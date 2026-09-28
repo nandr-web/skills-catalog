@@ -1,0 +1,52 @@
+// A variant of the agent-experience trials' agent-facing surface (agent-ux/surface.yaml#<variant>): what the tools are called and the
+// companion skill's text. Scenarios name contract operations (any contract draft's name, or the surface's key); the
+// runner maps them to this variant's tool names, and back when scoring.
+import { readFileSync } from 'node:fs';
+import { parse } from 'yaml';
+import type { Names } from './score.ts';
+
+const CLI_VERB: Record<string, string> = { search: 'search', get: 'get', install: 'install', versions: 'history', diff: 'diff', update: 'update', status: 'status', policy: 'policy', publish: 'publish' };
+const ALIAS: Record<string, string> = { read: 'get' };   // contract draft 3 says "read"; the surface's key is "get"
+
+export type Surface = ReturnType<typeof loadSurface>;
+
+export function loadSurface(spec: string) {
+  const [path, variant] = spec.split('#');
+  const doc = parse(readFileSync(path, 'utf8'));
+  const v = doc.variants?.[variant];
+  if (!v) throw new Error(`surface ${path}: no variant ${JSON.stringify(variant)}; it has ${Object.keys(doc.variants ?? {}).join(', ')}`);
+  const server: string = doc.server.name;
+  const own: Record<string, string> = doc.names[v.names];
+  const sets = Object.values(doc.names) as Record<string, string>[];
+
+  /** The surface key for an operation named by key, alias, or any names set's tool name. */
+  const key = (op: string): string | undefined => {
+    const k = ALIAS[op] ?? op;
+    if (k in own) return k;
+    for (const set of sets) for (const [kk, name] of Object.entries(set)) if (name === op) return kk;
+    return undefined;
+  };
+  const tool = (op: string): string => {
+    const k = key(op);
+    if (!k) throw new Error(`surface ${path}#${variant}: no operation ${JSON.stringify(op)}`);
+    return `mcp__${server}__${own[k]}`;
+  };
+  const fill = (text: string) => text.replace(/\$\{(\w+)\}/g, (m, k) => own[k] ?? m);
+
+  return {
+    variant, server, key, tool,
+    /** Every name a scenario might use for each operation → how it shows in a trace (the MCP tool, the CLI verb). */
+    names(): Names {
+      const ops: Record<string, string[]> = {};
+      for (const k of Object.keys(own)) {
+        const forms = [tool(k), `skills ${CLI_VERB[k] ?? k}`];
+        for (const set of sets) if (set[k]) ops[set[k]] = forms;
+        ops[k] = forms;
+      }
+      for (const [a, k] of Object.entries(ALIAS)) if (ops[k]) ops[a] = ops[k];
+      return { ops, server };
+    },
+    companionSkill: (kind: 'mcp' | 'cli'): string => fill(doc.companion_skill[kind]),
+    skillName: doc.companion_skill.name as string,
+  };
+}

@@ -1,0 +1,27 @@
+# A small surface file for the runner's tests, shaped like the agent-experience trials' agent-ux/surface.yaml (variants, server,
+# names, companion_skill). Not the real words: those come from --surface <path>#<variant>.
+variants:
+  control:   {names: contract, descriptions: bare, instructions: none, results: json, page: 20, skill: none}
+  proposed:  {names: proposed, descriptions: guided, instructions: guided, results: guided, page: 10, skill: none}
+server:
+  name: skills-catalog
+names:
+  contract:  {search: search_shared_skills, get: get_shared_skill, versions: list_skill_versions, diff: diff_skill_versions,
+              install: install_skill, update: update_skills, status: skills_status, policy: set_update_policy, publish: publish_skill}
+  proposed:  {search: search_shared_skills, get: read_shared_skill, versions: list_shared_skill_versions, diff: diff_shared_skill_versions,
+              install: install_shared_skill, update: update_installed_skills, status: list_installed_skills, policy: set_skill_update_policy,
+              publish: publish_skill_to_catalog}
+companion_skill:
+  name: shared-skills
+  mcp: |
+    ---
+    name: shared-skills
+    description: Use the shared catalog.
+    ---
+    Search with `${search}`, install with `${install}`.
+  cli: |
+    ---
+    name: shared-skills
+    description: Use the shared catalog with the skills command.
+    ---
+    Run `skills search <words>`.

@@ -17,8 +17,9 @@ export type Watch = Roots & {
   processGroups: number[];       // this run's process groups
 };
 
-// The product's default places. Contract §4.5 doesn't fix them yet: slice 1 sets them, and this list follows.
-export const PRODUCT_DEFAULTS = (home: string) => [join(home, '.skills-catalog'), join(home, '.config', 'skills-catalog')];
+// The product's default place (contract §4.5): $SKILLS_HOME and the local catalog live in ~/.skills-catalog/; no XDG folders.
+// Installs go to ~/.claude/skills/<name>/, which the check watches anyway.
+export const PRODUCT_DEFAULTS = (home: string) => [join(home, '.skills-catalog')];
 
 export function realWatch(over: Partial<Watch> & { sandboxRoot: string }): Watch {
   const home = userInfo().homedir, roots = realRoots();

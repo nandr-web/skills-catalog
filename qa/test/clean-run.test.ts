@@ -11,7 +11,7 @@ import { assistantLeftovers, slug } from '../src/leftovers.ts';
 import { createSandbox, DIRS, FailSafeError, failSafe, realHome, recordSession } from '../src/sandbox.ts';
 import { teardown } from '../src/teardown.ts';
 import { janitor } from '../src/janitor.ts';
-import { compare, snapshot, type Watch } from '../src/check.ts';
+import { compare, PRODUCT_DEFAULTS, snapshot, type Watch } from '../src/check.ts';
 
 const made: string[] = [];
 afterEach(() => { for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true }); });
@@ -143,6 +143,10 @@ describe('janitor', () => {
 });
 
 describe('before/after check', () => {
+  it('watches the product\'s default place, ~/.skills-catalog (contract §4.5; no XDG folders)', () => {
+    expect(PRODUCT_DEFAULTS('/Users/me')).toEqual(['/Users/me/.skills-catalog']);
+  });
+
   it('[5] sees a new folder, a new file and a changed file in the watched places', () => {
     const m = machine();
     const sb = createSandbox({ runId: 'r5', tmp: m.tmp, home: m.home });
