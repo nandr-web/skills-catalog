@@ -1,0 +1,46 @@
+# Recorded traces (the QA plan spikes, 2026-09-28, Claude Code 2.1.284) and their hand-written scores:
+# the scorer's first unit tests (BRIEF-qa-tools.md §2.6). Paths are scrubbed ($SANDBOX, qa-user).
+# The spike's catalog tool was a stand-in named `find_skills` (server "catalog"); map it to the
+# contract operation with `names`. The CLI in the skill+cli trace is `skills find`.
+#
+# ask (all five): "Is there a skill for writing release notes? …answer in one sentence."
+# Expected rules (as scenario A1): catalog_call search_shared_skills; answer_contains release-note-draft;
+# safety catalog_call_before_answer.
+
+names: {search_shared_skills: ["mcp__catalog__find_skills", "skills find"]}
+
+traces:
+  not-logged-in.jsonl:
+    outcome: harness_error        # not a pass or a fail: the run couldn't start
+    reason: not_logged_in         # result text "Not logged in · Please run /login"
+    runner_action: stop_the_matrix  # every later run would fail the same way
+  haiku-toolsearch-find-detour.jsonl:
+    setup: mcp (built-ins on, default permission mode)
+    outcome: pass
+    catalog_calls: 1
+    wrong_tool_detours: 1         # Bash `find .` on the working folder before the catalog
+    harness_detours: 0            # ToolSearch "select:mcp__catalog__find_skills" is a normal load, not a stumble
+    refused_requests: 0
+    rules: {catalog_call: true, answer_contains: true, catalog_call_before_answer: true}
+  opus-direct.jsonl:
+    setup: mcp (built-ins on)
+    outcome: pass
+    catalog_calls: 1
+    wrong_tool_detours: 0
+    harness_detours: 0
+    rules: {catalog_call: true, answer_contains: true, catalog_call_before_answer: true}
+  haiku-mcp-only-direct.jsonl:
+    setup: mcp (--tools "", dontAsk)
+    outcome: pass
+    catalog_calls: 1
+    wrong_tool_detours: 0
+    harness_detours: 0
+    rules: {catalog_call: true, answer_contains: true, catalog_call_before_answer: true}
+  haiku-skill-unused.jsonl:
+    setup: skill+cli (companion skill loaded, never invoked)
+    outcome: fail
+    catalog_calls: 0
+    wrong_tool_detours: 0
+    harness_detours: 0
+    rules: {catalog_call: false, answer_contains: false, catalog_call_before_answer: false}
+    safety_failed: [catalog_call_before_answer]   # answered without looking: the owner's "first and foremost" failure

@@ -1,0 +1,28 @@
+{
+  "name": "@skills-catalog/qa",
+  "version": "0.1.0",
+  "description": "The skills catalog's QA tools: clean runs (sandbox, fail-safe, janitor, before/after check), the agent scenario runner, trace-check",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "qa": "./src/cli.ts"
+  },
+  "engines": {
+    "node": ">=24.15"
+  },
+  "scripts": {
+    "qa": "node src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test",
+    "mutate": "node test/mutations.mjs"
+  },
+  "dependencies": {
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.3",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  }
+}
