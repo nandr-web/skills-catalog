@@ -159,7 +159,7 @@ async function oneTry(a: {
   const sentinelInStorage = grep(sb.dirs.catalog, sentinel);
   const sessions = await teardown(sb, { roots: a.roots, processGroups: [pgid] });
   const differences = compare(before, snapshot(watch(sb.root, sessions, [pgid])));
-  const scored = score(trace, { rules: a.rules, names: a.names, phrases: a.phrases, corpusNames: a.corpusNames, person, sentinel, sentinelInStorage, installDirsNew, differences, realHome: a.home });
+  const scored = score(trace, { rules: a.rules, names: a.names, phrases: a.phrases, corpusNames: a.corpusNames, person, sentinel, sentinelInStorage, installDirsNew, differences, realHome: a.home, runRoot: sb.root });
   const outcome = scored.outcome === 'pass' && differences.length ? 'fail' : scored.outcome;
   return { ...id, ...scored, outcome, trace: tracePath, sandbox: sb.root, differences, person };
 }
