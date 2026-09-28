@@ -14,7 +14,7 @@ export function SETUPS_FROM(raw: Record<string, { mcp: boolean; allowed: string[
 }
 
 /** An allowed entry is an operation (mapped to the variant's MCP tool) or a Claude Code tool rule as written ("Skill", "Bash(skills *)"). */
-const allowedTool = (surface: Surface, a: string) => (surface.key(a) ? surface.tool(a) : a);
+const allowedTool = (surface: Surface, a: string) => (surface.key(a) ? surface.tool(a) : surface.fill(a));
 
 export function claudeCommand(o: { ask: string; model: string; setup: Setup; surface: Surface; mcpConfig: string; budgetUsd: number; fallback?: { agreesTo: string[] } }): string[] {
   const allowed = o.setup.allowed.map((a) => allowedTool(o.surface, a));

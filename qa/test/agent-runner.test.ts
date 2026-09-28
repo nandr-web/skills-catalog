@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
+import { parse, stringify } from 'yaml';
 import { runScenarios } from '../src/agent/runner.ts';
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
@@ -65,9 +66,10 @@ describe('agent scenario runner (fake claude)', () => {
     expect(mcp.argv).toContain('mcp__qa-person__approve');
     expect(mcp.skill).toBeNull();
     expect(calls['mcp+skill'].skill).toContain('name: shared-skills');
-    expect(calls['skill+cli'].skill).toContain('skills search');
+    expect(calls['skill+cli'].skill).toContain('skills-catalog search');
     expect(Object.keys(calls['skill+cli'].mcp.mcpServers)).toEqual(['qa-person']);
     expect(calls['skill+cli'].path0).toMatch(/\/bin$/);
+    expect(calls['skill+cli'].shims).toEqual(['skills-catalog']);   // named after the surface's CLI
 
     for (const r of report.runs) {
       expect(existsSync(r.trace), r.trace).toBe(true);
@@ -91,6 +93,11 @@ describe('agent scenario runner (fake claude)', () => {
     expect(report.stopped).toBe('not_logged_in');
   });
 
+  it('the discovery asks are A1, A2, A3, A3g, A11 and A13 (the QA plan)', async () => {
+    const { DISCOVERY } = await import('../src/agent/runner.ts');
+    expect([...DISCOVERY].sort()).toEqual(['A1', 'A11', 'A13', 'A2', 'A3', 'A3g']);
+  });
+
   it('five tries for Haiku on the discovery asks, three otherwise, unless --tries says', async () => {
     const m = machine();
     process.env.FAKE_CLAUDE_TRACE = traceFile(m.out.replace(/out$/, ''), 'haiku-mcp-only-direct.jsonl');
@@ -104,5 +111,19 @@ describe('agent scenario runner (fake claude)', () => {
     const report = await runScenarios({ ...base(m), scenarios: ['A4'], setups: ['mcp'] });
     expect(report.runs).toEqual([]);
     expect(report.skipped).toEqual([{ scenario: 'A4', why: expect.stringMatching(/histories\.h1@v4.*slice 1/) }]);
+  });
+});
+
+describe('agent scenario runner: asks from the surface', () => {
+  it('fails a run whose ask leaves a placeholder unfilled, without calling the assistant', async () => {
+    const m = machine();
+    process.env.FAKE_CLAUDE_TRACE = traceFile(m.out.replace(/out$/, ''), 'haiku-mcp-only-direct.jsonl');
+    const doc = parse(readFileSync(here('../golden/agent-scenarios.yaml'), 'utf8'));
+    doc.scenarios.find((s: any) => s.id === 'A1').ask = 'surface:setup.broken';
+    const file = join(m.out.replace(/out$/, ''), 'scenarios.yaml');
+    writeFileSync(file, stringify(doc));
+    const report = await runScenarios({ ...base(m), scenariosFile: file, scenarios: ['A1'], setups: ['mcp'] });
+    expect(report.runs[0]).toMatchObject({ outcome: 'fail', rules: [{ name: 'ask_filled', ok: false, why: '${nope}' }] });
+    expect(report.runs[0].metrics.cost_usd).toBe(0);
   });
 });

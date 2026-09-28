@@ -5,6 +5,11 @@ variants:
   proposed:  {names: proposed, descriptions: guided, instructions: guided, results: guided, page: 10, skill: none}
 server:
   name: skills-catalog
+cli: skills-catalog
+setup:
+  handoff_prompt: "Set up our team's Skills Catalog on this machine: run `${cli} setup` and ask me the questions it prints."
+  handoff_prompt_fast: "Set up our team's Skills Catalog on this machine with the defaults: run `${cli} setup --yes`."
+  broken: "Run ${nope} please."
 names:
   contract:  {search: search_shared_skills, get: get_shared_skill, versions: list_skill_versions, diff: diff_skill_versions,
               install: install_skill, update: update_skills, status: skills_status, policy: set_update_policy, publish: publish_skill}
@@ -24,4 +29,4 @@ companion_skill:
     name: shared-skills
     description: Use the shared catalog with the skills command.
     ---
-    Run `skills search <words>`.
+    Run `${cli} search <words>`.

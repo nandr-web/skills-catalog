@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { chmodSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 import { compare, PRODUCT_DEFAULTS, snapshot, type Difference } from '../check.ts';
 import { janitor } from '../janitor.ts';
@@ -29,6 +30,8 @@ export type RunnerOptions = {
   out: string; budgetUsd?: number; timeoutMs?: number; fallback?: boolean;
   beforeTry?: (t: TryId) => void; afterTry?: (t: TryId) => void;
   tmp?: string; home?: string; roots?: Roots; productDefaults?: string[]; claudeJson?: string; settingsJson?: string;
+  productRepo?: string | null;             // hashed before and after (default: this repo); null skips it
+  toolFiles?: string[];                    // the installed tool's files, hashed before and after
 };
 export type TryId = { scenario: string; setup: string; model: string; try: number };
 export type RunRecord = TryId & TryScore & { trace: string; sandbox: string; differences: Difference[]; person: PersonEntry[] };
@@ -37,7 +40,8 @@ export type Report = { runs: RunRecord[]; summary: (Omit<TryId, 'try'> & Aggrega
 // Starting catalogs the MCP server brings itself (slice 0: the mock serves the QA plan's discovery corpus). Seeding any other
 // state takes the catalog's own publish, which comes with slice 1.
 const SERVED = new Set(['queries.corpus']);
-const DISCOVERY = new Set(['A1', 'A2', 'A3', 'A11', 'A13']);
+export const PRODUCT_REPO = fileURLToPath(new URL('../../..', import.meta.url));
+export const DISCOVERY = new Set(['A1', 'A2', 'A3', 'A3g', 'A11', 'A13']);   // 5 tries for Haiku (the QA plan)
 export const MODEL_ALIAS: Record<string, string> = { haiku: 'claude-haiku-4-5-20251001', opus: 'claude-opus-5-5' };
 const short = (model: string) => model.replace(/^claude-/, '').split('-')[0];
 
@@ -98,10 +102,18 @@ async function oneTry(a: {
   tmp: string; home: string; roots: Roots; runId: string;
 }): Promise<RunRecord> {
   const { o, s, id, setup, surface } = a;
+  const ask = surface.ask(String(s.ask)) + (s.ask_suffix ?? '');
+  const unfilled = surface.unfilled(ask);
+  if (unfilled.length) {
+    return { ...id, outcome: 'fail', rules: [{ name: 'ask_filled', kind: 'safety', ok: false, why: unfilled.join(' ') }],
+      metrics: { catalog_calls: 0, wrong_tool_detours: 0, harness_detours: 0, refused_requests: 0, tool_result_tokens_max: 0, wall_ms: 0, cost_usd: 0 },
+      trace: '', sandbox: '', differences: [], person: [] };
+  }
   const watch = (root: string, sessions: string[], pgids: number[]) => ({
     ...a.roots, sandboxRoot: root, sessions, processGroups: pgids,
     claudeJson: o.claudeJson ?? join(a.home, '.claude.json'), settingsJson: o.settingsJson ?? join(a.roots.claudeDir, 'settings.json'),
     productDefaults: o.productDefaults ?? PRODUCT_DEFAULTS(a.home),
+    productRepo: o.productRepo === null ? undefined : o.productRepo ?? PRODUCT_REPO, toolFiles: o.toolFiles,
   });
   const root = join(a.tmp, 'skills-catalog-qa', a.runId);
   const before = snapshot(watch(root, [], []));
@@ -114,14 +126,14 @@ async function oneTry(a: {
     writeFileSync(join(dir, 'SKILL.md'), surface.companionSkill(setup.mcp ? 'mcp' : 'cli'));
   }
   if (setup.cliOnPath && o.cliCommand) {
-    const shim = join(sb.dirs.bin, 'skills');
+    const shim = join(sb.dirs.bin, surface.cli);
     writeFileSync(shim, `#!/bin/sh\nexec ${o.cliCommand.map((x) => `'${x.replace(/'/g, `'\\''`)}'`).join(' ')} "$@"\n`);
     chmodSync(shim, 0o755);
   }
   const personLog = join(sb.root, 'person.jsonl');
   const cfgPath = join(sb.root, 'mcp.json');
   writeFileSync(cfgPath, JSON.stringify(mcpConfig({ setup, surface, catalog: o.catalogCommand, env: sb.env, person: { agreesTo: a.agreesTo, log: personLog } }), null, 2));
-  const cmd = claudeCommand({ ask: s.ask, model: id.model, setup, surface, mcpConfig: cfgPath, budgetUsd: o.budgetUsd ?? 0.25, fallback: o.fallback ? { agreesTo: a.agreesTo } : undefined });
+  const cmd = claudeCommand({ ask, model: id.model, setup, surface, mcpConfig: cfgPath, budgetUsd: o.budgetUsd ?? 0.25, fallback: o.fallback ? { agreesTo: a.agreesTo } : undefined });
   const argv = [...(o.claude ?? ['claude']), ...cmd.slice(1)];
   const tracePath = join(o.out, 'traces', `${id.scenario}-${id.setup.replace('+', '-')}-${short(id.model)}-${id.try}.jsonl`);
 
@@ -147,7 +159,7 @@ async function oneTry(a: {
   const sentinelInStorage = grep(sb.dirs.catalog, sentinel);
   const sessions = await teardown(sb, { roots: a.roots, processGroups: [pgid] });
   const differences = compare(before, snapshot(watch(sb.root, sessions, [pgid])));
-  const scored = score(trace, { rules: a.rules, names: a.names, phrases: a.phrases, corpusNames: a.corpusNames, person, sentinel, sentinelInStorage, installDirsNew, differences });
+  const scored = score(trace, { rules: a.rules, names: a.names, phrases: a.phrases, corpusNames: a.corpusNames, person, sentinel, sentinelInStorage, installDirsNew, differences, realHome: a.home });
   const outcome = scored.outcome === 'pass' && differences.length ? 'fail' : scored.outcome;
   return { ...id, ...scored, outcome, trace: tracePath, sandbox: sb.root, differences, person };
 }

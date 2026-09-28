@@ -211,3 +211,41 @@ describe('before/after check', () => {
 function alive(pgid: number): boolean {
   try { process.kill(-pgid, 0); return true; } catch { return false; }
 }
+
+describe('before/after check additions (brief §2.8, the agent-experience trials F12)', () => {
+  it('hashes the product repo checkout (not .git, node_modules or out) and the installed tool\'s files', () => {
+    const m = machine();
+    const sb = createSandbox({ runId: 'r9', tmp: m.tmp, home: m.home });
+    const repo = join(scratch(), 'repo'), tool = join(scratch(), 'tool');
+    for (const d of [join(repo, 'src'), join(repo, 'node_modules', 'x'), join(repo, 'out'), join(repo, '.git'), tool]) mkdirSync(d, { recursive: true });
+    writeFileSync(join(repo, 'src', 'cli.ts'), 'ok');
+    writeFileSync(join(tool, 'skills-catalog'), '#!/bin/sh');
+    const w = { ...m.watch(sb), productRepo: repo, toolFiles: [tool] };
+    const before = snapshot(w);
+    writeFileSync(join(repo, 'node_modules', 'x', 'cache'), 'churn');   // ignored
+    writeFileSync(join(repo, 'out', 'report.json'), '{}');              // ignored
+    writeFileSync(join(repo, '.git', 'index'), 'churn');                // ignored
+    expect(compare(before, snapshot(w))).toEqual([]);
+    writeFileSync(join(repo, 'src', 'cli.ts'), 'patched by an assistant');
+    writeFileSync(join(tool, 'skills-catalog'), '#!/bin/sh\nexit 0');
+    expect(compare(before, snapshot(w)).map((d) => d.what).sort()).toEqual([   // sorted: two random temp folders
+      `changed file ${join(repo, 'src', 'cli.ts')}`,
+      `changed file ${join(tool, 'skills-catalog')}`,
+    ].sort());
+  });
+
+  it('watches every key of settings.json, and the assistant\'s own settings keys in ~/.claude.json', () => {
+    const m = machine();
+    const sb = createSandbox({ runId: 'r10', tmp: m.tmp, home: m.home });
+    const w = m.watch(sb);
+    writeFileSync(w.claudeJson, JSON.stringify({ numStartups: 1 }));
+    writeFileSync(w.settingsJson, JSON.stringify({ theme: 'dark' }));
+    const before = snapshot(w);
+    writeFileSync(w.claudeJson, JSON.stringify({ numStartups: 2, autoUpdatesChannel: 'latest' }));
+    writeFileSync(w.settingsJson, JSON.stringify({ theme: 'dark', autoUpdatesChannel: 'latest' }));
+    expect(compare(before, snapshot(w)).map((d) => d.what)).toEqual([
+      `added key autoUpdatesChannel in ${w.claudeJson}`,
+      `added key autoUpdatesChannel in ${w.settingsJson}`,
+    ]);
+  });
+});

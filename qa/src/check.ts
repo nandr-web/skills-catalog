@@ -15,6 +15,8 @@ export type Watch = Roots & {
   sandboxRoot: string;           // names in projects/ and the tmp folder are matched by this path's slug
   sessions: string[];            // this run's assistant sessions
   processGroups: number[];       // this run's process groups
+  productRepo?: string;          // the product repo checkout (assistants tried to patch a crashed tool: agent-ux F12)
+  toolFiles?: string[];          // the installed tool's files
 };
 
 // The product's default place (contract §4.5): $SKILLS_HOME and the local catalog live in ~/.skills-catalog/; no XDG folders.
@@ -29,11 +31,23 @@ export function realWatch(over: Partial<Watch> & { sandboxRoot: string }): Watch
   };
 }
 
-/** What a run could add: whole values under these keys (and, for `projects`, entries for paths in the sandbox). */
-const JSON_KEYS: Record<'claudeJson' | 'settingsJson', string[]> = {
-  claudeJson: ['mcpServers'],
-  settingsJson: ['hooks', 'mcpServers', 'enabledMcpjsonServers'],
+/** What a run could add: whole values under these keys (and, for `projects`, entries for paths in the sandbox).
+ *  settings.json: every key (the assistant's own settings; agent-ux F9/F12: an assistant tried to change them).
+ *  ~/.claude.json churns with every session, so only the keys a run could add there. */
+const JSON_KEYS: Record<'claudeJson' | 'settingsJson', string[] | 'all'> = {
+  claudeJson: ['mcpServers', 'autoUpdates', 'autoUpdatesChannel', 'env', 'permissions'],
+  settingsJson: 'all',
 };
+const REPO_SKIP = new Set(['.git', 'node_modules', 'out']);
+
+function walkRepo(dir: string, out: Snapshot): void {
+  if (!existsSync(dir)) return;
+  for (const n of readdirSync(dir)) {
+    if (REPO_SKIP.has(n)) continue;
+    const p = join(dir, n);
+    if (lstatSync(p).isDirectory()) walkRepo(p, out); else walk(p, out);
+  }
+}
 
 type Entry = { kind: 'folder' | 'file' | 'key' | 'process'; label: string; sig: string };
 export type Snapshot = Map<string, Entry>;
@@ -66,13 +80,16 @@ export function snapshot(w: Watch): Snapshot {
   for (const p of w.productDefaults) walk(p, out);
   for (const file of ['claudeJson', 'settingsJson'] as const) {
     const data = readJson(w[file]);
-    for (const k of JSON_KEYS[file]) if (k in data) out.set(`${w[file]}\u0000${k}`, { kind: 'key', label: `${k} in ${w[file]}`, sig: JSON.stringify(data[k]) });
+    const keys = JSON_KEYS[file] === 'all' ? Object.keys(data) : (JSON_KEYS[file] as string[]);
+    for (const k of keys) if (k in data) out.set(`${w[file]}\u0000${k}`, { kind: 'key', label: `${k} in ${w[file]}`, sig: JSON.stringify(data[k]) });
     if (file === 'claudeJson' && data.projects && typeof data.projects === 'object') {
       for (const p of Object.keys(data.projects)) {
         if (p === w.sandboxRoot || p.startsWith(w.sandboxRoot + '/')) out.set(`${w[file]}\u0000projects\u0000${p}`, { kind: 'key', label: `projects[${JSON.stringify(p)}] in ${w[file]}`, sig: 'present' });
       }
     }
   }
+  if (w.productRepo) walkRepo(w.productRepo, out);
+  for (const p of w.toolFiles ?? []) walk(p, out);
   for (const g of w.processGroups) {
     try { process.kill(-g, 0); out.set(`\u0001pgid ${g}`, { kind: 'process', label: `process group ${g}`, sig: 'running' }); } catch { /* gone */ }
   }

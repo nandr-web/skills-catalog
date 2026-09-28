@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { compare, PRODUCT_DEFAULTS, snapshot, type Difference, type Watch } from './check.ts';
 import { janitor, DEFAULT_TTL_MS } from './janitor.ts';
 import { realRoots, type Roots } from './leftovers.ts';
@@ -24,7 +25,10 @@ export type RunOptions = {
   // Where the machine's places are; tests point these at a fake home. The fail-safe's home is always the real one
   // unless a test of the fail-safe itself passes `home`.
   tmp?: string; home?: string; roots?: Roots; productDefaults?: string[]; claudeJson?: string; settingsJson?: string;
+  productRepo?: string | null; toolFiles?: string[];
 };
+/** The product repo checkout, hashed before and after every run (assistants tried to patch a crashed tool: agent-ux F12). */
+export const PRODUCT_REPO = fileURLToPath(new URL('../..', import.meta.url));
 
 export const newRunId = () => `${new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '')}-${randomBytes(3).toString('hex')}`;
 
@@ -37,6 +41,7 @@ export async function qaRun(o: RunOptions): Promise<RunResult> {
     ...roots, sandboxRoot: root, sessions, processGroups,
     claudeJson: o.claudeJson ?? join(home, '.claude.json'), settingsJson: o.settingsJson ?? join(roots.claudeDir, 'settings.json'),
     productDefaults: o.productDefaults ?? PRODUCT_DEFAULTS(home),
+    productRepo: o.productRepo === null ? undefined : o.productRepo ?? PRODUCT_REPO, toolFiles: o.toolFiles,
   });
   const before = snapshot(watch([], []));
   const sb = createSandbox({ runId, tmp, home });

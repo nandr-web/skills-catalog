@@ -39,7 +39,8 @@ describe('qa trace-check', () => {
     const c = copy();
     const r = traceCheck({ qa: c.qa, backlog: c.backlog });
     expect(r.problems).toEqual([]);
-    expect(r.counts).toMatchObject({ requirements: expect.any(Number), scenarios: 21, queries: 33 });
+    const golden = (f: string) => parse(readFileSync(join(QA, 'golden', f), 'utf8'));
+    expect(r.counts).toMatchObject({ scenarios: golden('agent-scenarios.yaml').scenarios.length, queries: golden('queries.yaml').queries.length });
   });
 
   it('fails when a requirement has no automated check, or a manual one says nothing about automating it', () => {

@@ -20,15 +20,34 @@ describe('surface', () => {
     expect(s.tool('publish_skill_to_catalog')).toBe('mcp__skills-catalog__publish_skill_to_catalog');
     // a scenario may name an operation by any contract version's name, or by its key
     expect(s.tool('install_skill')).toBe('mcp__skills-catalog__install_shared_skill');
-    expect(s.tool('read')).toBe('mcp__skills-catalog__read_shared_skill');   // draft 3's "read" is the surface's "get"
-    expect(s.names().ops.install_shared_skill).toEqual(['mcp__skills-catalog__install_shared_skill', 'skills install']);
-    expect(s.names().ops.search_shared_skills).toEqual(['mcp__skills-catalog__search_shared_skills', 'skills search']);
+    expect(s.tool('get')).toBe('mcp__skills-catalog__read_shared_skill');
+    expect(s.key('read')).toBeUndefined();   // no alias: the goldens use the surface's keys (the QA plan, patch surface-keys)
+    expect(s.names().ops.install_shared_skill).toEqual(['mcp__skills-catalog__install_shared_skill', 'skills-catalog install']);
+    expect(s.names().ops.search_shared_skills).toEqual(['mcp__skills-catalog__search_shared_skills', 'skills-catalog search']);
+    expect(s.names().ops.setup).toEqual(['mcp__skills-catalog__setup', 'skills-catalog setup']);
+    expect(s.cli).toBe('skills-catalog');
   });
 
   it('fills the companion skill with the variant\'s tool names', () => {
     const s = loadSurface(`${SURFACE}#control`);
     expect(s.companionSkill('mcp')).toContain('Search with `search_shared_skills`, install with `install_skill`.');
-    expect(s.companionSkill('cli')).toContain('skills search <words>');
+    expect(s.companionSkill('cli')).toContain('skills-catalog search <words>');
+  });
+
+  it('takes an ask from the surface, filled with the variant\'s names, and finds anything left unfilled', () => {
+    const s = loadSurface(`${SURFACE}#proposed`);
+    expect(s.ask('surface:setup.handoff_prompt_fast')).toBe("Set up our team's Skills Catalog on this machine with the defaults: run `skills-catalog setup --yes`.");
+    expect(s.ask('Is there a skill for X?')).toBe('Is there a skill for X?');
+    expect(() => s.ask('surface:setup.missing')).toThrow(/setup\.missing/);
+    expect(s.unfilled(s.ask('surface:setup.broken'))).toEqual(['${nope}']);
+    expect(s.unfilled(s.ask('surface:setup.handoff_prompt'))).toEqual([]);
+  });
+
+  it('fills ${cli} in an allowed entry', () => {
+    const s = loadSurface(`${SURFACE}#proposed`);
+    const setups = SETUPS_FROM({ 'skill+cli': { mcp: false, allowed: ['Bash(${cli} *)', 'Skill'], companion_skill: true, cli_on_path: true } });
+    const cmd = claudeCommand({ ask: 'x', model: 'm', setup: setups['skill+cli'], surface: s, mcpConfig: '/c', budgetUsd: 0.25 });
+    expect(cmd).toContain('Bash(skills-catalog *),Skill');
   });
 
   it('refuses an unknown variant, naming the ones it has', () => {
@@ -39,7 +58,7 @@ describe('surface', () => {
 describe('the claude -p command (qa-plan §3.2)', () => {
   const surface = loadSurface(`${SURFACE}#proposed`);
   const setups = SETUPS_FROM({
-    mcp: { mcp: true, allowed: ['read', 'search', 'install'], companion_skill: false, cli_on_path: false },
+    mcp: { mcp: true, allowed: ['get', 'search', 'install'], companion_skill: false, cli_on_path: false },
     'mcp+skill': { mcp: true, allowed: ['search', 'Skill'], companion_skill: true, cli_on_path: false },
     'skill+cli': { mcp: false, allowed: ['Bash(skills *)', 'Skill'], companion_skill: true, cli_on_path: true },
   });
@@ -52,7 +71,7 @@ describe('the claude -p command (qa-plan §3.2)', () => {
       '--max-budget-usd', '0.25', '--strict-mcp-config', '--mcp-config', '/run/mcp.json',
       '--allowedTools', 'mcp__skills-catalog__read_shared_skill,mcp__skills-catalog__search_shared_skills,mcp__skills-catalog__install_shared_skill',
       '--output-format', 'stream-json', '--verbose']);
-    expect(claudeCommand({ ...base, setup: setups['skill+cli'] })).toContain('Bash(skills *),Skill');
+    expect(claudeCommand({ ...base, setup: setups['skill+cli'] })).toContain('Bash(skills *),Skill');   // as written; pre-flight flags the mismatch
     expect(claudeCommand({ ...base, setup: setups['mcp+skill'] })).toContain('mcp__skills-catalog__search_shared_skills,Skill');
   });
 

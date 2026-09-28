@@ -4,6 +4,7 @@
 //   qa janitor [--ttl <s>]                                     remove old runs and their leftovers
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
+import { preflight } from './agent/preflight.ts';
 import { runScenarios } from './agent/runner.ts';
 import { janitor } from './janitor.ts';
 import { traceCheck } from './trace-check.ts';
@@ -20,9 +21,10 @@ const USAGE = `qa: the skills catalog's QA tools
       Removes runs older than the TTL (default 1 hour) and their leftovers.
   qa agent --surface <surface.yaml>#<variant> --mcp "<catalog MCP server command>" [--cli "<skills CLI command>"]
            [--scenario A1,A2] [--setup mcp,mcp+skill,skill+cli] [--models haiku,opus] [--tries <n>] [--out <dir>]
-           [--budget <usd>] [--fallback]
+           [--budget <usd>] [--fallback] [--no-preflight]
       The agent scenario runner: a real headless Claude Code per scenario × setup × model × try, each in its own
-      sandbox, scored from its trace (golden/agent-scenarios.yaml). Spends money on your Claude login: each run is
+      sandbox, scored from its trace (golden/agent-scenarios.yaml). A pre-flight runs first (unit tests, every variant
+      renders, the server's self-test, a login probe) and nothing runs unless it's clean. Spends money on your Claude login: each run is
       capped with --max-budget-usd. Writes <out>/report.json, <out>/summary.txt and every trace.
   qa trace-check [--backlog <dir>]
       Every requirement has an automated check; every golden, catalog, query, fixture and backlog reference resolves;
@@ -63,12 +65,19 @@ async function main(argv: string[]): Promise<number> {
       const a = parseArgs({ args: own.slice(1), options: {
         surface: { type: 'string' }, mcp: { type: 'string' }, cli: { type: 'string' }, scenario: { type: 'string' }, setup: { type: 'string' },
         models: { type: 'string', default: 'haiku' }, tries: { type: 'string' }, out: { type: 'string' }, budget: { type: 'string' }, fallback: { type: 'boolean' },
+        'no-preflight': { type: 'boolean' },
       } }).values;
       if (!a.surface || !a.mcp) return console.error(USAGE), 1;
       const list = (v?: string) => v?.split(',').map((x) => x.trim()).filter(Boolean);
       const words = (v?: string) => v?.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)?.map((w) => w.replace(/^["']|["']$/g, ''));
       const golden = (f: string) => new URL(`../golden/${f}`, import.meta.url).pathname;
       const out = a.out ?? `out/agent/${newRunId()}`;
+      if (!a['no-preflight']) {
+        const [surfaceFile, variant] = a.surface.split('#');
+        const problems = await preflight({ qaDir: new URL('..', import.meta.url).pathname, scenariosFile: golden('agent-scenarios.yaml'), surfaceFile, variant, catalogCommand: words(a.mcp)! });
+        if (problems.length) { console.error(`qa agent: pre-flight failed, nothing ran:\n  ${problems.join('\n  ')}`); return 3; }
+        console.error('qa agent: pre-flight clean');
+      }
       const report = await runScenarios({
         scenariosFile: golden('agent-scenarios.yaml'), queriesFile: golden('queries.yaml'), phrasesFile: golden('phrases.yaml'),
         surface: a.surface, catalogCommand: words(a.mcp)!, cliCommand: words(a.cli), scenarios: list(a.scenario), setups: list(a.setup),
