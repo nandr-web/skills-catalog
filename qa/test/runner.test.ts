@@ -25,6 +25,7 @@ describe('surface', () => {
     expect(s.names().ops.install_shared_skill).toEqual(['mcp__skills-catalog__install_shared_skill', 'skills-catalog install']);
     expect(s.names().ops.search_shared_skills).toEqual(['mcp__skills-catalog__search_shared_skills', 'skills-catalog search']);
     expect(s.names().ops.setup).toEqual(['mcp__skills-catalog__setup', 'skills-catalog setup']);
+    expect(s.names().ops.teardown).toEqual(['mcp__skills-catalog__teardown', 'skills-catalog teardown']);   // A14
     expect(s.cli).toBe('skills-catalog');
   });
 

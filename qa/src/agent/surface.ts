@@ -53,7 +53,8 @@ export function loadSurface(spec: string) {
         for (const set of sets) if (set[k]) ops[set[k]] = forms;
         ops[k] = forms;
       }
-      ops.setup = [`mcp__${server}__setup`, `${cli} setup`];   // setup is CLI-first (contract §6); a setup tool counts too
+      // setup and teardown are CLI-first (contract §6); a tool of that name counts too
+      for (const op of ['setup', 'teardown']) ops[op] = [`mcp__${server}__${op}`, `${cli} ${op}`];
       return { ops, server };
     },
     companionSkill: (kind: 'mcp' | 'cli'): string => fill(doc.companion_skill[kind]),

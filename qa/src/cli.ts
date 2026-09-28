@@ -3,7 +3,7 @@
 //   qa run [--timeout <s>] [--ttl <s>] -- <command> [args…]    run a command in a clean, checked sandbox
 //   qa janitor [--ttl <s>]                                     remove old runs and their leftovers
 import { readFileSync } from 'node:fs';
-import { parseArgs } from 'node:util';
+import { parseArgs, type ParseArgsOptionsConfig } from 'node:util';
 import { preflight } from './agent/preflight.ts';
 import { runScenarios } from './agent/runner.ts';
 import { janitor } from './janitor.ts';
@@ -19,7 +19,7 @@ const USAGE = `qa: the skills catalog's QA tools
       changed. Exit: the command's code, 2 if something was left behind, 124 on timeout, 130 on Ctrl-C.
   qa janitor [--ttl <seconds>]
       Removes runs older than the TTL (default 1 hour) and their leftovers.
-  qa agent --surface <surface.yaml>#<variant> --mcp "<catalog MCP server command>" [--cli "<skills CLI command>"]
+  qa agent --surface <surface.yaml>#<variant> --mcp "<catalog MCP server command>" [--cli "<skills CLI command>"] [--claude "<command>"]
            [--scenario A1,A2] [--setup mcp,mcp+skill,skill+cli] [--models haiku,opus] [--tries <n>] [--out <dir>]
            [--budget <usd>] [--fallback] [--no-preflight]
       The agent scenario runner: a real headless Claude Code per scenario × setup × model × try, each in its own
@@ -32,13 +32,16 @@ const USAGE = `qa: the skills catalog's QA tools
       sets match the queries; the hand-written diffs equal diff -u; the fingerprints and name lengths hold.`;
 
 async function main(argv: string[]): Promise<number> {
+  // Each command parses its own flags: the first word picks the command, `--` ends qa's flags (qa run -- <command>).
   const dash = argv.indexOf('--');
   const own = dash < 0 ? argv : argv.slice(0, dash), command = dash < 0 ? [] : argv.slice(dash + 1);
-  const { values, positionals } = parseArgs({ args: own, allowPositionals: true, options: { timeout: { type: 'string' }, ttl: { type: 'string' }, help: { type: 'boolean', short: 'h' } } });
+  const [name, ...flags] = own;
   const seconds = (v?: string) => (v === undefined ? undefined : Number(v) * 1000);
-  if (values.help) return console.log(USAGE), 0;
-  switch (positionals[0]) {
+  if (!name || name === '-h' || name === '--help' || flags.includes('--help') || flags.includes('-h')) return console.log(USAGE), name ? 0 : 1;
+  const opts = (options: ParseArgsOptionsConfig) => parseArgs({ args: flags, options }).values as Record<string, any>;
+  switch (name) {
     case 'run': {
+      const values = opts({ timeout: { type: 'string' }, ttl: { type: 'string' } });
       if (!command.length) return console.error(USAGE), 1;
       const stop = new AbortController();
       process.on('SIGINT', () => stop.abort());
@@ -51,22 +54,24 @@ async function main(argv: string[]): Promise<number> {
       console.error(`qa run ${r.runId}: ${r.status}${r.differences.length ? '' : ', nothing left behind'}`);
       return { pass: 0, fail: r.exitCode || 1, leak: 2, timeout: 124, interrupted: 130 }[r.status];
     }
-    case 'janitor':
+    case 'janitor': {
+      const values = opts({ ttl: { type: 'string' } });
       for (const p of janitor({ ttlMs: seconds(values.ttl) })) console.error(`removed ${p}`);
       return 0;
+    }
     case 'trace-check': {
-      const b = parseArgs({ args: own.slice(1), options: { backlog: { type: 'string' } } }).values;
+      const b = opts({ backlog: { type: 'string' } });
       const r = traceCheck({ qa: new URL('..', import.meta.url).pathname, backlog: b.backlog });
       console.log(`${r.counts.backlog} requirement items, ${r.counts.requirements} requirements, ${r.counts.scenarios} scenarios, ${r.counts.queries} queries, ${r.counts.policy} policy cases`);
       console.log(r.problems.length ? r.problems.join('\n') : 'trace-check: no issues');
       return r.problems.length ? 1 : 0;
     }
     case 'agent': {
-      const a = parseArgs({ args: own.slice(1), options: {
-        surface: { type: 'string' }, mcp: { type: 'string' }, cli: { type: 'string' }, scenario: { type: 'string' }, setup: { type: 'string' },
+      const a = opts({
+        surface: { type: 'string' }, mcp: { type: 'string' }, cli: { type: 'string' }, claude: { type: 'string' }, scenario: { type: 'string' }, setup: { type: 'string' },
         models: { type: 'string', default: 'haiku' }, tries: { type: 'string' }, out: { type: 'string' }, budget: { type: 'string' }, fallback: { type: 'boolean' },
         'no-preflight': { type: 'boolean' },
-      } }).values;
+      });
       if (!a.surface || !a.mcp) return console.error(USAGE), 1;
       const list = (v?: string) => v?.split(',').map((x) => x.trim()).filter(Boolean);
       const words = (v?: string) => v?.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)?.map((w) => w.replace(/^["']|["']$/g, ''));
@@ -74,13 +79,13 @@ async function main(argv: string[]): Promise<number> {
       const out = a.out ?? `out/agent/${newRunId()}`;
       if (!a['no-preflight']) {
         const [surfaceFile, variant] = a.surface.split('#');
-        const problems = await preflight({ qaDir: new URL('..', import.meta.url).pathname, scenariosFile: golden('agent-scenarios.yaml'), surfaceFile, variant, catalogCommand: words(a.mcp)! });
+        const problems = await preflight({ qaDir: new URL('..', import.meta.url).pathname, scenariosFile: golden('agent-scenarios.yaml'), surfaceFile, variant, catalogCommand: words(a.mcp)!, claude: words(a.claude) });
         if (problems.length) { console.error(`qa agent: pre-flight failed, nothing ran:\n  ${problems.join('\n  ')}`); return 3; }
         console.error('qa agent: pre-flight clean');
       }
       const report = await runScenarios({
         scenariosFile: golden('agent-scenarios.yaml'), queriesFile: golden('queries.yaml'), phrasesFile: golden('phrases.yaml'),
-        surface: a.surface, catalogCommand: words(a.mcp)!, cliCommand: words(a.cli), scenarios: list(a.scenario), setups: list(a.setup),
+        surface: a.surface, catalogCommand: words(a.mcp)!, cliCommand: words(a.cli), claude: words(a.claude), scenarios: list(a.scenario), setups: list(a.setup),
         models: list(a.models)!, tries: a.tries ? Number(a.tries) : undefined, out, budgetUsd: a.budget ? Number(a.budget) : undefined, fallback: a.fallback,
       });
       process.stdout.write(readFileSync(`${out}/summary.txt`, 'utf8'));
