@@ -1,0 +1,624 @@
+# Discovery golden set for the Skills Catalog (PRD FR-02; qa-plan.md §2 oracles "Found" and
+# "Nothing matches", §3 "Discovery"). Hand-written 2026-09-28, before any code exists.
+#
+# WHAT IS HERE
+#   corpus:  64 skills a software team would publish (name, description, a one-line body_gist).
+#            It seeds the catalog as `queries.corpus` (agent scenarios A1-A3, A12) and must be
+#            embedded unchanged in the generated scale.10k catalog (A11).
+#   queries: 33 plain-words asks a developer puts to their assistant, each labelled by hand.
+#   sets:    the named subsets other files refer to (traceability.yaml: queries.must-find,
+#            queries.no-match). A lint recomputes them from the queries and fails on drift.
+#   common_words: the words the any-word route drops from a term (below the header).
+#
+# THE LABELS ARE ORACLES
+#   Every must_find / may_find / class / keyword_route_expected / any_word_route_expected /
+#   any_word_no_match_holds is written by a person reading the ask and the corpus. Never generate,
+#   fill in or "fix" a label from the system under test's output. If the system disagrees with a
+#   label, a person re-reads the label first; a changed label needs a `note:` saying why.
+#
+# QUERY FIELDS
+#   ask:        the developer's words to their assistant.
+#   keywords:   1-3 search terms an assistant would most likely send to a keyword `find` first
+#               (each term is sent as its own `q`). For typo queries: the misspelling as typed.
+#   class:      exact-name | keyword | synonym | paraphrase | multi-match | no-match | typo | ambiguous
+#   must_find:  every name here must be in the top 5. Empty for no-match.
+#   may_find:   acceptable extras; neither required nor penalised.
+#   keyword_route_expected: hit | miss. Would `keywords` alone find every must_find skill, with
+#               all-words matching? (Must-find queries only.)
+#   any_word_route_expected: hit | miss. The same question with any-word matching. (Must-find
+#               queries only: with an empty must_find, hit or miss means nothing.)
+#   any_word_no_match_holds: true | false. No-match queries only: does every term stay empty with
+#               any-word matching? `false` names the leaking word in the note; that query then
+#               fails "Nothing matches" in any-word mode (a finding for the architects, not a
+#               label to relax).
+#   reformulation: for `miss` queries, one term that does find it (proves the skill is findable).
+#               It finds it in both modes.
+#   scenario / alias: links from agent-scenarios.yaml (A1, A2, A3, A11).
+#
+# TWO MATCHING MODES (the lexical adapter is configured with one; the goldens support both)
+#   Shared: tokens from the name (split on hyphens) and the description; case-insensitive; a token
+#   is a run of letters and digits (so 'syntax' is one token and never matches 'tax', and
+#   'CHANGELOG.md' is 'changelog' + 'md'); no stemming, prefix or fuzzy matching; the body is not
+#   searched; ranked by bm25; "hit" = every must_find name is in the top 5 of at least one term.
+#   all-words (keyword_route_expected; both architects' local plan: SQLite FTS5's implicit AND):
+#     a term matches a skill when ALL its words are tokens of that skill.
+#   any-word (any_word_route_expected; the agent-experience trials findings.md F4, because agents send
+#     "any of these words" queries such as `release notes changelog sprint changes customer`):
+#     the words in common_words are dropped from the term; a term matches a skill when ANY
+#     remaining word is one of its tokens (FTS5: the remaining words joined with OR); "nothing
+#     matched" = no remaining word matched. The adapter's common-word list must be exactly
+#     common_words below; the lint compares the two and fails on any difference.
+#   Checked against real SQLite FTS5 3.50 (bm25, top 5), both modes, with the unicode61 and porter
+#   tokenizers, over one column (name words + description) and over two (name, description): no
+#   label changes, and every reformulation finds its skill in both modes. Substring (LIKE)
+#   matching flips a few labels in either mode (q17 'docker' in 'dockerfile'; q29 'tax' in
+#   'syntax'); the notes say which.
+#   Any-word flips four all-words misses to hits (q13, q16, q17, q25) and no hit to a miss; it
+#   breaks two no-match queries (q30 'batch', q32 'schema'); the queries' notes say which.
+#
+# METRICS
+#   Interface level (no model), through every door (CLI, MCP, HTTP). The gate sets follow the
+#   adapter's configured mode: all-words uses sets.keyword-gate and sets.semantic-gap; any-word
+#   uses sets.keyword-gate-any and sets.semantic-gap-any. The all-words sets stay as they are.
+#     - Found: for each query in the mode's gate set, call find(q=term) for each term in keywords.
+#       Pass when every must_find name is in the top 5 of at least one call. recall@5 = must_find
+#       names found / must_find names labelled; the gate is 1.0. Every result has a name and a
+#       description.
+#     - Findable: for each query in the mode's semantic-gap set, find(q=reformulation) has every
+#       must_find in its top 5 (gated). find(q=keywords) is run and reported as the adapter's
+#       known gap, not gated. A semantic adapter must turn these into hits without breaking no-match.
+#     - Nothing matches: in BOTH modes, for each query in sets.no-match, every find(q=term) returns
+#       an empty page. In any-word mode q30 and q32 fail this as labelled
+#       (any_word_no_match_holds: false) until the architects settle F4 against FR-02.
+#   Agent level (qa-plan.md §1, 3 runs per access setup):
+#     - must_find: the final answer names every must_find skill, after a catalog call in the trace.
+#     - no-match: the answer says plainly that nothing matches and names no catalog skill.
+#     - A skill name not in the corpus fails (fabricated). Names outside must_find + may_find are
+#       reported as precision misses, not gated.
+#     - For the mode's semantic-gap set and typo queries, also recorded: did the assistant search
+#       again with other terms after the first search came back empty or off-target
+#       (reformulation rate)?
+
+# The words the any-word mode drops from a term before matching (small on purpose: articles,
+# pronouns, the question words assistants copy from the ask, and "skill"/"find"/"help", which
+# describe the search rather than the need). The adapter's list must be exactly this one; the
+# lint compares them. Adding a word here changes labels: re-reason every query that uses it.
+common_words: [a, an, the, is, there, for, to, of, and, or, my, me, i, skill, skills, any, find, get,
+               with, in, on, that, this, what, how, can, do, does, help, helps]
+
+corpus:
+  # --- git, pull requests, releases ---
+  - name: release-note-draft
+    description: "Drafts release notes from merged pull requests using the team template. Use when preparing a release."
+    body_gist: "List PRs merged since the last tag, group them by type, fill templates/release.md."
+  - name: changelog-from-commits
+    description: "Generates or updates CHANGELOG.md from Conventional Commits between two git tags, in Keep a Changelog format. Use when maintaining a library's changelog; not for customer-facing release notes."
+    body_gist: "Parse commits between tags by type and scope, append a dated section to CHANGELOG.md."
+  - name: semver-bump
+    description: "Works out the next semantic version (major, minor or patch) from the commits since the last tag and updates package.json, pyproject.toml or other version files. Use before tagging a release."
+    body_gist: "Classify commits as breaking, feature or fix, pick the bump, edit the version files."
+  - name: pr-description-writer
+    description: "Writes a pull request title and description from the branch diff and the linked ticket: summary, motivation, how it was tested, and screenshots for UI changes. Use when opening a PR or when a PR has an empty description."
+    body_gist: "Read the diff and ticket, fill the PR template, list test evidence."
+  - name: pr-review-checklist
+    description: "A checklist for reviewing pull requests (tests, naming, security, docs). Use when asked to review a PR."
+    body_gist: "Work through checklist.md item by item and leave line comments."
+  - name: commit-message-conventional
+    description: "Writes commit messages in Conventional Commits format (type(scope): subject, body, footer) from the staged diff. Use when committing, or to reword commits before merging."
+    body_gist: "Read the staged diff, pick type and scope, write a 50-char subject and a wrapped body."
+  - name: git-branch-cleanup
+    description: "Finds local and remote git branches that are already merged or have had no commits for 90 days, and deletes them after you confirm. Use when the branch list is cluttered."
+    body_gist: "List merged and stale branches, show them, delete only the confirmed ones."
+  - name: merge-conflict-resolver
+    description: "Resolves git merge and rebase conflicts file by file: explains what each side changed, proposes the combined version and runs the tests afterwards. Use when a merge or rebase stops on conflicts."
+    body_gist: "For each conflicted file, show both sides, propose a merge, run the tests."
+
+  # --- testing ---
+  - name: unit-test-writer
+    description: "Writes unit tests for a function or module in the project's existing framework (pytest, Jest, JUnit, Go testing), covering edge cases and error paths. Use when adding tests to new or untested code."
+    body_gist: "Detect the test framework, list cases per branch, write and run the tests."
+  - name: flaky-test-triage
+    description: "Investigates a flaky test: reruns it in a loop, compares logs of failing and passing runs, and classifies the cause (timing, shared state, test order, network). Use when a test passes and fails intermittently in CI."
+    body_gist: "Rerun N times, diff the logs, classify the cause, propose a fix or a quarantine."
+  - name: e2e-playwright-tests
+    description: "Writes end-to-end browser tests with Playwright for a user flow, with stable role-based selectors, fixtures and traces on failure. Use when a web feature needs an end-to-end test."
+    body_gist: "Map the flow to steps, write the spec with getByRole selectors, run it headless."
+  - name: test-coverage-gaps
+    description: "Reads a coverage report (lcov, Cobertura, coverage.py) and lists the riskiest uncovered branches with a suggested test for each. Use when coverage drops or before a release."
+    body_gist: "Parse the report, rank uncovered branches by risk, suggest one test each."
+  - name: load-test-k6
+    description: "Writes a k6 load test for an HTTP endpoint with ramp-up stages and pass/fail thresholds on latency and error rate. Use to check how a service behaves under expected and peak traffic."
+    body_gist: "Write the k6 script with stages and thresholds, run it, summarise p95 and errors."
+  - name: contract-test-pact
+    description: "Sets up consumer-driven contract tests with Pact between a service and the clients that call its API, including the broker step in CI. Use when two services must keep agreeing on an API."
+    body_gist: "Write consumer pacts, add provider verification, wire the broker into CI."
+
+  # --- documentation ---
+  - name: readme-writer
+    description: "Writes or refreshes a repository README: purpose, quickstart, configuration and contributing, with every command checked by running it. Use when a README is missing or out of date."
+    body_gist: "Read the repo, draft the sections, run each quickstart command before keeping it."
+  - name: adr-writer
+    description: "Drafts an architecture decision record (ADR) in the team's template: context, options considered, decision and consequences. Use when a technical decision should be written down."
+    body_gist: "Ask for context and options, fill templates/adr.md, number it after the last ADR."
+  - name: api-docs-openapi
+    description: "Generates or updates OpenAPI 3.1 documentation from the service's route handlers, with request and response examples. Use when an HTTP API's reference docs are missing or have drifted from the code."
+    body_gist: "Walk the routes, emit openapi.yaml with schemas and examples, diff against the old spec."
+  - name: docstring-writer
+    description: "Adds docstrings and comments to undocumented functions and classes in the language's usual style (Google-style Python, JSDoc, KDoc, GoDoc). Use when code lacks inline documentation."
+    body_gist: "Find undocumented symbols, write docstrings in the detected style."
+  - name: runbook-writer
+    description: "Writes an operational runbook for a service: what each alert means, dashboards to check, common failures and step-by-step recovery. Use when a service goes to production or an incident shows steps were missing."
+    body_gist: "List alerts and failure modes, write a recovery procedure for each."
+
+  # --- infrastructure ---
+  - name: terraform-module-scaffold
+    description: "Scaffolds a new Terraform module with variables, outputs, versions.tf, a README and an example, following the team's module layout. Use when creating reusable infrastructure code in Terraform."
+    body_gist: "Create the module folder from the template, fill variables and outputs, add an example."
+  - name: terraform-plan-review
+    description: "Reviews a terraform plan before apply: flags resources that will be destroyed or replaced, drift, security groups open to the internet and likely cost increases. Use when a plan needs approval."
+    body_gist: "Read the plan JSON, list destroys and replaces first, then security and cost flags."
+  - name: k8s-manifest-lint
+    description: "Checks Kubernetes manifests and Helm charts for missing resource limits, liveness and readiness probes, security context and deprecated API versions. Use before deploying to a cluster."
+    body_gist: "Render the charts, run the checks, report each finding with the fix."
+  - name: k8s-pod-debug
+    description: "Debugs a Kubernetes pod that won't start or keeps restarting (CrashLoopBackOff, ImagePullBackOff, OOMKilled, Pending) using kubectl describe, logs and events. Use when a deployment is stuck."
+    body_gist: "Describe the pod, read events and previous logs, match the failure to a known cause."
+  - name: dockerfile-optimizer
+    description: "Rewrites a Dockerfile for smaller, faster, safer container images: multi-stage builds, layer caching, a non-root user and pinned base images. Use when images are large or slow to build."
+    body_gist: "Reorder layers for caching, split build and runtime stages, drop root, pin the base."
+  - name: github-actions-workflow
+    description: "Writes or fixes GitHub Actions workflows for build, test and deploy, with dependency caching, test matrices and secrets handled safely. Use when setting up CI for a repository or when a workflow run fails."
+    body_gist: "Draft .github/workflows/ci.yml with cache and matrix, read the failing run's logs."
+  - name: aws-cost-review
+    description: "Reviews AWS spend from a Cost Explorer or CUR export: idle resources, oversized instances and missing savings plans, with estimated monthly savings for each. Use when the cloud bill jumps or before a budget review."
+    body_gist: "Group spend by service and tag, flag idle and oversized resources, estimate savings."
+  - name: cdk-stack-scaffold
+    description: "Scaffolds an AWS CDK stack in TypeScript with a construct layout, snapshot tests and cdk-nag checks. Use when starting new AWS infrastructure as code with CDK."
+    body_gist: "Create the CDK app, one construct per concern, add snapshot tests and cdk-nag."
+  - name: iam-policy-review
+    description: "Reviews AWS IAM policies for wildcard actions, privilege-escalation paths and unused permissions, and proposes least-privilege versions. Use when adding a role or auditing access."
+    body_gist: "Parse the policies, flag wildcards and escalation paths, propose a narrowed policy."
+
+  # --- security ---
+  - name: security-review-owasp
+    description: "Reviews code changes for OWASP Top 10 risks (injection, broken access control, SSRF, unsafe deserialization, XSS) and reports each finding with a fix. Use when a change touches authentication, user input or data access."
+    body_gist: "Walk the diff against the OWASP list, report findings with severity and a patch."
+  - name: secret-scan
+    description: "Scans a repository and its full git history for leaked secrets (API keys, tokens, private keys, passwords) and explains how to revoke and rotate each one. Use before open-sourcing a repository or after a suspected leak."
+    body_gist: "Run the scanner over history, group findings by secret, give rotation steps."
+  - name: dependency-vuln-triage
+    description: "Triages dependency vulnerability alerts (CVEs) from Dependabot, npm audit or pip-audit: whether the vulnerable code is reachable, severity in context, and the smallest safe upgrade. Use when security alerts pile up."
+    body_gist: "For each alert check reachability and fix version, rank, open one upgrade PR per batch."
+  - name: threat-model-stride
+    description: "Runs a STRIDE threat model on a design: data flows, trust boundaries, the threats at each and their mitigations, as a table and a diagram. Use when designing a new service or a feature that handles sensitive data."
+    body_gist: "Draw the data flow, mark trust boundaries, list STRIDE threats and mitigations."
+
+  # --- data and SQL ---
+  - name: sql-query-review
+    description: "Reviews SQL queries for correctness and performance: missing indexes, N+1 access patterns, full table scans, implicit casts and string-built SQL. Use when a query is slow or before merging data-access code."
+    body_gist: "Read the query and its EXPLAIN plan, flag scans and missing indexes, suggest rewrites."
+  - name: sql-migration-writer
+    description: "Writes forward and rollback database migrations (Flyway, Alembic, Rails, Prisma) for schema changes, splitting risky changes on large tables into zero-downtime steps. Use when adding or changing a table, column or index."
+    body_gist: "Write up and down migrations, split big-table changes into expand and contract steps."
+  - name: dbt-model-builder
+    description: "Builds a dbt model (SQL plus YAML) with sources, tests and column docs from a description of the table needed. Use when adding a model to the analytics warehouse."
+    body_gist: "Find the sources, write the model SQL and schema.yml with tests, run dbt build."
+  - name: data-pipeline-debug
+    description: "Debugs a failed Airflow DAG or scheduled batch job: reads task logs, finds the failing step and its upstream cause, and proposes a safe backfill. Use when a data pipeline run fails or is late."
+    body_gist: "Find the first failed task, read its logs and inputs, propose a backfill command."
+  - name: csv-data-profiler
+    description: "Profiles a CSV or Parquet file: column types, nulls, distinct counts, outliers and values that look wrong. Use when you receive a new dataset or before loading a file into the warehouse."
+    body_gist: "Load a sample, compute per-column stats, list suspicious values."
+
+  # --- frontend ---
+  - name: react-component-builder
+    description: "Builds a React component in TypeScript from a description or mock-up, with typed props, loading and error states, a Storybook story and tests. Use when adding UI to a React app."
+    body_gist: "Sketch props and states, write the component, its story and a test."
+  - name: accessibility-audit
+    description: "Audits a web page or component against WCAG 2.2 AA: colour contrast, form labels, keyboard navigation, focus order, screen reader names and ARIA misuse. Use before shipping UI changes."
+    body_gist: "Run axe, walk the page by keyboard, report each issue with the WCAG rule and a fix."
+  - name: tailwind-migration
+    description: "Converts plain CSS, Sass or styled-components to Tailwind utility classes while keeping the rendered page the same, checked with screenshots. Use when moving a codebase's styles to Tailwind."
+    body_gist: "Convert one component at a time, compare before and after screenshots."
+  - name: web-performance-audit
+    description: "Audits page load performance with Lighthouse and Core Web Vitals (LCP, CLS, INP) and proposes fixes for bundle size, images and render-blocking resources. Use when a page feels slow to load."
+    body_gist: "Run Lighthouse, attribute each slow metric to a cause, propose fixes in order of gain."
+  - name: i18n-string-extractor
+    description: "Extracts hard-coded UI strings into translation files (i18next, ICU MessageFormat) and flags concatenated or pluralised strings that won't translate. Use when preparing an app for other languages."
+    body_gist: "Find literal strings in components, move them to locale files, flag concatenations."
+
+  # --- incidents and observability ---
+  - name: incident-commander
+    description: "Runs an active incident: sets severity, assigns roles, keeps a timeline and drafts status updates for stakeholders every 30 minutes. Use when production is down or degraded."
+    body_gist: "Declare severity, assign roles, keep timeline.md, draft updates on a timer."
+  - name: postmortem-writer
+    description: "Writes a blameless postmortem from an incident timeline: impact, root cause, contributing factors and owned action items. Use after an incident is resolved."
+    body_gist: "Read the timeline, fill templates/postmortem.md, give each action item an owner."
+  - name: log-query-builder
+    description: "Writes log search queries (CloudWatch Logs Insights, Datadog, Grafana Loki LogQL) from a plain description of what you are looking for. Use when digging through logs during debugging or an incident."
+    body_gist: "Ask what to find and where, write the query for that log tool, explain each clause."
+  - name: alert-rule-tuning
+    description: "Tunes noisy monitoring alerts: finds alerts that fire without anyone acting, adjusts thresholds and windows, and replaces them with SLO burn-rate alerts. Use when on-call gets paged too often."
+    body_gist: "Pull 30 days of alert history, flag unactioned alerts, propose new thresholds."
+  - name: otel-instrumentation
+    description: "Adds OpenTelemetry tracing and metrics to a service: spans around handlers and outbound calls, context propagation and exporter configuration. Use when a service has no traces or you can't follow a request across services."
+    body_gist: "Add the SDK, wrap handlers and clients in spans, configure the exporter."
+  - name: slo-definition
+    description: "Defines service level objectives from user journeys: the SLIs to measure, targets, error budgets and the dashboard to watch them. Use when a service needs reliability targets."
+    body_gist: "List user journeys, pick an SLI each, set targets and the error budget policy."
+
+  # --- onboarding ---
+  - name: onboarding-guide
+    description: "Builds a first-week onboarding guide for an engineer joining the team: setup steps, an architecture tour, who to ask about what, and starter tasks. Use when someone new joins."
+    body_gist: "Collect setup steps and owners, pick three starter tasks, write guide.md."
+  - name: codebase-tour
+    description: "Explains an unfamiliar codebase: entry points, main modules, how data flows through them and where common changes go, with a diagram. Use when starting work in a repository you don't know."
+    body_gist: "Find entry points, map modules and their dependencies, draw the data flow."
+  - name: dev-env-setup
+    description: "Sets up a local development environment from the repository's config: toolchain versions, dependencies, env files and seed data, then checks the app starts. Use when a project won't build or run on a new machine."
+    body_gist: "Read tool-version files, install pinned versions, copy env templates, start the app."
+
+  # --- code quality ---
+  - name: refactor-long-function
+    description: "Breaks a long function into smaller, well-named functions without changing behaviour, running the tests after each step. Use when a function is too long or does too many things."
+    body_gist: "Find cohesive blocks, extract one at a time, run the tests after each extraction."
+  - name: dead-code-finder
+    description: "Finds unused functions, exports, files and stale feature flags, and proposes deletions that are safe to make. Use when cleaning up a codebase."
+    body_gist: "Build the reference graph, list unreferenced symbols, propose deletions in small batches."
+  - name: regex-helper
+    description: "Writes and explains regular expressions, with test strings that should and shouldn't match. Use when you need a regex or can't read one."
+    body_gist: "Write the pattern, explain each part, list matching and non-matching examples."
+  - name: shell-script-hardening
+    description: "Hardens bash scripts: set -euo pipefail, quoting, shellcheck fixes, safe temporary files and cleanup traps. Use when a shell script will run in CI or production."
+    body_gist: "Run shellcheck, add strict mode and traps, quote every expansion."
+
+  # --- dependency upgrades ---
+  - name: dependency-upgrade-planner
+    description: "Plans and applies dependency upgrades in safe batches: reads each package's changelogs for breaking changes and runs the tests between batches. Use when dependencies are out of date."
+    body_gist: "List outdated dependencies, group by risk, upgrade one batch at a time with tests."
+  - name: react-version-upgrade
+    description: "Upgrades a React app to a new major version: runs the official codemods, replaces deprecated APIs and fixes the tests that break. Use when moving to a new React major release."
+    body_gist: "Run the codemods, fix deprecations, get the test suite green."
+  - name: python-version-upgrade
+    description: "Upgrades a project to a newer Python version: modernises syntax with pyupgrade, replaces removed standard-library modules and updates CI images and classifiers. Use when moving to a new Python release."
+    body_gist: "Bump the interpreter pin, run pyupgrade, replace removed modules, update CI."
+
+  # --- API design ---
+  - name: api-design-review
+    description: "Reviews a REST API design against the team's guidelines: resource naming, status codes, pagination, versioning and the error format. Use when designing or changing HTTP endpoints."
+    body_gist: "Check each endpoint against guidelines.md, report deviations with the preferred shape."
+  - name: openapi-client-generator
+    description: "Generates a typed API client in TypeScript or Python from an OpenAPI spec, with retries, pagination helpers and auth. Use when a service needs to call another team's API."
+    body_gist: "Run the generator on the spec, add retry and pagination wrappers, write a smoke test."
+
+  # --- planning and team process ---
+  - name: feature-flag-rollout
+    description: "Plans a gradual rollout behind a feature flag (LaunchDarkly, Unleash or config): cohorts, the metrics to watch, a kill switch and when to remove the flag. Use when shipping a risky change."
+    body_gist: "Define cohorts and steps, list the metrics that stop the rollout, schedule flag removal."
+  - name: jira-ticket-writer
+    description: "Turns a bug report or feature idea into a well-formed Jira ticket: summary, acceptance criteria, reproduction steps and labels. Use when filing work items."
+    body_gist: "Ask for the missing facts, write the ticket in the team's template."
+  - name: bug-repro-minimizer
+    description: "Reduces a bug report to a minimal reproducible example: strips unrelated code, pins versions and writes a failing test. Use when a bug is hard to reproduce or before filing it upstream."
+    body_gist: "Copy the failing case, delete code while it still fails, pin versions, write the test."
+  - name: standup-summary
+    description: "Summarises yesterday's merged PRs, open reviews and blockers into a short standup digest to post in Slack. Use before the daily standup or for async teams."
+    body_gist: "Collect merged and open PRs per person, list blockers, format for Slack."
+
+queries:
+  # --- keyword: the need uses the catalog's own words ---
+  - id: q01
+    ask: "Is there a skill for writing release notes?"
+    keywords: ["release notes"]
+    class: keyword
+    must_find: [release-note-draft]
+    may_find: [changelog-from-commits, semver-bump]
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+    scenario: A1
+    note: "The PRD's own example (FR-02, as quoted in the QA brief). changelog-from-commits also contains 'release notes' (to rule them out), so it will rank close: fine as an extra, wrong as the only answer."
+  - id: q02
+    ask: "I need to write a changelog for our open-source library."
+    keywords: ["changelog"]
+    class: keyword
+    must_find: [changelog-from-commits]
+    may_find: [release-note-draft, semver-bump, dependency-upgrade-planner]
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+    note: "dependency-upgrade-planner says 'changelogs': a stemming search returns it too."
+  - id: q03
+    ask: "Is there something that reviews SQL queries for performance problems?"
+    keywords: ["sql query review", "sql performance"]
+    class: keyword
+    must_find: [sql-query-review]
+    may_find: [sql-migration-writer, dbt-model-builder]
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+  - id: q04
+    ask: "Anything that writes the description for my pull request?"
+    keywords: ["pull request description", "pr description"]
+    class: keyword
+    must_find: [pr-description-writer]
+    may_find: [pr-review-checklist, commit-message-conventional]
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+  - id: q05
+    ask: "I want my assistant to review a PR before I approve it."
+    keywords: ["pr review", "code review"]
+    class: keyword
+    must_find: [pr-review-checklist]
+    may_find: [security-review-owasp, pr-description-writer]
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+  - id: q06
+    ask: "Do we have anything for triaging flaky tests?"
+    keywords: ["flaky test", "flaky tests"]
+    class: keyword
+    must_find: [flaky-test-triage]
+    may_find: []
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+  - id: q07
+    ask: "Is there a skill for load testing an API?"
+    keywords: ["load test", "load testing"]
+    class: keyword
+    must_find: [load-test-k6]
+    may_find: [web-performance-audit, contract-test-pact]
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+    note: "web-performance-audit is the near-neighbour: 'page load' performance, not load testing."
+  - id: q08
+    ask: "Find me a skill that reviews Terraform plans before apply."
+    keywords: ["terraform plan", "terraform"]
+    class: keyword
+    must_find: [terraform-plan-review]
+    may_find: [terraform-module-scaffold]
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+    scenario: A11
+    alias: terraform-plan-review
+    note: "Same ask as A11 (scale.10k). The alias lets A11's `queries.terraform-plan-review` resolve to this label."
+
+  # --- exact-name: the developer already knows the name ---
+  - id: q09
+    ask: "Do we have the secret-scan skill in the catalog?"
+    keywords: ["secret-scan"]
+    class: exact-name
+    must_find: [secret-scan]
+    may_find: [dependency-vuln-triage]
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+  - id: q10
+    ask: "Show me k8s-pod-debug."
+    keywords: ["k8s-pod-debug"]
+    class: exact-name
+    must_find: [k8s-pod-debug]
+    may_find: [k8s-manifest-lint]
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+    note: "An assistant may call get directly; the agent check only needs the skill named with its description."
+  - id: q11
+    ask: "Is dockerfile-optimizer published yet?"
+    keywords: ["dockerfile-optimizer"]
+    class: exact-name
+    must_find: [dockerfile-optimizer]
+    may_find: []
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+
+  # --- synonym: a different word for the same thing ---
+  - id: q12
+    ask: "Is there an a11y checker for our React components?"
+    keywords: ["a11y", "a11y react"]
+    class: synonym
+    must_find: [accessibility-audit]
+    may_find: [react-component-builder]
+    keyword_route_expected: miss
+    any_word_route_expected: miss
+    reformulation: "accessibility"
+    note: "'a11y' is a numeronym the description never uses (it says accessibility and WCAG). This label depends on that wording, which was chosen on purpose."
+  - id: q13
+    ask: "Anything to check our npm packages for known security holes?"
+    keywords: ["security holes", "npm packages"]
+    class: synonym
+    must_find: [dependency-vuln-triage]
+    may_find: [secret-scan, security-review-owasp, dependency-upgrade-planner]
+    keyword_route_expected: miss
+    any_word_route_expected: hit
+    reformulation: "npm audit"
+    note: "'security holes' ~ vulnerabilities. dependency-vuln-triage's text has neither 'holes' nor 'packages'. Any-word hits: 'npm' is only in dependency-vuln-triage (and 'security' alone matches exactly five skills, it among them)."
+  - id: q14
+    ask: "Help me write the retro for last night's outage."
+    keywords: ["retro", "outage retro"]
+    class: synonym
+    must_find: [postmortem-writer]
+    may_find: [incident-commander, runbook-writer]
+    keyword_route_expected: miss
+    any_word_route_expected: miss
+    reformulation: "postmortem"
+
+  # --- paraphrase: the need is described, not named ---
+  - id: q15
+    ask: "I have to tell customers what changed in this sprint. Anything in our shared catalog that helps?"
+    keywords: ["what changed", "customer update", "sprint summary"]
+    class: paraphrase
+    must_find: [release-note-draft]
+    may_find: [changelog-from-commits, standup-summary]
+    keyword_route_expected: miss
+    any_word_route_expected: miss
+    reformulation: "release notes"
+    scenario: A2
+    note: "A2 accepts either release-note-draft or changelog-from-commits; this label requires release-note-draft because changelog-from-commits says it is not for customer-facing notes. 'what changed' hits merge-conflict-resolver: a wrong result the assistant must not offer as the answer. Any-word also misses: 'customer update' returns only changelog-from-commits (via 'customer-facing'), the wrong answer agent-ux F4 saw one run settle on."
+  - id: q16
+    ask: "Our on-call keeps getting woken up at night by pages nobody acts on. Anything for that?"
+    keywords: ["pager fatigue", "alert fatigue"]
+    class: paraphrase
+    must_find: [alert-rule-tuning]
+    may_find: [slo-definition, incident-commander, runbook-writer]
+    keyword_route_expected: miss
+    any_word_route_expected: hit
+    reformulation: "noisy alerts"
+    note: "Borderline: an assistant that searches 'alerts' or 'on-call' on its own hits, and so does any-word ('alert fatigue' returns alert-rule-tuning and runbook-writer). The all-words label is for the likely two-word first try."
+  - id: q17
+    ask: "Our Docker builds take forever. Anything to speed them up?"
+    keywords: ["docker build", "speed up builds"]
+    class: paraphrase
+    must_find: [dockerfile-optimizer]
+    may_find: [github-actions-workflow]
+    keyword_route_expected: miss
+    any_word_route_expected: hit
+    reformulation: "dockerfile"
+    note: "'Dockerfile' is one token, so 'docker' doesn't match it in a token index. A prefix or substring search would hit, and so does any-word: 'build' matches only three skills, dockerfile-optimizer first."
+  - id: q18
+    ask: "I'm new here and don't get how this repo is laid out. Is there a skill that walks me through it?"
+    keywords: ["repo layout", "onboarding"]
+    class: paraphrase
+    must_find: [codebase-tour]
+    may_find: [onboarding-guide, readme-writer, dev-env-setup]
+    keyword_route_expected: miss
+    any_word_route_expected: miss
+    reformulation: "codebase"
+    note: "'onboarding' finds onboarding-guide, a near-neighbour for writing a guide for someone else. The assistant should keep looking, or offer both. Unsure: onboarding-guide includes an 'architecture tour', so a reader could argue it belongs in must_find."
+  - id: q19
+    ask: "Our AWS bill doubled last month. Anything that can help figure out why?"
+    keywords: ["aws cost", "cloud bill"]
+    class: paraphrase
+    must_find: [aws-cost-review]
+    may_find: [iam-policy-review, cdk-stack-scaffold]
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+    note: "A paraphrase the keyword route handles, so not every paraphrase needs reformulating."
+
+  # --- multi-match: several skills are right ---
+  - id: q20
+    ask: "What do we have for Terraform?"
+    keywords: ["terraform"]
+    class: multi-match
+    must_find: [terraform-module-scaffold, terraform-plan-review]
+    may_find: [cdk-stack-scaffold]
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+  - id: q21
+    ask: "Which skills help with Kubernetes?"
+    keywords: ["kubernetes", "k8s"]
+    class: multi-match
+    must_find: [k8s-manifest-lint, k8s-pod-debug]
+    may_find: []
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+  - id: q22
+    ask: "What skills do we have for handling incidents?"
+    keywords: ["incident", "incidents"]
+    class: multi-match
+    must_find: [incident-commander, postmortem-writer]
+    may_find: [runbook-writer, log-query-builder, alert-rule-tuning]
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+  - id: q23
+    ask: "Anything for working with OpenAPI specs?"
+    keywords: ["openapi"]
+    class: multi-match
+    must_find: [api-docs-openapi, openapi-client-generator]
+    may_find: [api-design-review, contract-test-pact]
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+
+  # --- typo: the developer misspells ---
+  - id: q24
+    ask: "Any skill for writing playwrite tests?"
+    keywords: ["playwrite"]
+    class: typo
+    must_find: [e2e-playwright-tests]
+    may_find: [unit-test-writer]
+    keyword_route_expected: miss
+    any_word_route_expected: miss
+    reformulation: "playwright"
+    note: "A common misspelling of Playwright. keywords is the misspelling as typed (the pass-through case). A token index has no fuzzy match; the agent passes if it corrects the spelling or retries."
+  - id: q25
+    ask: "Install the pr-reveiw-checklist skill for me."
+    keywords: ["pr-reveiw-checklist"]
+    class: typo
+    must_find: [pr-review-checklist]
+    may_find: [pr-description-writer]
+    keyword_route_expected: miss
+    any_word_route_expected: hit
+    reformulation: "pr review"
+    note: "A misspelled skill name. A get on the typed name is a not-found. The assistant should then search, name pr-review-checklist and confirm before installing a name the user didn't type. Any-word hits on the parts ('pr', 'checklist'): pr-review-checklist ranks first; the agent-level rule (confirm first) is the same in both modes."
+
+  # --- ambiguous: more than one reading ---
+  - id: q26
+    ask: "Is there a skill that can review my changes?"
+    keywords: ["review", "code review"]
+    class: ambiguous
+    must_find: [pr-review-checklist]
+    may_find: [security-review-owasp, sql-query-review, terraform-plan-review, iam-policy-review, api-design-review, aws-cost-review]
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+    note: "Genuinely ambiguous: 'changes' could be a PR, SQL, a Terraform plan. 'review' matches 7 skill names, so the top 5 depends on ranking (pr-review-checklist has the term twice in a short text and should rank first). Unsure: the label takes the everyday reading. The agent passes if it names pr-review-checklist and lists the other reviewers or asks which kind."
+  - id: q27
+    ask: "Do we have anything for migrations?"
+    keywords: ["migration", "migrations"]
+    class: ambiguous
+    must_find: [sql-migration-writer]
+    may_find: [tailwind-migration, react-version-upgrade, python-version-upgrade, dependency-upgrade-planner]
+    keyword_route_expected: hit
+    any_word_route_expected: hit
+    note: "Genuinely ambiguous: database migrations or code migrations (Tailwind, React, Python). Unsure: the label takes the database reading, the most common one on a dev team. The agent passes if it names sql-migration-writer and mentions or asks about the others."
+
+  # --- no-match: nothing in the catalog fits ---
+  - id: q28
+    ask: "Is there a skill for baking sourdough bread?"
+    keywords: ["sourdough", "baking", "bread"]
+    class: no-match
+    must_find: []
+    may_find: []
+    any_word_no_match_holds: true
+    scenario: A3
+  - id: q29
+    ask: "Can any skill do my personal tax return?"
+    keywords: ["tax return", "tax"]
+    class: no-match
+    must_find: []
+    may_find: []
+    any_word_no_match_holds: true
+    note: "Substring trap on purpose: 'tax' is inside 'syntax' (python-version-upgrade). A token index returns nothing in both modes ('return' is no token either); a LIKE '%tax%' search returns a false match and fails this oracle."
+  - id: q30
+    ask: "Do we have a skill for writing COBOL batch jobs?"
+    keywords: ["cobol", "cobol batch"]
+    class: no-match
+    must_find: []
+    may_find: []
+    any_word_no_match_holds: false
+    note: "'batch' alone hits data-pipeline-debug (an Airflow batch job). COBOL is the need; an OR search on 'cobol batch' would return a false match. Any-word leak (so any_word_no_match_holds is false): 'batch' makes 'cobol batch' return data-pipeline-debug, so this query fails 'Nothing matches' in any-word mode. A finding for the architects (agent-ux F4 against FR-02), not a label to relax."
+  - id: q31
+    ask: "Is there a skill for building Flutter widgets?"
+    keywords: ["flutter", "flutter widgets"]
+    class: no-match
+    must_find: []
+    may_find: []
+    any_word_no_match_holds: true
+  - id: q32
+    ask: "Is there a skill for designing a GraphQL schema?"
+    keywords: ["graphql", "graphql schema"]
+    class: no-match
+    must_find: []
+    may_find: []
+    any_word_no_match_holds: false
+    note: "Adjacent on purpose: api-design-review covers REST only, and 'schema' alone (or an OR search) hits sql-migration-writer. The find oracle is clear (empty). Open at agent level: the strict oracle says the answer names no skill, but 'no GraphQL skill; api-design-review covers REST' may serve the developer better. Settled (the QA plan, 2026-09-28): a near fit may be named only after the answer first says plainly that nothing matches, and only as 'not a match'. The PRD's 'clearly says so' holds either way. Any-word leak (so any_word_no_match_holds is false): 'schema' makes 'graphql schema' return sql-migration-writer, so this query fails 'Nothing matches' in any-word mode. A finding for the architects (agent-ux F4 against FR-02)."
+  - id: q33
+    ask: "Any skill for writing Unity game shaders?"
+    keywords: ["unity shader", "shaders"]
+    class: no-match
+    must_find: []
+    may_find: []
+    any_word_no_match_holds: true
+
+# Named subsets (derived from the queries above; a lint recomputes them and fails on drift).
+sets:
+  must-find: [q01, q02, q03, q04, q05, q06, q07, q08, q09, q10, q11, q12, q13, q14, q15, q16, q17, q18, q19, q20, q21, q22, q23, q24, q25, q26, q27]
+  no-match: [q28, q29, q30, q31, q32, q33]
+  keyword-gate: [q01, q02, q03, q04, q05, q06, q07, q08, q09, q10, q11, q19, q20, q21, q22, q23, q26, q27]
+  semantic-gap: [q12, q13, q14, q15, q16, q17, q18, q24, q25]
+  # any-word mode (any_word_route_expected): hit -> keyword-gate-any, miss -> semantic-gap-any
+  keyword-gate-any: [q01, q02, q03, q04, q05, q06, q07, q08, q09, q10, q11, q13, q16, q17, q19, q20, q21, q22, q23, q25, q26, q27]
+  semantic-gap-any: [q12, q14, q15, q18, q24]

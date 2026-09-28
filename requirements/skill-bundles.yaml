@@ -1,0 +1,17 @@
+id: skill-bundles
+title: "Phase 2: Bundles of skills you can share"
+workstream: architect
+added: 2026-09-28
+from: owner
+source: "../word for word/2026-09-28-prd-notes-final.md"
+quote: "Maybe some UX where I can select which skills to group together and share my bundle"
+want: "As a developer, I want to create bundles of skills / plugins, selecting which skills to group together, and share my bundle, so that others get the whole set in one step."
+confirmed: true
+status: idea
+phase: "2"
+relates: [skill-bundle-votes]
+arch:
+  lands_in: [core, web]
+  approach: "contract.md §2 (later: bundles), §5.3 (following latest is the subscriber's policy)"
+  design: "none"
+accept: "A person picks skills (each pinned to a version) into a named bundle and shares it; another developer installs the bundle in one step and gets exactly those versions."

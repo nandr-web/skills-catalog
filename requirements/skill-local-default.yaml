@@ -1,0 +1,18 @@
+id: skill-local-default
+title: "Everything local by default; AWS is an option, off"
+workstream: architect
+added: 2026-09-28
+from: owner
+source: "../word for word/2026-09-28-scope-delivery-readme.md"
+quote: "The guided runner should give the option of setting it up in AWS, with the default being off. By default everything should run locally."
+want: "As a developer, I want everything to run locally by default, with the guided setup offering to set it up in AWS as an option that's off by default, so that nothing needs an account or a server unless I choose it."
+confirmed: true
+status: idea
+phase: "1"
+decision: a recorded decision
+relates: [skill-web-aws, skill-readme-run]
+arch:
+  lands_in: [cli, aws]
+  approach: "contract.md §6 `hosting` (local by default) and the optional `aws` block"
+  design: "none"
+accept: "Setup with its defaults creates no cloud resources and needs no account; choosing AWS deploys the same core there, shows what it creates and costs first, and teardown removes it."

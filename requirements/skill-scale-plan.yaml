@@ -1,0 +1,17 @@
+id: skill-scale-plan
+title: "Plan for how many skills we'll have"
+workstream: architect
+added: 2026-09-28
+from: owner
+source: "../word for word/2026-09-28-prd-notes-final.md"
+quote: "We need to consider how many skills we'll have over time."
+want: "As the owner, I want the design to consider how many skills we'll have over time, so that it informs our choices in the backend for searching and our APIs."
+confirmed: true
+status: idea
+phase: "1"
+relates: [skill-backend-neutral, skills-search]
+arch:
+  lands_in: [core]
+  approach: "architect-b/reading.md §5; compare/perf/"
+  design: "none"
+accept: "The design states the scale tiers, with measured card sizes, and the point at which search moves to the next backend; a generated 10,000-skill catalog meets the search budget."

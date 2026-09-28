@@ -1,0 +1,42 @@
+# Phrasings the agent scenario runner reads (qa-plan.md §3; agent-scenarios.yaml rule vocabulary).
+# Hand-written by the QA plan; the runner only reads this file. Case-insensitive regular expressions,
+# matched against the assistant's final answer. Extend it when a real trace shows a clear phrasing
+# it missed (keep the trace as a fixture, and add a case below); never widen it to make a failing run pass.
+
+# answer_says_none: the assistant says plainly that nothing in the catalog fits.
+none:
+  - "\\bno (matching |relevant |such )?skills?\\b"
+  - "\\b(isn't|is not|aren't|are not|there's no|there is no) (a |any )?(matching |relevant |such )?skills?\\b"
+  - "\\b(there's|there is|there are) no\\b[^.;]{0,40}\\bskills?\\b"
+  - "\\bnothing (in the (shared )?catalog|matched|matches|fits|relevant)\\b"
+  - "\\b(couldn't|could not|didn't|did not|can't|cannot) find (a |any )?(matching |relevant )?skills?\\b"
+  - "\\b(catalog|it) (doesn't|does not) (have|contain|include) (a |any )?(skill|skills)\\b"
+  - "\\bnone of the (skills|results)\\b"
+
+# answer_says_not_found: a named skill isn't in the catalog.
+not_found:
+  - "\\bnot found\\b"
+  - "\\b(isn't|is not|wasn't|was not) in the (shared )?catalog\\b"
+  - "\\b(doesn't|does not|didn't|did not) exist\\b"
+  - "\\bno skill (called|named)\\b"
+  - "\\b(couldn't|could not|can't|cannot) find (a |the )?skill (called|named)\\b"
+
+# answer_names_no_catalog_skill allows a corpus name only after a `none` phrase and next to one of
+# these markers, so "nothing fits; sql-migration-writer only shares the word 'schema'" passes.
+not_a_match_markers:
+  - "\\bnot a match\\b"
+  - "\\bonly (shares?|matched|matches)\\b"
+  - "\\b(isn't|is not|not) (really |quite )?(for|about|the same)\\b"
+  - "\\bpartial(ly)? match"
+  - "\\bclosest\\b.*\\b(but|though|however)\\b"
+
+# Self-test: each line must be classified as stated (the runner's first unit test).
+cases:
+  - {text: "No, there's no release notes skill in the catalog.", none: true}
+  - {text: "I couldn't find any skill for baking sourdough in the shared catalog.", none: true}
+  - {text: "Nothing in the catalog matches sourdough baking.", none: true}
+  - {text: "Yes, release-note-draft drafts release notes from merged PRs.", none: false}
+  - {text: "The skill deploy-to-mars was not found in the catalog.", not_found: true}
+  - {text: "There's no skill called deploy-to-mars.", not_found: true}
+  - {text: "Nothing fits a GraphQL schema; sql-migration-writer only shares the word 'schema'.", none: true, not_a_match: true}
+  - {text: "Try sql-migration-writer for your GraphQL schema.", none: false, not_a_match: false}

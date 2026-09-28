@@ -1,0 +1,17 @@
+id: skill-versions
+title: "Version a skill"
+workstream: architect
+added: 2026-09-28
+from: owner
+source: "the PRD, docs/prd (section fr-04) (skills_catalog_prd.pdf v0.1.0, word for word)"
+quote: "As Developer 1, I want publishing an updated skill to create a new version so changes are tracked and nothing is silently overwritten."
+want: "As Developer 1, I want publishing an updated skill to create a new version so changes are tracked and nothing is silently overwritten."
+confirmed: true
+status: idea
+phase: "1"
+relates: [skill-web-delta]
+arch:
+  lands_in: [core]
+  approach: "contract.md §4.4 (immutable versions, a revert is a new version), §2 list_shared_skill_versions"
+  design: "none"
+accept: "From FR-04, UC-04 and the goals: publishing a skill whose name already exists creates a new version and prior versions are retained; a developer can see a skill's version history; retrieving returns the latest version by default and an earlier version when asked for; a malformed update is rejected and existing versions are untouched; history is retained and inspectable."

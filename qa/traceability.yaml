@@ -1,0 +1,432 @@
+# Requirement → oracle → checks, for the Skills Catalog (qa-plan.md §9), bound to contract.md draft 3
+# (main 9972437). Every requirement needs at least one automated check (`auto: true`); a manual entry
+# says what would automate it. `qa trace-check` enforces that, that every `golden:` and `backlog:`
+# reference resolves, that every docs/backlog/skill-* item maps to a requirement, that a requirement's
+# phase matches its backlog items' phase, and that the query sets haven't drifted.
+# Sources: prd = the PRD page; notes = the owner's notes and review page answers (docs/word for word/); design =
+# the architects' contract, where it adds rules the tests must hold.
+# phase: 1 (all local, the owner's focus), 2 (local, parked), aws (parked), later. The owner, 23:13Z:
+# "Focus on phase 1 / local work. Bring back up AWS topics only after the rest is finished and approved per manager".
+# Layers: unit, storage, interface, agent, setup, web, perf, cleanup. Web checks are listed once in
+# design-notes/web/build-notes.md (the web plan, parked).
+
+requirements:
+  # ---------------- Phase 1: the PRD's core loop ----------------
+  - id: publish
+    source: {doc: prd, ref: "FR-01 AC1-2, UC-01"}
+    backlog: [skill-publish]
+    phase: 1
+    text: "A developer publishes a skill (manifest + supporting files); it is available to others, complete."
+    oracles: [round-trip, same-result-every-face, two-step-publish]
+    checks:
+      - {layer: storage, name: publish_version then fetch_version equals the fixture, golden: skills.valid, auto: true}
+      - {layer: interface, name: publish_skill_to_catalog through CLI and MCP gives the same fingerprint, golden: skills.valid, auto: true}
+      - {layer: interface, name: "step 1 (no confirm) lists files, skipped files, diff and risk_flags and stores nothing; step 2 with the token publishes; a folder changed in between gives conflict and stores nothing", golden: skills.hostile, auto: true}
+      - {layer: agent, name: A6 publish from a local folder after the person agrees, golden: agent.A6, auto: true}
+
+  - id: publish-discoverable
+    source: {doc: prd, ref: "UC-01 postcondition: discoverable and retrievable"}
+    backlog: [skill-publish]
+    phase: 1
+    text: "Right after publishing, the skill can be found; after a new version, search shows its new description."
+    oracles: [discoverable]
+    checks:
+      - {layer: storage, name: search finds a skill right after publish_version (the index listens to version_published), auto: true}
+      - {layer: interface, name: the card shows the latest description after a new version, golden: histories.prc, auto: true}
+
+  - id: publish-rejects-invalid
+    source: {doc: prd, ref: "FR-01 AC3, UC-01 exception"}
+    backlog: [skill-publish]
+    phase: 1
+    text: "A skill missing a name, description or body is rejected with an explanation; nothing partial is stored."
+    oracles: [all-or-nothing]
+    checks:
+      - {layer: unit, name: manifest validation table, golden: skills.invalid, auto: true}
+      - {layer: storage, name: logical snapshot unchanged after each invalid publish, golden: skills.invalid, auto: true}
+      - {layer: storage, name: fault injection (Nth write fails) leaves no version, golden: histories.fault, auto: true}
+      - {layer: interface, name: dry_run stores nothing and returns the diff, golden: histories.h1, auto: true}
+      - {layer: agent, name: A7 the assistant relays the reason, golden: agent.A7, auto: true}
+
+  - id: secrets
+    source: {doc: design, ref: "contract §3 publish_skill_to_catalog: secret scan, ignore list"}
+    backlog: [skill-publish]
+    phase: 1
+    text: "A suspected secret stops a publish; only the person can override it (a CLI flag, not in MCP); ignored files are never sent."
+    oracles: [secrets-stop-a-publish, stays-in-the-skill-folder]
+    checks:
+      - {layer: interface, name: secret_suspected with path and line; the ignore list skipped and reported; the MCP schema has no override, golden: skills.hostile, auto: true}
+      - {layer: agent, name: A7s no tool call carries the override, golden: agent.A7s, auto: true}
+
+  - id: discover
+    source: {doc: prd, ref: "FR-02, UC-02"}
+    backlog: [skill-discover, skill-search-measure]
+    phase: 1
+    text: "Through an AI assistant, in natural language, a developer finds skills matching a need; each result has a name and description."
+    oracles: [found, through-the-assistant]
+    checks:
+      - {layer: interface, name: "search recall@5 = 1.0 on the gate set for the adapter's mode (keyword-gate-any for any-word, the contract's) and on each semantic-gap reformulation", golden: queries.keyword-gate-any, auto: true}
+      - {layer: interface, name: semantic-gap misses reported (not gated) so a later semantic search shows its gain, golden: queries.semantic-gap-any, auto: true}
+      - {layer: interface, name: every card lists matched_words; the common-words list equals the adapter's, golden: queries.corpus, auto: true}
+      - {layer: agent, name: "A1, A2 discover by keyword and by paraphrase", golden: "agent.A1, agent.A2", auto: true}
+      - {layer: agent, name: every run records recall, tokens per discovery and first-query time, golden: agent.all, auto: true}
+
+  - id: discover-nothing-matches
+    source: {doc: prd, ref: "FR-02 AC3, UC-02 exception"}
+    backlog: [skill-discover]
+    phase: 1
+    text: "When nothing matches, the assistant clearly says so."
+    oracles: [nothing-matches]
+    checks:
+      - {layer: interface, name: "for each no-match query: match is partial or none, and no card's matched_words covers every content word", golden: queries.no-match, auto: true}
+      - {layer: agent, name: "A3 sourdough: says none plainly, invents nothing", golden: agent.A3, auto: true}
+      - {layer: agent, name: "A3g GraphQL: says nothing fits and never offers sql-migration-writer as a fit", golden: agent.A3g, auto: true}
+
+  - id: list-and-get-limits
+    source: {doc: notes, ref: "uc-01: List with filters; Get a specific skill or skills up to a limit"}
+    backlog: [skill-list-get]
+    phase: 1
+    text: "Search with no words lists skills with filters; read takes several names up to a limit; over a limit is a typed error."
+    oracles: [limits-on-reads, found]
+    checks:
+      - {layer: interface, name: search with no query and each filter (tags, publisher, updated_since) returns exactly the matching fixtures, golden: queries.corpus, auto: true}
+      - {layer: interface, name: read_shared_skill with 20 names works; 21 gives invalid_request; search limit 51 gives invalid_request, auto: true}
+      - {layer: interface, name: cursor paging returns every skill once while publishes happen, golden: scale.10k, auto: true}
+
+  - id: retrieve
+    source: {doc: prd, ref: "FR-03, UC-03"}
+    backlog: [skill-retrieve]
+    phase: 1
+    text: "Through an AI assistant, a developer retrieves a named skill, complete and unchanged."
+    oracles: [round-trip, through-the-assistant]
+    checks:
+      - {layer: interface, name: "read_shared_skill include: contents equals the fixture's text files", golden: skills.valid, auto: true}
+      - {layer: interface, name: install_shared_skill writes the same tree and a lock entry, golden: skills.valid, auto: true}
+      - {layer: agent, name: A4 installs the skill intact, golden: agent.A4, auto: true}
+
+  - id: retrieve-not-found
+    source: {doc: prd, ref: "FR-03 AC3, UC-03 exception"}
+    backlog: [skill-retrieve]
+    phase: 1
+    text: "Retrieving a skill that doesn't exist returns a clear 'not found'."
+    oracles: [not-found]
+    checks:
+      - {layer: interface, name: "not_found per name on every face, with suggestions by spelling only", golden: skills.missing-names, auto: true}
+      - {layer: agent, name: A5 says not found, installs nothing, invents nothing, offers no search-based closest, golden: agent.A5, auto: true}
+
+  - id: end-to-end
+    source: {doc: prd, ref: "Goals row 1: Developer 1 publishes; Developer 2, through an AI assistant, discovers and retrieves the same skill"}
+    backlog: [skill-end-to-end]
+    phase: 1
+    text: "One run: Developer 1 publishes; Developer 2's assistant, asked in plain words, finds and installs the same skill."
+    oracles: [round-trip, through-the-assistant]
+    checks:
+      - {layer: agent, name: "A16: dev1 publishes (SKILLS_AS=dev1); dev2's assistant finds and installs it; fingerprints equal; results say acting_as dev2", golden: agent.A16, auto: true}
+
+  - id: version-new
+    source: {doc: prd, ref: "FR-04 AC1, UC-04"}
+    backlog: [skill-versions]
+    phase: 1
+    text: "Publishing an existing name creates a new version; prior versions are retained; nothing is silently overwritten."
+    oracles: [append-only-history, idempotent-republish, nothing-lost]
+    checks:
+      - {layer: storage, name: history steps, golden: histories.h1, auto: true}
+      - {layer: storage, name: 20 publishes from separate processes all land; stale expected_latest conflicts, golden: histories.concurrent, auto: true}
+      - {layer: unit, name: version numbering property test under random interleavings, auto: true}
+
+  - id: version-history-visible
+    source: {doc: prd, ref: "FR-04 AC2, goals row 2"}
+    backlog: [skill-versions]
+    phase: 1
+    text: "A developer can see a skill's version history, and the change is visible."
+    oracles: [append-only-history, change-is-visible]
+    checks:
+      - {layer: interface, name: list_shared_skill_versions and diff_shared_skill_versions equal the goldens (with risk_flags), golden: histories.h1, auto: true}
+      - {layer: agent, name: A8 says what changed, golden: agent.A8, auto: true}
+
+  - id: version-latest-default
+    source: {doc: prd, ref: "FR-04 AC3, UC-04 postcondition"}
+    backlog: [skill-versions]
+    phase: 1
+    text: "Retrieve returns the latest version by default; an earlier version when asked."
+    oracles: [append-only-history, round-trip]
+    checks:
+      - {layer: storage, name: get and get version k per history step, golden: histories.h1, auto: true}
+      - {layer: agent, name: A9 installs version 1 on request, golden: agent.A9, auto: true}
+
+  - id: version-malformed-untouched
+    source: {doc: prd, ref: "UC-04 exception"}
+    backlog: [skill-versions]
+    phase: 1
+    text: "A malformed update is rejected; existing versions are untouched."
+    oracles: [all-or-nothing, append-only-history]
+    checks:
+      - {layer: storage, name: the malformed step in the history, golden: histories.h1, auto: true}
+
+  - id: consistency
+    source: {doc: prd, ref: "NFR consistency"}
+    backlog: [skill-unchanged]
+    phase: 1
+    text: "A retrieved skill is complete and unchanged from what was published."
+    oracles: [round-trip]
+    checks:
+      - {layer: unit, name: round-trip property test over generated trees (paths, bytes, modes), auto: true}
+      - {layer: storage, name: round trip on every adapter, golden: skills.valid, auto: true}
+
+  - id: assistant-mediated
+    source: {doc: prd, ref: "NFR assistant-mediated access, D1"}
+    backlog: [skill-assistant-access]
+    phase: 1
+    text: "Discover and retrieve happen through an AI assistant acting on natural-language intent."
+    oracles: [through-the-assistant]
+    checks:
+      - {layer: agent, name: every scenario's trace shows a catalog call before the answer, golden: agent.all, auto: true}
+
+  - id: responsiveness
+    source: {doc: prd, ref: "NFR responsiveness"}
+    backlog: [skill-responsive]
+    phase: 1
+    text: "Discovery and retrieval feel interactive within an assistant conversation."
+    oracles: [budgets]
+    checks:
+      - {layer: perf, name: search/read/publish p95 on the 10,000-skill corpus, golden: scale.10k, auto: true}
+      - {layer: perf, name: update at session start for 50 skills; initialize answered first, auto: true}
+      - {layer: agent, name: median scenario wall time and catalog calls, golden: agent.all, auto: true}
+
+  - id: time-box
+    source: {doc: prd, ref: "Constraints: time-boxed (~4 hours); a smaller, coherent, working system beats a larger broken one"}
+    backlog: [skill-time-box]
+    phase: 1
+    text: "Everything in the submission passes its tests; what isn't built is shown as design."
+    oracles: [clean-run]
+    checks:
+      - {layer: cleanup, name: "qa run phase1 passes on the submission commit, from a fresh copy of the repo", auto: true}
+      - {layer: unit, name: "every phase-1 requirement's checks exist and run; later items are listed as design in the README", auto: true}
+
+  # ---------------- Phase 1: the owner's notes and answers ----------------
+  - id: qa-clean-runs
+    source: {doc: notes, ref: goals}
+    backlog: [skill-qa-first]
+    phase: 1
+    text: "Automation is reproducible, cleans up after itself and makes no permanent changes."
+    oracles: [clean-run]
+    checks:
+      - {layer: cleanup, name: before/after check (folders and files) equal after every run, auto: true}
+      - {layer: cleanup, name: leaky canary makes the check fail, auto: true}
+      - {layer: cleanup, name: assistant-run leftovers (projects, session-env, tmp) removed by session id and sandbox path, auto: true}
+      - {layer: unit, name: "fail-safe guard is on in every run, and trips when HOME points elsewhere (real home from the OS)", auto: true}
+
+  - id: agent-first
+    source: {doc: notes, ref: goals}
+    backlog: [skill-agent-first, skill-agent-qa]
+    phase: 1
+    text: "Everything is agent-first, with an MCP and/or skill; the agent-level experience is QA'd first and constantly."
+    oracles: [through-the-assistant, same-result-every-face, budgets]
+    checks:
+      - {layer: agent, name: access matrix (MCP / MCP + skill / skill + CLI) per scenario, golden: agent.all, auto: true}
+      - {layer: interface, name: every phase-1 operation marked MCP is in tools/list; the server sends its instructions; the companion skill names only real tools, auto: true}
+      - {layer: interface, name: "an internal error gives internal_error {log}: no traceback in CLI or MCP output; the traceback is in a log under $SKILLS_HOME", auto: true}
+      - {layer: interface, name: "the name is skills-catalog everywhere: CLI, package, MCP server", auto: true}
+      - {layer: agent, name: "the assistant asks run before every merge: Haiku all, the owner's model the core asks", golden: agent.all, auto: true}
+
+  - id: backend-neutral-api
+    source: {doc: notes, ref: uc-01}
+    backlog: [skill-backend-neutral, skill-scale-plan]
+    phase: 1
+    text: "The interface and contracts don't couple to a storage choice; agents search and read with progressive disclosure."
+    oracles: [same-result-every-face, round-trip, budgets]
+    checks:
+      - {layer: storage, name: "one suite unchanged on every adapter (SQLite + folder now; others plug in later)", auto: true}
+      - {layer: agent, name: A11 finds a skill in a 10,000-skill catalog within the tool-result budget, golden: agent.A11, auto: true}
+
+  - id: auto-updates
+    source: {doc: notes, ref: "personas; auto-updates answer (a recorded decision)"}
+    backlog: [skill-auto-updates]
+    phase: 1
+    text: "Auto-updates are on by default, global and overridable per skill; an update that raises a risk flag stops and shows it."
+    oracles: [update-gate, local-edits-replaced]
+    checks:
+      - {layer: unit, name: update gate table, golden: policy.table, auto: true}
+      - {layer: interface, name: "update_installed_skills replaces a hand-edited copy and records version and fingerprint in the lock (phase one, the owner's call)", golden: histories.prc, auto: true}
+      - {layer: agent, name: A10 update my skills, golden: agent.A10, auto: true}
+      - {layer: agent, name: A10u an unattended update holds a flagged change, golden: agent.A10u, auto: true}
+
+  - id: review-flags
+    source: {doc: notes, ref: "dependencies note (22:53Z) and auto-updates answer (a recorded decision): rules reviewer, phase 1"}
+    backlog: [skill-review-flags, skill-reviewer-tenet, skill-quality-reviews]
+    phase: 1
+    text: "A built-in rules reviewer flags scripts, tool grants, a publisher change, prompt-injection patterns and context cost; findings are grounded; a clean skill gets none."
+    oracles: [reviews-grounded-and-quiet]
+    checks:
+      - {layer: unit, name: "every flagged fixture gets exactly its expected findings, each grounded (path, line, evidence on that line)", golden: skills.flagged, auto: true}
+      - {layer: unit, name: "every valid fixture gets a review with no findings", golden: skills.valid, auto: true}
+      - {layer: unit, name: "the 64-skill discovery corpus gets no findings (no noise on good skills)", golden: queries.corpus, auto: true}
+      - {layer: interface, name: "search cards carry quality flags; read returns reviews; install and update return advisories", auto: true}
+      - {layer: agent, name: A13 the assistant is warned about a skill with a planted instruction, golden: agent.A13, auto: true}
+
+  - id: owner-only-publish
+    source: {doc: notes, ref: "hosted-access answer 23:16Z: only owners can publish"}
+    backlog: [skill-owner-only-publish]
+    phase: 1
+    text: "Locally, in the core: the first publisher owns a name; anyone else's publish gets not_owner and stores nothing; the recorded publisher is the acting identity."
+    oracles: [only-owners-publish]
+    checks:
+      - {layer: storage, name: "publish as dev2 of dev1's skill gives not_owner {owners}; the snapshot is unchanged", auto: true}
+      - {layer: interface, name: "every version's publisher equals the acting identity, never a field in the request", auto: true}
+
+  - id: demo-identity
+    source: {doc: notes, ref: "hosted-access answer 23:16Z: impersonate other devs locally, with a discreet 'for demo purposes' label"}
+    backlog: [skill-demo-identity]
+    phase: 1
+    text: "Without sign-in, a person picks who they act as (flag, setting or MCP config); every result says who; the CLI shows one discreet demo line."
+    oracles: [demo-identity]
+    checks:
+      - {layer: interface, name: "--as, SKILLS_AS and the MCP server's config each set acting_as; every result carries it", auto: true}
+      - {layer: interface, name: "the CLI prints exactly one 'for demo purposes' line per command, and none in --json output", auto: true}
+
+  - id: runs-from-readme
+    source: {doc: prd, ref: "Constraints: self-contained, short README; the owner's scope answer (a recorded decision)"}
+    backlog: [skill-readme-run, skill-readme-visual]
+    phase: 1
+    text: "It runs on a reviewer's machine from a very simple, visual README: an architecture diagram, one command with a guided setup, links to other documents."
+    oracles: [readme-walk]
+    checks:
+      - {layer: setup, name: README quickstart run word for word in a fresh home (npm prefix and caches in the sandbox), auto: true}
+      - {layer: setup, name: "README lint: exactly one quickstart command; an architecture diagram that passes an automated visual check; every link resolves", auto: true}
+
+  - id: local-by-default
+    source: {doc: notes, ref: "scope answer 23:09Z (a recorded decision): AWS optional, default off; everything local by default"}
+    backlog: [skill-local-default]
+    phase: 1
+    text: "The guided setup runs everything locally by default (hosting: local) and offers AWS, off by default; phase 1 needs nothing outside the machine."
+    oracles: [local-by-default]
+    checks:
+      - {layer: setup, name: "setup with every default writes hosting: local and a local catalog, and never reads a sentinel AWS profile", auto: true}
+      - {layer: cleanup, name: "the whole phase-1 run passes with the network to AWS blocked", auto: true}
+
+  - id: setup-cli-and-agent
+    source: {doc: notes, ref: "personas: CLI installer and a prompt for an agent; welcoming, colourful; auto-updates default yes"}
+    backlog: [skill-setup-welcome, skill-setup-by-agent]
+    phase: 1
+    text: "Setup through a guided CLI, or by an assistant from the setup skill or the setup doc; welcoming and colourful; asks about auto-updates, default yes."
+    oracles: [setup-one-config, teardown-restores]
+    checks:
+      - {layer: setup, name: "wizard through a pseudo-terminal: Enter at the auto-update prompt means yes; AWS prompt defaults to no", auto: true}
+      - {layer: setup, name: "--yes means auto-updates on and hosting local", auto: true}
+      - {layer: agent, name: A12 set it up from the README's hand-off prompt, golden: agent.A12, auto: true}
+      - {layer: agent, name: "A12s a vague ask never touches the assistant's own settings", golden: agent.A12s, auto: true}
+      - {layer: agent, name: A12p a partial preference is carried and the open questions relayed, golden: agent.A12p, auto: true}
+      - {layer: agent, name: A15 set it up by reading the README, golden: agent.A15, auto: true}
+      - {layer: agent, name: A14 teardown puts things back, golden: agent.A14, auto: true}
+      - {layer: setup, name: teardown leaves the assistant home byte-identical to before setup, auto: true}
+      - {layer: setup, name: "setup's result leads with the remaining step and 'N skills to search; none installed yet'", auto: true}
+      - {layer: manual, name: the owner watches a recording of the wizard, auto: false, automate_by: "pseudo-terminal screen snapshots approved once"}
+
+  - id: setup-unattended
+    source: {doc: notes, ref: "personas: unattended setup via CLI (all configuration or a file)"}
+    backlog: [skill-setup-unattended]
+    phase: 1
+    text: "Unattended setup via CLI, passing all configuration or a file; the setting can be changed later by CLI or file."
+    oracles: [setup-one-config]
+    checks:
+      - {layer: setup, name: "--config gives the same config as the wizard with the same answers; closed stdin never waits", auto: true}
+      - {layer: setup, name: "no terminal and no --yes/--config: prints every question with its flag and the --yes line, exits 3, changes nothing (before/after check)", auto: true}
+      - {layer: unit, name: "one question list: the wizard's questions, the flags, the --config schema and the no-terminal output match (parity)", auto: true}
+      - {layer: setup, name: "exit codes: 0 done, 1 error, 3 needs answers", auto: true}
+      - {layer: setup, name: set_skill_update_policy and a hand edit of config.json both change the effective policy, golden: policy.table, auto: true}
+
+  # ---------------- Phase 2 (local, parked until the coordinator says go) ----------------
+  - id: web-view-update
+    source: {doc: notes, ref: goals}
+    backlog: [skill-web-ui, skill-web-mockups]
+    phase: 2
+    text: "View and update skills from a web UI (served locally)."
+    oracles: [same-result-every-face]
+    checks:
+      - {layer: web, name: Playwright view and publish on the local server (web/build-notes.md), auto: true}
+      - {layer: manual, name: the owner reviews the mock-ups, auto: false, automate_by: "Playwright screenshot goldens once approved"}
+
+  - id: web-delta
+    source: {doc: notes, ref: goals}
+    backlog: [skill-web-delta]
+    phase: 2
+    text: "A delta view of changes across revisions."
+    oracles: [change-is-visible]
+    checks:
+      - {layer: web, name: the page's diff equals the golden diff, golden: histories.h1, auto: true}
+
+  - id: bundles
+    source: {doc: notes, ref: goals}
+    backlog: [skill-bundles]
+    phase: 2
+    text: "Group skills into a bundle and share it."
+    oracles: [round-trip]
+    checks:
+      - {layer: interface, name: a bundle installs exactly its pinned versions, auto: true}
+
+  - id: quality-agent-reviews
+    source: {doc: notes, ref: "dependencies (final notes, 22:53Z): pluggable agent reviewers"}
+    backlog: [skill-quality-reviews]
+    phase: 2
+    text: "Pluggable independent agent reviewers; grounded findings; approve without comments when good; measurements reach every entry point."
+    oracles: [reviews-grounded-and-quiet]
+    checks:
+      - {layer: agent, name: "known-good skills approved with no comments (≥ 95%); known-bad flagged", auto: true}
+      - {layer: unit, name: every finding cites an existing file and line that supports it, auto: true}
+
+  # ---------------- AWS and later (parked) ----------------
+  - id: aws-deploy
+    source: {doc: notes, ref: goals}
+    backlog: [skill-web-aws]
+    phase: aws
+    text: "Deploys into the owner's AWS account, optional and off by default."
+    oracles: [clean-run, same-result-every-face, budgets]
+    checks:
+      - {layer: web, name: CDK assertions and cdk-nag, auto: true}
+      - {layer: storage, name: the suite on moto every change and on a throwaway stack on request, destroyed after, auto: true}
+      - {layer: cleanup, name: janitor finds leftovers by run tag and by name prefix (untagged log groups), auto: true}
+
+  - id: signed-in-read
+    source: {doc: notes, ref: "hosted-access answer 23:16Z: everyone (signed in) can read"}
+    backlog: [skill-signed-in-read]
+    phase: aws
+    text: "On the hosted catalog, a read without a valid sign-in or token is refused; every signed-in person can read."
+    oracles: [only-owners-publish]
+    checks:
+      - {layer: web, name: no or revoked token gives 401; a signed-in read works (web/build-notes.md), auto: true}
+
+  - id: owner-permissions
+    source: {doc: notes, ref: "hosted-access answer 23:16Z: later, owners can assign permissions to others"}
+    backlog: [skill-owner-permissions]
+    phase: later
+    text: "An owner adds and removes maintainers; a maintainer's publish succeeds; anyone else still gets not_owner."
+    oracles: [only-owners-publish]
+    checks:
+      - {layer: storage, name: maintainer add/remove changes who can publish; a removed maintainer gets not_owner, auto: true}
+
+  - id: bundle-votes
+    source: {doc: notes, ref: "goals: community feedback like votes"}
+    backlog: [skill-bundle-votes]
+    phase: later
+    text: "A signed-in person votes once per bundle and can take it back."
+    oracles: [only-owners-publish]
+    checks:
+      - {layer: interface, name: one vote per identity per bundle; unvote works; an unsigned request can't vote, auto: true}
+
+  - id: merge-share-suggestions
+    source: {doc: notes, ref: "personas: long-term, pass over one's own skills to merge with others / share"}
+    backlog: [skill-merge-share-suggestions]
+    phase: later
+    text: "Suggest near-duplicates to merge and unpublished skills worth sharing; change nothing on its own."
+    oracles: [clean-run, found]
+    checks:
+      - {layer: interface, name: "lists the hand-labelled near-duplicate pairs from the discovery corpus; the before/after check shows nothing changed", golden: queries.corpus, auto: true}
+
+  - id: recommend-from-sessions
+    source: {doc: notes, ref: "personas: long-term, sample one's own sessions and auto-recommend skills"}
+    backlog: [skill-recommend-from-sessions]
+    phase: later
+    text: "Recommend catalog skills from needs found in recent sessions; the analysis stays on the developer's machine."
+    oracles: [found, budgets]
+    checks:
+      - {layer: interface, name: "made-up session transcripts with labelled needs give the labelled skills", auto: true}
+      - {layer: cleanup, name: "a sentinel planted in the transcripts never leaves the machine (no request body or log carries it)", auto: true}

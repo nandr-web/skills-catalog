@@ -1,0 +1,45 @@
+# Update gate table (qa-plan.md §4 "Update gate"; traceability `policy.table`), bound to
+# contract.md draft 3 §5.3 (confirmed by the owner, a recorded decision). Hand-written: for each case, the one outcome
+# `update_installed_skills` must give. A unit test runs every row against the gate; an interface test
+# runs a sample through the CLI with a real lock file (SKILLS_SYNC_ON_START=0 so the test controls sync).
+#
+# policy: the global default; override: per skill (none = inherit). The effective policy is the override when set.
+# flags: the risk_flags the newest version raises against the installed one (contract §5.3):
+#   from the diff: runnable_file, non_markdown, capability_frontmatter, new_publisher;
+#   from the rules reviewer, run by the installer on the fetched version: prompt_injection, context_cost.
+#   [] = a markdown-only change with no reviewer findings. `newer: false` = no newer version.
+# local: same | changed_here. Phase 1 (the owner, the owner's notes;
+#   contract §5.4): nothing checks for local changes and an update replaces the installed copy, so
+#   `outcome` ignores `local`. `if_protected` is the outcome if the owner later picks protection.
+# accept: the setup option accept_flagged_updates (default false).
+# mode: interactive | unattended (unattended holds are reported at the next session).
+# outcome: updated | unchanged | held:pin | held:notify | held:flagged
+# Precedence: pin, then notify, then the risk-flag gate.
+
+cases:
+  - {policy: auto,   override: none,   flags: [],                       local: same,         accept: false, mode: interactive, outcome: updated}
+  - {policy: auto,   override: none,   flags: [],                       local: same,         accept: false, mode: unattended,  outcome: updated}
+  - {policy: auto,   override: none,   flags: [non_markdown],           local: same,         accept: false, mode: interactive, outcome: held:flagged}
+  - {policy: auto,   override: none,   flags: [non_markdown],           local: same,         accept: false, mode: unattended,  outcome: held:flagged}
+  - {policy: auto,   override: none,   flags: [runnable_file],          local: same,         accept: false, mode: interactive, outcome: held:flagged}
+  - {policy: auto,   override: none,   flags: [capability_frontmatter], local: same,         accept: false, mode: interactive, outcome: held:flagged}
+  - {policy: auto,   override: none,   flags: [new_publisher],          local: same,         accept: false, mode: unattended,  outcome: held:flagged}
+  - {policy: auto,   override: none,   flags: [prompt_injection],       local: same,         accept: false, mode: interactive, outcome: held:flagged}
+  - {policy: auto,   override: none,   flags: [context_cost],           local: same,         accept: false, mode: unattended,  outcome: held:flagged}
+  - {policy: auto,   override: none,   flags: [],                       local: changed_here, accept: false, mode: interactive, outcome: updated, if_protected: held:changed_here}
+  - {policy: auto,   override: none,   flags: [], newer: false,         local: changed_here, accept: false, mode: interactive, outcome: unchanged, if_protected: held:changed_here}
+  - {policy: auto,   override: pin,    flags: [],                       local: same,         accept: false, mode: interactive, outcome: held:pin}
+  - {policy: auto,   override: notify, flags: [],                       local: same,         accept: false, mode: interactive, outcome: held:notify}
+  - {policy: auto,   override: notify, flags: [],                       local: same,         accept: false, mode: unattended,  outcome: held:notify}
+  - {policy: notify, override: none,   flags: [],                       local: same,         accept: false, mode: interactive, outcome: held:notify}
+  - {policy: notify, override: auto,   flags: [],                       local: same,         accept: false, mode: unattended,  outcome: updated}
+  - {policy: notify, override: auto,   flags: [non_markdown],           local: same,         accept: false, mode: unattended,  outcome: held:flagged}
+  - {policy: pin,    override: none,   flags: [],                       local: same,         accept: false, mode: interactive, outcome: held:pin}
+  - {policy: pin,    override: auto,   flags: [],                       local: same,         accept: false, mode: interactive, outcome: updated}
+  - {policy: auto,   override: none,   flags: [], newer: false,         local: same,         accept: false, mode: interactive, outcome: unchanged}
+  - {policy: auto,   override: none,   flags: [non_markdown],           local: same,         accept: true,  mode: unattended,  outcome: updated, note: "The lock records each update the option let through"}
+  - {policy: auto,   override: none,   flags: [prompt_injection],       local: same,         accept: true,  mode: unattended,  outcome: updated, note: "accept_flagged_updates covers every flag kind; the lock records it"}
+  - {policy: auto,   override: none,   flags: [],                       local: changed_here, accept: true,  mode: unattended,  outcome: updated, if_protected: held:changed_here}
+  - {policy: pin,    override: none,   flags: [],                       local: changed_here, accept: false, mode: interactive, outcome: held:pin, if_protected: held:changed_here}
+  - {policy: notify, override: none,   flags: [runnable_file],          local: changed_here, accept: false, mode: interactive, outcome: held:notify, if_protected: held:changed_here}
+  - {policy: auto,   override: pin,    flags: [non_markdown],           local: same,         accept: true,  mode: unattended,  outcome: held:pin}

@@ -1,0 +1,80 @@
+# Version histories (qa-plan.md §4 "Append-only history", "Idempotent republish", "Nothing lost",
+# "Change is visible", "Dry run stores nothing"), bound to contract.md draft 2 (§2, §4.4).
+# Every version's files are written out in full (exact bytes). Expected values are hand-written;
+# fingerprints are the test's own (contract §4.3), never read from the system.
+# Diff goldens in diffs/ are compared by hunks (@@ lines and +/- lines), ignoring the ---/+++ headers.
+
+versions:
+  h1.v1:   # = skills.valid.release-note-draft
+    SKILL.md: "---\nname: release-note-draft\ndescription: Drafts release notes from merged pull requests using the team template. Use when preparing a release.\n---\n# Release note draft\n\n1. List the merged PRs since the last tag.\n2. Group them by type.\n3. Fill templates/release.md.\n"
+    templates/release.md: "# Release {{version}}\n\n## Features\n\n## Fixes\n"
+  h1.v2:   # body edit
+    SKILL.md: "---\nname: release-note-draft\ndescription: Drafts release notes from merged pull requests using the team template. Use when preparing a release.\n---\n# Release note draft\n\n1. List the merged PRs since the last tag.\n2. Group them by type.\n3. Fill templates/release.md.\n4. Add a Breaking changes section when a PR is labelled breaking.\n"
+    templates/release.md: "# Release {{version}}\n\n## Features\n\n## Fixes\n"
+  h1.v3:   # adds an example
+    SKILL.md: "---\nname: release-note-draft\ndescription: Drafts release notes from merged pull requests using the team template. Use when preparing a release.\n---\n# Release note draft\n\n1. List the merged PRs since the last tag.\n2. Group them by type.\n3. Fill templates/release.md.\n4. Add a Breaking changes section when a PR is labelled breaking.\n"
+    templates/release.md: "# Release {{version}}\n\n## Features\n\n## Fixes\n"
+    examples/sample-output.md: "# Release 1.4.0\n\n## Features\n- Search by tag\n"
+  h1.v4:   # removes the example, template gains a section
+    SKILL.md: "---\nname: release-note-draft\ndescription: Drafts release notes from merged pull requests using the team template. Use when preparing a release.\n---\n# Release note draft\n\n1. List the merged PRs since the last tag.\n2. Group them by type.\n3. Fill templates/release.md.\n4. Add a Breaking changes section when a PR is labelled breaking.\n"
+    templates/release.md: "# Release {{version}}\n\n## Breaking changes\n\n## Features\n\n## Fixes\n"
+  h1.malformed:   # v4 with the description deleted
+    SKILL.md: "---\nname: release-note-draft\n---\n# Release note draft\n\n1. List the merged PRs since the last tag.\n2. Group them by type.\n3. Fill templates/release.md.\n4. Add a Breaking changes section when a PR is labelled breaking.\n"
+    templates/release.md: "# Release {{version}}\n\n## Breaking changes\n\n## Features\n\n## Fixes\n"
+  prc.v1:  # = skills.valid.pr-review-checklist
+    SKILL.md: "---\nname: pr-review-checklist\ndescription: A checklist for reviewing pull requests (tests, naming, security, docs). Use when asked to review a PR.\n---\nWork through checklist.md item by item.\n"
+    checklist.md: "- [ ] Tests cover the change\n- [ ] Names say what things are\n- [ ] No secrets\n"
+  prc.v2:  # markdown only: executes = false
+    SKILL.md: "---\nname: pr-review-checklist\ndescription: A checklist for reviewing pull requests (tests, naming, security, docs). Use when asked to review a PR.\n---\nWork through checklist.md item by item.\n"
+    checklist.md: "- [ ] Tests cover the change\n- [ ] Names say what things are\n- [ ] No secrets\n- [ ] Docs updated\n"
+  prc.v3:  # adds an executable script: executes = true
+    SKILL.md: "---\nname: pr-review-checklist\ndescription: A checklist for reviewing pull requests (tests, naming, security, docs). Use when asked to review a PR.\n---\nWork through checklist.md item by item. Run scripts/lint.sh first.\n"
+    checklist.md: "- [ ] Tests cover the change\n- [ ] Names say what things are\n- [ ] No secrets\n- [ ] Docs updated\n"
+    scripts/lint.sh: {mode: "0755", text: "#!/bin/sh\necho lint ok\n"}
+
+histories:
+  h1:
+    name: release-note-draft
+    steps:
+      - {publish: h1.v1, expect: {created: true, version: 1, versions: [1], latest: 1}}
+      - {publish: h1.v2, expect: {created: true, version: 2, versions: [1, 2], latest: 2, get_version: {1: h1.v1}}}
+      - {publish: h1.v3, expect: {created: true, version: 3, versions: [1, 2, 3], latest: 3}}
+      - {publish: h1.v4, expect: {created: true, version: 4, versions: [1, 2, 3, 4], latest: 4}}
+      - {publish: h1.malformed, expect: {error: invalid_manifest, fields: [description], versions: [1, 2, 3, 4], storage_unchanged: true}}
+      - {publish: h1.v4, expect: {created: false, version: 4, versions: [1, 2, 3, 4]}}
+      - {publish: h1.v1, expect: {created: true, version: 5, versions: [1, 2, 3, 4, 5], latest: 5, fingerprint_equals: h1.v1}, note: "a revert: identical to an older version, so a new version (contract §4.4)"}
+      - {publish: h1.v2, dry_run: true, expect: {created: false, storage_unchanged: true, diff_from_latest: {changed: [SKILL.md]}}}
+    at: {h1@v4: "steps 1-4 applied", h1@v5: "steps 1-7 applied"}
+    diffs:
+      - {from: 1, to: 2, files: [{path: SKILL.md, status: changed}], executes: false, unified: diffs/h1-1-2.diff}
+      - {from: 2, to: 3, files: [{path: examples/sample-output.md, status: added}], executes: false}
+      - {from: 3, to: 4, files: [{path: examples/sample-output.md, status: removed}, {path: templates/release.md, status: changed}], executes: false, unified: diffs/h1-3-4.diff}
+
+  prc:
+    name: pr-review-checklist
+    steps:
+      - {publish: prc.v1, expect: {created: true, version: 1}}
+      - {publish: prc.v2, expect: {created: true, version: 2}}
+      - {publish: prc.v3, expect: {created: true, version: 3}}
+    at: {prc@v2: "steps 1-2 applied", prc@v3: "steps 1-3 applied"}
+    diffs:
+      - {from: 1, to: 2, files: [{path: checklist.md, status: changed}], executes: false}
+      - {from: 2, to: 3, files: [{path: SKILL.md, status: changed}, {path: scripts/lint.sh, status: added, flags: {executable: true, script: true}}], executes: true}
+
+  concurrent:
+    name: concurrent-skill
+    steps:
+      - parallel_publish:
+          count: 20
+          processes: "10 CLI processes and 10 MCP client processes, started together (separate processes, not threads)"
+          fixture: "prc.v1 renamed to concurrent-skill, body line 'Variant N.' appended (N = 1..20, so every publish is distinct)"
+        expect: {versions: "1..20, no gaps, no repeats", every_variant_retrievable: true}
+      - {publish: "variant 21", expected_latest: 19, expect: {error: conflict, latest: 20, versions_count: 20, storage_unchanged: true}}
+      - {publish: "variant 21", expected_latest: 20, expect: {created: true, version: 21}}
+
+  fault:
+    name: fault-skill
+    note: "Storage tests only: the adapter under test is wrapped to fail its Nth write."
+    steps:
+      - {publish: prc.v1, fail_write: "the version append (after the blobs were stored)", expect: {error: any, versions: [], search_finds: false}}
+      - {publish: prc.v1, expect: {created: true, version: 1}, note: "the retry succeeds; leftover blobs are allowed (cleaned later) but no version points at a missing blob"}

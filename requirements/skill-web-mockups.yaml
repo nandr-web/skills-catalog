@@ -1,0 +1,17 @@
+id: skill-web-mockups
+title: "Plan: Web UI mock-ups to review"
+workstream: web
+added: 2026-09-28
+from: owner
+source: "../word for word/2026-09-28-prd-notes-final.md"
+quote: "let's have a designer + architect come up with mock-ups that I can review."
+want: "As the owner, I want a designer and an architect to come up with mock-ups that I can review, so that I shape the UI before it's built."
+confirmed: true
+status: idea
+phase: "plan"
+relates: [skill-web-ui]
+arch:
+  lands_in: [web]
+  approach: "the design notes with the web plan"
+  design: "none"
+accept: "Mock-ups of the main web pages (browse, a skill and its history, the delta view, editing, bundles) are on the review page as a card for the owner's review."

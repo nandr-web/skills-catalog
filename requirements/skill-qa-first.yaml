@@ -1,0 +1,18 @@
+id: skill-qa-first
+title: "QA first, with automation that cleans up after itself"
+workstream: qa
+added: 2026-09-28
+from: owner
+source: "../word for word/2026-09-28-prd-notes-final.md"
+quote: "We should think about how to build reproducible automation for this. (That automatically cleans up after itself / doesn't make permanent changes.)"
+want: "As the owner, I want a QA-first mentality and reproducible automation that automatically cleans up after itself and doesn't make permanent changes, so that every check can be run again safely."
+confirmed: true
+status: idea
+phase: "1"
+decision: a recorded decision
+relates: [skill-agent-qa]
+arch:
+  lands_in: [qa]
+  approach: "the QA plan (design-notes/qa/qa-plan.md §4)"
+  design: "none"
+accept: "One command runs every test layer in a throwaway sandbox; a footprint check after each run finds nothing changed outside the sandbox; a deliberately leaky canary test makes the footprint check fail."

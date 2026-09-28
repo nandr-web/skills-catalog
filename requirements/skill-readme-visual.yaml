@@ -1,0 +1,18 @@
+id: skill-readme-visual
+title: "A simple, visual README"
+workstream: architect
+added: 2026-09-28
+from: owner
+source: "../word for word/2026-09-28-scope-delivery-readme.md"
+quote: "The README should be very easy / visual / simple, with an architecture diagram, how to run (one command with a guided setup), and links to other documents."
+want: "As a reviewer of the exercise, I want a very easy, visual, simple README, with an architecture diagram, how to run it (one command with a guided setup) and links to other documents, so that I understand and run it in minutes."
+confirmed: true
+status: idea
+phase: "1"
+decision: a recorded decision
+relates: [skill-readme-run, skill-setup-welcome]
+arch:
+  lands_in: [cli]
+  approach: "the README and the guided setup (contract.md §6)"
+  design: "none"
+accept: "The README shows an architecture diagram, one command that starts the guided setup, and links to the other documents; the README walker runs that command word for word in a fresh home folder and it completes."

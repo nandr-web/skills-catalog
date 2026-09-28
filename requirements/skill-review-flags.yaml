@@ -1,0 +1,18 @@
+id: skill-review-flags
+title: "Reviewer flags such as prompt-injection risk"
+workstream: architect
+added: 2026-09-28
+from: owner
+source: "../word for word/2026-09-28-auto-updates-answer.md"
+quote: "should also consider other reviewer-based metrics or flags (maybe phase 1 or phase 2) (e.g. risk of prompt injection, etc.)"
+want: "As Developer 2, I want reviewer-based metrics or flags, such as the risk of prompt injection, considered alongside auto-updates, so that a risky skill or update is flagged before it reaches my assistant."
+confirmed: true
+status: idea
+phase: "1"
+decision: a recorded decision
+relates: [skill-quality-reviews, skill-reviewer-tenet, skill-auto-updates]
+arch:
+  lands_in: [core, installer]
+  approach: "contract.md §5.3 and §10: the rules reviewer is one pure function, run by the catalog on version_published and by the installer before an update"
+  design: "none"
+accept: "Phase 1: a built-in rules reviewer flags scripts and executables, tool-granting frontmatter, a publisher change, prompt-injection patterns (instructions to ignore prior guidance, exfiltration or curl-to-shell, hidden unicode or HTML comments) and context cost, each finding grounded; a clean skill gets an empty list; the update gate stops on any risk flag; search cards show the flags."

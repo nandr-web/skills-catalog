@@ -1,0 +1,11 @@
+id: skill-reviewer-tenet
+title: Skill reviewers measure, not nit-pick
+workstream: architect
+added: 2026-09-28
+from: owner
+source: ../word for word/2026-09-28-prd-notes-final.md
+want: "As a skill submitter, I want reviewers to measure, ground every finding and add notes only when they help, and to approve without comments when a skill is good, so that reviews don't add unnecessary toil."
+confirmed: true
+status: idea
+phase: "1"
+relates: [skill-quality-reviews, skill-review-flags]

@@ -1,0 +1,18 @@
+id: skill-time-box
+title: "Scoped to the time box"
+workstream: architect
+added: 2026-09-28
+from: owner
+source: "the PRD, docs/prd (section assumptions) (skills_catalog_prd.pdf v0.1.0, word for word)"
+quote: "Time-boxed exercise (~4 hours). Scope accordingly, a smaller, coherent, working system beats a larger broken one."
+want: "As the reviewer of the exercise, I want the build scoped to the time box, a smaller, coherent, working system rather than a larger broken one, so that what's shipped works."
+confirmed: true
+status: idea
+phase: "1"
+decision: a recorded decision
+relates: [skills-scope]
+arch:
+  lands_in: [core]
+  approach: "a recorded decision: every phase 1 requirement locally, phase 2 if possible, nice-to-haves in AWS and/or later"
+  design: "none"
+accept: "Everything in the submission passes its tests; what isn't built is shown as design, and the owner's scope decision says which is which."

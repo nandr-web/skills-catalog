@@ -1,0 +1,11 @@
+id: skill-quality-reviews
+title: Automated skill quality reviews
+workstream: architect
+added: 2026-09-28
+from: owner
+source: ../word for word/2026-09-28-prd-notes-final.md
+want: "As someone finding or installing skills (through an agent, the UI or the CLI), I want every skill measured by a pluggable set of independent reviewer agents and rules, on publish or offline, so that skills with low quality (security-questionable, too much context, slop) rank lower or come with advice against them."
+confirmed: true
+status: idea
+phase: "1 (rules reviewer), 2 (agent reviewers)"
+relates: [skill-reviewer-tenet, skill-review-flags]

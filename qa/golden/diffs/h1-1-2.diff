@@ -1,0 +1,7 @@
+--- a/SKILL.md
++++ b/SKILL.md
+@@ -7,3 +7,4 @@
+ 1. List the merged PRs since the last tag.
+ 2. Group them by type.
+ 3. Fill templates/release.md.
++4. Add a Breaking changes section when a PR is labelled breaking.

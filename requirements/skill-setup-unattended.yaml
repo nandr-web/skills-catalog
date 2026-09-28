@@ -1,0 +1,17 @@
+id: skill-setup-unattended
+title: "Unattended setup from flags or a file"
+workstream: architect
+added: 2026-09-28
+from: owner
+source: "../word for word/2026-09-28-prd-notes-final.md"
+quote: "Unattended setup via CLI also should be a thing (e.g. pass all configurations / a file)."
+want: "As a developer, I want unattended setup via the CLI, passing all configurations or a file, so that setup can run fast and unattended."
+confirmed: true
+status: idea
+phase: "1"
+relates: [skill-setup-welcome]
+arch:
+  lands_in: [cli, installer]
+  approach: "contract.md §6: one schema for the wizard, --yes and --config"
+  design: "none"
+accept: "Setup with all defaults, or with a config file, writes the same config as the same answers typed at the prompts; with no terminal attached it never waits."

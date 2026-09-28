@@ -1,0 +1,17 @@
+id: skill-owner-permissions
+title: "Later: Owners give others permission to publish"
+workstream: architect
+added: 2026-09-28
+from: owner
+source: "../word for word/2026-09-28-hosted-access-answer.md"
+quote: "Later, owners can assign permissions to others."
+want: "As a skill's owner, I want to assign permissions to others, so that maintainers I choose can publish new versions too."
+confirmed: true
+status: idea
+phase: "later"
+relates: [skill-owner-only-publish]
+arch:
+  lands_in: [core]
+  approach: "contract.md §7: add_skill_maintainer, remove_skill_maintainer (later)"
+  design: "none"
+accept: "An owner adds and removes maintainers; a maintainer's publish succeeds; anyone else still gets the not-owner error; each update shows who published it."

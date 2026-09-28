@@ -1,0 +1,17 @@
+id: skill-signed-in-read
+title: "AWS, opt-in: Everyone signed in can read"
+workstream: web
+added: 2026-09-28
+from: owner
+source: "../word for word/2026-09-28-hosted-access-answer.md"
+quote: "everyone (signed in) can read"
+want: "As the owner, I want everyone to sign in to read a hosted catalog, so that our skills stay within the people we share them with."
+confirmed: true
+status: idea
+phase: "aws"
+relates: [skills-hosted-access, skill-web-aws]
+arch:
+  lands_in: [aws, web]
+  approach: "contract.md §7: Identity's hosted adapter (parked with AWS)"
+  design: "none"
+accept: "On the hosted catalog, every read without a valid sign-in or token is refused, and every signed-in person can read every skill."

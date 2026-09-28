@@ -1,0 +1,18 @@
+id: skill-agent-qa
+title: "Constant QA on the agent-level experience"
+workstream: qa
+added: 2026-09-28
+from: owner
+source: "../word for word/2026-09-28-prd-notes-final.md"
+quote: "we should do constant QA on the agent-level experience first and foremost."
+want: "As the owner, I want constant QA on the agent-level experience, first and foremost, so that how assistants really use the catalog is what we measure."
+confirmed: true
+status: idea
+phase: "1"
+decision: a recorded decision
+relates: [a recorded decision, skill-qa-first]
+arch:
+  lands_in: [qa, mcp]
+  approach: "the QA plan §1; the agentic UX team (a recorded decision)"
+  design: "none"
+accept: "Agent scenarios drive a real assistant, headless, in three setups (MCP only, MCP + companion skill, skill + CLI), three runs each; every safety rule holds in all runs and each task succeeds in at least two of three; results are kept per run."

@@ -1,0 +1,19 @@
+id: skill-auto-updates
+title: "Auto-updates: global and per skill"
+workstream: architect
+added: 2026-09-28
+from: owner
+source: "../word for word/2026-09-28-prd-notes-final.md"
+source_also: "../word for word/2026-09-28-fingerprint-question.md"
+quote: "auto-updates should be a user option (it can be global and overridable per skill)"
+want: "As Developer 2, I want auto-updates as a user option, global and overridable per skill, as part of the initial delivery, so that my installed skills stay the same as the catalog."
+confirmed: true
+status: idea
+phase: "1"
+decision: a recorded decision
+relates: [skills-auto-updates, skill-setup-welcome, skill-review-flags]
+arch:
+  lands_in: [installer]
+  approach: "contract.md §3 update_installed_skills, set_skill_update_policy; §5.3 (confirmed by the owner, a recorded decision)"
+  design: "none"
+accept: "A global update policy with per-skill overrides; the update gate table (contract.md §5.3) passes the QA plan's policy goldens; an update replaces the installed copy (the owner's stance for now: local edits not shared upstream may be lost, as with other installed tools; handling them is an open question)."

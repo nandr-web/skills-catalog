@@ -1,0 +1,17 @@
+id: skill-backend-neutral
+title: "Contracts not coupled to a backend"
+workstream: architect
+added: 2026-09-28
+from: owner
+source: "../word for word/2026-09-28-prd-notes-final.md"
+quote: "we should build the experience, interface and contracts without coupling ourselves with a specific choice."
+want: "As the owner, I want the experience, interface and contracts built without coupling ourselves to a specific backend choice, so that we stay flexible (e.g. OpenSearch, or DynamoDB + S3)."
+confirmed: true
+status: idea
+phase: "1"
+relates: [skill-list-get]
+arch:
+  lands_in: [core]
+  approach: "contract.md §7 ports"
+  design: "none"
+accept: "One conformance suite passes unchanged against the local catalog and at least one other backend; changing the search engine needs no data migration."

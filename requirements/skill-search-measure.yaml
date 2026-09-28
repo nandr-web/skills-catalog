@@ -1,0 +1,17 @@
+id: skill-search-measure
+title: "Measure and improve search over time"
+workstream: qa
+added: 2026-09-28
+from: owner
+source: "../word for word/2026-09-28-prd-notes-final.md"
+quote: "We'd measure and improve the system over time."
+want: "As the owner, I want the system measured and improved over time, so that search choices follow evidence."
+confirmed: true
+status: idea
+phase: "1"
+relates: [skill-scale-plan]
+arch:
+  lands_in: [qa]
+  approach: "the QA plan's discovery golden set"
+  design: "none"
+accept: "Every run records recall of the labelled discovery queries, tokens per successful discovery and first-query time, and keeps them per run so trends show."

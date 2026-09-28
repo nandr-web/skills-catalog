@@ -1,0 +1,17 @@
+--- a/examples/sample-output.md
++++ /dev/null
+@@ -1,4 +0,0 @@
+-# Release 1.4.0
+-
+-## Features
+-- Search by tag
+--- a/templates/release.md
++++ b/templates/release.md
+@@ -1,5 +1,7 @@
+ # Release {{version}}
+ 
++## Breaking changes
++
+ ## Features
+ 
+ ## Fixes

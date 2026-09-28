@@ -1,0 +1,17 @@
+id: skill-web-ui
+title: "Phase 2: Web UI: view and update skills"
+workstream: web
+added: 2026-09-28
+from: owner
+source: "../word for word/2026-09-28-prd-notes-final.md"
+quote: "We should make it easy to view and update skills from the UI."
+want: "As a developer, I want a web UI where it's easy to view and update skills and inspect their history, so that I don't need an assistant or a CLI to look after them."
+confirmed: true
+status: idea
+phase: "2"
+relates: [skill-web-delta, skill-web-mockups]
+arch:
+  lands_in: [web]
+  approach: "the web plan, served locally by `serve`; contract.md §2 with expected_latest"
+  design: "in review: the designer's mock-ups (the design notes)"
+accept: "In the web UI a person can browse skills, open one and its history, and edit it; saving publishes a new version, and is refused if someone published since."

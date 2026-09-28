@@ -1,0 +1,17 @@
+id: skill-recommend-from-sessions
+title: "Later: skills recommended from your own sessions"
+workstream: architect
+added: 2026-09-28
+from: owner
+source: "../word for word/2026-09-28-prd-notes-final.md"
+quote: "A way to automatically or on-demand review / sample one's own sessions / transcripts and have skills auto-recommended"
+want: "As a developer, I want my own sessions and transcripts reviewed or sampled, automatically or on demand, and skills auto-recommended, so that I find skills I'd use without searching."
+confirmed: true
+status: idea
+phase: "later"
+relates: [skill-merge-share-suggestions]
+arch:
+  lands_in: [installer]
+  approach: "later; ranks locally against a downloaded index (swarm review)"
+  design: "none"
+accept: "Run on demand or on a schedule, it recommends catalog skills that match needs found in recent sessions; the analysis runs on the developer's machine, and a planted marker in a transcript never leaves it."

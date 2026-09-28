@@ -1,0 +1,17 @@
+id: skill-discover
+title: "Discover skills through an AI assistant"
+workstream: architect
+added: 2026-09-28
+from: owner
+source: "the PRD, docs/prd (section fr-02) (skills_catalog_prd.pdf v0.1.0, word for word)"
+quote: "As Developer 2, I want to ask my AI assistant what skills exist for a need so I can reuse one instead of writing my own."
+want: "As Developer 2, I want to ask my AI assistant what skills exist for a need so I can reuse one instead of writing my own."
+confirmed: true
+status: idea
+phase: "1"
+relates: [skill-list-get, skill-search-measure]
+arch:
+  lands_in: [core, mcp]
+  approach: "contract.md §2 search_shared_skills (an empty page means nothing matched) and the companion skill"
+  design: "none"
+accept: "From FR-02 and UC-02: through an AI assistant, in natural language, a developer can find published skills that match a described need; each result identifies the skill (at least name and description); when nothing matches, the assistant clearly says so."
