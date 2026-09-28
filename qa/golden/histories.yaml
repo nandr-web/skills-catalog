@@ -1,5 +1,5 @@
 # Version histories (qa-plan.md §4 "Append-only history", "Idempotent republish", "Nothing lost",
-# "Change is visible", "Dry run stores nothing"), bound to contract.md draft 2 (§2, §4.4).
+# "Change is visible", "Dry run stores nothing"), bound to contract.md draft 3 (§2, §4.4, §5.3).
 # Every version's files are written out in full (exact bytes). Expected values are hand-written;
 # fingerprints are the test's own (contract §4.3), never read from the system.
 # Diff goldens in diffs/ are compared by hunks (@@ lines and +/- lines), ignoring the ---/+++ headers.
@@ -46,9 +46,9 @@ histories:
       - {publish: h1.v2, dry_run: true, expect: {created: false, storage_unchanged: true, diff_from_latest: {changed: [SKILL.md]}}}
     at: {h1@v4: "steps 1-4 applied", h1@v5: "steps 1-7 applied"}
     diffs:
-      - {from: 1, to: 2, files: [{path: SKILL.md, status: changed}], executes: false, unified: diffs/h1-1-2.diff}
-      - {from: 2, to: 3, files: [{path: examples/sample-output.md, status: added}], executes: false}
-      - {from: 3, to: 4, files: [{path: examples/sample-output.md, status: removed}, {path: templates/release.md, status: changed}], executes: false, unified: diffs/h1-3-4.diff}
+      - {from: 1, to: 2, files: [{path: SKILL.md, status: changed}], risk_flags: [], unified: diffs/h1-1-2.diff}
+      - {from: 2, to: 3, files: [{path: examples/sample-output.md, status: added}], risk_flags: []}
+      - {from: 3, to: 4, files: [{path: examples/sample-output.md, status: removed}, {path: templates/release.md, status: changed}], risk_flags: [], unified: diffs/h1-3-4.diff}
 
   prc:
     name: pr-review-checklist
@@ -58,8 +58,8 @@ histories:
       - {publish: prc.v3, expect: {created: true, version: 3}}
     at: {prc@v2: "steps 1-2 applied", prc@v3: "steps 1-3 applied"}
     diffs:
-      - {from: 1, to: 2, files: [{path: checklist.md, status: changed}], executes: false}
-      - {from: 2, to: 3, files: [{path: SKILL.md, status: changed}, {path: scripts/lint.sh, status: added, flags: {executable: true, script: true}}], executes: true}
+      - {from: 1, to: 2, files: [{path: checklist.md, status: changed}], risk_flags: []}
+      - {from: 2, to: 3, files: [{path: SKILL.md, status: changed}, {path: scripts/lint.sh, status: added, flags: {executable: true, script: true}}], risk_flags: [{kind: runnable_file, path: scripts/lint.sh}], note: "one reason per file: runnable_file, not also non_markdown (contract d9d15cc); SKILL.md is markdown, so no flag"}
 
   concurrent:
     name: concurrent-skill

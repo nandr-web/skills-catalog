@@ -249,6 +249,10 @@ requirements:
       - {layer: interface, name: "update_installed_skills replaces a hand-edited copy and records version and fingerprint in the lock (phase one, the owner's call)", golden: histories.prc, auto: true}
       - {layer: agent, name: A10 update my skills, golden: agent.A10, auto: true}
       - {layer: agent, name: A10u an unattended update holds a flagged change, golden: agent.A10u, auto: true}
+      - {layer: agent, name: A10g a held update is relayed to the person and never accepted by the assistant, golden: agent.A10g, auto: true}
+      - {layer: interface, name: "accept_held_update with the held result's confirm installs that version, and the lock records the flags it let through", golden: histories.prc, auto: true}
+      - {layer: interface, name: "a newer version published between hold and accept gives conflict and changes nothing; a confirm for another name or version is refused", golden: histories.prc, auto: true}
+      - {layer: setup, name: "setup's allowed tools never include accept_held_update or publish_skill_to_catalog", auto: true}
 
   - id: review-flags
     source: {doc: notes, ref: "dependencies note (22:53Z) and auto-updates answer (a recorded decision): rules reviewer, phase 1"}
@@ -260,7 +264,8 @@ requirements:
       - {layer: unit, name: "every flagged fixture gets exactly its expected findings, each grounded (path, line, evidence on that line)", golden: skills.flagged, auto: true}
       - {layer: unit, name: "every valid fixture gets a review with no findings", golden: skills.valid, auto: true}
       - {layer: unit, name: "the 64-skill discovery corpus gets no findings (no noise on good skills)", golden: queries.corpus, auto: true}
-      - {layer: interface, name: "search cards carry quality flags; read returns reviews; install and update return advisories", auto: true}
+      - {layer: interface, name: "a card carries quality only when the skill is flagged; read returns reviews; install and update return advisories", auto: true}
+      - {layer: unit, name: "one reason per file: a script path gets runnable_file only, never also non_markdown", golden: histories.prc, auto: true}
       - {layer: agent, name: A13 the assistant is warned about a skill with a planted instruction, golden: agent.A13, auto: true}
 
   - id: owner-only-publish
