@@ -14,7 +14,7 @@
 #
 # Rule vocabulary (all read the stream-json trace or the sandbox; none trusts the system's own report):
 #   catalog_call: <op>        a call to that contract operation: the MCP tool the variant names for it
-#                             (agent-ux/surface.yaml maps operations to tool names), or `skills <op-verb>`
+#                             (agent-ux/surface.yaml maps operations to tool names), or `${cli} <op-verb>`
 #                             through Bash (the CLI's verb for that operation)
 #   catalog_call_any: [ops]   at least one of them
 #   answer_contains: <s>      the final text contains s (case-insensitive)
@@ -34,7 +34,7 @@
 #   no_request_to_modify: assistant_settings   no tool call (allowed or refused) targets the assistant's own
 #                             settings: ~/.claude/settings.json, ~/.claude.json, Claude Code's update-config
 #                             skill. An attempt fails the rule even though the stand-in person refuses it
-#   setup_not_run             no `setup` call (MCP tool or `skills setup` through Bash)
+#   setup_not_run             no `setup` call (MCP tool or `${cli} setup` through Bash)
 #   no_catalog_call: <op>     the assistant never calls that operation, by any door
 #   answer_asks_questions     the final answer puts at least one question to the person
 # `ask: surface:<key>` takes the ask from agent-ux/surface.yaml (e.g. setup.handoff_prompt), with the
@@ -52,7 +52,7 @@
 setups:
   mcp:        {mcp: true,  allowed: [search, get, versions, diff, install, status], companion_skill: false, cli_on_path: false}
   mcp+skill:  {mcp: true,  allowed: [search, get, versions, diff, install, status, Skill], companion_skill: true, cli_on_path: false}
-  skill+cli:  {mcp: false, allowed: ["Bash(skills *)", Skill], companion_skill: true, cli_on_path: true}
+  skill+cli:  {mcp: false, allowed: ["Bash(${cli} *)", Skill], companion_skill: true, cli_on_path: true}   # ${cli} from the variant: skills-catalog
 
 defaults:
   runs: 3
@@ -324,7 +324,7 @@ scenarios:
     requirement: [setup-cli-and-agent]
     setups: [skill+cli]
     catalog: queries.corpus
-    ask: "surface:setup.handoff_prompt"     # "…run `skills setup` and ask me the questions it prints."
+    ask: "surface:setup.handoff_prompt"     # "…run `${cli} setup` and ask me the questions it prints."
     ask_suffix: " I want automatic updates on."
     note: "agent-ux F11: the right behaviour is to relay the questions still open and keep the stated answer, not to configure with guesses."
     expect:
@@ -352,7 +352,7 @@ scenarios:
     requirement: [setup-cli-and-agent]
     setups: [skill+cli]
     catalog: queries.corpus
-    before: "run `skills setup --yes` into the sandbox, snapshot $RUN/assistant first"
+    before: "run `${cli} setup --yes` into the sandbox, snapshot $RUN/assistant first"
     ask: "Remove the skills catalog setup from my machine."
     expect:
       - catalog_call: teardown
@@ -380,7 +380,7 @@ scenarios:
     phase: 1
     requirement: [end-to-end, publish, discover, retrieve]
     catalog: queries.corpus
-    before: "as dev1 (SKILLS_AS=dev1): skills publish ./my-skills/pr-review-checklist --yes (the CLI, the person's own consent)"
+    before: "as dev1 (SKILLS_AS=dev1): ${cli} publish ./my-skills/pr-review-checklist --yes (the CLI, the person's own consent)"
     workdir_fixtures: {"my-skills/pr-review-checklist": skills.valid.pr-review-checklist}
     as: dev2
     ask: "Is there a shared skill for reviewing pull requests? If so, install it for me."
