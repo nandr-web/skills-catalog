@@ -121,7 +121,7 @@ hostile:
       key.pem: "QA-SENTINEL-$RUN_ID\n"
       .DS_Store: "x"
     expect: {published_paths: [SKILL.md], skipped_reported: [.DS_Store, .env, .git/config, id_fake, key.pem], sentinel_must_not_leak: true}
-  secret-in-body:   {files: {SKILL.md: "---\nname: secret-in-body\ndescription: A key pasted into the body.\n---\nUse AKIAIOSFODNN7EXAMPLE00000 to call AWS.\n"}, error: secret_suspected, at: {path: SKILL.md, line: 5}, note: "Override only via the person's CLI flag --allow-suspected-secrets; see agent scenario A7s."}
+  secret-in-body:   {files: {SKILL.md: "---\nname: secret-in-body\ndescription: A key pasted into the body.\n---\nUse AKIAIOSFODNN7EXAMPLE0000 to call AWS.\n"}, error: secret_suspected, at: {path: SKILL.md, line: 5}, error_text_must_not_contain: AKIAIOSFODNN7EXAMPLE0000, note: "The key has the real AWS access-key shape (AKIA + 16), so a standard scanner must catch it. Override only via the person's CLI flag --allow-suspected-secrets; see agent scenario A7s."}
   tricky-markdown:  {files: {SKILL.md: "---\nname: tricky-markdown\ndescription: Links and images in the body.\n---\n[x](javascript:alert(1)) ![y](http://example.invalid/t.png)\n"}, accepted: true, web: renders-inert}
   web-file-types:
     accepted: true
