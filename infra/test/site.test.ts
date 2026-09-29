@@ -7,6 +7,7 @@
 
 import { Match, type Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
+import { PRESETS, REGION } from '../src/config.ts';
 import { synth } from './synth.ts';
 
 type Res = Record<string, { Type: string; Properties?: Record<string, any> }>;
@@ -39,9 +40,27 @@ for (const preset of ['throwaway', 'demo'] as const) {
       expect(api.CachePolicyId).toBe('4135ea2d-6df8-44a3-9df3-4b5a84be39ad'); // Managed-CachingDisabled
     });
 
-    it('managed policies only, no legacy forwarded values, no CloudFront functions', () => {
-      for (const type of ['AWS::CloudFront::CachePolicy', 'AWS::CloudFront::OriginRequestPolicy', 'AWS::CloudFront::ResponseHeadersPolicy', 'AWS::CloudFront::Function']) t.resourceCountIs(type, 0);
+    it('managed policies only, no legacy forwarded values', () => {
+      for (const type of ['AWS::CloudFront::CachePolicy', 'AWS::CloudFront::OriginRequestPolicy', 'AWS::CloudFront::ResponseHeadersPolicy']) t.resourceCountIs(type, 0);
       expect(JSON.stringify(distribution(t))).not.toContain('ForwardedValues');
+    });
+
+    it("deep links: a CloudFront function on the default behavior's viewer request sends a path without an extension to /index.html; never custom error responses (they'd turn the API's 403 and 404 into the page)", () => {
+      const d = distribution(t);
+      expect(d.CustomErrorResponses).toBeUndefined();
+      const onRequest = (d.DefaultCacheBehavior.FunctionAssociations ?? []).filter((a: { EventType: string }) => a.EventType === 'viewer-request');
+      expect(onRequest.length).toBe(1);
+      for (const b of d.CacheBehaviors) expect(b.FunctionAssociations, b.PathPattern).toBeUndefined();
+      const fns = Object.values(t.findResources('AWS::CloudFront::Function')) as { Properties: { FunctionCode: string; FunctionConfig: { Runtime: string } } }[];
+      const code = fns.map((f) => f.Properties.FunctionCode).find((c) => c.includes('index.html'))!;
+      // The function's own code, run as CloudFront runs it: handler(event) → the request.
+      const handler = new Function(`${code}; return handler;`)() as (e: unknown) => { uri: string };
+      const uri = (u: string) => handler({ request: { uri: u, headers: {} } }).uri;
+      expect(uri('/skills/pr-review')).toBe('/index.html');
+      expect(uri('/bundles/team/')).toBe('/index.html');
+      expect(uri('/assets/app.3f2a.js')).toBe('/assets/app.3f2a.js');
+      expect(uri('/favicon.svg')).toBe('/favicon.svg');
+      expect(uri('/')).toBe('/');
     });
 
     it('the site bucket is private and reached by origin access control, never an origin access identity', () => {
@@ -69,6 +88,21 @@ describe('the edge is the only way in', () => {
   });
 });
 
+describe('where it runs, and who hears the alarms', () => {
+  it("the region is us-east-1: a web ACL for CloudFront can only be made there, and it's in this stack", () => {
+    expect(REGION).toBe('us-east-1');
+    for (const preset of ['throwaway', 'demo'] as const) expect(PRESETS[preset].env.region).toBe('us-east-1');
+    synth('throwaway').hasResourceProperties('AWS::WAFv2::WebACL', { Scope: 'CLOUDFRONT' });
+  });
+
+  it('the alerts topic has an email subscriber when an address is given at the deploy go; none in code', () => {
+    const given = synth('throwaway', { alertEmail: 'alerts@example.test' });
+    given.hasResourceProperties('AWS::SNS::Subscription', { Protocol: 'email', Endpoint: 'alerts@example.test' });
+    synth('throwaway').resourceCountIs('AWS::SNS::Subscription', 0);
+    for (const preset of ['throwaway', 'demo'] as const) expect(PRESETS[preset].alertEmail).toBeUndefined();
+  });
+});
+
 describe('lost events raise an alarm', () => {
   for (const preset of ['throwaway', 'demo'] as const) {
     it(`a message in the dead-letter queue, and a failed pipe run, each raise an alarm to the alerts topic [${preset}]`, () => {
@@ -92,9 +126,11 @@ describe('demo only', () => {
     synth('throwaway').resourceCountIs('AWS::PricingPlanManager::Subscription', 0);
   });
 
-  it('a budget alarm; throwaway has none', () => {
-    synth('demo').resourceCountIs('AWS::Budgets::Budget', 1);
-    synth('throwaway').resourceCountIs('AWS::Budgets::Budget', 0);
+  it('a budget alarm, and a small one for throwaway too (a forgotten throwaway stack is the likeliest surprise bill)', () => {
+    for (const [preset, usd] of [['demo', 10], ['throwaway', 5]] as const) {
+      synth(preset).resourceCountIs('AWS::Budgets::Budget', 1);
+      synth(preset).hasResourceProperties('AWS::Budgets::Budget', { Budget: { BudgetLimit: { Amount: usd, Unit: 'USD' } } });
+    }
   });
 
   it("pins every catalog function's exact runtime version, and can't be made without one", () => {
