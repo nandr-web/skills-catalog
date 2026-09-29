@@ -13,10 +13,21 @@
 #   `outcome` ignores `local`. `if_protected` is the outcome if the owner later picks protection.
 # accept: the setup option accept_flagged_updates (default false).
 # mode: interactive | unattended (unattended holds are reported at the next session).
-# outcome: updated | unchanged | installed | held:pin | held:notify | held:flagged
-# Precedence: pin, then notify, then the risk-flag hold.
+# outcome: updated | unchanged | installed | held:other_catalog | held:pin | held:notify | held:flagged
+# Precedence (contract §5.3, c5b03b4): other_catalog, then pin, then notify, then the risk-flag hold.
 # first_install: true = an install from nothing (contract §5.3): it follows the auto rows whatever the policy, so no flags
 #   installs and any flag is held:flagged, then accept_held_update with its confirm installs it.
+# install_over: true = install_shared_skill asks for another version of a skill installed there (the owner's decision;
+#   contract §3, §5.3, d6e6a87, 123377d, 241c647). It follows that skill's rows, like an update: pin and notify hold it
+#   (the held result carries `from`, the installed version), auto goes through the risk-flag hold, and an unflagged one is
+#   `installed`, the lock's version moving and its accepted flags unchanged. `older: true` = the version asked for is older
+#   than the installed one (a downgrade counts as another version). `newer: false` = the same version: `unchanged`
+#   {version}, nothing written, when the installed copy is intact (its fingerprint matches the lock's); `intact: false` =
+#   files of the installed copy were changed or removed, so that version is written again (`installed`) whatever the
+#   policy. accept_flagged_updates never applies to an install, a first one or one over an installed skill (241c647).
+# catalog: other = the lock entry came from another catalog than the one in use (a skill of the same name from somewhere
+#   else; c5b03b4): held:other_catalog {was, now}, first in the order, never applied silently, even with
+#   accept_flagged_updates on (the option covers flags, not where a skill comes from).
 
 cases:
   - {policy: auto,   override: none,   flags: [],                       local: same,         accept: false, mode: interactive, outcome: updated}
@@ -57,6 +68,28 @@ cases:
   - {first_install: true, policy: notify, override: none, flags: [runs_at_load],           local: same, accept: false, mode: interactive, outcome: held:flagged}
   - {first_install: true, policy: auto,   override: none, flags: [runnable_file],          local: same, accept: false, mode: interactive, outcome: held:flagged}
   - {first_install: true, policy: auto,   override: none, flags: [runnable_file],          local: same, accept: true,  mode: unattended,  outcome: held:flagged, note: "accept_flagged_updates never applies to a first install (contract §5.3, 1803115)"}
+  # An install over an installed skill follows that skill's rows (the owner's decision; d6e6a87, 123377d, 241c647).
+  - {install_over: true, policy: pin,    override: none,   flags: [],                       local: same, accept: false, mode: interactive, outcome: held:pin, note: "the held result carries target, version and from; accepting keeps the pin, at the new version"}
+  - {install_over: true, policy: pin,    override: none,   flags: [], older: true,          local: same, accept: false, mode: interactive, outcome: held:pin, note: "an older version is another version too"}
+  - {install_over: true, policy: auto,   override: pin,    flags: [runnable_file],          local: same, accept: false, mode: interactive, outcome: held:pin, note: "pin before the flags; the hold lists them and accept names them"}
+  - {install_over: true, policy: notify, override: none,   flags: [],                       local: same, accept: false, mode: interactive, outcome: held:notify}
+  - {install_over: true, policy: auto,   override: notify, flags: [runs_at_load],           local: same, accept: false, mode: interactive, outcome: held:notify, note: "shown with its flags"}
+  - {install_over: true, policy: auto,   override: none,   flags: [],                       local: same, accept: false, mode: interactive, outcome: installed, note: "the lock's version moves; its accepted flags are unchanged"}
+  - {install_over: true, policy: auto,   override: none,   flags: [], older: true,          local: same, accept: false, mode: interactive, outcome: installed, note: "an unflagged downgrade installs, diffed from the installed version"}
+  - {install_over: true, policy: auto,   override: none,   flags: [non_markdown],           local: same, accept: false, mode: interactive, outcome: held:flagged}
+  - {install_over: true, policy: pin,    override: auto,   flags: [capability_frontmatter], local: same, accept: false, mode: interactive, outcome: held:flagged}
+  - {install_over: true, policy: auto,   override: none,   flags: [non_markdown],           local: same, accept: true,  mode: unattended,  outcome: held:flagged, note: "accept_flagged_updates never applies to an install over an installed skill either (241c647)"}
+  - {install_over: true, policy: auto,   override: none,   flags: [prompt_injection],       local: same, accept: true,  mode: unattended,  outcome: held:flagged, note: "every flag kind, the reviewer's too"}
+  - {install_over: true, policy: pin,    override: none,   flags: [], newer: false,         local: same, accept: false, mode: interactive, outcome: unchanged, note: "the same version: unchanged {version}, nothing written, the lock byte-identical"}
+  - {install_over: true, policy: auto,   override: none,   flags: [], newer: false,         local: same, accept: false, mode: interactive, outcome: unchanged}
+  - {install_over: true, policy: pin,    override: none,   flags: [], newer: false, intact: false, local: changed_here, accept: false, mode: interactive, outcome: installed, note: "the same version written again over a changed or incomplete copy, whatever the policy (123377d)"}
+  # A lock entry from another catalog (c5b03b4): held:other_catalog {was, now}, first in the order, never applied silently.
+  - {catalog: other, policy: auto,   override: none,   flags: [],                       local: same, accept: false, mode: interactive, outcome: held:other_catalog}
+  - {catalog: other, policy: auto,   override: none,   flags: [],                       local: same, accept: false, mode: unattended,  outcome: held:other_catalog}
+  - {catalog: other, policy: pin,    override: none,   flags: [],                       local: same, accept: false, mode: interactive, outcome: held:other_catalog, note: "before pin"}
+  - {catalog: other, policy: auto,   override: notify, flags: [runnable_file],          local: same, accept: false, mode: interactive, outcome: held:other_catalog, note: "before notify and the flags; the hold lists the flags"}
+  - {catalog: other, policy: auto,   override: none,   flags: [non_markdown],           local: same, accept: true,  mode: unattended,  outcome: held:other_catalog, note: "accept_flagged_updates covers flags, not where a skill comes from"}
+  - {catalog: other, install_over: true, policy: auto, override: none, flags: [],       local: same, accept: false, mode: interactive, outcome: held:other_catalog, note: "an install over it too"}
 
 # Permissive modes (contract §5.3; detection pinned at ff9c881 and f1b7200; e22d154 replaced the blanket hold): while one is
 # detected, added or changed lines get command_instruction (histories.gate pairs with `permissive`).
@@ -146,6 +179,33 @@ accept_cases:
     cases:
       - {flags: [instructions_changed, capability_frontmatter], outcome: installed, note: "order ignored"}
       - {flags: [capability_frontmatter], outcome: conflict, no_new_skill_dirs: true}
+  target_version:
+    held: {name: runner, target: user, version: 2, flags: [runnable_file]}
+    note: >-
+      accept_held_update takes name, target, version and confirm, all four from the held result, and flags (c5b03b4). target
+      and version are compared exactly, as the confirm is (it's tied to the name, the target and the version's fingerprint):
+      another target, an older or a missing version is conflict, changing nothing. A missing input is invalid_request
+      {field, why: required}. Each case starts from the same hold (runner v1 installed in the user target, v2 adds a script).
+    cases:
+      - {send: {target: user, version: 2}, outcome: updated}
+      - {send: {target: project, version: 2}, outcome: conflict, installed_unchanged: true, note: "another target"}
+      - {send: {target: user, version: 1}, outcome: conflict, installed_unchanged: true, note: "an older version"}
+      - {send: {target: user, version: 3}, outcome: conflict, installed_unchanged: true, note: "a version that doesn't exist"}
+      - {send: {version: 2}, outcome: {error: invalid_request, field: target, why: required}, installed_unchanged: true}
+      - {send: {target: user}, outcome: {error: invalid_request, field: version, why: required}, installed_unchanged: true}
+  keeps_policy:
+    note: >-
+      Accepting a held pin or notify, an install's or an update's (both carry a confirm), takes that version and keeps the
+      policy: a pinned skill stays pinned, at the new version (123377d). v1 installed, v2 in the catalog.
+    cases:
+      - {hold: {from: install, reason: pin}, flags: [], lock_version_after: 2, policy_after: pin}
+      - {hold: {from: update, reason: pin}, flags: [], lock_version_after: 2, policy_after: pin}
+      - {hold: {from: install, reason: notify, risk_flags: [runs_at_load]}, flags: [runs_at_load], lock_version_after: 2, policy_after: notify}
+      - {hold: {from: install, reason: pin}, flags: [runnable_file], outcome: conflict, installed_unchanged: true, note: "a kind the hold didn't list"}
+  other_catalog:
+    note: "accepting a held other_catalog records the catalog in use now in the lock entry (c5b03b4); the policy is kept"
+    cases:
+      - {flags: [], lock_version_after: 2, lock_catalog_after: now, policy_after: unchanged}
 
 # A damaged lock or config file (contract §4.5, §9; 4f3b878): invalid_local_file {file, why, path}. Each case starts from a
 # real install of prc.v1 (user target, so lock.json holds one entry written by the installer, keyed by its path) and a
