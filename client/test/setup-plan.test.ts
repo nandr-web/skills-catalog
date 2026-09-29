@@ -1,7 +1,7 @@
 // Setup's plan (setup build notes §3 "Order of a run": everything read and checked first, any refusal changes nothing):
 // where it works, whether the install is safe, each assistant file read with the one reader and merged; the planner
 // writes nothing, whatever it finds.
-import { chmodSync, linkSync, mkdirSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, linkSync, mkdirSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CatalogError, Words } from '@skills-catalog/core';
 import { sandbox } from '@skills-catalog/core/testing';
@@ -50,7 +50,7 @@ describe('setup\'s plan: read and checked, nothing written', () => {
     const before = listing(dir);
     const plan = planSetup(input);
     expect(plan.id).toBe(ID);
-    expect(plan.run.env).toEqual({ SKILLS_HOME: input.skillsHome, SKILLS_ASSISTANT_HOME: A, SKILLS_AS: 'someone' });
+    expect(plan.run.env).toEqual({ SKILLS_HOME: input.skillsHome, SKILLS_ASSISTANT_HOME: A });
     const entry = mcpEntry(plan.run);
     // Only the settings setup carries: never SKILLS_AS.
     expect(Object.keys(entry['env'] as object)).toEqual(['SKILLS_SETUP_ID', 'SKILLS_HOME', 'SKILLS_ASSISTANT_HOME']);
@@ -58,6 +58,35 @@ describe('setup\'s plan: read and checked, nothing written', () => {
     expect(plan.files.settingsJson.text).toBe(freshText({ hooks: { SessionStart: [hookGroup(plan.run)] }, permissions: { allow: allowRules(S) } }));
     expect(plan.missing).toEqual({ claudeDir: true, skillsHome: true, backups: true });
     expect(listing(dir)).toEqual(before);
+  });
+
+  it('carries each setting as the absolute place setup checked, never as given: a relative one would resolve in each project', () => {
+    const { dir, input } = world();
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+      const plan = planSetup({ ...input, env: { SKILLS_HOME: 'skills-home', SKILLS_MANAGED_SETTINGS: './managed', SKILLS_ACTIVITY_LOG: 'logs/a.log', SKILLS_CATALOG: 'file:///c/catalog' } });
+      expect(plan.run.env).toEqual({ SKILLS_HOME: join(dir, 'skills-home'), SKILLS_MANAGED_SETTINGS: join(dir, 'managed'), SKILLS_ACTIVITY_LOG: join(dir, 'logs', 'a.log'), SKILLS_CATALOG: 'file:///c/catalog' });
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it('refuses a setting it couldn\'t carry safely: a relative install folder, a catalog that isn\'t a URL, a $, a backtick or a control character', () => {
+    const { input } = world();
+    expect(refusal(() => planSetup({ ...input, env: { SKILLS_INSTALL_DIR: 'skills' } }))).toEqual({ code: 'invalid_request', data: { field: 'SKILLS_INSTALL_DIR', why: 'not_absolute' } });
+    expect(refusal(() => planSetup({ ...input, env: { SKILLS_CATALOG: 'catalog' } }))).toEqual({ code: 'invalid_request', data: { field: 'catalog', why: 'not_a_catalog_url' } });
+    for (const v of ['/a/$HOME', '/a/`x`', '/a/\nb']) {
+      expect(refusal(() => planSetup({ ...input, env: { SKILLS_HOME: v } })), JSON.stringify(v)).toEqual({ code: 'install_unsafe', data: { path: v, why: 'path_characters' } });
+    }
+  });
+
+  it('an assistant home reached through a link: the places are its real folder, so each later check sees the same folder', () => {
+    const { dir, A, input } = world();
+    const linked = join(dir, 'linked-home');
+    symlinkSync(A, linked);
+    const plan = planSetup({ ...input, assistantHome: linked });
+    expect(plan.places.claudeJson).toBe(join(realpathSync(A), '.claude.json'));
   });
 
   it('a rerun with setup\'s record: its setup id, and no file to write', () => {

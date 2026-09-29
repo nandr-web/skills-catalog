@@ -186,6 +186,16 @@ describe('setup\'s run', () => {
     expect([old, oldSettings, fresh, theirs].map((p) => existsSync(p))).toEqual([false, false, true, true]);
   });
 
+  it('an assistant home reached through a link: written in its real folder, not refused as a changed folder', async () => {
+    const { dir, A, input, claudeJson } = world();
+    const linked = join(dir, 'linked-home');
+    symlinkSync(A, linked);
+    const r = await runSetup({ ...input, assistantHome: linked });
+    expect(r.written).toHaveLength(2);
+    expect(existsSync(claudeJson)).toBe(true);
+    expect(lstatSync(linked).isSymbolicLink()).toBe(true);
+  });
+
   it('another run holding setup.lock (or a link in its place): lock_busy, nothing written', async () => {
     const { dir, H, input, claudeJson } = world();
     mkdirSync(H, { mode: 0o700 });

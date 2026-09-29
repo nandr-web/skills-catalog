@@ -4,10 +4,12 @@
 // (setup-merge). The plan says, per file, what it was and the text to write (none when it already holds this run's
 // entries); the executor writes it.
 
+import { isAbsolute, resolve } from 'node:path';
 import { CatalogError, type Words } from '@skills-catalog/core';
 import { readJsonFile, type Snapshot } from './json-file.ts';
 import { allowRules, hookGroup, mcpEntry, type SetupRun } from './setup-entries.ts';
-import { checkInstall } from './setup-install.ts';
+import { CARRIED } from './setup-values.ts';
+import { BAD_CHARACTER, checkInstall } from './setup-install.ts';
 import { mergeClaudeJson, mergeSettingsJson, SERVER_NAME, type Merged, type PlannedEntry } from './setup-merge.ts';
 import { checkPlaces, type SetupPlaces } from './setup-places.ts';
 
@@ -71,11 +73,30 @@ export function planFile(kind: FileKind, plan: Pick<SetupPlan, 'places' | 'run' 
   return { path, was, read: before, text: m.text, entries: m.entries };
 }
 
+// The settings the MCP entry and the hook carry, each as the place setup checked: a path resolved as settings.ts resolved
+// it for this run (a relative one would resolve again in whatever project a later session opens), the install folder
+// only when absolute and the catalog only as a URL (as they're refused elsewhere), and none with a character a command or
+// an MCP config could read as something else.
+const PATH_SETTINGS = ['SKILLS_HOME', 'SKILLS_ASSISTANT_HOME', 'SKILLS_MANAGED_SETTINGS', 'SKILLS_ACTIVITY_LOG'] as const;
+function carriedSettings(env: PlanInput['env']): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const k of CARRIED) {
+    const v = env[k];
+    if (!v) continue;
+    if (BAD_CHARACTER.test(v)) throw new CatalogError('install_unsafe', { path: v, why: 'path_characters' });
+    if (k === 'SKILLS_INSTALL_DIR' && !isAbsolute(v)) throw new CatalogError('invalid_request', { field: 'SKILLS_INSTALL_DIR', why: 'not_absolute' });
+    if (k === 'SKILLS_CATALOG' && !v.startsWith('file:///') && !v.startsWith('https://')) throw new CatalogError('invalid_request', { field: 'catalog', why: 'not_a_catalog_url' });
+    out[k] = (PATH_SETTINGS as readonly string[]).includes(k) ? resolve(v) : v;
+  }
+  return out;
+}
+
 export function planSetup(input: PlanInput): SetupPlan {
+  const env = carriedSettings(input.env);
   const { places, missing, record, recordWas } = checkPlaces({ assistantHome: input.assistantHome, skillsHome: input.skillsHome, env: input.env, uid: input.uid });
   const install = checkInstall({ node: input.node, script: input.script, temporaryRoots: input.temporaryRoots, uid: input.uid });
   const id = record?.setup_id ?? input.newId;
-  const run: SetupRun = { node: install.node, script: install.script, id, env: input.env };
+  const run: SetupRun = { node: install.node, script: install.script, id, env };
   const base = { places, run, record };
   const files = { claudeJson: planFile('claudeJson', base, input.words), settingsJson: planFile('settingsJson', base, input.words) };
   return { places, missing, id, run, sharedGroup: install.sharedGroup, record, recordWas, files };

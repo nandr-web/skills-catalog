@@ -102,7 +102,7 @@ describe('where setup works, checked before anything is made', () => {
     const { dir, A, H, input } = homes();
     const linked = join(dir, 'linked-home');
     symlinkSync(A, linked);
-    expect(checkPlaces({ ...input, assistantHome: linked }).places.claudeJson).toBe(join(linked, '.claude.json'));
+    expect(checkPlaces({ ...input, assistantHome: linked }).places.claudeJson).toBe(join(A, '.claude.json')); // its real folder
 
     const elsewhere = join(dir, 'elsewhere');
     mkdirSync(elsewhere, { mode: 0o700 });

@@ -28,7 +28,7 @@ export type Install = { node: string; script: string; sharedGroup: string[] };
 
 const unsafe = (path: string, why: InstallUnsafeWhy) => new CatalogError('install_unsafe', { path, why });
 // A character a shell line or an MCP config could read as something else.
-const BAD_CHARACTER = /[\u0000-\u001f\u007f$`]/;
+export const BAD_CHARACTER = /[\u0000-\u001f\u007f$`]/;
 const under = (path: string, root: string) => path === root || path.startsWith(root.endsWith(sep) ? root : root + sep);
 
 function real(path: string): string {

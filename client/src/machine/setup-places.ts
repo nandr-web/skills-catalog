@@ -4,7 +4,7 @@
 // another user owns; a home others can write, or setup can't; .claude or backups/ a link, a file, or not private; the
 // record a link, unreadable, or not setup's shape, or naming paths outside setup's own places.
 
-import { accessSync, constants, lstatSync, statSync, type BigIntStats } from 'node:fs';
+import { accessSync, constants, lstatSync, realpathSync, statSync, type BigIntStats } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CatalogError } from '@skills-catalog/core';
 import { readJsonFile, type Snapshot } from './json-file.ts';
@@ -89,11 +89,14 @@ export function checkPlaces({ assistantHome: A, skillsHome: H, env, uid }: Place
   writable(A);
   writable(h ? H : hParent);
 
+  // The assistant home's real folder, taken once: every place below is built from it, so each later check (a write's
+  // folder identity included) looks at the folder that was checked here, never at a link to it.
+  const home = realpathSync(A);
   const places: SetupPlaces = {
-    assistantHome: A,
-    claudeDir: join(A, '.claude'),
-    claudeJson: join(A, '.claude.json'),
-    settingsJson: join(A, '.claude', 'settings.json'),
+    assistantHome: home,
+    claudeDir: join(home, '.claude'),
+    claudeJson: join(home, '.claude.json'),
+    settingsJson: join(home, '.claude', 'settings.json'),
     skillsHome: H,
     backups: join(H, 'backups'),
     record: join(H, 'setup-record.json'),
