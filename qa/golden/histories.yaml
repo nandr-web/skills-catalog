@@ -375,6 +375,29 @@ versions:
   gate.g0-ci-prose:
     SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\nMake sure the tests run in CI before you merge.\n"
     reference.md: "Step one.\n"
+  # runs_at_load's line ends and blanks (contract §5.3, 96274fb, 2fe012b): a line ends at a CRLF (once), a lone CR or LF,
+  # U+2028 or U+2029; a blank is a space, a tab or any invisible character.
+  gate.g0-bang-after-cr:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\nNote.\r```!\necho QA-MARKER\n```\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-after-ls:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\nNote. ```!\necho QA-MARKER\n```\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-after-ps:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\nNote. ```!\necho QA-MARKER\n```\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-crlf:
+    SKILL.md: "---\r\nname: gate-skill\r\ndescription: A plain skill.\r\n---\r\nFollow reference.md.\r\n```!\r\necho QA-MARKER\r\n```\r\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-zwsp-fence:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```​!\necho QA-MARKER\n```\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-bom-fence:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```﻿!\necho QA-MARKER\n```\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-nbsp-fence:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n``` !\necho QA-MARKER\n```\n"
+    reference.md: "Step one.\n"
   # Planted straight into storage by the installer tests (never published: they break today's rules on purpose or carry
   # a catalog row whose risk_flags lie). Exempt from the goldens' publish checks by the `planted.` prefix.
   planted.stale-v1:
@@ -567,6 +590,14 @@ histories:
       - {from: gate.g1, to: gate.g1-curl, permissive: none, risk_flags: [{kind: instructions_changed, path: SKILL.md}, {kind: prompt_injection, path: SKILL.md, line: 7, detail: "curl piped to a shell"}], note: "the same change in the default mode: only instructions_changed"}
       - {from: gate.g0, to: gate.g0-bang-curl, permissive: auto, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: prompt_injection, path: SKILL.md, line: 6, detail: "curl piped to a shell"}], note: "an injected command is runs_at_load, which comes first: no command_instruction for that line (the reviewer's flag joins beside it)"}
       - {from: null, to: gate.g0-curl, permissive: auto, risk_flags: [{kind: command_instruction, path: SKILL.md, line: 6, instruction: fetch_and_run, mode: auto}, {kind: prompt_injection, path: SKILL.md, line: 6, detail: "curl piped to a shell"}], note: "a first install in auto mode is checked too, so it's held: flagged"}
+      # runs_at_load's line ends and blanks (contract 96274fb, 2fe012b).
+      - {from: gate.g0, to: gate.g0-bang-after-cr, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 7}], note: "a lone CR ends line 6, so the fence opens line 7"}
+      - {from: gate.g0, to: gate.g0-bang-after-ls, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 7}], note: "U+2028 ends a line (so the reviewer sees no hidden character: it's a line end)"}
+      - {from: gate.g0, to: gate.g0-bang-after-ps, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 7}], note: "U+2029 ends a line"}
+      - {from: gate.g0, to: gate.g0-bang-crlf, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a CRLF is one line end: the fence is line 6, as an editor shows it, and the other lines match gate.g0's"}
+      - {from: gate.g0, to: gate.g0-bang-zwsp-fence, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: prompt_injection, path: SKILL.md, line: 6, detail: "hidden character U+200B"}], note: "a zero-width space is a blank before the !; the reviewer flags it too"}
+      - {from: gate.g0, to: gate.g0-bang-bom-fence, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: prompt_injection, path: SKILL.md, line: 6, detail: "hidden character U+FEFF"}], note: "a BOM that isn't the file's first character is a blank, and hidden"}
+      - {from: gate.g0, to: gate.g0-bang-nbsp-fence, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a no-break space is a blank (and not hidden text)"}
       # command_instruction's pinned patterns (contract §5.3, 54db418).
       - {from: gate.g0, to: gate.g0-npm-prose, permissive: auto, risk_flags: [{kind: command_instruction, path: SKILL.md, line: 6, instruction: install, mode: auto}], note: "a package install in prose, outside any code span"}
       - {from: gate.g0, to: gate.g0-run-make, permissive: broad_bash_rule, risk_flags: [{kind: command_instruction, path: SKILL.md, line: 6, instruction: shell, mode: broad_bash_rule}], note: "run before an inline code span"}
@@ -598,6 +629,15 @@ histories:
           4,002 differing lines in the middle, so the diff gives up: every new fence line counts, one flag per block, the
           unchanged ~~~ block at 6 included (a diff that doesn't give up leaves it alone); the ! block's text is unchanged,
           so it's flagged at 2010 as a fence, not as a new block
+
+  gate_bytes:
+    note: >-
+      A markdown file that isn't UTF-8 can't be read the same way everywhere, so it's runs_at_load at line 1 and nothing
+      else for that file (contract §5.3, 96274fb). `from` is a history version; `change` replaces one file with exact bytes
+      (base64). Kept out of `versions`, which every version reader takes as text.
+    pending: "files given as bytes in the gate's tests, and the non-UTF-8 rule (contract 96274fb)"
+    cases:
+      - {id: reference-not-utf8, from: gate.g0, change: {reference.md: {base64: "U3RlcCBvbmUuCv/+IG5vdCBVVEYtOAo="}}, risk_flags: [{kind: runs_at_load, path: reference.md, line: 1}], note: "'Step one.', then the bytes FF FE"}
 
   installer:
     name: stale-rules

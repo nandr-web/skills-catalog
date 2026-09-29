@@ -39,6 +39,8 @@ const PENDING: string[] = [
   'policy.cases[40]',
   'policy.cases[46]',
   'policy.accept_cases.keeps_policy.cases[2]',
+  // A markdown file that isn't UTF-8 flagged runs_at_load at line 1: the tests read versions as text.
+  'histories.histories.gate_bytes',
   // The rules reviewer: prompt_injection's six rules and context_cost.
   'skills.rules_review',
   // One filter tag over 32 characters: item_too_long.
