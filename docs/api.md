@@ -899,6 +899,13 @@ Served by local and hosted catalogs. Called through HTTP (`web`). It changes the
 - `dry_run`: true or false (optional)
 - `allow_suspected_secrets`: true or false (optional; CLI only: a person's own choice, never taken from the Assistant's tool or HTTP)
 
+**Hosted, instead** (each form refuses the other)
+
+- `files`: a list of at most 10,000, each with (required)
+  - `path`: text, at most 4,096 characters (required)
+  - `mode`: text, at most 8 characters (required)
+  - `sha256`: text (required)
+
 **Output**
 
 - an object with
@@ -942,6 +949,93 @@ Served by local and hosted catalogs. Called through HTTP (`web`). It changes the
     - `detail`: text
 
 **Errors:** `unauthenticated`, `not_owner`, `conflict`, `invalid_manifest`, `invalid_name`, `invalid_path`, `too_large`, `secret_suspected`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
+
+### `request_upload_links`
+
+Served by hosted catalogs only. Called through HTTP (`web`). It changes the catalog (`writes_catalog`).
+
+**Input**
+
+- `name`: text, at most 200 characters (required)
+- `files`: a list of at most 100, each with (required)
+  - `sha256`: text (required)
+  - `size`: a whole number, at least 0 (required)
+
+**Output**
+
+- an object with
+  - `name`: text
+  - `files`: a list, each one of these
+    - an object with
+      - `kind`: one of `upload`
+      - `sha256`: text
+      - `url`: text
+      - `headers`: an object
+    - an object with
+      - `kind`: one of `stored`
+      - `sha256`: text
+    - an object with
+      - `kind`: one of `removing`
+      - `sha256`: text
+      - `retry_after`: text
+
+**Errors:** `unauthenticated`, `not_owner`, `invalid_name`, `too_large`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
+
+### `sign_in_with_github`
+
+Served by hosted catalogs only. Called through HTTP (`web`). It changes the catalog (`writes_catalog`).
+
+**Input**
+
+- `github_token`: text, at most 255 characters (required)
+- `scope`: one of `read`, `publish` (required)
+
+**Output**
+
+- an object with
+  - `token`: text
+  - `id`: text
+  - `scope`: one of `read`, `publish`
+  - `expires_at`: text
+
+**Errors:** `unauthenticated`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
+
+### `list_tokens`
+
+Served by hosted catalogs only. Called through HTTP (`web`). It changes nothing (`reads`).
+
+**Input**
+
+- nothing
+
+**Output**
+
+- an object with
+  - `tokens`: a list, each an object with
+    - `id`: text
+    - `scope`: one of `read`, `publish`
+    - `kind`: one of `session`, `personal`
+    - `created_at`: text
+    - `expires_at`: text
+    - `last_used_at`: text (not always there)
+    - `revoked_at`: text (not always there)
+
+**Errors:** `unauthenticated`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
+
+### `revoke_token`
+
+Served by hosted catalogs only. Called through HTTP (`web`). It changes the catalog (`writes_catalog`).
+
+**Input**
+
+- `id`: text (required)
+
+**Output**
+
+- an object with
+  - `id`: text
+
+**Errors:** `unauthenticated`, `not_found`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
 
 ### `fetch_version`
 
