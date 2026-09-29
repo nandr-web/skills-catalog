@@ -452,6 +452,17 @@ requirements:
       - {layer: agent, name: "known-good skills approved with no comments (≥ 95%); known-bad flagged", auto: true}
       - {layer: unit, name: every finding cites an existing file and line that supports it, auto: true}
 
+  - id: usage-metrics
+    source: {doc: notes, ref: "the owner's answer on permissive modes: add instrumentation, phase 2"}
+    backlog: [skill-usage-metrics]
+    phase: 2
+    text: "The client counts how it's used (searches that find nothing, installs, updates applied, updates held by reason with how long each waits for a yes, held updates declined or never taken), keeps the counts on the machine and summarises them on request."
+    oracles: [activity-log, clean-run]
+    checks:
+      - {layer: interface, name: "a scripted sequence (a search with no match, a partial one, an install, an update applied, one held and taken later with the injected clock, one held and declined) gives exactly the expected counts and wait times in skills-catalog stats", auto: true}
+      - {layer: interface, name: "the counts live under $SKILLS_HOME only and follow the activity log's rules: a sentinel planted in a query, a skill's text and a publish message never appears in them", auto: true}
+      - {layer: cleanup, name: "the before/after check shows nothing written outside $SKILLS_HOME and no network use", auto: true}
+
   # ---------------- AWS and later ----------------
   - id: aws-deploy
     source: {doc: notes, ref: goals}
