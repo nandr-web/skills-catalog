@@ -813,7 +813,6 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
       }
       const at = { name: e.name, from: e.version, to: v.latest };
       targets.push(`${e.name} v${e.version} → v${v.latest}`);
-      const { policy } = policyOf(e, config);
       // Where it goes, checked as an install checks it: a link or a same-name skill or command may have appeared since.
       let dest: string;
       try {
@@ -840,54 +839,72 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
       }
       const d = gate(await installedSide(catalog, e), to);
       const confirm = encode({ name: e.name, target: e.target, version: to.version, fingerprint: to.fingerprint, latest: v.latest });
-      const take = { ...at, target: e.target, confirm, flags: JSON.stringify(kinds(d.risk_flags)) };
-      const also = d.risk_flags.length ? s.format(w.held_also, { reasons: reasons(s, d.risk_flags) }) : '';
-      // A copy from another catalog comes first (§5.3): it may be a different skill that shares the name. Never applied
-      // silently; taken on a yes, which records the catalog in use.
-      if (e.catalog !== ctx.settings.catalog) {
-        recordHold(ctx, e.name, to.version, 'other_catalog', d.risk_flags, to.version - e.version);
-        lines.push(s.format(w.held_other_catalog, { ...at, was: e.catalog, now: ctx.settings.catalog, also }));
-        lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
-        saw('held_other_catalog');
-        continue;
-      }
-      // Pinned: stays, and the person may still take this version; it stays pinned, at that version.
-      if (policy === 'pin') {
-        recordHold(ctx, e.name, to.version, 'pin', d.risk_flags, to.version - e.version);
-        lines.push(s.format(w.held_pin, at));
-        lines.push(s.format(ctx.face === 'cli' ? w.held_pin_next_cli : w.held_pin_next, take));
-        saw('held_pin');
-        continue;
-      }
-      // "Tell me first" holds every new version, flagged or not (§5.3: pin, then notify, then the flags); it's taken with
-      // the flags it shows, [] when none.
-      if (policy === 'notify') {
-        recordHold(ctx, e.name, to.version, 'notify', d.risk_flags, to.version - e.version);
-        lines.push(d.risk_flags.length ? s.format(w.held_notify_flagged, { ...at, reasons: reasons(s, d.risk_flags) }) : s.format(w.held_notify, at));
-        lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
-        saw('held_notify');
-        continue;
-      }
-      if (d.risk_flags.length) {
-        recordHold(ctx, e.name, to.version, 'flagged', d.risk_flags, to.version - e.version);
-        lines.push(s.format(w.held_flagged, { ...at, reasons: reasons(s, d.risk_flags) }));
-        lines.push(s.format(ctx.face === 'cli' ? w.held_next_cli : w.held_next, take));
-        saw('held_flagged');
-        continue;
-      }
+      // Held over `entry`, with `d` the gate against it: its lines are written and true is returned; false when it goes on.
+      const heldOver = (entry: LockEntry, d: TreeDiff): boolean => {
+        const at = { name: e.name, from: entry.version, to: v.latest };
+        const take = { ...at, target: e.target, confirm, flags: JSON.stringify(kinds(d.risk_flags)) };
+        const also = d.risk_flags.length ? s.format(w.held_also, { reasons: reasons(s, d.risk_flags) }) : '';
+        const { policy } = policyOf(entry, config);
+        // A copy from another catalog comes first (§5.3): it may be a different skill that shares the name. Never applied
+        // silently; taken on a yes, which records the catalog in use.
+        if (entry.catalog !== ctx.settings.catalog) {
+          recordHold(ctx, e.name, to.version, 'other_catalog', d.risk_flags, to.version - entry.version);
+          lines.push(s.format(w.held_other_catalog, { ...at, was: entry.catalog, now: ctx.settings.catalog, also }));
+          lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
+          saw('held_other_catalog');
+          return true;
+        }
+        // Pinned: stays, and the person may still take this version; it stays pinned, at that version.
+        if (policy === 'pin') {
+          recordHold(ctx, e.name, to.version, 'pin', d.risk_flags, to.version - entry.version);
+          lines.push(s.format(w.held_pin, at));
+          lines.push(s.format(ctx.face === 'cli' ? w.held_pin_next_cli : w.held_pin_next, take));
+          saw('held_pin');
+          return true;
+        }
+        // "Tell me first" holds every new version, flagged or not (§5.3: pin, then notify, then the flags); it's taken with
+        // the flags it shows, [] when none.
+        if (policy === 'notify') {
+          recordHold(ctx, e.name, to.version, 'notify', d.risk_flags, to.version - entry.version);
+          lines.push(d.risk_flags.length ? s.format(w.held_notify_flagged, { ...at, reasons: reasons(s, d.risk_flags) }) : s.format(w.held_notify, at));
+          lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
+          saw('held_notify');
+          return true;
+        }
+        if (d.risk_flags.length) {
+          recordHold(ctx, e.name, to.version, 'flagged', d.risk_flags, to.version - entry.version);
+          lines.push(s.format(w.held_flagged, { ...at, reasons: reasons(s, d.risk_flags) }));
+          lines.push(s.format(ctx.face === 'cli' ? w.held_next_cli : w.held_next, take));
+          saw('held_flagged');
+          return true;
+        }
+        return false;
+      };
+      if (heldOver(e, d)) continue;
       if (req.dry_run) {
         lines.push(s.format(w.would_update, { ...at, changes: changesOf(s, d) }));
         continue;
       }
       // A folder that changed while it was being written is that skill's refused line; the other skills go on.
       // Another run holding the lock past the wait refuses the whole call (lock_busy).
-      let written: ReturnType<typeof writeSkill>;
+      // Under the lock the decision is taken again from the entry as it is now (§4.5): another run may have pinned, moved,
+      // updated or removed it since it was read. The fresh decision stands, with the version already fetched and checked;
+      // the flags are taken again against another installed version, read from the catalog.
+      let done: { written: ReturnType<typeof writeSkill>; from: number; d: TreeDiff } | 'held' | 'unchanged' | 'removed';
       try {
-        written = await hold.change((fresh) => {
-          const now = fresh.skills[dest] ?? e;
-          const w = writeSkill(dest, e.target, to.files, now);
-          record(ctx, fresh, dest, now, to, now.policy, now.accepted, toLock(w.copy));
-          return w;
+        done = await hold.change(async (fresh) => {
+          const now = fresh.skills[dest];
+          let dNow = d;
+          if (!sameDecision(e, now)) {
+            if (!now) return 'removed';
+            if (now.catalog === ctx.settings.catalog && now.version >= to.version) return 'unchanged';
+            if (now.version !== e.version || now.catalog !== e.catalog) dNow = gate(await installedSide(catalog, now), to);
+            if (heldOver(now, dNow)) return 'held';
+          }
+          const entry = now ?? e;
+          const w = writeSkill(dest, e.target, to.files, entry);
+          record(ctx, fresh, dest, entry, to, entry.policy, entry.accepted, toLock(w.copy));
+          return { written: w, from: entry.version, d: dNow };
         });
       } catch (err) {
         if (!(err instanceof CatalogError) || err.code === 'lock_busy') throw err;
@@ -895,7 +912,18 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
         refused(err.code);
         continue;
       }
-      lines.push(s.format(w.updated, { ...at, changes: changesOf(s, d) }) + keptLine(s, e.name, written.kept));
+      if (done === 'held') continue;
+      if (done === 'unchanged' || done === 'removed') {
+        targets.pop();
+        if (done === 'unchanged') unchanged++;
+        // Removed meanwhile: no longer installed, so left out of an update of every skill; named, it's not_installed.
+        else if (req.names) {
+          lines.push(s.format(w.refused, { ...at, reason: refusalReason(s, new CatalogError('not_installed', { name: e.name })) }));
+          refused('not_installed');
+        }
+        continue;
+      }
+      lines.push(s.format(w.updated, { ...at, from: done.from, changes: changesOf(s, done.d) }) + keptLine(s, e.name, done.written.kept));
       saw('updated');
     }
   } finally {

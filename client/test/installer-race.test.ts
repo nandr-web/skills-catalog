@@ -933,6 +933,80 @@ describe('the lock entry a decision used, changed by another run before the lock
     expect(r.outcome).toBe('held');
     expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('One.\n');
   });
+
+  // An update decides again the same way, per skill, under the lock it holds to its end.
+  const W = S.word('update');
+  const updating = async (ctx: ReturnType<typeof ctxFor>, names?: string[]) => {
+    try {
+      return (await update(ctx, names ? { names } : {})).text.split('\n');
+    } finally {
+      clearHooks();
+    }
+  };
+  const installedV1ThenV2 = async () => {
+    const p = place();
+    await versionsOf(p, [NOTES('One.\n')]);
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha' });
+    await versionsOf(p, [NOTES('Two.\n')]);
+    return { p, ctx };
+  };
+  const header = S.format(W.header, { checked: 1 });
+  // The sentence up to where its reasons begin (the reasons are worded elsewhere).
+  const upToReasons = (template: string, fields: Record<string, unknown>, key: string) => S.format(template, { ...fields, [key]: '\u0000' }).split('\u0000')[0]!;
+
+  it('update, pinned meanwhile: held as pinned, nothing written', async () => {
+    const { p, ctx } = await installedV1ThenV2();
+    const dest = meanwhile(p, (e) => ({ ...e!, policy: 'pin' }));
+    const lines = await updating(ctx);
+    expect(lines.slice(0, 2)).toEqual([header, S.format(W.held_pin, { name: 'alpha', from: 1, to: 2 })]);
+    expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('One.\n');
+  });
+
+  it('update, moved to another catalog meanwhile: held as from another catalog, nothing written', async () => {
+    const { p, ctx } = await installedV1ThenV2();
+    const dest = meanwhile(p, (e) => ({ ...e!, catalog: 'file:///elsewhere/catalog' }));
+    const lines = await updating(ctx);
+    expect(lines.slice(0, 2)).toEqual([header, S.format(W.held_other_catalog, { name: 'alpha', from: 1, to: 2, was: 'file:///elsewhere/catalog', now: p.catalogUrl, also: '' })]);
+    expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('One.\n');
+  });
+
+  it('update, the latest version installed meanwhile: up to date, nothing written', async () => {
+    const { p, ctx } = await installedV1ThenV2();
+    const dest = meanwhile(p, (e) => ({ ...e!, version: 2 }));
+    expect(await updating(ctx)).toEqual([header, S.format(W.unchanged, { n: 1 })]);
+    expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('One.\n');
+  });
+
+  it('update, removed meanwhile: left out of an update of every skill; refused as not installed when it was named', async () => {
+    for (const names of [undefined, ['alpha']]) {
+      const { p, ctx } = await installedV1ThenV2();
+      const dest = meanwhile(p, () => undefined);
+      const lines = await updating(ctx, names);
+      if (names) {
+        expect(lines).toHaveLength(2);
+        expect(lines[1]!.startsWith(upToReasons(W.refused, { name: 'alpha', from: 1, to: 2 }, 'reason'))).toBe(true);
+        expect(lines[1]).toContain('not_installed');
+      } else expect(lines).toEqual([header]);
+      expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('One.\n');
+      expect((JSON.parse(race.fs.readFileSync(join(p.home, 'lock.json'), 'utf8')) as { skills: Record<string, unknown> }).skills[dest]).toBeUndefined();
+    }
+  });
+
+  it('update, an older version installed meanwhile: flagged against that version, held, nothing written', async () => {
+    const p = place();
+    await versionsOf(p, [NOTES('One.\n')], [RUN, NOTES('One.\n')]);
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha', version: 1 });
+    const held = await pendingHold(ctx, 'alpha');
+    const { target, version, confirm, flags } = held as { target: 'user'; version: number; confirm: string; flags: string[] };
+    await accept(ctx, { name: 'alpha', target, version, confirm, flags });
+    await versionsOf(p, [RUN, NOTES('Three.\n')]);
+    const dest = meanwhile(p, (e) => ({ ...e!, version: 1 }));
+    const lines = await updating(ctx);
+    expect(lines[1]!.startsWith(upToReasons(W.held_flagged, { name: 'alpha', from: 1, to: 3 }, 'reasons'))).toBe(true);
+    expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('One.\n');
+  });
 });
 
 // Inode numbers past 2^53 (overlay and some network file systems): compared exactly, and kept in the lock as decimal
