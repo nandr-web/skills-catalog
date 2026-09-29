@@ -53,6 +53,16 @@ describe('Catalog.file: a stored version\'s file by its sha256', () => {
     catalog.close();
   });
 
+  it('is unknown for a sha256 that a version only mentions (in a file\'s path), not names as a file', async () => {
+    const orphan = new TextEncoder().encode('stored, but no version\'s file\n');
+    const sha = sha256Hex(orphan);
+    const { catalog } = await published({ wrapBlobs: (b: any) => (b.put(sha, orphan), b) });
+    const mention = [...files('prc.v2'), { path: `notes/${sha}.md`, mode: '0644', bytes: new TextEncoder().encode('A note.\n') }];
+    await catalog.publish(request(NAME, mention as any), actAs('dev1'));
+    expect(await catalog.file(sha)).toEqual({ kind: 'unknown' });
+    catalog.close();
+  });
+
   it('is unknown, asking storage nothing, for anything but 64 lowercase hex', async () => {
     const asked: string[] = [];
     const { catalog } = await published({ wrapStorage: counting(asked) });
