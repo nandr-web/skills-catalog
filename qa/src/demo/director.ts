@@ -222,7 +222,7 @@ async function main(argv: string[]): Promise<number> {
   configure(t, { control: files.control });
   const panes: Panes = buildLayout(t, { developers: scenes.developers, size, cwd: demo });
   mark('window');
-  writeWhole(files.steps, JSON.stringify(initialSteps(scenes, mode)));
+  writeWhole(files.steps, JSON.stringify(initialSteps(scenes, mode, !v.headless)));
   for (const d of scenes.developers) respawn(t, panes[d.id], join(root, 'work', d.id), [process.execPath, v.assistant, '--as', d.id]);
   respawn(t, panes.steps, demo, [process.execPath, v['steps-view']]);
   // The log as it grows. With the core in the stand-ins, they write it: a note first says so (sh gets both as

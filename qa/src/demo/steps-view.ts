@@ -11,30 +11,36 @@ const paint = (colour: string, s: string) => `${colour}${s}${RESET}`;
 export type StepView = { id: number; title: string; see: string; state: 'pending' | 'now' | 'seen' | 'missed' | 'planned'; missing?: string[] };
 /** What the conductor is doing: starting (waiting for the assistants), playing, pausing (paused while an assistant
  *  answers: it holds after that), paused (holding), waiting (for Enter, step by step) or done (its Done line says so).
- *  Optional: a steps.json written before it existed still draws. */
+ *  Optional, as are the others after it: a steps.json written before they existed still draws. */
 export type RunState = 'starting' | 'playing' | 'pausing' | 'paused' | 'waiting' | 'done';
-export type StepsState = { title: string; mode: 'auto' | 'step'; paused: boolean; state?: RunState; message: string; steps: StepView[] };
+/** `pausedIn`: where it holds, in a step or between steps (the default); `keys`: false when nobody can press them
+ *  (a headless run), so no keys line is drawn. */
+export type StepsState = {
+  title: string; mode: 'auto' | 'step'; paused: boolean; state?: RunState; pausedIn?: 'step' | 'between'; keys?: boolean; message: string; steps: StepView[];
+};
 export type Command = 'next' | 'pause' | 'quit';
 
 /** A line of parts: joined by " · " where they fit, one under another where they don't (the rest after `rest`). Its
  *  words are painted by WORD_COLOUR, the others in `base` (plain without one). */
 type Line = { parts: readonly string[]; base?: string; rest?: string };
-/** In the state and keys lines, green on a word means a key to press; orange marks a pause. */
-const WORD_COLOUR: Record<string, string> = { Enter: GREEN, p: GREEN, q: GREEN, paused: ORANGE, pausing: ORANGE };
+/** In the state and keys lines, green on a word means a key to press; orange (the ‖ and its word) marks a pause. */
+const WORD_COLOUR: Record<string, string> = { Enter: GREEN, p: GREEN, q: GREEN, '‖': ORANGE, paused: ORANGE, pausing: ORANGE };
 const KEYS = {
   usual: { parts: ['Enter next', 'p pause', 'q quit'], base: DIM },
   paused: { parts: ['Enter next', 'p carry on', 'q quit'], base: DIM },
   done: { parts: ['q close'], base: DIM },
 } satisfies Record<string, Line>;
 export const KEYS_LINE = KEYS.usual.parts.join(' · ');
-/** The line just above the keys, for each state but done. Each glyph is one column wide (a test checks it in tmux). */
-const STATE_LINE: Record<Exclude<RunState, 'done'>, Line> = {
-  starting: { parts: ['starting: waiting for both assistants'], base: DIM },
+/** The line just above the keys, for each state but done (paused: where it holds). Each glyph is one column wide (a
+ *  test checks it in tmux). */
+const STATE_LINE = {
+  starting: { parts: ['starting: waiting for the assistants'], base: DIM },
   playing: { parts: ['playing: p to pause'], base: DIM },
-  pausing: { parts: ['‖ pausing after this: p to carry on'], rest: '  ' },
-  paused: { parts: ['‖ paused: Enter for one step', 'p to carry on'], rest: '  ' },
+  pausing: { parts: ['‖ pausing after this answer', 'p to carry on'], rest: '  ' },
+  between: { parts: ['‖ paused: Enter for the next step', 'p to carry on'], rest: '  ' },
+  step: { parts: ['‖ paused: Enter to finish this step', 'p to carry on'], rest: '  ' },
   waiting: { parts: ['step by step: Enter for the next step'] },
-};
+} satisfies Record<string, Line>;
 const MARK = { seen: '✓', now: '▶', planned: '◌', missed: '✗', pending: ' ' } as const;
 const COLOUR = { now: BOLD_GREEN, planned: DIM, missed: ORANGE } as Record<StepView['state'], string>;
 const INDENT = '     ';
@@ -115,8 +121,8 @@ export function renderSteps(state: StepsState | null, o: { width?: number } = {}
   out.push('', ...block(`${MARK.seen} = the demo checked it too`, DIM, '', ''));
   if (state.message) out.push(...block(state.message, undefined, '', ''));
   const run = state.state ?? (state.paused ? 'paused' : undefined);   // an older steps.json: only paused is known
-  if (run && run !== 'done') out.push(...drawLine(STATE_LINE[run], width));
-  out.push(...drawLine(run === 'paused' || run === 'pausing' ? KEYS.paused : run === 'done' ? KEYS.done : KEYS.usual, width));
+  if (run && run !== 'done') out.push(...drawLine(STATE_LINE[run === 'paused' ? (state.pausedIn ?? 'between') : run], width));
+  if (state.keys !== false) out.push(...drawLine(run === 'paused' || run === 'pausing' ? KEYS.paused : run === 'done' ? KEYS.done : KEYS.usual, width));
   return out.join('\n');
 }
 

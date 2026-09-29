@@ -703,7 +703,7 @@ describe('the conductor', () => {
     const r = await conduct(scenes(), w.io, { mode: 'auto', pace: 0, attached: false });
     expect(r.counts).toEqual({ seen: 2, planned: 1, missed: 0 });
     expect(r.quit).toBe(false);
-    expect(w.writes[0]).toMatchObject({ title: 'what to look for', mode: 'auto', paused: false, state: 'starting' });
+    expect(w.writes[0]).toMatchObject({ title: 'what to look for', mode: 'auto', paused: false, state: 'starting', keys: false });   // headless: no keys line
     expect(w.writes.map(states)).toContainEqual(['now', 'pending', 'pending']);
     expect(w.writes.map(states)).toContainEqual(['planned', 'now', 'pending']);
     expect(w.writes.map(states)).toContainEqual(['planned', 'seen', 'now']);
@@ -852,28 +852,100 @@ describe('the conductor', () => {
     expect(r.counts).toEqual({ seen: 2, planned: 1, missed: 0 });
   });
 
-  it('Enter while paused plays one ask, or one step between steps, then holds again; p plays on', async () => {
+  // As the shipped step 8: step 1's first ask is answered with a y at the assistant's question (a `then`), then bob asks;
+  // step 2 has two asks too. p is pressed as ana's first ask is typed, so the y is held.
+  const thenScenes = (): Scenes => {
+    const s = scenes();
+    s.steps[0].asks[0].then = [{ type: 'y', after: 'Take it? (y/N)' }];
+    s.steps[1].asks.push({ ...s.steps[2].asks[0] });
+    return s;
+  };
+  const pauseAtQuestion = (w: () => World) => (who: string, say: string): Answer => {
+    if (who === 'ana' && say === 'set me up') { w().queue('pause'); return { print: 'Take it? (y/N)', turn: null }; }
+    return { print: say === 'y' ? 'Took it' : ANSWERS[say] };
+  };
+  const where = (w: World) => w.writes.map((s) => (s.state === 'paused' ? `paused ${s.pausedIn}` : s.state)).filter((s, i, a) => s !== a[i - 1]);
+
+  it('a then answer is held while paused; Enter mid-step finishes the step (every ask and answer left), then it holds; Enter between steps plays one whole step', async () => {
     let phase = 0, heldAt = -1;
-    const typedAt: number[] = [];
+    const typedAt: string[][] = [];
+    const w: World = world({
+      answer: pauseAtQuestion(() => w),
+      onSleep: (w) => {
+        const s = w.writes.at(-1)!, held = () => w.slept - heldAt >= 10_000, typed = () => w.typed.map((t) => t.text);
+        if (phase === 0 && s.state === 'paused') { phase = 1; heldAt = w.slept; }   // at ana's question
+        else if (phase === 1 && held()) { phase = 2; typedAt.push(typed()); w.queue('next'); }
+        else if (phase === 2 && s.state === 'paused' && s.pausedIn === 'between') { phase = 3; heldAt = w.slept; }
+        else if (phase === 3 && held()) { phase = 4; typedAt.push(typed()); w.queue('next'); }
+        else if (phase === 4 && s.state === 'paused' && w.typed.length === 5) { phase = 5; heldAt = w.slept; }
+        else if (phase === 5 && held()) { phase = 6; typedAt.push(typed()); w.queue('pause'); }
+      },
+    });
+    const r = await conduct(thenScenes(), w.io, { mode: 'auto', pace: 3, attached: false });
+    expect(phase).toBe(6);
+    expect(typedAt).toEqual([
+      ['set me up'],                                           // 10 s at the question: the y held
+      ['set me up', 'y', 'set me up'],                         // Enter: the rest of step 1, then 10 s held
+      ['set me up', 'y', 'set me up', 'publish my skill, hello', 'find a skill that says hello'],   // Enter: all of step 2
+    ]);
+    expect(where(w)).toEqual(['starting', 'playing', 'pausing', 'paused step', 'pausing', 'paused between', 'pausing', 'paused between', 'playing', 'done']);
+    expect(w.typed).toHaveLength(6);
+    expect(r.counts).toEqual({ seen: 2, planned: 1, missed: 0 });
+  });
+
+  it('q while holding ends the run at once: mid-step (step 1 left pending) and between steps', async () => {
+    let quitAt = -1;
+    let w: World = world({ answer: pauseAtQuestion(() => w), onSleep: (w) => { if (quitAt < 0 && w.writes.at(-1)!.state === 'paused') { quitAt = w.slept; w.queue('quit'); } } });
+    let r = await conduct(thenScenes(), w.io, { mode: 'auto', pace: 3, attached: false });
+    expect(r.quit).toBe(true);
+    expect(w.slept - quitAt).toBeLessThanOrEqual(50);
+    expect(w.typed.map((t) => t.text)).toEqual(['set me up']);
+    expect(r.stopped).toEqual({ after: null, not_played: 3 });
+
+    quitAt = -1;
+    let pressed = false;
+    w = world({
+      onWrite: (s, w) => { if (s.steps[0].state === 'planned' && !pressed) { pressed = true; w.queue('pause'); } },
+      onSleep: (w) => { const s = w.writes.at(-1)!; if (quitAt < 0 && s.state === 'paused' && s.pausedIn === 'between') { quitAt = w.slept; w.queue('quit'); } },
+    });
+    r = await conduct(scenes(), w.io, { mode: 'auto', pace: 3, attached: false });
+    expect(w.slept - quitAt).toBeLessThanOrEqual(50);
+    expect(r.stopped).toEqual({ after: 1, not_played: 2 });
+  });
+
+  it('p while starting holds at once: paused between steps (nothing is under way), never pausing; p again plays', async () => {
+    let phase = 0, shownAt = -1, typedWhileHeld = -1;
+    const w = world({
+      onSleep: (w) => {
+        if (phase === 0) { phase = 1; w.queue('pause'); }
+        else if (phase === 1 && w.slept >= 500) { phase = 2; shownAt = w.slept; w.panes.ana = 'ana\n› '; }   // the prompts show
+        else if (phase === 2 && w.slept - shownAt >= 10_000) { phase = 3; typedWhileHeld = w.typed.length; w.queue('pause'); }
+      },
+    });
+    w.panes.ana = '';
+    await conduct(scenes(), w.io, { mode: 'auto', pace: 0, attached: false });
+    expect(phase).toBe(3);
+    expect(typedWhileHeld).toBe(0);
+    expect(where(w)).toEqual(['starting', 'paused between', 'playing', 'done']);
+    expect(w.typed).toHaveLength(4);
+  });
+
+  it('p forgets an Enter pressed before it: a stale Enter never lets an ask through under pausing', async () => {
+    let phase = 0, heldAt = -1, typedWhileHeld = -1;
     const w: World = world({
       answer: slowAna(() => w),
       onSleep: (w) => {
-        const now = w.writes.at(-1)!.state, held = () => w.slept - heldAt >= 10_000;
-        if (phase === 0 && w.typed.length === 1) { phase = 1; w.queue('pause'); }
-        else if (phase === 1 && now === 'pausing') { phase = 2; w.answered('ana', 'set me up'); }
-        else if (phase === 2 && now === 'paused') { phase = 3; typedAt.push(w.typed.length); w.queue('next'); }   // before bob's ask
-        else if (phase === 3 && now === 'paused' && w.typed.length === 2) { phase = 4; heldAt = w.slept; }   // after step 1
-        else if (phase === 4 && held()) { phase = 5; typedAt.push(w.typed.length); w.queue('next'); }
-        else if (phase === 5 && now === 'paused' && w.typed.length === 3) { phase = 6; heldAt = w.slept; }   // after step 2
-        else if (phase === 6 && held()) { phase = 7; typedAt.push(w.typed.length); w.queue('pause'); }
+        const now = w.writes.at(-1)!.state;
+        if (phase === 0 && w.typed.length === 1) { phase = 1; w.queue('next'); }   // Enter while ana's assistant answers
+        else if (phase === 1) { phase = 2; w.queue('pause'); }
+        else if (phase === 2 && now === 'pausing') { phase = 3; w.answered('ana', 'set me up'); }
+        else if (phase === 3 && now === 'paused') { phase = 4; heldAt = w.slept; }
+        else if (phase === 4 && w.slept - heldAt >= 10_000) { phase = 5; typedWhileHeld = w.typed.length; w.queue('pause'); }
       },
     });
-    const r = await conduct(scenes(), w.io, { mode: 'auto', pace: 3, attached: false });
-    expect(phase).toBe(7);
-    expect(typedAt).toEqual([1, 2, 3]);   // each Enter: one more ask (bob's), then one more step (step 2's one ask)
-    expect(runs(w)).toEqual(['starting', 'playing', 'pausing', 'paused', 'pausing', 'paused', 'pausing', 'paused', 'playing', 'done']);
-    expect(w.typed.map((t) => t.text)).toEqual(['set me up', 'set me up', 'publish my skill, hello', 'find a skill that says hello']);
-    expect(r.counts).toEqual({ seen: 2, planned: 1, missed: 0 });
+    await conduct(scenes(), w.io, { mode: 'auto', pace: 0, attached: false });
+    expect(phase).toBe(5);
+    expect(typedWhileHeld).toBe(1);   // bob's ask waited for p
   });
 
   it('q ends early and leaves the rest pending: stopped after the last step played, and how many were not', async () => {
@@ -910,6 +982,7 @@ describe('the conductor', () => {
     expect(done).toBe(true);
     expect(settled).toBe(false);
     expect(w.writes.at(-1)!.message).toBe('Done: 2 seen, 1 planned, 0 missed. Press q to close; everything is removed.');
+    expect(w.writes.every((s) => s.keys === true)).toBe(true);   // attached: the keys line stays, q close at the end
     w.queue('quit');
     const r = await run;
     expect(r.quit).toBe(true);

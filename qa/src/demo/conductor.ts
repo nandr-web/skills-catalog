@@ -3,8 +3,8 @@
 // turns.jsonl line; then look for each expected text in the panes the step names (only text that appeared during the
 // step counts; in the steps pane, which redraws itself, all of it). A step is seen, planned (a planned call and nothing
 // expected) or missed. Between steps it waits the pace, or for Enter; q ends. p pauses: it holds before the next ask or
-// answer it would type (pausing until then), and Enter lets one ask (or, between steps, one step) through. Everything
-// goes through ConductorIo, so the tests run it without tmux.
+// answer it would type (pausing until then), and Enter lets the rest of that step (or, between steps, the next step)
+// through. Everything goes through ConductorIo, so the tests run it without tmux.
 import { CLI_OPS, type Scenes, type Step } from './scenes.ts';
 import type { RunState } from './steps-view.ts';
 
@@ -13,8 +13,11 @@ import type { RunState } from './steps-view.ts';
 export type Turn = { who: string; say: string; step: number | string | null; ok: boolean; at: string };
 export type StepState = 'pending' | 'now' | 'seen' | 'missed' | 'planned';
 export type StepView = { id: number | string; title: string; see: string; state: StepState; missing?: string[] };
-/** steps.json, which the steps view draws. `state`: playing, paused, waiting for Enter, or done. */
-export type StepsFile = { title: string; mode: 'auto' | 'step'; paused: boolean; state: RunState; message: string; steps: StepView[] };
+/** steps.json, which the steps view draws. `state`: starting, playing, pausing, paused (`pausedIn` a step or between
+ *  steps), waiting for Enter, or done; `keys`: whether anyone can press them (attached), so the keys line shows. */
+export type StepsFile = {
+  title: string; mode: 'auto' | 'step'; paused: boolean; state: RunState; pausedIn?: 'step' | 'between'; keys: boolean; message: string; steps: StepView[];
+};
 export type Counts = { seen: number; planned: number; missed: number };
 
 export type ConductorIo = {
@@ -54,9 +57,9 @@ const count = (steps: StepView[]): Counts => {
   return { seen: n('seen'), planned: n('planned'), missed: n('missed') };
 };
 
-/** steps.json before the first step. */
-export const initialSteps = (scenes: Scenes, mode: StepsFile['mode']): StepsFile => ({
-  title: TITLE, mode, paused: false, state: 'starting', message: '', steps: scenes.steps.map((s) => ({ id: s.id, title: s.title, see: s.see, state: 'pending' })),
+/** steps.json before the first step (`keys`: false for a headless run). */
+export const initialSteps = (scenes: Scenes, mode: StepsFile['mode'], keys: boolean): StepsFile => ({
+  title: TITLE, mode, paused: false, state: 'starting', keys, message: '', steps: scenes.steps.map((s) => ({ id: s.id, title: s.title, see: s.see, state: 'pending' })),
 });
 
 /** What a pane showed after `before` was captured: from before's last line on, less what that line already had (the
@@ -71,22 +74,28 @@ export function since(before: string, after: string): string {
 export const joined = (text: string) => text.replace(/ *\n {2}│ /g, ' ');
 
 export async function conduct(scenes: Scenes, io: ConductorIo, o: ConductorOptions): Promise<Conducted> {
-  const view = initialSteps(scenes, o.mode);
+  const view = initialSteps(scenes, o.mode, o.attached);
   const timeout = o.turnTimeoutMs ?? 30_000, settle = o.settleMs ?? 3000;
   let quit = false, done = false, ready = false, nexts = 0, waiting: 'no' | 'enter' | 'pace' = 'no';
-  // holding: in a wait or a hold, where a pause really stops it; pass: an Enter while paused between steps lets the
-  // step's first ask through.
-  let holding = false, pass = false;
+  // holding: where a pause really stops it (a wait, a hold, or before the start, when nothing is under way), and
+  // where: in a step or between steps; pass: an Enter while paused lets the rest of the step through.
+  let holding = false, where: 'step' | 'between' = 'between', pass = false;
   // The steps pane says the state; the message is left for the end.
   const render = () => {
-    view.state = done ? 'done' : view.paused ? (holding ? 'paused' : 'pausing') : !ready ? 'starting' : waiting === 'enter' ? 'waiting' : 'playing';
+    const held = holding || !ready;
+    view.state = done ? 'done' : view.paused ? (held ? 'paused' : 'pausing') : !ready ? 'starting' : waiting === 'enter' ? 'waiting' : 'playing';
+    if (view.state === 'paused') view.pausedIn = ready ? where : 'between'; else delete view.pausedIn;
     io.writeSteps(view);
   };
   const poll = () => {
     for (const w of io.control()) {
       if (w === 'quit') quit = true;
       else if (w === 'next') nexts++;
-      else if (w === 'pause' && !done) { view.paused = !view.paused; render(); }
+      else if (w === 'pause' && !done) {
+        view.paused = !view.paused;
+        if (view.paused) nexts = 0;   // an Enter from before the pause never lets an ask through
+        render();
+      }
     }
     return quit;
   };
@@ -94,6 +103,7 @@ export async function conduct(scenes: Scenes, io: ConductorIo, o: ConductorOptio
   const wait = async (seconds: number, forEnter: boolean) => {
     waiting = forEnter ? 'enter' : 'pace';
     holding = true;
+    where = 'between';
     render();
     for (let waited = 0; !poll(); ) {
       if (nexts) { nexts--; pass = view.paused; break; }
@@ -104,18 +114,18 @@ export async function conduct(scenes: Scenes, io: ConductorIo, o: ConductorOptio
     waiting = 'no';
     holding = false;
   };
-  // Before typing an ask or an answer: while paused, hold until p again, or Enter lets this one through.
+  // Before typing an ask or an answer: while paused, hold until p again, or Enter lets the rest of this step through.
   const hold = async () => {
-    if (poll() || !view.paused) { pass = false; return; }
-    if (pass) { pass = false; return; }
+    if (poll() || !view.paused || pass) return;
     holding = true;
+    where = 'step';
     render();
     while (!poll() && view.paused) {
-      if (nexts) { nexts--; break; }
+      if (nexts) { nexts--; pass = true; break; }
       await io.sleep(TICK);
     }
     holding = false;
-    if (view.paused && !quit) render();   // let through by Enter: pausing again after it (p again already drew playing)
+    if (view.paused && !quit) render();   // let through by Enter: pausing again after the step (p again already drew playing)
   };
   // The ask's turn; meanwhile each `then` is typed once the pane shows its `after` (the person's y at a question). If
   // the turn comes first (the question never asked, e.g. the step is planned here), the rest is skipped.
@@ -167,6 +177,8 @@ export async function conduct(scenes: Scenes, io: ConductorIo, o: ConductorOptio
   io.writeSteps(view);
   for (let waited = 0; waited < (o.readyMs ?? 30_000) && !scenes.developers.every((d) => io.capture(d.id).includes(PROMPT)) && !poll(); waited += TICK) await io.sleep(TICK);
   ready = true;
+  // Paused while starting: it holds before the first step (step by step, the wait for Enter holds there anyway).
+  if (view.paused && o.mode === 'auto' && !quit) await wait(0, false);
   o.onMark?.('ready');
   const only = o.only?.map(String);
   const last = only ? Math.max(...scenes.steps.map((s, i) => (only.includes(String(s.id)) ? i : -1))) : scenes.steps.length - 1;

@@ -592,30 +592,57 @@ describe('the steps view', () => {
     expect(last({ state: 'done', message: 'Done: 5 seen, 2 planned, 1 missed.' })).toBe(KEYS_DONE);
   });
 
-  it('one state line just above the keys; green on a word there means a key to press, orange marks a pause; done has none', () => {
+  const PAUSED_BETWEEN = [`${O}‖ paused${R}: ${G}Enter${R} for the next step`, `  ${G}p${R} to carry on`];
+  const PAUSED_IN_STEP = [`${O}‖ paused${R}: ${G}Enter${R} to finish this step`, `  ${G}p${R} to carry on`];
+
+  it('the state lines above the keys; green on a word there means a key to press, orange (with ‖) marks a pause; done has none', () => {
     const lines = (s: Partial<StepsState>) => renderSteps({ ...state, ...s }, { width: 48 }).split('\n');
-    const cases: [Partial<StepsState>, string][] = [
-      [{ state: 'starting' }, `${D}starting: waiting for both assistants${R}`],
-      [{ state: 'playing' }, `${D}playing:${R} ${G}p${R} ${D}to pause${R}`],
-      [{ state: 'pausing', paused: true }, `‖ ${O}pausing${R} after this: ${G}p${R} to carry on`],
-      [{ state: 'paused', paused: true }, `‖ ${O}paused${R}: ${G}Enter${R} for one step · ${G}p${R} to carry on`],
-      [{ state: 'waiting', mode: 'step' }, `step by step: ${G}Enter${R} for the next step`],
+    const cases: [Partial<StepsState>, string[]][] = [
+      [{ state: 'starting' }, [`${D}starting: waiting for the assistants${R}`]],
+      [{ state: 'playing' }, [`${D}playing:${R} ${G}p${R} ${D}to pause${R}`]],
+      [{ state: 'pausing', paused: true }, [`${O}‖ pausing${R} after this answer · ${G}p${R} to carry on`]],
+      // 49 and 51 columns whole: both split at " · ", the second half under "paused"
+      [{ state: 'paused', paused: true, pausedIn: 'between' }, PAUSED_BETWEEN],
+      [{ state: 'paused', paused: true, pausedIn: 'step' }, PAUSED_IN_STEP],
+      [{ state: 'waiting', mode: 'step' }, [`step by step: ${G}Enter${R} for the next step`]],
     ];
-    for (const [s, line] of cases) {
+    for (const [s, want] of cases) {
       const l = lines(s);
-      expect(l.at(-2), s.state).toBe(line);
-      expect(plain(l.at(-3)!), s.state).toBe(LEGEND);   // one line only: nothing else says the state
-      expect(plain(l.join('\n'))).not.toMatch(/one step at a time|Press Enter|Paused:/);
+      expect(l.slice(-1 - want.length, -1), `${s.state} ${s.pausedIn}`).toEqual(want);
+      expect(plain(l.at(-2 - want.length)!), s.state).toBe(LEGEND);   // nothing else between the legend and the keys
     }
     const done = lines({ state: 'done', message: 'Done: 5 seen, 2 planned, 1 missed.' });
     expect(done.slice(-3).map(plain)).toEqual([LEGEND, 'Done: 5 seen, 2 planned, 1 missed.', 'q close']);
   });
 
-  it('the paused line fits 48 columns on one line and wraps at 40 between its two halves, the second under "paused"', () => {
-    expect(renderSteps({ ...state, state: 'paused', paused: true }, { width: 48 }).split('\n').slice(-2).map(plain))
-      .toEqual(['‖ paused: Enter for one step · p to carry on', 'Enter next · p carry on · q quit']);
-    const at40 = renderSteps({ ...state, state: 'paused', paused: true }, { width: 40 }).split('\n');
-    expect(at40.slice(-3)).toEqual([`‖ ${O}paused${R}: ${G}Enter${R} for one step`, `  ${G}p${R} to carry on`, KEYS_PAUSED]);
+  it('the state is said once in the whole pane: one mention of its words, none of the old texts', () => {
+    const words = /\b(starting|playing|pausing|paused|step by step)\b|one step at a time|Press Enter|Paused:/g;
+    const cases: [Partial<StepsState>, string][] = [
+      [{ state: 'starting' }, 'starting'], [{ state: 'playing' }, 'playing'], [{ state: 'pausing', paused: true }, 'pausing'],
+      [{ state: 'paused', paused: true, pausedIn: 'between' }, 'paused'], [{ state: 'paused', paused: true, pausedIn: 'step' }, 'paused'],
+      [{ state: 'waiting', mode: 'step' }, 'step by step'],
+    ];
+    for (const width of [48, 40]) {
+      for (const [s, word] of cases) expect(plain(renderSteps({ ...state, ...s }, { width })).match(words), `${width} ${s.state}`).toEqual([word]);
+      expect(plain(renderSteps({ ...state, state: 'done', message: 'Done: 5 seen, 2 planned, 1 missed.' }, { width })).match(words)).toBeNull();
+    }
+  });
+
+  it('the pausing line fits 48 on one line; at 40 the pausing and paused lines split at " · ", the second half under the word', () => {
+    const at40 = (s: Partial<StepsState>) => renderSteps({ ...state, ...s }, { width: 40 }).split('\n');
+    expect(at40({ state: 'pausing', paused: true }).slice(-3)).toEqual([`${O}‖ pausing${R} after this answer`, `  ${G}p${R} to carry on`, KEYS_PAUSED]);
+    expect(at40({ state: 'paused', paused: true, pausedIn: 'between' }).slice(-3)).toEqual([...PAUSED_BETWEEN, KEYS_PAUSED]);
+    expect(at40({ state: 'paused', paused: true, pausedIn: 'step' }).slice(-3)).toEqual([...PAUSED_IN_STEP, KEYS_PAUSED]);
+  });
+
+  it('without keys (a headless run: nobody to press them) there is no keys line; the state or the Done line ends the pane', () => {
+    const lines = (s: Partial<StepsState>) => renderSteps({ ...state, keys: false, ...s }, { width: 48 }).split('\n');
+    expect(lines({ state: 'playing' }).at(-1)).toBe(`${D}playing:${R} ${G}p${R} ${D}to pause${R}`);
+    expect(lines({ state: 'done', message: 'Done: 5 seen, 2 planned, 1 missed.' }).slice(-2).map(plain)).toEqual([LEGEND, 'Done: 5 seen, 2 planned, 1 missed.']);
+    for (const s of ['starting', 'playing', 'pausing', 'paused', 'waiting', 'done'] as const) {
+      expect(plain(lines({ state: s, paused: s === 'paused' || s === 'pausing' }).join('\n'))).not.toMatch(/Enter next|q quit|q close/);
+    }
+    expect(renderSteps({ ...state, keys: true, state: 'done', message: 'Done.' }).split('\n').at(-1)).toBe(KEYS_DONE);   // attached: q closes
   });
 
   it('a steps.json from before the state was written still draws: its steps and keys; paused shows paused, otherwise no state line', () => {
@@ -626,15 +653,14 @@ describe('the steps view', () => {
     expect(lines.at(-1)).toBe(KEYS_PAINTED);
     expect(plain(lines.at(-2)!)).toBe(LEGEND);
     lines = renderSteps({ ...old, paused: true }, { width: 48 }).split('\n');
-    expect(lines.at(-2)).toBe(`‖ ${O}paused${R}: ${G}Enter${R} for one step · ${G}p${R} to carry on`);
-    expect(lines.at(-1)).toBe(KEYS_PAUSED);
+    expect(lines.slice(-3)).toEqual([...PAUSED_BETWEEN, KEYS_PAUSED]);
   });
 
   it('every line fits the pane at 40 and 48 columns, in every state, each glyph one character', () => {
     const long: StepsState = { ...state, message: 'Stopped after step 5; 3 not played. Everything is removed.' };
     for (const width of [40, 48]) {
-      for (const s of ['starting', 'playing', 'pausing', 'paused', 'waiting', 'done'] as const) {
-        const out = plain(renderSteps({ ...long, state: s, paused: s === 'paused' || s === 'pausing' }, { width }));
+      for (const [s, pausedIn] of [['starting'], ['playing'], ['pausing'], ['paused', 'between'], ['paused', 'step'], ['waiting'], ['done']] as const) {
+        const out = plain(renderSteps({ ...long, state: s, paused: s === 'paused' || s === 'pausing', ...(pausedIn ? { pausedIn } : {}) }, { width }));
         for (const l of out.split('\n')) expect([...l].length, `${width} ${s}: ${l}`).toBeLessThanOrEqual(width);
       }
     }
