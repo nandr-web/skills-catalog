@@ -186,6 +186,31 @@ describe('the server itself (web/serve.ts)', () => {
     }
   });
 
+  it('holds no connection past its cap: one more is closed at once (the cap lowered to 2 for the test)', async () => {
+    const p = place();
+    const s = await serve({ port: 0, publish: false, settings: settingsOf(p), words: S });
+    const open = (): Promise<{ sock: ReturnType<typeof connect>; closed: Promise<boolean> }> =>
+      new Promise((resolve) => {
+        const sock = connect({ host: '127.0.0.1', port: s.port });
+        sock.on('error', () => undefined);
+        const closed = new Promise<boolean>((r) => {
+          const t = setTimeout(() => r(false), 1_000);
+          sock.on('close', () => (clearTimeout(t), r(true)));
+        });
+        sock.on('connect', () => resolve({ sock, closed }));
+      });
+    try {
+      s.server.maxConnections = 2;
+      const held = [await open(), await open()];
+      const third = await open();
+      expect(await third.closed, 'the third connection').toBe(true);
+      expect(await Promise.race([held[0]!.closed, held[1]!.closed]), 'the two held').toBe(false);
+      for (const h of held) h.sock.destroy();
+    } finally {
+      await s.close();
+    }
+  });
+
   it('a request the handler fails on is a bare 500 with the fixed headers, never stored, and its connection closed', async () => {
     const p = place();
     const s = await serve({ port: 0, publish: false, settings: settingsOf(p), words: S, handle: async () => Promise.reject(new TypeError('a bug')) });
@@ -194,8 +219,182 @@ describe('the server itself (web/serve.ts)', () => {
       expect([r.status, r.body, r.headers['cache-control'], r.headers['connection']]).toEqual([500, '', 'no-store', 'close']);
       expect(Object.keys(POLICY.headers)).toHaveLength(5);
       for (const [k, v] of Object.entries(POLICY.headers)) expect(r.headers[k], k).toBe(v);
+      expect(Object.keys(r.headers).filter((k) => k.startsWith('access-control-'))).toEqual([]);
     } finally {
       await s.close();
+    }
+  });
+});
+
+type Raw = { status: number; head: string; body: string; closed: boolean };
+/** Writes these exact bytes on a fresh socket; resolves with what came back once the server closes it, or after `ms`
+ *  with `closed: false` (the socket then destroyed). The only way to send what node:http won't: a header twice. */
+function raw(port: number, bytes: string, ms = 2_000): Promise<Raw> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const sock = connect({ host: '127.0.0.1', port });
+    const done = (closed: boolean) => {
+      clearTimeout(timer);
+      const text = Buffer.concat(chunks).toString('utf8');
+      const at = text.indexOf('\r\n\r\n');
+      const head = at < 0 ? text : text.slice(0, at);
+      let body = at < 0 ? '' : text.slice(at + 4);
+      if (/^transfer-encoding: chunked$/im.test(head)) body = dechunk(body);
+      resolve({ status: Number(/^HTTP\/1\.1 (\d{3})/.exec(head)?.[1] ?? 0), head: head.toLowerCase(), body, closed });
+      sock.destroy();
+    };
+    const timer = setTimeout(() => done(false), ms);
+    sock.on('data', (c: Buffer) => chunks.push(c));
+    sock.on('close', () => done(true));
+    sock.on('error', (e: NodeJS.ErrnoException) => (e.code === 'ECONNRESET' || e.code === 'EPIPE' ? undefined : reject(e)));
+    sock.write(bytes);
+  });
+}
+/** A chunked body's data: each chunk's size line, then that many bytes, until the 0 chunk. */
+function dechunk(s: string): string {
+  let out = '';
+  for (let i = 0; ; ) {
+    const eol = s.indexOf('\r\n', i);
+    const size = parseInt(s.slice(i, eol), 16);
+    if (!(size > 0)) return out;
+    out += s.slice(eol + 2, eol + 2 + size);
+    i = eol + 2 + size + 2;
+  }
+}
+/** A request's bytes: its header lines as given (a name may repeat), then the body. */
+const bytesOf = (path: string, lines: string[], body = '') => `POST ${path} HTTP/1.1\r\n${lines.join('\r\n')}\r\n\r\n${body}`;
+
+/** serve started on a seeded catalog and paired once: its port, token, and the headers a page's request carries. */
+async function session() {
+  const p = place();
+  configure(p);
+  await seed(p);
+  const s = start([], env(p));
+  const port = portOf(await s.line);
+  const code = codeOf(await s.line);
+  const token = await paired(port, code);
+  const lines = (o: { host?: readonly string[]; type?: readonly string[]; origin?: readonly string[]; token?: readonly string[]; length?: number } = {}) => [
+    ...(o.host ?? [`127.0.0.1:${port}`]).map((v) => `Host: ${v}`),
+    ...(o.origin ?? [`http://127.0.0.1:${port}`]).map((v) => `Origin: ${v}`),
+    ...(o.type ?? ['application/json']).map((v) => `Content-Type: ${v}`),
+    ...(o.token ?? [token]).map((v) => `X-Skills-Catalog-Token: ${v}`),
+    'X-Skills-Catalog-As: dev1',
+    ...(o.length === undefined ? [] : [`Content-Length: ${o.length}`]),
+  ];
+  return { s, port, code, token, lines };
+}
+
+describe('hostile input over a raw socket (contract §1.1)', () => {
+  it('a repeated Host, Content-Type, Origin or token header is refused, never read as its first value', async () => {
+    const { s, port, lines } = await session();
+    const SEARCH = '/api/v1/search_shared_skills';
+    try {
+      const own = `127.0.0.1:${port}`;
+      const plain = await raw(port, bytesOf(SEARCH, lines({ length: 2 }), '{}'));
+      expect(plain.status, 'the same request, each header once').toBe(200);
+      for (const [label, o, status] of [
+        ['Host twice', { host: [own, 'evil.example'] }, 403],
+        ['Host twice, both its own', { host: [own, own] }, 403],
+        ['Origin twice', { origin: [`http://${own}`, 'http://evil.example'] }, 403],
+        ['Content-Type twice', { type: ['application/json', 'text/plain'] }, 415],
+        ['the token twice', { token: ['x', 'y'] }, 401],
+      ] as const) {
+        const r = await raw(port, bytesOf(SEARCH, lines({ ...o, length: 2 }), '{}'));
+        expect(r.status, label).toBe(status);
+      }
+    } finally {
+      await s.stop();
+    }
+  });
+
+  it('a body past the limit (by one byte, or by megabytes still being sent) is answered too_large in the envelope, then the connection closed within 2 s', async () => {
+    const { s, port, lines } = await session();
+    try {
+      for (const n of [POLICY.bodyLimit + 1, 2 * POLICY.bodyLimit]) {
+        const r = await raw(port, bytesOf('/api/v1/search_shared_skills', lines({ length: n }), ' '.repeat(n)));
+        expect([r.status, r.closed], `${n} bytes: ${r.head.split('\r\n')[0]}`).toEqual([200, true]);
+        expect(JSON.parse(r.body).error, `${n} bytes`).toMatchObject({ code: 'too_large', limit: 'request_bytes' });
+      }
+    } finally {
+      await s.stop();
+    }
+  });
+
+  it('a sender that trickles on past the limit: answered too_large, then closed within 2 s all the same', async () => {
+    const { s, port, lines } = await session();
+    try {
+      const t0 = Date.now();
+      const r = await new Promise<{ status: number; closed: boolean }>((resolve) => {
+        const got: Buffer[] = [];
+        const sock = connect({ host: '127.0.0.1', port });
+        const finish = (closed: boolean) => {
+          clearTimeout(timer);
+          clearInterval(drip);
+          resolve({ status: Number(/^HTTP\/1\.1 (\d{3})/.exec(Buffer.concat(got).toString('utf8'))?.[1] ?? 0), closed });
+          sock.destroy();
+        };
+        const timer = setTimeout(() => finish(false), 4_000);
+        sock.on('data', (c: Buffer) => got.push(c));
+        sock.on('close', () => finish(true));
+        sock.on('error', () => undefined);
+        sock.write(bytesOf('/api/v1/search_shared_skills', lines({ length: 10 * POLICY.bodyLimit }), ' '.repeat(POLICY.bodyLimit + 1)));
+        // A kilobyte every 50 ms: far under the byte bound, so only the time bound can close it.
+        const drip = setInterval(() => sock.destroyed || sock.write(Buffer.alloc(1024, 0x20)), 50);
+      });
+      expect([r.status, r.closed]).toEqual([200, true]);
+      expect(Date.now() - t0).toBeLessThan(2_500);
+    } finally {
+      await s.stop();
+    }
+  });
+
+  it('a sender that never stops past the limit: answered too_large, closed within 2 s, what it sent after the answer discarded, not held', async () => {
+    const { s, port, lines } = await session();
+    try {
+      const chunk = Buffer.alloc(256 * 1024, 0x20);
+      let sent = 0;
+      const heapBefore = process.memoryUsage().heapUsed;
+      const r = await new Promise<Raw & { ms: number }>((resolve) => {
+        const t0 = Date.now();
+        const got: Buffer[] = [];
+        const sock = connect({ host: '127.0.0.1', port });
+        const finish = (closed: boolean) => {
+          clearTimeout(timer);
+          const text = Buffer.concat(got).toString('utf8');
+          resolve({ status: Number(/^HTTP\/1\.1 (\d{3})/.exec(text)?.[1] ?? 0), head: '', body: '', closed, ms: Date.now() - t0 });
+          sock.destroy();
+        };
+        const timer = setTimeout(() => finish(false), 4_000);
+        sock.on('data', (c: Buffer) => got.push(c));
+        sock.on('close', () => finish(true));
+        sock.on('error', () => undefined);
+        sock.write(bytesOf('/api/v1/search_shared_skills', lines({ length: 10 * POLICY.bodyLimit })));
+        // Keeps sending, a chunk at a time (never more than the socket takes), until the server closes.
+        const pump = () => {
+          while (!sock.destroyed && sent < 10 * POLICY.bodyLimit) {
+            sent += chunk.length;
+            if (!sock.write(chunk)) return void sock.once('drain', pump);
+          }
+        };
+        pump();
+      });
+      expect([r.status, r.closed], `closed after ${r.ms} ms`).toEqual([200, true]);
+      expect(r.ms).toBeLessThan(2_000);
+      expect(sent, 'it sent past the limit').toBeGreaterThan(POLICY.bodyLimit);
+      expect(process.memoryUsage().heapUsed - heapBefore, 'the server held what it discarded').toBeLessThan(POLICY.bodyLimit);
+    } finally {
+      await s.stop();
+    }
+  });
+
+  it('a wrong token with a Content-Length of a gigabyte and no body: 401, the connection closed within 2 s', async () => {
+    const { s, port, lines } = await session();
+    try {
+      const r = await raw(port, bytesOf('/api/v1/search_shared_skills', lines({ token: ['wrong'], length: 1_000_000_000 })));
+      expect([r.status, r.closed]).toEqual([401, true]);
+      expect(r.head).toContain('connection: close');
+    } finally {
+      await s.stop();
     }
   });
 });

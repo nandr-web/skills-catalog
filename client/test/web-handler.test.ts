@@ -128,7 +128,7 @@ describe('the guards: each refuses before anything is looked up or read', () => 
 
   it('the session token on every call (401), whatever its length', async () => {
     const { h, token } = await served();
-    for (const t of [undefined, '', 'x', token.slice(0, -1) + (token.endsWith('A') ? 'B' : 'A'), token + 'x']) {
+    for (const t of [undefined, '', 'x', token.slice(0, 8), token.slice(0, -1), token.slice(0, -1) + (token.endsWith('A') ? 'B' : 'A'), token + 'x']) {
       const body = untouched();
       const r = await h.handle({ ...api(token, 'search_shared_skills', {}, { 'x-skills-catalog-token': t }), body });
       expect([r.status, body.read], String(t)).toEqual([401, false]);
@@ -195,7 +195,10 @@ describe('the fixed headers', () => {
       await h.handle({ ...api(token, 'search_shared_skills', {}), method: 'GET' }),
       await h.handle(api(token, 'nothing_here', {})),
       await h.handle({ ...api(token, 'x', {}), path: '/' }),
+      await h.handle(api('wrong', 'search_shared_skills', {})),
+      await h.handle(api(token, 'search_shared_skills', {}, { 'content-type': 'text/plain' })),
     ];
+    expect(responses.map((r) => r.status)).toEqual([200, 403, 405, 404, 404, 401, 415]);
     for (const r of responses) {
       for (const [k, v] of Object.entries(POLICY.headers)) expect(r.headers[k], `${r.status} ${k}`).toBe(v);
       expect(Object.keys(r.headers).filter((k) => k.toLowerCase().startsWith('access-control-')), String(r.status)).toEqual([]);
@@ -228,12 +231,14 @@ describe('who is acting (contract §7): setup\'s me or one of its demo developer
     expect(await code('dev3')).toBe('unauthenticated');
   });
 
-  it('who is acting is checked before any of the body is read', async () => {
-    const { h, token } = await served();
-    for (const as of [undefined, 'Bad Name', 'dev3']) {
-      const body = untouched();
-      const r = await h.handle({ ...api(token, 'search_shared_skills', {}, { 'x-skills-catalog-as': as }), body });
-      expect([json(r).ok, body.read], String(as)).toEqual([false, false]);
+  it('who is acting is checked before any of the body is read, with --publish or without', async () => {
+    for (const publish of [false, true]) {
+      const { h, token } = await served({ publish });
+      for (const as of [undefined, 'Bad Name', 'dev3']) {
+        const body = untouched();
+        const r = await h.handle({ ...api(token, 'search_shared_skills', {}, { 'x-skills-catalog-as': as }), body });
+        expect([json(r).ok, body.read], `${as} publish=${publish}`).toEqual([false, false]);
+      }
     }
   });
 
@@ -300,6 +305,30 @@ describe('pairing (outside the versioned API)', () => {
     expect((await trade({ 'content-type': 'text/plain' })).status).toBe(415);
     expect((await trade({})).status).toBe(200);   // none of those used it up
   });
+
+  it('a missing Origin is refused (403), and that leaves the code unused', async () => {
+    const fresh = createHandler({ port: PORT, pairingCode: CODE, publish: false, settings: settingsFrom({ SKILLS_HOME: '/nonexistent-home' }), words: W });
+    const trade = (headers: Record<string, string | undefined>) => fresh.handle({ method: 'POST', path: '/api/pair', headers: base(headers), body: bytes(JSON.stringify({ code: CODE })) });
+    expect((await trade({ origin: undefined })).status).toBe(403);
+    expect((await trade({})).status).toBe(200);
+  });
+
+  it('a pairing body past 4 KiB is 401 even with the right code, and leaves the code unused', async () => {
+    const fresh = createHandler({ port: PORT, pairingCode: CODE, publish: false, settings: settingsFrom({ SKILLS_HOME: '/nonexistent-home' }), words: W });
+    const exact = JSON.stringify({ code: CODE, pad: '' });
+    const padded = JSON.stringify({ code: CODE, pad: 'x'.repeat(4097 - exact.length) });
+    expect(Buffer.byteLength(padded)).toBe(4097);
+    expect((await fresh.handle({ method: 'POST', path: '/api/pair', headers: base(), body: bytes(padded) })).status).toBe(401);
+    expect((await fresh.handle({ method: 'POST', path: '/api/pair', headers: base(), body: bytes(JSON.stringify({ code: CODE })) })).status).toBe(200);
+  });
+
+  it('a wrong code\'s answer holds neither the code sent nor the real one', async () => {
+    const fresh = createHandler({ port: PORT, pairingCode: CODE, publish: false, settings: settingsFrom({ SKILLS_HOME: '/nonexistent-home' }), words: W });
+    const SENT = 'sent-code-3b7e19';
+    const r = await fresh.handle({ method: 'POST', path: '/api/pair', headers: base(), body: bytes(JSON.stringify({ code: SENT })) });
+    expect(r.status).toBe(401);
+    for (const secret of [SENT, CODE]) expect(JSON.stringify(r.headers) + String(r.body ?? ''), secret).not.toContain(secret);
+  });
 });
 
 describe('what the web face shows and logs of a failure', () => {
@@ -349,7 +378,7 @@ describe('a version\'s files by fingerprint (GET /api/v1/files/<sha256>)', () =>
   it('behind the guards, each refusing before any lookup: Host, Origin exact when sent, Sec-Fetch-Site same-origin when sent, the token always; a malformed fingerprint is never looked up', async () => {
     const { sha, get } = await files();
     expect((await get({ origin: 'http://evil.example' })).status).toBe(403);
-    expect((await get({ 'sec-fetch-site': 'cross-site' })).status).toBe(403);
+    for (const site of ['cross-site', 'same-site', 'none']) expect((await get({ 'sec-fetch-site': site })).status, site).toBe(403);
     expect((await get({ 'x-skills-catalog-token': undefined })).status).toBe(401);
     expect((await get({ 'x-skills-catalog-token': 'wrong' })).status).toBe(401);
     expect((await get({ host: 'evil' })).status).toBe(403);
@@ -360,6 +389,7 @@ describe('a version\'s files by fingerprint (GET /api/v1/files/<sha256>)', () =>
     const { get } = await files();
     const ok = await get({});
     expect(ok.status).toBe(200);
+    expect(ok.headers['content-disposition']).toBe('attachment');
     expect(Buffer.from(ok.body as Uint8Array).toString('utf8')).toContain('name: release-notes-kit');
     expect((await get({ origin: ORIGIN, 'sec-fetch-site': 'same-origin' })).status).toBe(200);
     expect((await get({}, `/api/v1/files/${'0'.repeat(64)}`)).status).toBe(404);
