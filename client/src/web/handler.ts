@@ -1,40 +1,25 @@
 // The local web face (contract §1.1, §3 `serve`, §7; the web-local build notes, slice 3), without a transport: web/serve.ts
-// only moves bytes, and every rule is here. A request is refused by its guards before anything is looked up and before
-// any of its body is read: Host exactly 127.0.0.1:<port> (403), then on /api POST only (405), JSON only (415), Origin
-// exactly this page's (403) and the session token (401). The routes are the operations whose row serves the web face, as
-// own keys (anything else is the fixed 404); an operation's result, error or not, is 200 in the envelope
-// {ok: true, data, words?} or {ok: false, error: {code, ...its data}, words?}. Pairing, outside the versioned API, trades
-// the printed code once for the session token. A version's files are served by fingerprint behind the same guards.
+// only moves bytes. The web API's shared half is the core's (@skills-catalog/core/http: the routes, the refusals' numbers,
+// the envelope, a file's answer); this is the local transport's own: its guards, run before anything is looked up and
+// before any of the body is read (Host exactly 127.0.0.1:<port>, then POST only on an operation, JSON only, Origin exactly
+// this page's and the session token), reading the body cut at its limit, who is acting (setup's developers), pairing, and
+// publishing only under --publish.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { CatalogError, OPERATIONS, actAs, checkActor, openCatalog, randomIds, renderError, toCatalogError, validateInput, type Catalog, type Words } from '@skills-catalog/core';
-import { DEFAULT_LIMITS } from '@skills-catalog/core/skill-tree';
+import { CatalogError, checkActor, openCatalog, randomIds, toCatalogError, type Catalog, type Words } from '@skills-catalog/core';
+import { API_HEADERS, BODY_LIMIT, NOT_FOUND, SECURITY_HEADERS, envelope, fileResponse, operationResponse, refuse, route, type FileAnswer, type HttpResponse } from '@skills-catalog/core/http';
 import { readConfig } from '../machine/lock.ts';
-import { actingAs, perform, type Context } from '../operations.ts';
+import { perform, type Context } from '../operations.ts';
 import type { Settings } from '../settings.ts';
 
-export type WebRequest = { method: string; path: string; headers: Record<string, string | undefined>; body: AsyncIterable<Buffer> };
-export type WebResponse = { status: number; headers: Record<string, string>; body: string | Buffer };
+export type WebRequest = { method: string; path: string; headers: Record<string, string | undefined>; body: AsyncIterable<Uint8Array> };
+export type WebResponse = HttpResponse;
 
-/** The fixed parts: the headers on every response, those on /api, the 404's text, and the largest body read. */
-export const POLICY = {
-  headers: {
-    'content-security-policy': "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
-    'x-content-type-options': 'nosniff',
-    'referrer-policy': 'no-referrer',
-    'cross-origin-opener-policy': 'same-origin',
-    'cross-origin-resource-policy': 'same-origin',
-  } as Record<string, string>,
-  api: { 'cache-control': 'no-store' } as Record<string, string>,
-  notFound: 'Not found.\n',
-  // A skill at the core's limit, as base64, plus room for 100 paths and the message: a publish over the core's limits
-  // still reaches the core, which says too_large in its own words; anything past this is cut while it's read.
-  bodyLimit: Math.ceil(DEFAULT_LIMITS.skill_bytes / 3) * 4 + 100 * 4096 + 64 * 1024,
-};
+/** The fixed parts, from the core: the headers on every response, those on /api, the 404's text, and the largest body read. */
+export const POLICY = { headers: SECURITY_HEADERS, api: API_HEADERS, notFound: NOT_FOUND, bodyLimit: BODY_LIMIT };
 
 const PAIR_LIMIT = 4096;   // {"code": "..."}
-const SHA256 = /^[0-9a-f]{64}$/;
 const JSON_TYPE = /^application\/json(\s*;\s*charset=utf-8)?$/i;
 
 export type HandlerOptions = { port: number; pairingCode: string; publish: boolean; settings: Settings; words: Words; now?: () => Date };
@@ -44,6 +29,8 @@ export function createHandler(o: HandlerOptions): { handle(req: WebRequest): Pro
   const origin = `http://${host}`;
   const now = o.now ?? (() => new Date());
   const words = o.words;
+  // A local catalog has no sign-in: no developer is a setup matter, in its own words (as on every face).
+  const sentences = { words, unauthenticated: words.word('errors.unauthenticated_local') as string };
   // The token exists only once the code was traded, and lives only in this process.
   let token: string | undefined;
 
@@ -53,27 +40,19 @@ export function createHandler(o: HandlerOptions): { handle(req: WebRequest): Pro
   let reading: Promise<Catalog> | undefined;
   const readCatalog = () => (reading ??= openCatalog(o.settings.catalog, { readOnly: true, named }).catch((e) => ((reading = undefined), Promise.reject(e))));
 
-  const respond = (status: number, body: string | Buffer, extra: Record<string, string> = {}): WebResponse => ({ status, headers: { ...POLICY.headers, ...extra }, body });
-  const notFound = () => respond(404, POLICY.notFound, { 'content-type': 'text/plain; charset=utf-8' });
-  const envelope = (body: unknown) => respond(200, JSON.stringify(body), { ...POLICY.api, 'content-type': 'application/json; charset=utf-8' });
-  const refusal = (status: number) => respond(status, '', POLICY.api);
-  const failed = (err: CatalogError) => envelope({ ok: false, error: err.toJSON(), words: { error: sentence(err) } });
-  // A local catalog has no sign-in: no developer is a setup matter, in its own words (as on every face).
-  const sentence = (err: CatalogError) => (err.code === 'unauthenticated' ? words.word('errors.unauthenticated_local') : renderError(words, err));
-
   // A secret compared in constant time, whatever the lengths: a hash of each, then timingSafeEqual.
   const same = (given: string | undefined, expected: string | undefined) => {
     if (given === undefined || expected === undefined) return false;
     return timingSafeEqual(createHash('sha256').update(given).digest(), createHash('sha256').update(expected).digest());
   };
 
-  /** Reads the body up to `limit` bytes; past that it stops reading and says so, never holding more. */
-  async function readBody(body: AsyncIterable<Buffer>, limit: number): Promise<Buffer | 'too_large'> {
-    const chunks: Buffer[] = [];
+  /** Reads the body up to `limit` bytes; one byte past that it stops reading and says so, never holding more. */
+  async function readBody(body: AsyncIterable<Uint8Array>, limit: number): Promise<Uint8Array | 'cut'> {
+    const chunks: Uint8Array[] = [];
     let size = 0;
     for await (const chunk of body) {
       size += chunk.length;
-      if (size > limit) return 'too_large';
+      if (size > limit) return 'cut';
       chunks.push(chunk);
     }
     return Buffer.concat(chunks);
@@ -92,38 +71,33 @@ export function createHandler(o: HandlerOptions): { handle(req: WebRequest): Pro
 
   async function operation(op: string, req: WebRequest): Promise<WebResponse> {
     let developer: string;
-    let input: Record<string, unknown>;
     try {
       developer = actor(req.headers['x-skills-catalog-as']);
-      const raw = await readBody(req.body, POLICY.bodyLimit);
-      if (raw === 'too_large') throw new CatalogError('too_large', { limit: 'request_bytes', max: POLICY.bodyLimit });
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(raw.toString('utf8'));
-      } catch {
-        throw new CatalogError('invalid_request', { field: 'body', why: 'not_json' });
-      }
-      // The web face's schema: a person-only input (cliOnly) is an unknown field here.
-      input = validateInput<Record<string, unknown>>(op as keyof typeof OPERATIONS, parsed, 'web');
     } catch (e) {
-      return failed(toCatalogError(e, o.settings.home, now()));
+      return envelope({ error: toCatalogError(e, o.settings.home, now()) }, sentences);
     }
-    const real = op === 'publish_version' && input['dry_run'] !== true;
-    if (real && !o.publish) return failed(new CatalogError('forbidden', { why: 'read_only' }));
+    const raw = await readBody(req.body, BODY_LIMIT);
     let writing: Promise<Catalog> | undefined;
-    const settings: Settings = { ...o.settings, developer, developerInvalid: false };
-    const ctx: Context = {
-      catalog: real ? () => (writing ??= openCatalog(o.settings.catalog, { identity: actAs(developer) })) : readCatalog,
-      words,
-      settings,
-      face: 'web',
-      now,
-      ids: randomIds,
+    // Through perform, so the web's calls are in the activity log and the usage metrics like every face's.
+    const run = async (name: string, input: Record<string, unknown>) => {
+      const real = name === 'publish_version' && input['dry_run'] !== true;
+      if (real && !o.publish) throw new CatalogError('forbidden', { why: 'read_only' });
+      const ctx: Context = {
+        catalog: real ? () => (writing ??= openCatalog(o.settings.catalog)) : readCatalog,
+        words,
+        settings: { ...o.settings, developer, developerInvalid: false },
+        face: 'web',
+        now,
+        ids: randomIds,
+      };
+      const a = await perform(ctx, name, name, input);
+      if (a.isError) throw a.error!;
+      return a.data;
     };
     try {
-      const a = await perform(ctx, op, op, input);
-      if (a.isError) return failed(a.error!);
-      return envelope({ ok: true, data: a.data, words: { acting_as: actingAs(words, developer) } });
+      return await operationResponse({ op, raw, developer, run, ...sentences });
+    } catch (e) {
+      return envelope({ error: toCatalogError(e, o.settings.home, now()) }, sentences);
     } finally {
       void writing?.then((c) => c.close()).catch(() => {});
     }
@@ -131,47 +105,42 @@ export function createHandler(o: HandlerOptions): { handle(req: WebRequest): Pro
 
   async function pair(req: WebRequest): Promise<WebResponse> {
     const raw = await readBody(req.body, PAIR_LIMIT);
-    if (token !== undefined || raw === 'too_large') return refusal(401);
+    if (token !== undefined || raw === 'cut') return refuse('no_token', sentences);
     let code: unknown;
     try {
-      code = (JSON.parse(raw.toString('utf8')) as { code?: unknown }).code;
+      code = (JSON.parse(new TextDecoder().decode(raw)) as { code?: unknown }).code;
     } catch {
-      return refusal(401);
+      return refuse('no_token', sentences);
     }
-    if (typeof code !== 'string' || !same(code, o.pairingCode)) return refusal(401);
+    if (typeof code !== 'string' || !same(code, o.pairingCode)) return refuse('no_token', sentences);
     token = randomBytes(32).toString('base64url');
-    return envelope({ ok: true, data: { token } });
+    return envelope({ data: { token } }, sentences);
   }
 
-  async function file(req: WebRequest, sha: string): Promise<WebResponse> {
+  async function file(req: WebRequest, sha256: string): Promise<WebResponse> {
     // A GET from the page itself may carry no Origin (browsers leave it off a same-origin GET): a present one must match,
     // and so must Sec-Fetch-Site when sent. The token is always needed.
-    if (req.headers['origin'] !== undefined && req.headers['origin'] !== origin) return refusal(403);
+    if (req.headers['origin'] !== undefined && req.headers['origin'] !== origin) return refuse('refused', sentences);
     const site = req.headers['sec-fetch-site'];
-    if (site !== undefined && site !== 'same-origin') return refusal(403);
-    if (!same(req.headers['x-skills-catalog-token'], token)) return refusal(401);
-    if (!SHA256.test(sha)) return notFound();
-    const catalog = (await readCatalog()) as Catalog & { file(sha256: string): Promise<Uint8Array | undefined> };
-    const bytes = await catalog.file(sha);
-    if (!bytes) return notFound();
-    return respond(200, Buffer.from(bytes), { ...POLICY.api, 'content-type': 'application/octet-stream' });
+    if (site !== undefined && site !== 'same-origin') return refuse('refused', sentences);
+    if (!same(req.headers['x-skills-catalog-token'], token)) return refuse('no_token', sentences);
+    // Opened only for a well-formed fingerprint (the core checks it first). The cast stays until Catalog.file's type lands.
+    return fileResponse({ file: async (sha) => ((await readCatalog()) as unknown as { file(sha256: string): Promise<FileAnswer> }).file(sha) }, sha256);
   }
 
   async function handle(req: WebRequest): Promise<WebResponse> {
-    if (req.headers['host'] !== host) return refusal(403);
-    const path = req.path;
-    if (path !== '/api/pair' && !path.startsWith('/api/v1/')) return notFound();
-    const files = /^\/api\/v1\/files\/([^/]*)$/.exec(path);
-    if (files && req.method === 'GET') return file(req, files[1]!);
-    if (req.method !== 'POST') return refusal(405);
-    if (!JSON_TYPE.test(req.headers['content-type'] ?? '')) return refusal(415);
-    if (req.headers['origin'] !== origin) return refusal(403);
-    if (path === '/api/pair') return pair(req);
-    if (!same(req.headers['x-skills-catalog-token'], token)) return refusal(401);
-    const op = path.slice('/api/v1/'.length);
-    const row = Object.hasOwn(OPERATIONS, op) ? OPERATIONS[op] : undefined;
-    if (!row || !row.faces.includes('web')) return notFound();
-    return operation(op, req);
+    if (req.headers['host'] !== host) return refuse('refused', sentences);
+    const r = route(req.method, req.path);
+    if (r.kind === 'not_found' && !r.operationPath) return refuse('not_found', sentences);
+    if (r.kind === 'file') return file(req, r.sha256);
+    if (r.kind === 'method') return refuse('method', sentences);
+    if (!JSON_TYPE.test(req.headers['content-type'] ?? '')) return refuse('not_json', sentences);
+    if (req.headers['origin'] !== origin) return refuse('refused', sentences);
+    if (r.kind === 'pair') return pair(req);
+    if (!same(req.headers['x-skills-catalog-token'], token)) return refuse('no_token', sentences);
+    // An operation no one serves on the web is the fixed 404 only now, past the token: an unpaired caller learns nothing.
+    if (r.kind === 'not_found') return refuse('not_found', sentences);
+    return operation(r.op, req);
   }
 
   return { handle, close: () => void reading?.then((c) => c.close()).catch(() => {}) };

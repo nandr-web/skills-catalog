@@ -5,6 +5,7 @@
 // words (a bug is internal_error, its traceback in a log file under SKILLS_HOME, never shown), the activity log's line,
 // the usage metrics' `use` event, and the "acting as" line.
 import { actAs, CatalogError, OPERATIONS, openCatalog, randomIds, renderDiff, renderError, renderRead, renderSearch, renderVersions, toCatalogError, type Catalog, type Face, type Ids, type ReadItem, type SearchInput, type Words } from '@skills-catalog/core';
+import { dispatch } from '@skills-catalog/core/http';
 import { appendActivity, logWords } from './activity.ts';
 import { MACHINE } from './machine/index.ts';
 import type { Settings } from './settings.ts';
@@ -66,13 +67,12 @@ const CATALOG_OPS: Record<string, CatalogOp> = {
     },
     present: (ctx, r) => renderDiff(ctx.words, r, ctx.ids),
   },
-  // The web's own (faces: web only, never presented): a publish, a dry run included, and fetching a version's files,
-  // which the log counts as a read.
+  // The web's own (faces: web only, never presented): a publish, a dry run included, and fetching a version's files.
   publish_version: {
     log: (ctx, r) => ({ target: `${r.name} v${r.version}`, result: logWords(ctx.words).result('publish', r.dry_run ? 'preview' : 'published') }),
   },
   fetch_version: {
-    log: (ctx, r) => ({ target: `${r.name} v${r.version}`, result: logWords(ctx.words).result('get') }),
+    log: (ctx, r) => ({ target: `${r.name} v${r.version}`, result: logWords(ctx.words).result('fetch') }),
   },
 };
 
@@ -86,13 +86,8 @@ async function run(ctx: Context, op: string, args: unknown): Promise<Ran> {
   }
   const catalogOp = CATALOG_OPS[op];
   if (!catalogOp) throw new Error(`no run for ${op} on this client yet`);
-  // Each method gets the caller's face in its own slot: publish's second argument is the identity (the developer this
-  // call acts as, so one shared catalog serves every caller), the others' second is the face.
-  const catalog = await ctx.catalog();
-  const data =
-    row.run === 'publish'
-      ? await catalog.publish(args, actAs(ctx.settings.developer), ctx.face)
-      : await (catalog as unknown as Record<string, (input: unknown, face: Face) => Promise<unknown>>)[row.run]!.call(catalog, args, ctx.face);
+  // The core's one per-method call (publish's identity in its own slot), the same one the web API dispatches through.
+  const data = await dispatch(op, args, { catalog: await ctx.catalog(), developer: ctx.settings.developer, face: ctx.face });
   return { data, ...catalogOp.log(ctx, data) };
 }
 
