@@ -559,7 +559,7 @@ describe('the folder is checked again before every write (contract §3, §4.5)',
       for (const dry_run of [true, false]) {
         const r = await update(ctx, { dry_run });
         const reason = S.format(S.word('update.target_reason.target_symlink'), { path: link });
-        expect(r.text.split('\n')).toEqual([S.format(S.word('update.header'), { checked: 1 }), S.format(S.word('update.refused_target'), { name: 'notes-helper', from: 1, to: 1, path: link, reason })]);
+        expect(r.text.split('\n')).toEqual([S.format(S.word('update.header'), { checked: 1 }), S.format(S.word('update.refused_target_current'), { name: 'notes-helper', from: 1, reason })]);
         expect(r.outcome).toBe('refused');
       }
       expect(tree(moved)).toEqual(before);

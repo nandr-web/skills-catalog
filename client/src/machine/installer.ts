@@ -620,7 +620,8 @@ function refusedTarget(s: Surface, at: { name: string; from: number; to: number 
   }
   const path = String(err.data['path']);
   const reason = s.word('update.target_reason')?.[err.code];
-  return s.format(s.word('update.refused_target'), { ...at, path, reason: typeof reason === 'string' ? s.format(reason, { path }) : asData(err.code, err.data) });
+  // With nothing newer to apply, the version refused is the one installed: its own sentence says it's the latest.
+  return s.format(s.word(at.from === at.to ? 'update.refused_target_current' : 'update.refused_target'), { ...at, path, reason: typeof reason === 'string' ? s.format(reason, { path }) : asData(err.code, err.data) });
 }
 
 /** The line naming where a replaced copy was kept (an entry recorded before identities were kept), or nothing. */

@@ -445,6 +445,17 @@ results:
     waiting: "- Still waiting for an answer: {open_holds}{oldest_part}."
     oldest_part: ", the oldest for {oldest_days} days"
     turned_off: '- Updates turned off (pinned or set to "tell me first"): {changes} time(s), {within_a_day} within a day of a held update.'
+    unreadable: "- {n} day(s) couldn't be read and aren't counted, so the numbers here may be low: {by_why}."
+    unreadable_only: "{n} day(s) of usage are on this machine, but none could be read, so nothing could be counted: {by_why}."
+    unreadable_why:
+      other_user: another user's ({n})
+      hard_linked: hard-linked ({n})
+      too_big: too big ({n})
+      unreadable: unreadable ({n})
+    folder_unusable: The usage folder on this machine couldn't be read ({why}), so nothing could be counted.
+    folder_unusable_why:
+      link: it's a link
+      not_a_folder: it isn't a folder
     review_none: Nothing here asks for a review of when updates are held.
     review_header: "Worth a review of when updates are held:"
     review:
@@ -596,6 +607,7 @@ results:
     refused: "- Not updated: {name} v{to} breaks the catalog's current rules ({reason}), so {name} stays on v{from}. Tell the person; only its publisher can fix it."
     refused_fingerprint: "- Not updated: the catalog's copy of {name} v{to} doesn't match its fingerprint (damaged or altered), so {name} stays on v{from}. Don't retry or work around it; tell the person, so whoever runs the catalog can check it."
     refused_target: "- Not updated: {reason}, so nothing was written and {name} stays on v{from} (v{to} is available). Tell the person; they decide what to do about it. Don't change it yourself."
+    refused_target_current: "- {name} v{from} is the latest, but {reason}, so nothing was written. Tell the person; they decide what to do about it. Don't change it yourself."
     target_changed: "- Not updated: {path} changed while the installer was replacing it (something else was put there in between), so {name} stays on v{from} and the folder it had moved aside is back in place. This may not be the person's doing. Don't retry or work around it: tell the person, so they can check {path} first."
     target_changed_temp: "- Not updated: the folder the installer was preparing the new copy of {name} in, {path}, changed while it was being written (something else was put there), so {name} stays on v{from}, untouched. This may not be the person's doing. Don't retry or work around it: tell the person, so they can check {path}."
     target_changed_staging: "- Not updated: {path} changed while the installer was replacing it (something else was put there in between), so {name} wasn't updated to v{to}. The folder it had moved aside couldn't be put back: it is now at {staging}. This may not be the person's doing. Don't retry or move anything yourself: tell the person where both are, so they can check {path} and put their copy back."
@@ -733,6 +745,8 @@ results:
       paths_need_one_name: work only with one name, not names (read the other skills' files in their own calls)
       fingerprint_or_name_and_version: goes alone (give a fingerprint, or a name and a version, not both)
       not_a_catalog_url: isn't a local folder or a catalog address
+      not_a_catalog: has no catalog in it
+      catalog_unreadable: couldn't be opened
       hosted_not_available: is a hosted catalog, which this version doesn't support yet
     invalid_manifest_problem:
       missing: is missing
@@ -821,6 +835,8 @@ results:
     invalid_request_allowed: "invalid_request: {field} {why}: {allowed}. Nothing was done: call again with one of them."
     invalid_request_allowed_cli: "invalid_request: {field} {why}: {allowed}. Nothing was done: run it again with one of them."
     invalid_request_limit_cli: "invalid_request: {field} {why}; the limit is {limit}. Nothing was done: run it again within it (for example in batches)."
+    invalid_request_catalog: "invalid_request: there's no catalog at {path}, the place SKILLS_CATALOG or --catalog names, so nothing was read. Most likely the path is mistyped. Tell the person so they can check it; don't change that setting or create anything there yourself. If they meant a new catalog, publishing their first skill to it creates it."
+    invalid_request_catalog_unreadable: "invalid_request: the catalog at {path} is there but couldn't be opened (its permissions don't allow it, it's in the middle of a change in a folder this user can't write, or the file isn't laid out as a catalog should be), so nothing was read or changed. Tell the person so they can check it; if it may be mid-change, try once more after a moment. Don't change permissions or anything in that folder yourself."
     unauthenticated: "unauthenticated: the catalog needs the person to sign in, so nothing was done. Ask them to run ${cli} login in their own terminal; never ask for a password or token in the chat."
     invalid_developer_setting: "invalid_developer_setting: the developer name in {setting} isn't a valid name (lowercase letters, digits and single hyphens), so nothing was done. It's a setting, not something in this call: don't retry or change the call. Tell the person; they fix it there, or run ${cli} setup in their own terminal."
     developer_setting:
@@ -863,6 +879,14 @@ results:
     local_file_effect:
       lock.json: "removing it loses the record of which skills came from the catalog: their folders stay, but they're no longer updated"
       config.json: removing it puts ${cli}'s settings back to their defaults
+      setup-record.json: removing it means teardown can no longer tell setup's entries in the assistant's files from the person's own, so it would remove nothing and they'd have to be removed by hand
+    assistant_file_unusable: "assistant_file_unusable: {path} {why}, so setup changed nothing anywhere. Setup never repairs, rewrites or moves the assistant's own files: tell the person which file and why; they decide whether to fix or move it, then run setup again. Don't change the file yourself."
+    assistant_file_changed: "assistant_file_changed: something kept changing {path} while setup was writing it (usually a running Claude Code), so setup left it as that writer left it and stopped; the lines above say what was already done. Tell the person: quit Claude Code, then run ${cli} setup again from a terminal to finish."
+    name_taken: "name_taken: {path} already has an MCP server named {name} that setup didn't write, or that was changed since setup wrote it, so setup changed nothing. Tell the person; they decide whether to remove or rename that server, or, if it was setup's, to run ${cli} teardown first. Don't edit the file yourself."
+    install_unsafe_temporary: "install_unsafe: skills-catalog is running from {path}, a temporary folder that gets cleaned (npx's cache or the system's temp folder), so setup changed nothing: the session-start hook would stop working when it's cleaned. Tell the person: install skills-catalog in a lasting folder of their own, then run setup from there."
+    install_unsafe_path_characters: "install_unsafe: {path} has a character setup can't safely put into a command (a control character, $ or a backtick), so setup changed nothing. Tell the person: install skills-catalog (or Node) in a folder whose path doesn't, then run setup from there."
+    install_unsafe_writable_by_others: "install_unsafe: {path} can be changed by other users on this machine, and the session-start hook would run the code there each time a session starts, so setup changed nothing. Tell the person: install skills-catalog (or Node) in a folder only they can change, then run setup from there. Don't change permissions yourself."
+    assistant_config_elsewhere: "assistant_config_elsewhere: {setting} is set, so Claude Code may keep its settings and MCP servers somewhere other than where setup would write, and setup changed nothing. Tell the person; there are two ways on: set SKILLS_ASSISTANT_HOME to the folder Claude Code really uses and run setup again, or add the entries below by hand."
 setup:
   questions:
     - ask: Keep installed skills up to date automatically? Updates that could change what runs on this machine still wait for you.
@@ -873,7 +897,7 @@ setup:
       flag: --catalog <folder>
     - ask: Which assistant should use it?
       default: Claude Code, for you in every project
-      flag: --for claude-code|claude-code-project
+      flag: --for claude-code
     - ask: Your name as a developer here (lowercase letters, digits and hyphens)? The catalog shows it as who published what.
       default: "{me_default}"
       flag: --me <name>
@@ -891,7 +915,7 @@ setup:
     - catalog: {catalog} ({count} skills to search; none installed yet)
     - updates: {updates}
     - assistant: {assistant}
-    Nothing went to the cloud. To undo all of it: ${cli} teardown
+    Nothing went to the cloud. To remove what setup added to your assistant: ${cli} teardown
   updates_auto: automatic; an update that could change what runs on this machine waits for you
   updates_permissive_now: Your assistant's settings let it run commands without asking ({mode}), so an update whose instructions tell it to run commands, install packages or read secrets will ask you first. A mode switched on for one session only isn't seen.
   updates_permissive_unknown: Your assistant's settings file {path} couldn't be used ({why}), so it may let the assistant run commands without asking. Until it can be used, an update whose instructions tell it to run commands, install packages or read secrets will ask you first.
@@ -904,7 +928,72 @@ setup:
   updates_off: only when you ask (${cli} update)
   handoff_prompt: "Set up our team's Skills Catalog on this machine: run `${cli} setup` and ask me the questions it prints."
   handoff_prompt_fast: "Set up our team's Skills Catalog on this machine with the defaults: run `${cli} setup --yes`."
-  next_claude_code: start a new Claude Code session (the catalog's tools load when a session starts), then ask it "is there a skill for ...?". This session can't use them yet.
+  next_claude_code: quit Claude Code if it's open, then start a new session (the catalog's tools load when a session starts) and ask it "is there a skill for ...?".
+  next_claude_code_inside: quit the Claude Code session that ran setup (it keeps its own copy of the assistant's settings, so it can't use the catalog's tools), then start a new one and ask it "is there a skill for ...?".
+  plan:
+    inside: "Setup is running inside Claude Code. Once it's done, quit this session and start a new one: this session keeps its own copy of the assistant's settings."
+    header: "Setup will change these files on this machine, and nothing else:"
+    config: "- {path}: the catalog's settings (where it lives, how skills update, your name here)"
+    mcp_add: "- {path}: add one MCP server, skills-catalog, so Claude Code can find, read and install skills"
+    mcp_replace: "- {path}: update the skills-catalog MCP server setup added before (Node or a setting has moved)"
+    hook_add: "- {path}: add one session-start hook (it tells you when an update waits for your yes) and {rules} allow rule(s), so your assistant can search, read, install and update skills without asking you each time"
+    hook_replace: "- {path}: update the session-start hook setup added before (Node or a setting has moved)"
+    record: "- {path}: a record of exactly what setup added, so teardown can remove just that"
+    backup: Before changing a file, setup saves a copy of it in {folder}.
+    unchanged: Everything is already set up as it would be; nothing to change.
+    ask: Go ahead? (Y/n)
+    declined: Nothing was changed.
+    dry_run: That's the plan; nothing was changed (--dry-run).
+  by_hand:
+    intro: "To set it up by hand, add these entries yourself (setup's own values only), then quit Claude Code and start a new session:"
+    mcp: 'In {path}, inside "mcpServers":'
+    hook: 'In {path}, inside "hooks" -> "SessionStart", as a new group:'
+    rules: 'In {path}, inside "permissions" -> "allow":'
+  file_why:
+    unreadable: can't be read (check its permissions)
+    too_big: is too big for setup to read
+    not_json: isn't a plain JSON object
+    link: is a link (often a dotfiles manager's), and setup doesn't write through links
+    wrong_type: has {key} set to the wrong type
+    duplicate_key: has the key {key} twice
+    other_user: belongs to another user (was setup run with sudo? run it as yourself)
+    hard_linked: has more than one hard link, so changing it would change another file too
+  person_only_rule: "- {file} has the allow rule {rule}, which lets your assistant take held updates, delete kept copies or publish your skills without asking you. Setup leaves it as it is; remove or narrow it if that isn't what you want."
+  shadow_local: "- {path} has its own skills-catalog server for the project {project}; in that project Claude Code uses it instead of setup's. Setup leaves it as it is."
+  shadow_project: "- This project's {path} has its own skills-catalog server; here Claude Code uses it instead of setup's. Setup leaves it as it is."
+  shared_install: "- skills-catalog runs from {path}, which others in the group {group} can change; the session-start hook runs that code at each session start."
+  managed:
+    managed_mcp: "- An administrator's managed-mcp.json ({path}) decides which MCP servers Claude Code runs, so setup's server won't start unless they add it. The catalog still works from a terminal."
+    allow_managed_mcp_servers_only: "- An administrator's settings ({path}) allow only the MCP servers they list (allowManagedMcpServersOnly), so setup's server won't start unless they list it. The catalog still works from a terminal."
+    allowed_mcp_servers: "- An administrator's settings ({path}) list the MCP servers allowed (allowedMcpServers), and skills-catalog isn't among them, so setup's server won't start. The catalog still works from a terminal."
+    denied_mcp_servers: "- An administrator's settings ({path}) block the skills-catalog server (deniedMcpServers), so it won't start. The catalog still works from a terminal."
+    strict_plugin_only_mcp: "- An administrator's settings ({path}) allow MCP servers only from plugins (strictPluginOnlyCustomization), so setup's server won't start. The catalog still works from a terminal."
+    strict_plugin_only_hooks: "- An administrator's settings ({path}) allow hooks only from plugins (strictPluginOnlyCustomization), so setup's session-start hook won't run: you'll hear about updates waiting for your yes only when your assistant uses the catalog."
+    allow_managed_hooks_only: "- An administrator's settings ({path}) allow only their own hooks (allowManagedHooksOnly), so setup's session-start hook won't run: you'll hear about updates waiting for your yes only when your assistant uses the catalog."
+    disable_all_hooks: "- {path} turns every hook off (disableAllHooks), so setup's session-start hook won't run: you'll hear about updates waiting for your yes only when your assistant uses the catalog."
+  backups: Setup saved a copy of each file before changing it, in {folder}; the two most recent copies of each file are kept. They hold what the files hold, including your Claude Code sign-in and other servers' keys, so they stay on this machine and are never shown.
+  restore: "- To put {file} back as it was before this run: close Claude Code, then copy {backup} over it."
+  node: Setup points Claude Code at Node in {node}; if you change Node or move skills-catalog, run ${cli} setup again.
+  teardown:
+    header: "Teardown removed what setup added to your assistant:"
+    removed: "- {path}: removed {what}"
+    changed: "- {path}: left {what} as it is: it changed since setup, so it may be yours now. Remove it by hand if you don't want it."
+    gone: "- {path}: {what} was already gone"
+    not_here: "- {path}: not touched: setup's record names it, but setup never writes there"
+    unusable: "- {path}: nothing in it was touched, because it {why}"
+    damaged: "- {path} is damaged; teardown left it untouched"
+    what:
+      mcp: the skills-catalog MCP server
+      hook: the session-start hook
+      rule: the allow rule {rule}
+      file: the file (setup had created it)
+      skill: the companion skill
+    nothing: Setup's record lists nothing left to remove; nothing was changed.
+    record_unusable: "Setup's record ({path}) couldn't be used, so teardown removed nothing: it can't tell setup's entries from yours. These look like setup's; remove them by hand if you want them gone:"
+    record_unusable_line: "- {path}: {what}"
+    kept: "Kept: the catalog ({catalog}), your installed skills, the catalog's own settings ({home}) and the backups ({backups})."
+    next: Quit Claude Code if it's open, so a running session doesn't keep the catalog's tools.
+  hook_entry_missing: The skills-catalog MCP server that setup added is missing from {path}, so your assistant has no catalog tools in this session. Run ${cli} setup again to add it back.
   doc: |
     # Skills Catalog
 
@@ -916,8 +1005,8 @@ setup:
 
         ${cli} setup
 
-    It asks three questions (automatic updates, where the catalog lives, which assistant uses it) and sets everything up on this
-    machine. Nothing goes to the cloud. To undo everything: `${cli} teardown`.
+    It asks a few questions (automatic updates, where the catalog lives, which assistant uses it, your name here) and sets
+    everything up on this machine. Nothing goes to the cloud. To remove what it added to your assistant: `${cli} teardown`.
 
     Or hand it to your assistant:
 
@@ -1043,6 +1132,11 @@ log:
     target_changed: "refused: the folder changed during the install"
     target_not_private: "refused: the folder isn't private"
     target_unavailable: "refused: the folder can't be made"
+    assistant_file_unusable: "refused: an assistant file can't be used"
+    assistant_file_changed: "stopped: an assistant file kept changing"
+    name_taken: "refused: another skills-catalog server is there"
+    install_unsafe: "refused: the install folder isn't safe to run from"
+    assistant_config_elsewhere: "refused: Claude Code's files may be elsewhere"
     lock_busy: "refused: another run was busy"
     person_only: waiting for the person
     fingerprint_mismatch: "refused: the catalog's copy doesn't match its fingerprint"
