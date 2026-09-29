@@ -29,7 +29,7 @@ const MUTATIONS = [
   ['leftovers.ts', 'a session folder from before the run is deleted', 'if (o.sessionEnvsBefore!.has(id)) {', 'if (false) {'],
   ['teardown.ts', 'teardown forgets the session envs', 'sessions: o.sessions,', 'sessions: [],'],
   ['teardown.ts', 'teardown leaves the process groups', 'await killGroups(o.processGroups ?? [], 2000, { leaderAlive });', ''],
-  ['teardown.ts', 'a group whose number is someone else\'s is signalled', '((o.leaderAlive?.(g) ?? false) || !sys.pidAlive(g))', 'true'],
+  ['groups.ts', 'a group whose number is someone else\'s is signalled', 'leaderRunning || !pidAlive(pgid);', 'true;'],
   ['janitor.ts', 'the janitor ignores the TTL', 'if (now() - Date.parse(run.started_at) <= ttlMs) continue;', ''],
   ['janitor.ts', 'the janitor takes a live run', 'if (alive(run.pid) || run.pgids.some((g) => alive(g, true))) {', 'if (false) {'],
   ['janitor.ts', 'the janitor forgets the process groups', ' || run.pgids.some((g) => alive(g, true))', ''],
@@ -90,7 +90,7 @@ const MUTATIONS = [
   ['run.ts', 'a run starts without proving the check can see', 'await checkSees(runId, o.tools);', ''],
   // the tests stop what they start (a mutant here can leave a sleep or listener that ends itself within 60 s)
   ['test/machine.ts', 'a test\'s detached child outlives the test', 'onTestFinished(() => stopGroup(child));', ''],
-  ['test/machine.ts', 'a group is signalled after its leader exited', 'if (child.pid && child.exitCode === null && child.signalCode === null) kill(-child.pid);', 'if (child.pid) kill(-child.pid);'],
+  ['test/machine.ts', 'a test\'s child is never stopped', 'if (child.pid) signalGroup(child.pid, \'SIGKILL\', child);', ''],
   ['test/machine.ts', 'cleanup leaves a timed-out run\'s processes running', 'for (const d of made) for (const id of runsIn(d))', 'for (const d of []) for (const id of runsIn(d))'],
 ];
 

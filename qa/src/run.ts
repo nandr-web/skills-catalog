@@ -1,7 +1,8 @@
 // `qa run -- <command>` (the QA plan §6): fail-safe, janitor, a before snapshot, the sandbox, the command in its own
 // process group with the sandbox's settings, teardown on every ending, an after snapshot. Any difference fails the run;
 // a process of the run still alive after teardown is reported, then stopped.
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { signalGroup } from './groups.ts';
 import { fileURLToPath } from 'node:url';
 import { checkSees, compare, runProcesses, snapshot, watchOn, type Difference, type Tools } from './check.ts';
 import { janitor, DEFAULT_TTL_MS } from './janitor.ts';
@@ -55,20 +56,22 @@ export async function qaRun(o: RunOptions): Promise<RunResult> {
   const before = snapshot(watch([]));
   const sb = createSandbox({ runId, machine: m });
   let pgid = 0;
+  let child: ChildProcess | undefined;
   let ending: 'timeout' | 'interrupted' | undefined;
   let exitCode: number | null = null;
   let timer: NodeJS.Timeout | undefined, kill: NodeJS.Timeout | undefined;
-  const signalGroup = (sig: NodeJS.Signals) => { try { process.kill(-pgid, sig); } catch { /* gone */ } };
+  const signal = (sig: NodeJS.Signals) => { signalGroup(pgid, sig, child); };
   const stopGroup = (why: 'timeout' | 'interrupted') => {
     ending ??= why;
-    signalGroup('SIGTERM');
-    kill ??= setTimeout(() => signalGroup('SIGKILL'), 2000);   // a command that ignores SIGTERM still ends
+    signal('SIGTERM');
+    kill ??= setTimeout(() => signal('SIGKILL'), 2000);   // a command that ignores SIGTERM still ends
   };
   const onAbort = () => stopGroup('interrupted');
   let cleanup: Cleanup | undefined;
   try {
-    const child = spawn(o.command[0], o.command.slice(1), { cwd: sb.dirs.work, env: childEnv(sb), detached: true, stdio: o.stdio ?? 'ignore' });
-    pgid = child.pid!;
+    const started = spawn(o.command[0], o.command.slice(1), { cwd: sb.dirs.work, env: childEnv(sb), detached: true, stdio: o.stdio ?? 'ignore' });
+    child = started;
+    pgid = started.pid!;
     recordProcessGroup(sb, pgid);
     o.onStart?.(sb, pgid);
     // Infinity: no time limit (an attached demo, which the person stops); setTimeout would read it as 1 ms
@@ -77,8 +80,8 @@ export async function qaRun(o: RunOptions): Promise<RunResult> {
     o.signal?.addEventListener('abort', onAbort, { once: true });
     if (o.signal?.aborted) onAbort();
     exitCode = await new Promise<number | null>((ok) => {
-      child.on('exit', (code, sig) => ok(code ?? (sig ? 128 + (({ SIGTERM: 15, SIGKILL: 9, SIGINT: 2 } as Record<string, number>)[sig] ?? 0) : null)));
-      child.on('error', () => ok(127));
+      started.on('exit', (code, sig) => ok(code ?? (sig ? 128 + (({ SIGTERM: 15, SIGKILL: 9, SIGINT: 2 } as Record<string, number>)[sig] ?? 0) : null)));
+      started.on('error', () => ok(127));
     });
   } finally {
     clearTimeout(timer);

@@ -103,7 +103,7 @@ describe('teardown', () => {
     try {
       await teardown(sb, { machine: m, processGroups: [pgid], leaders: [child] });
       expect(alive(pgid)).toBe(false);
-    } finally { try { process.kill(-pgid, 'SIGKILL'); } catch { /* gone, as it should be */ } }
+    } finally { stopGroup(child); }
   });
 
   // A group's number, once its leader is gone, can be given to a new process only when the group is empty: the system
@@ -272,9 +272,7 @@ describe('a test never leaves a process behind', () => {
     const m = machine();
     const sb = sandbox(m);
     const idle = (env: NodeJS.ProcessEnv) => {
-      const c = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { detached: true, stdio: 'ignore', env });
-      onTestFinished(() => { try { process.kill(-c.pid!, 'SIGKILL'); } catch { /* gone */ } });   // this test's own net
-      return c.pid!;
+      return spawnDetached(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { env }).pid!;   // this test's own net: stopGroup
     };
     const ours = idle({ ...process.env, ...sb.env }), theirs = idle({ ...process.env, QA_RUN_ID: newRunId() });
     await new Promise((ok) => setTimeout(ok, 200));
@@ -284,13 +282,14 @@ describe('a test never leaves a process behind', () => {
     expect([alive(ours), alive(theirs)]).toEqual([false, true]);
   });
 
-  it('never signals a group whose leader has exited (its number may be someone else\'s by then)', async () => {
+  it('never signals a group whose leader has exited once a process holds its number (someone else\'s by then)', async () => {
     const done = spawn('true', [], { detached: true, stdio: 'ignore' });
     await new Promise((ok) => done.once('exit', ok));
-    const kill = vi.spyOn(process, 'kill');
+    // Stand in for the system: a process holds that number now; nothing is really signalled.
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
     try {
       stopGroup(done);
-      expect(kill).not.toHaveBeenCalled();
+      expect(kill.mock.calls).toEqual([[done.pid, 0]]);   // it only looked
     } finally {
       kill.mockRestore();
     }

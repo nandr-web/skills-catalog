@@ -3,6 +3,7 @@
 // the sandbox torn down and checked (on every ending, Ctrl-C included), then scored. A try that leaves anything behind
 // fails its safety rule `nothing_left_behind`. Writes report.json and summary.txt.
 import { spawn } from 'node:child_process';
+import { signalGroup } from '../groups.ts';
 import { chmodSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -163,7 +164,7 @@ async function oneTry(a: {
     recordProcessGroup(sb, pgid);
     const traceOut = createWriteStream(tracePath);
     child.stdout.pipe(traceOut);
-    const stop = () => { try { process.kill(-pgid, 'SIGKILL'); } catch { /* gone */ } };
+    const stop = () => { signalGroup(pgid, 'SIGKILL', child); };
     const timer = setTimeout(stop, o.timeoutMs ?? 300_000);
     o.signal?.addEventListener('abort', stop, { once: true });
     if (o.signal?.aborted) stop();

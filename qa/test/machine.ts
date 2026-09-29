@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { onTestFinished } from 'vitest';
 import { PS, runProcesses } from '../src/check.ts';
+import { groupIsOurs, signalGroup } from '../src/groups.ts';
 import { fakeMachine, type Machine } from '../src/machine.ts';
 import { RUN_ID } from '../src/safe-delete.ts';
 import { sandboxBase } from '../src/sandbox.ts';
@@ -27,11 +28,10 @@ export function spawnDetached(command: string, args: string[], o: SpawnOptions =
   return child;
 }
 
-/** Kill a detached child's whole group, but only while its leader hasn't exited: node records the exit before the number
- *  can be reused, so a group that is someone else's by now is never signalled. Members that outlive their leader are left
- *  to cleanup's run-id sweep (a run's processes) and to the listeners' own self-exit. */
+/** Kill a detached child's whole group while it's still that group (src/groups.ts, the one rule): its leader not yet
+ *  reaped, or no process holding its number; members that outlived their leader go too. */
 export function stopGroup(child: ChildProcess): void {
-  if (child.pid && child.exitCode === null && child.signalCode === null) kill(-child.pid);
+  if (child.pid) signalGroup(child.pid, 'SIGKILL', child);
 }
 
 const kill = (pid: number) => {
@@ -53,8 +53,11 @@ const made: string[] = [];
  *  sandbox is in the test's own folders (a test that timed out never reached its run's teardown), each one looked at
  *  again right before the signal; never by name or port. Then the folders. */
 export const cleanup = () => {
-  for (const d of made) for (const id of runsIn(d)) for (const p of runProcesses(id)) if (runProcesses(id).some((q) => q.pid === p.pid)) kill(p.pid);
-  for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true });
+  try {
+    for (const d of made) for (const id of runsIn(d)) for (const p of runProcesses(id)) if (runProcesses(id).some((q) => q.pid === p.pid)) kill(p.pid);
+  } finally {
+    for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true });   // even when the sweep can't look
+  }
 };
 
 /** A temporary folder of the test's own, by its real path. */
@@ -119,12 +122,15 @@ const commandOf = (pid: number): string | undefined => {
   return r.status === 0 && r.stdout.trim() ? r.stdout.trim() : undefined;
 };
 
-/** Kills the group of a qa command line a test started on its own machine `dir`, only while its leader is still that
- *  command (its command line names that machine), looked at right before the signal: a leader that exited long ago may
- *  have left its number to someone else's program, maybe one of the person's own shells. Returns whether it signalled. */
+/** Kills the group of a qa command line a test started on its own machine `dir` (it isn't this process's child, so its
+ *  leader is known by its command line, which names that machine), by the one rule (src/groups.ts): the leader still
+ *  that command, or no process holding its number; a number held by any other program (a leader that exited long ago
+ *  may have left it to one of the person's own shells) is left alone. Looked at right before the signal. Returns
+ *  whether it signalled. */
 export function stopQaGroup(pid: number, dir: string, o: { commandOf?: (pid: number) => string | undefined; signal?: (pid: number) => void } = {}): boolean {
   const command = (o.commandOf ?? commandOf)(pid);
-  if (command === undefined || !command.split(/\s+/).some((w, i, all) => w === dir && all[i - 1] === '--fake-machine')) return false;
+  const leaderRunning = command !== undefined && command.split(/\s+/).some((w, i, all) => w === dir && all[i - 1] === '--fake-machine');
+  if (!groupIsOurs(pid, leaderRunning, () => command !== undefined)) return false;
   (o.signal ?? kill)(-pid);
   return true;
 }

@@ -3,13 +3,13 @@
 // sandbox itself, last, so an interrupted teardown leaves the run folder for the janitor (§6.5a).
 import type { ChildProcess } from 'node:child_process';
 import { dirname } from 'node:path';
+import { exists, groupIsOurs } from './groups.ts';
 import { removeRunLeftovers, type Cleanup } from './leftovers.ts';
 import type { Machine } from './machine.ts';
 import { removeRun, verifyBase } from './safe-delete.ts';
 import type { Sandbox } from './sandbox.ts';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-const exists = (target: number) => { try { process.kill(target, 0); return true; } catch (e) { return (e as NodeJS.ErrnoException).code === 'EPERM'; } };
 const SYS = {
   pidAlive: (pid: number) => exists(pid),
   groupAlive: (pgid: number) => exists(-pgid),
@@ -17,16 +17,12 @@ const SYS = {
   sleep,
 };
 
-/** Stops the run's process groups: SIGTERM, then SIGKILL after `graceMs`. A group is signalled only while it is still the
- *  run's: the system never gives out a number still in use as a group's id, so once the group's leader is gone (reaped),
- *  a live process holding that number means the group emptied and the number is someone else's now; that group is left
- *  alone. `leaderAlive`: a leader the caller started and knows is still running (its number is then its own). Checked
- *  again right before each signal; what's left is the race between that check and the signal itself.
- *  The run's QA_RUN_ID isn't used to tell (as the demo's panes are): on macOS, ps can't see a system binary's
- *  environment (a `sleep` the run left in its group), so such a group would never be stopped. */
+/** Stops the run's process groups: SIGTERM, then SIGKILL after `graceMs`, each group only while it's still the run's
+ *  (groups.ts, the one rule), checked again right before each signal. `leaderAlive`: a leader the caller started and
+ *  knows is still running. */
 export async function killGroups(pgids: number[], graceMs = 2000, o: { leaderAlive?: (pgid: number) => boolean; sys?: Partial<typeof SYS> } = {}): Promise<void> {
   const sys = { ...SYS, ...o.sys };
-  const ours = (g: number) => sys.groupAlive(g) && ((o.leaderAlive?.(g) ?? false) || !sys.pidAlive(g));
+  const ours = (g: number) => sys.groupAlive(g) && groupIsOurs(g, o.leaderAlive?.(g) ?? false, sys.pidAlive);
   const live = pgids.filter(ours);
   for (const g of live) if (ours(g)) sys.signal(g, 'SIGTERM');
   for (let waited = 0; waited < graceMs && live.some(ours); waited += 50) await sys.sleep(50);

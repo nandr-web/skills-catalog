@@ -14,7 +14,7 @@ import { DEFAULT_TTL_MS } from '../src/janitor.ts';
 import { realClaudeTmp, removeLeftover, removeRun, RUN_ID, UnsafeError, verifyBase } from '../src/safe-delete.ts';
 import { createSandbox, FailSafeError, failSafe, newRunId, realHome, recordProcessGroup, sandboxBase } from '../src/sandbox.ts';
 import { teardown } from '../src/teardown.ts';
-import { cleanup, PROCESS_TEST_MS, machine, qaBareSync, qaSync, scratch, spawnDetached, type TestMachine } from './machine.ts';
+import { cleanup, PROCESS_TEST_MS, machine, qaBareSync, qaSync, scratch, spawnDetached, stopGroup, type TestMachine } from './machine.ts';
 
 vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start processes (see PROCESS_TEST_MS)
 
@@ -120,7 +120,7 @@ describe('canary: run folders', () => {
       expect(existsSync(byPid.root)).toBe(true);
       expect(existsSync(byGroup.root)).toBe(true);
       expect(r.skipped.filter((s) => /live run/.test(s.why)).map((s) => s.path).sort()).toEqual([byPid.root, byGroup.root].sort());
-    } finally { process.kill(-child.pid!, 'SIGKILL'); }
+    } finally { stopGroup(child); }
   });
 
   it('an entry without run.json is skipped and reported, however old its mtime (no mtime fallback)', () => {

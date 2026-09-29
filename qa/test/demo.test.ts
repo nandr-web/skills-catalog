@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, onTestFinished } from 'vitest';
 import { runProcesses } from '../src/check.ts';
 import { firstPid, pidFrom } from '../src/pids.ts';
+import { signalGroup } from '../src/groups.ts';
 import { conduct, joined, stoppedLine, type ConductorIo, type StepsFile, type Turn } from '../src/demo/conductor.ts';
 import { loadScenes, type Scenes } from '../src/demo/scenes.ts';
 import { copySkills, DEFAULTS, demoEnding, demoPaths, demoTimeoutMs, leftoverGroups, LOG_NOTE, nodeOk, preflight, repoServer, running, serverCommand } from '../src/demo/director.ts';
@@ -889,14 +890,15 @@ describe('the director kills only its own leftovers', () => {
     const script = `const c = require('node:child_process').spawn(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], { env: { PATH: '/usr/bin:/bin', QA_RUN_ID: ${JSON.stringify(id)} }, stdio: 'ignore' }); console.log(c.pid); c.unref();`;
     const leader = spawn(process.execPath, ['-e', script], { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
     const child = pidFrom(await new Promise<string>((ok) => leader.stdout!.once('data', (b) => ok(String(b)))));
-    onTestFinished(() => { if (child) try { process.kill(child, 'SIGKILL'); } catch { /* gone */ } });
+    // Only while it's still this run's process: once gone, its number may be someone else's.
+    onTestFinished(() => { if (child && runProcesses(id).some((p) => p.pid === child)) { try { process.kill(child, 'SIGKILL'); } catch { /* gone */ } } });
     expect(child).toBeGreaterThan(0);
     await new Promise((ok) => leader.on('exit', ok));
     const other = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], { detached: true, stdio: 'ignore', env: { PATH: '/usr/bin:/bin' } });
     onTestFinished(() => { other.kill('SIGKILL'); });
     await new Promise((r) => setTimeout(r, 300));   // both are sleeping by now
     expect(leftoverGroups([leader.pid!, other.pid!], id)).toEqual([leader.pid]);
-    process.kill(-leader.pid!, 'SIGKILL');   // as the director does: the child goes with its group
+    expect(signalGroup(leader.pid!, 'SIGKILL', leader)).toBe(true);   // the child goes with its group
     for (let i = 0; i < 40 && running(child!); i++) await new Promise((r) => setTimeout(r, 50));
     expect(running(child!)).toBe(false);
   }, 30_000);
