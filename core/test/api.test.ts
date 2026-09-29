@@ -148,8 +148,8 @@ describe('the error list at run time (contract §9)', () => {
   });
 });
 
-// An output schema, checked the strict way: an object has exactly its listed fields (the required ones always), so a
-// field the code adds or drops fails here before it reaches the published schema.
+// An output schema, checked by the JSON Schema rule (an object takes other fields unless additionalProperties says no);
+// the schemas close every object, so a field the code adds or drops fails here before it reaches the published schema.
 function conforms(schema: OutputSchema, value: unknown, at = '$'): string[] {
   if ('anyOf' in schema) {
     const each = schema.anyOf.map((s) => conforms(s, value, at));
@@ -175,8 +175,8 @@ function conforms(schema: OutputSchema, value: unknown, at = '$'): string[] {
       for (const [k, v] of Object.entries(o)) {
         const p = schema.properties[k];
         if (p) errs.push(...conforms(p, v, `${at}.${k}`));
-        else if (schema.additionalProperties === undefined || schema.additionalProperties === false) errs.push(`${at}.${k}: not in the schema`);
-        else if (schema.additionalProperties !== true) errs.push(...conforms(schema.additionalProperties, v, `${at}.${k}`));
+        else if (schema.additionalProperties === false) errs.push(`${at}.${k}: not in the schema`);
+        else if (schema.additionalProperties !== undefined && schema.additionalProperties !== true) errs.push(...conforms(schema.additionalProperties, v, `${at}.${k}`));
       }
       return errs;
     }
@@ -189,6 +189,21 @@ describe('each operation\'s output (contract §1)', () => {
       if (def.kind === 'machine') expect([def.name, def.output]).toEqual([def.name, 'text']);
       else expect([def.name, typeof def.output === 'object' && 'type' in def.output && def.output.type]).toEqual([def.name, 'object']);
     }
+  });
+
+  it('every object in an output schema says whether it takes other fields: closed, but for a front matter and an error\'s data', () => {
+    const open: string[] = [];
+    const walk = (s: OutputSchema, at: string): void => {
+      if ('anyOf' in s) return s.anyOf.forEach((x, i) => walk(x, `${at}|${i}`));
+      if (!('type' in s)) return;
+      if (s.type === 'array') return walk(s.items, `${at}[]`);
+      if (s.type !== 'object') return;
+      if (s.additionalProperties === undefined) open.push(`${at}: not said`);
+      else if (s.additionalProperties !== false) open.push(at);
+      for (const [k, v] of Object.entries(s.properties)) walk(v, `${at}.${k}`);
+    };
+    for (const def of Object.values(OPERATIONS)) if (def.output !== 'text') walk(def.output, def.name);
+    expect(open).toEqual(['read_shared_skill.skills[]|0.manifest.frontmatter', 'read_shared_skill.skills[]|1.error']);
   });
 
   it('what each catalog operation really returns fits its schema, every shape it takes', async () => {
