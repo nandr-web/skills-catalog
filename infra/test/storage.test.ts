@@ -66,6 +66,11 @@ describe('the presets', () => {
     t.hasResourceProperties('AWS::DynamoDB::Table', { PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true } });
     t.hasResourceProperties('AWS::S3::Bucket', { VersioningConfiguration: { Status: 'Enabled' } });
     t.hasResource('AWS::DynamoDB::Table', { DeletionPolicy: 'Retain' });
+    t.hasResourceProperties('AWS::DynamoDB::Table', { DeletionProtectionEnabled: true });
+  });
+
+  it('throwaway can be deleted: no deletion protection', () => {
+    for (const r of Object.values(synth('throwaway').findResources('AWS::DynamoDB::Table'))) expect((r as any).Properties.DeletionProtectionEnabled ?? false).toBe(false);
   });
 
   it('the account and region are fixed in code, never looked up', () => {
