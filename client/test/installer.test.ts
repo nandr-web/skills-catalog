@@ -1,7 +1,7 @@
 // The installer (contract §3, §4.5, §5.3; golden/histories.yaml installer and gate). It installs from bytes it checked,
 // computes every flag itself (a first install is an update from nothing), holds a flagged change until the person's
 // yes, never overwrites or shadows what it didn't install, and records what it did in the lock.
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CatalogError, Surface, actAs, reasons, renderError, type Catalog } from '@skills-catalog/core';
 import { checkTree, diffTrees, fingerprint, sha256Hex, type Mode } from '@skills-catalog/core/skill-tree';
@@ -334,6 +334,83 @@ describe('the installer decides from bytes it checked (golden/histories.yaml ins
     expect((await refusal(() => accept(ctxFor(p, { catalog }), { name: 'stale-rules', confirm, flags: kinds.filter((k) => k !== 'new_publisher') }))).code).toBe('conflict');
     await accept(ctxFor(p, { catalog }), { name: 'stale-rules', confirm, flags: kinds });
     expect(lockOf(p)[join(userSkills(p), 'stale-rules')]).toMatchObject({ version: 2, publisher: 'bob' });
+  });
+});
+
+// An update writes where an install would, so it runs the install's checks on the folder first: a link made since the
+// install (at .claude, at .claude/skills or at the skill's own folder), or a same-name skill or command that appeared, and
+// that skill is not updated. Nothing is written through a link, even one made while the call runs.
+describe('the folder is checked again before every write (contract §3, §4.5)', () => {
+  const refusedTarget = (name: string, code: string, path: string) =>
+    S.format(S.word('update.refused_target'), { name, from: 1, to: 2, path, reason: S.format(S.word(`update.target_reason.${code}`), { path }) });
+
+  async function installedThenNewer(): Promise<{ p: Place; ctx: Context; elsewhere: string }> {
+    const p = place();
+    await publish(p, 'notes-helper', plain('notes-helper'));
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'notes-helper' });
+    await publish(p, 'notes-helper', plain('notes-helper', 'Second.\n'));
+    const elsewhere = join(p.dir, 'elsewhere');
+    mkdirSync(elsewhere, { recursive: true });
+    return { p, ctx, elsewhere };
+  }
+
+  it('a link made since the install, at any of the three folders: that skill is not updated, nothing is written through it', async () => {
+    for (const at of [(p: Place) => join(p.osHome, '.claude'), userSkills, (p: Place) => join(userSkills(p), 'notes-helper')]) {
+      const { p, ctx, elsewhere } = await installedThenNewer();
+      const link = at(p);
+      const moved = join(elsewhere, 'moved');
+      renameSync(link, moved);
+      symlinkSync(moved, link);
+      const before = tree(moved);
+      const lockBefore = readFileSync(join(p.home, 'lock.json'), 'utf8');
+      for (const dry_run of [true, false]) {
+        const r = await update(ctx, { dry_run });
+        expect(r.text.split('\n')).toEqual([S.format(S.word('update.header'), { checked: 1 }), refusedTarget('notes-helper', 'target_symlink', link)]);
+      }
+      expect(tree(moved)).toEqual(before);
+      expect(readFileSync(join(p.home, 'lock.json'), 'utf8')).toBe(lockBefore);
+      expect(nothingStaged(p)).toBe(true);
+    }
+  });
+
+  it('a same-name command or skill that appeared since the install: that skill is not updated', async () => {
+    const { p, ctx } = await installedThenNewer();
+    const command = join(p.dir, 'project', '.claude', 'commands', 'notes-helper.md');
+    mkdirSync(join(command, '..'), { recursive: true });
+    writeFileSync(command, 'a command\n');
+    expect((await update(ctx, {})).text.split('\n')[1]).toBe(refusedTarget('notes-helper', 'name_in_use', command));
+
+    const q = await installedThenNewer();
+    const theirs = join(projectSkills(q.p), 'notes-helper');
+    mkdirSync(theirs, { recursive: true });
+    writeFileSync(join(theirs, 'SKILL.md'), 'mine\n');
+    expect((await update(q.ctx, {})).text.split('\n')[1]).toBe(refusedTarget('notes-helper', 'name_in_use', theirs));
+    expect(readFileSync(join(userSkills(q.p), 'notes-helper', 'SKILL.md'), 'utf8')).toBe(skillMd('notes-helper', 'The notes-helper skill.'));
+  });
+
+  it('a link made while the call runs, after the check and before the write: refused, nothing written through it', async () => {
+    const p = place();
+    await publish(p, 'notes-helper', plain('notes-helper'));
+    const elsewhere = join(p.dir, 'elsewhere');
+    mkdirSync(elsewhere, { recursive: true });
+    // The fetch comes after the folder check: the link appears then, where the install would create .claude.
+    const racing = (c: Catalog): Catalog =>
+      new Proxy(c, {
+        get(target, prop, receiver) {
+          if (prop !== 'fetch') return Reflect.get(target, prop, receiver);
+          return async (input: { name: string; version: number }) => {
+            mkdirSync(p.osHome, { recursive: true });
+            if (!existsSync(join(p.osHome, '.claude'))) symlinkSync(elsewhere, join(p.osHome, '.claude'));
+            return target.fetch(input);
+          };
+        },
+      });
+    const e = await refusal(() => install(ctxFor(p, { catalog: racing }), { name: 'notes-helper' }));
+    expect([e.code, e.data]).toEqual(['target_symlink', { path: join(p.osHome, '.claude') }]);
+    expect(readdirSync(elsewhere)).toEqual([]);
+    expect(lockOf(p)).toEqual({});
+    expect(nothingStaged(p)).toBe(true);
   });
 });
 

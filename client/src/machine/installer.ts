@@ -54,6 +54,23 @@ function checkTarget(ctx: Context, target: Target, name: string, lock: Lock): st
   return dest;
 }
 
+// The skills folder under the target's root, made one folder at a time and never through a link: a link that appeared
+// since checkTarget (or appears while this runs) is refused, not followed. The skill's own folder is checked last.
+function skillsFolderFor(dest: string): void {
+  const skills = dirname(dest);
+  const claude = dirname(skills);
+  mkdirSync(dirname(claude), { recursive: true });
+  for (const p of [claude, skills]) {
+    try {
+      mkdirSync(p);
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+    }
+    if (isLink(p)) throw new CatalogError('target_symlink', { path: p });
+  }
+  if (isLink(dest)) throw new CatalogError('target_symlink', { path: dest });
+}
+
 // The files into a temp folder in SKILLS_HOME, then renamed into place; an installed copy is moved out first and
 // removed once the new one is in (an update replaces local edits: the owner's call).
 function writeSkill(ctx: Context, dest: string, files: readonly TreeFile[]): void {
@@ -66,7 +83,7 @@ function writeSkill(ctx: Context, dest: string, files: readonly TreeFile[]): voi
       mkdirSync(dirname(full), { recursive: true });
       writeFileSync(full, f.bytes, { mode: f.mode === '0755' ? 0o755 : 0o644 });
     }
-    mkdirSync(dirname(dest), { recursive: true });
+    skillsFolderFor(dest);
     const old = existsSync(dest) ? `${tmp}-replaced` : undefined;
     if (old) renameSync(dest, old);
     try {
@@ -318,7 +335,6 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     if (RANK.indexOf(o) > RANK.indexOf(outcome)) outcome = o;
   };
   for (const e of chosen) {
-    const dest = destOf(ctx, e.target, e.name);
     const v = await allVersions(catalog, e.name);
     if (v.latest === e.version) {
       unchanged++;
@@ -335,6 +351,16 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     if (policy === 'notify') {
       lines.push(s.format(w.held_notify, at));
       saw('held_notify');
+      continue;
+    }
+    // Where it goes, checked as an install checks it: a link or a same-name skill or command may have appeared since.
+    let dest: string;
+    try {
+      dest = checkTarget(ctx, e.target, e.name, lock);
+    } catch (err) {
+      if (!(err instanceof CatalogError)) throw err;
+      const path = String(err.data['path']);
+      lines.push(s.format(w.refused_target, { ...at, path, reason: s.format(w.target_reason[err.code], { path }) }));
       continue;
     }
     let to: Side;
