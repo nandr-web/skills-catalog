@@ -451,9 +451,12 @@ describe('the stand-in as a process (the REPL around the step function)', () => 
     const scenes = loadScenes(SCENES_FILE);
     const root = sandbox(scenes);
     mkdirSync(join(root, 'catalog'));
+    // One stand-in, which loads the core and publishes: about 1 s quiet, several at a heavy load. Half the test's budget,
+    // then killed (SIGKILL, as below), so a hung one fails fast and leaves nothing running.
     const child = spawn(process.execPath, [here('../src/demo/assistant.ts'), '--as', 'ana'], {
       cwd: join(root, 'work', 'ana'), stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, SKILLS_CATALOG: pathToFileURL(join(root, 'catalog')).href, QA_SANDBOX: root, DEMO_PACE: '0', DEMO_SCENES: SCENES_FILE, SKILLS_ACTIVITY_LOG: join(root, 'elsewhere.log') },
+      timeout: PROCESS_TEST_MS / 2, killSignal: 'SIGKILL',
     });
     let out = '', err = '';
     child.stdout.on('data', (b) => { out += b; });
@@ -466,7 +469,7 @@ describe('the stand-in as a process (the REPL around the step function)', () => 
     expect(plain(out)).toContain('  │ Published release-note-draft v1 to the shared catalog');
     expect(readFileSync(join(root, 'elsewhere.log'), 'utf8')).toMatch(/published +release-note-draft v1/);   // SKILLS_ACTIVITY_LOG wins
     expect(readFileSync(join(root, 'demo', 'turns.jsonl'), 'utf8')).toMatch(/"step":2/);
-  });
+  }, PROCESS_TEST_MS);   // a process start (see the spawn)
 
   it('both panes start at once: neither opens the catalog until it is asked something (two processes opening a new catalog together can fail)', async () => {
     const scenes = loadScenes(SCENES_FILE);
@@ -474,13 +477,14 @@ describe('the stand-in as a process (the REPL around the step function)', () => 
     mkdirSync(join(root, 'catalog'));
     const env = { ...process.env, SKILLS_CATALOG: pathToFileURL(join(root, 'catalog')).href, QA_SANDBOX: root, DEMO_PACE: '0', DEMO_SCENES: SCENES_FILE };
     const panes = ['ana', 'bob'].map((who) => {
-      const child = spawn(process.execPath, [here('../src/demo/assistant.ts'), '--as', who], { stdio: ['pipe', 'pipe', 'pipe'], env });
+      const child = spawn(process.execPath, [here('../src/demo/assistant.ts'), '--as', who], { stdio: ['pipe', 'pipe', 'pipe'], env, timeout: PROCESS_TEST_MS / 2, killSignal: 'SIGKILL' });
       const p = { child, out: '', exit: new Promise((ok) => child.on('exit', ok)) };
       child.stdout.on('data', (b) => { p.out += b; });
       return p;
     });
     const turns = () => (existsSync(join(root, 'demo', 'turns.jsonl')) ? readFileSync(join(root, 'demo', 'turns.jsonl'), 'utf8') : '');
-    const until = async (f: () => boolean) => { for (let i = 0; i < 200 && !f(); i++) await new Promise((r) => setTimeout(r, 25)); };
+    // two stand-ins start together and each loads the core: give each wait the children's budget, not a fixed 5 s
+    const until = async (f: () => boolean) => { for (let i = 0; i < PROCESS_TEST_MS / 2 / 25 && !f(); i++) await new Promise((r) => setTimeout(r, 25)); };
     try {
       await until(() => panes.every((p) => p.out.includes('› ')));
       expect(panes.every((p) => p.child.exitCode === null)).toBe(true);
@@ -496,7 +500,7 @@ describe('the stand-in as a process (the REPL around the step function)', () => 
       for (const p of panes) p.child.kill();
       await Promise.all(panes.map((p) => p.exit));
     }
-  });
+  }, PROCESS_TEST_MS);   // two process starts at once, and three waits (see until)
 
   it('refuses to start without its settings or for someone who isn\'t a developer (exit 3, one line)', async () => {
     const scenes = loadScenes(SCENES_FILE);
