@@ -110,6 +110,9 @@ const MUTATIONS = [
   ['machine/lock.ts', 'a lock file changed since it was looked at is removed', 'if (st.ctimeMs !== was.ctimeMs || st.birthtimeMs', 'if (st.birthtimeMs'],
   ['machine/lock.ts', 'this process\'s start is read on another clock than ps', '(myStart ??= startOf(process.pid) ?? Date.now()', '(myStart ??= Date.now()'],
   ['machine/lock.ts', 'days in ps etime are dropped', '(((days * 24 + hours)', '(((0 * 24 + hours)'],
+  ['machine/lock.ts', 'a change that changes nothing rewrites lock.json', '      if (JSON.stringify(lock) !== was) writeLock(home, lock);', '      writeLock(home, lock);'],
+  ['machine/lock.ts', 'a release removes the lock file by its path alone', '      removeIfSame(path, mine);\n', '      unlinkSync(path);\n'],
+  ['machine/lock.ts', 'a failed holder write removes whatever is at the path', '      if (there && there.dev === made.dev && there.ino === made.ino) unlinkSync(path);', '      if (there) unlinkSync(path);'],
   // decisions are taken under the lock (installer-race.test.ts)
   ['machine/installer.ts', 'accept writes over an entry another run changed', '    if (!sameDecision(existing, now)) throw conflict();\n', ''],
   ['machine/installer.ts', 'an install keeps its decision after another run changed the entry', '    if (!sameDecision(existing, now)) {', '    if (false) {'],

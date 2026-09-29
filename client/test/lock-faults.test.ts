@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CatalogError } from '@skills-catalog/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { startFromEtime, withLock } from '../src/machine/lock.ts';
+import { holdLock, startFromEtime, withLock } from '../src/machine/lock.ts';
 import { race } from './race-fs.ts';
 import { place } from './server.ts';
 
@@ -99,6 +99,41 @@ describe('the lock file under faults', () => {
       started = (JSON.parse(readFileSync(lockPath(h), 'utf8')) as { started: number }).started;
     });
     expect(Math.abs(Date.now() - THREE_DAYS_MS - started!)).toBeLessThan(5000);
+  });
+});
+
+describe('what the lock leaves as it is', () => {
+  it('a change that changes nothing (a hold) leaves lock.json as it is: the same file, the same bytes', async () => {
+    const h = home();
+    const file = join(h, 'lock.json');
+    writeFileSync(file, '{\n  "skills": {}\n}\n', { mode: 0o600 });
+    const [ino, bytes] = [race.fs.statSync(file).ino, readFileSync(file, 'utf8')];
+    await withLock(h, Date.now, () => undefined);
+    expect([race.fs.statSync(file).ino, readFileSync(file, 'utf8')]).toEqual([ino, bytes]);
+  });
+
+  it('a release after the lock file was replaced leaves the new file: it isn\'t this hold\'s any more', async () => {
+    const h = home();
+    const hold = holdLock(h, Date.now);
+    await hold.change(() => undefined);
+    const other = JSON.stringify({ pid: deadPid(), started: Date.now() });
+    race.fs.rmSync(lockPath(h));
+    writeFileSync(lockPath(h), other, { mode: 0o600 });
+    hold.release();
+    expect(readFileSync(lockPath(h), 'utf8')).toBe(other);
+  });
+
+  it('a holder write that fails after the lock file was swapped leaves the swapped-in file', async () => {
+    const h = home();
+    const other = JSON.stringify({ pid: deadPid(), started: Date.now() });
+    race.onWrite = () => {
+      race.onWrite = undefined;
+      race.fs.rmSync(lockPath(h));
+      race.fs.writeFileSync(lockPath(h), other, { mode: 0o600 });
+      throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
+    };
+    await expect(withLock(h, Date.now, () => undefined)).rejects.toMatchObject({ code: 'ENOSPC' });
+    expect(readFileSync(lockPath(h), 'utf8')).toBe(other);
   });
 });
 
