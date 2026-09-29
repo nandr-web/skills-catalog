@@ -2,7 +2,7 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseDocument } from 'yaml';
+import { isMap, isScalar, isSeq, parseDocument, visit, type Document } from 'yaml';
 import { CatalogError } from './errors.ts';
 import { decodeText, isText, type TreeFile } from './tree.ts';
 
@@ -67,18 +67,56 @@ export type ManifestProblem =
   | 'metadata_not_a_mapping'
   | 'tags_not_a_string'
   | 'bad_tag'
-  | 'too_many_tags';
+  | 'too_many_tags'
+  | 'yaml_feature'
+  | 'key_format';
+
+export type YamlFeature = 'merge_key' | 'anchor' | 'alias' | 'tag' | 'duplicate_key' | 'multiple_documents';
 
 function manifestError(problem: ManifestProblem, fields: string[] = [MANIFEST], extra: Record<string, unknown> = {}): CatalogError {
   return new CatalogError('invalid_manifest', { problem, fields, ...extra });
 }
 
-// Parse the front matter with YAML's core schema: no custom tags (a tag it doesn't know is refused, not ignored),
-// no duplicate keys, a mapping at the top.
+// Top-level front matter keys are plain: `allowed-tools` with a zero-width space, a BOM or a bidi override in it is
+// refused, never read as some other key.
+const KEY_RE = /^[a-z][a-z0-9_-]*$/;
+
+// The first YAML feature, in document order, that parsers disagree on: a merge key (`<<` is a plain key to a YAML 1.2
+// core-schema parser and a merge to PyYAML, so `<<: {allowed-tools: Bash}` would grant a tool the catalog never saw),
+// an anchor, an alias or an explicit tag, at any depth.
+function unsafeFeature(doc: Document): YamlFeature | undefined {
+  let found: YamlFeature | undefined;
+  visit(doc, {
+    Alias() {
+      found ??= 'alias';
+      return visit.BREAK;
+    },
+    Pair(_key, pair) {
+      if (isScalar(pair.key) && pair.key.type === 'PLAIN' && pair.key.value === '<<') {
+        found ??= 'merge_key';
+        return visit.BREAK;
+      }
+    },
+    Node(_key, node) {
+      if ((isScalar(node) || isMap(node) || isSeq(node)) && node.anchor) found ??= 'anchor';
+      else if ((isScalar(node) || isMap(node) || isSeq(node)) && node.tag) found ??= 'tag';
+      if (found) return visit.BREAK;
+    },
+  });
+  return found;
+}
+
+// Front matter is a safe subset of YAML, so every parser reads the same keys (contract §4.1): one document, YAML's
+// core schema, no merge keys, anchors, aliases, explicit tags or duplicate keys, a mapping at the top, plain keys.
 export function parseFrontmatter(text: string): { frontmatter: Record<string, unknown>; body: string } {
   const m = FRONT.exec(text);
   if (!m) throw manifestError('no_front_matter');
   const doc = parseDocument(m[1]!, { schema: 'core', uniqueKeys: true, prettyErrors: false });
+  const codes = doc.errors.map((e) => e.code);
+  if (codes.includes('MULTIPLE_DOCS')) throw manifestError('yaml_feature', undefined, { feature: 'multiple_documents' });
+  if (codes.includes('DUPLICATE_KEY')) throw manifestError('yaml_feature', undefined, { feature: 'duplicate_key' });
+  const feature = unsafeFeature(doc);
+  if (feature) throw manifestError('yaml_feature', undefined, { feature });
   if (doc.errors.length > 0 || doc.warnings.length > 0) {
     throw manifestError('invalid_yaml', undefined, { yaml: (doc.errors[0] ?? doc.warnings[0])!.code });
   }
@@ -90,6 +128,8 @@ export function parseFrontmatter(text: string): { frontmatter: Record<string, un
   }
   if (value === null || value === undefined) value = {};
   if (typeof value !== 'object' || Array.isArray(value)) throw manifestError('front_matter_not_a_mapping');
+  const bad = Object.keys(value as Record<string, unknown>).find((k) => !KEY_RE.test(k));
+  if (bad !== undefined) throw manifestError('key_format', [bad]);
   return { frontmatter: value as Record<string, unknown>, body: m[2]! };
 }
 

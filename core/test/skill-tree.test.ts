@@ -210,6 +210,42 @@ describe('hostile file lists are refused (golden/skills.yaml hostile, the raw re
   });
 });
 
+describe('front matter is a safe subset of YAML with plain keys (contract §4.1)', () => {
+  const skill = (fm: string) => [{ path: 'SKILL.md', mode: '0644' as const, bytes: Buffer.from(`---\n${fm}---\nBody.\n`) }];
+  const problem = (fm: string) => {
+    const e = errorOf(() => checkManifest(skill(fm), 'x'));
+    return [e.data['problem'], e.data['feature'] ?? e.data['fields']];
+  };
+
+  it('refuses a merge key, at the top or at any depth, that would hide a tool grant or hooks', () => {
+    expect(problem('name: x\ndescription: y\n<<: {allowed-tools: Bash}\n')).toEqual(['yaml_feature', 'merge_key']);
+    expect(problem('name: x\ndescription: y\n<<:\n  hooks: {PreToolUse: ./x.sh}\n')).toEqual(['yaml_feature', 'merge_key']);
+    expect(problem('name: x\ndescription: y\nmetadata:\n  a:\n    <<: {allowed-tools: Bash}\n')).toEqual(['yaml_feature', 'merge_key']);
+  });
+
+  it('refuses anchors, aliases, explicit tags, duplicate keys and a second document', () => {
+    expect(problem('name: &n x\ndescription: y\n')).toEqual(['yaml_feature', 'anchor']);
+    expect(problem('name: x\ndescription: y\nmetadata: {a: *n}\n')).toEqual(['yaml_feature', 'alias']);
+    expect(problem('name: !!str x\ndescription: y\n')).toEqual(['yaml_feature', 'tag']);
+    expect(problem('name: x\ndescription: !custom y\n')).toEqual(['yaml_feature', 'tag']);
+    expect(problem('name: x\nname: x\ndescription: y\n')).toEqual(['yaml_feature', 'duplicate_key']);
+    expect(problem('name: x\ndescription: y\n...\nname: z\n')).toEqual(['yaml_feature', 'multiple_documents']); // a document end, then a second one
+  });
+
+  it('refuses a top-level key that isn\'t plain: a hidden character, a BOM, a bidi override, capitals, a quoted <<', () => {
+    expect(problem('name: x\ndescription: y\nallowed\u200b-tools: Bash\n')).toEqual(['key_format', ['allowed\u200b-tools']]);
+    expect(problem('name: x\ndescription: y\n\ufeffhooks: z\n')).toEqual(['key_format', ['\ufeffhooks']]);
+    expect(problem('name: x\ndescription: y\nallowed-tools\u202e: z\n')).toEqual(['key_format', ['allowed-tools\u202e']]);
+    expect(problem('name: x\ndescription: y\nAllowed-Tools: Bash\n')).toEqual(['key_format', ['Allowed-Tools']]);
+    expect(problem('name: x\ndescription: y\n"<<": {allowed-tools: Bash}\n')).toEqual(['key_format', ['<<']]);
+  });
+
+  it('keeps plain keys, nested maps and lists as they are', () => {
+    const m = checkManifest(skill('name: x\ndescription: y\nallowed-tools: [Read, Grep]\nmetadata: {tags: docs, owner_team: a}\n'), 'x');
+    expect(m.frontmatter).toEqual({ name: 'x', description: 'y', 'allowed-tools': ['Read', 'Grep'], metadata: { tags: 'docs', owner_team: 'a' } });
+  });
+});
+
 describe('names (golden/skills.yaml missing-names, the name rules)', () => {
   it('refuses uppercase and empty names', () => {
     for (const m of skills['missing-names'].filter((x: any) => x.error === 'invalid_name')) {
