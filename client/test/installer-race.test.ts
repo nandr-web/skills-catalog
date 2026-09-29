@@ -56,7 +56,8 @@ const refused = (e: unknown) => e as { code?: string; data?: Record<string, unkn
 // A refusal is thrown by install and accept, and is a skill's refused line in update's result: read it from either.
 const codeOf = (r: unknown) => refused(r).code ?? /(target_changed|target_symlink|exists_untracked)/.exec(refused(r).text ?? '')?.[1];
 const stagedOf = (r: unknown) => (refused(r).data?.['staging'] as string | undefined) ?? /"staging":"([^"]+)"/.exec(refused(r).text ?? '')?.[1];
-const stagingEntries = (p: Place) => (race.fs.existsSync(join(p.home, 'staging')) ? race.fs.readdirSync(join(p.home, 'staging')) : []);
+const stagingDir = (p: Place) => join(p.dir, 'project', '.claude', '.skills-catalog-staging');
+const stagingEntries = (p: Place) => (race.fs.existsSync(stagingDir(p)) ? race.fs.readdirSync(stagingDir(p)).map((e) => join(stagingDir(p), e)) : []);
 
 // The project's skills folder S, and victim/ V holding alpha/canary: someone else's folder a link can point at.
 function places(p: Place) {
@@ -143,7 +144,7 @@ describe('links swapped in while the installer replaces a copy (the security rev
     const canaryAt = race.fs.existsSync(join(victim, 'alpha', 'canary')) ? join(victim, 'alpha', 'canary') : staged && join(staged, 'canary');
     expect(canaryAt && race.fs.readFileSync(canaryAt, 'utf8')).toBe('keep me\n');
     expect(race.fs.readdirSync(join(canaryAt!, '..'))).toEqual(['canary']);
-    expect(stagingEntries(p).map((e) => join(p.home, 'staging', e))).toEqual(staged === undefined ? [] : [staged]);
+    expect(stagingEntries(p)).toEqual(staged === undefined ? [] : [staged]);
     expect(race.fs.readFileSync(join(p.home, 'lock.json'), 'utf8')).toBe(lockBefore);
     expect(race.fs.readFileSync(join(p.dir, 'aside', 'alpha', 'SKILL.md'), 'utf8')).toBe(skillMd('alpha', 'The alpha skill.', 'Body.\n'));
   });
@@ -165,7 +166,7 @@ describe('links swapped in while the installer replaces a copy (the security rev
       expect(race.fs.readdirSync(join(pl.victim, 'alpha')), `${side} k=${k}`).toEqual(['canary']);
       // Nothing is left in staging unless the refusal names it.
       const staged = stagedOf(r);
-      expect(stagingEntries(p).map((e) => join(p.home, 'staging', e)), `${side} k=${k}`).toEqual(staged === undefined ? [] : [staged]);
+      expect(stagingEntries(p), `${side} k=${k}`).toEqual(staged === undefined ? [] : [staged]);
     }
   });
 
@@ -191,7 +192,7 @@ describe('links swapped in while the installer replaces a copy (the security rev
       const canaryAt = race.fs.existsSync(pl.canary) ? pl.canary : staged && join(staged, 'canary');
       expect(canaryAt && race.fs.readFileSync(canaryAt, 'utf8'), `${side} k=${k}`).toBe('keep me\n');
       expect(race.fs.readdirSync(join(canaryAt!, '..')), `${side} k=${k}`).toEqual(['canary']);
-      expect(stagingEntries(p).map((e) => join(p.home, 'staging', e)), `${side} k=${k}`).toEqual(staged === undefined ? [] : [staged]);
+      expect(stagingEntries(p), `${side} k=${k}`).toEqual(staged === undefined ? [] : [staged]);
       // The person's copy is in place at the old or the new version, or, when it couldn't be put back, in the named
       // staging folder.
       const installedAt = race.fs.existsSync(join(pl.skills, 'alpha', 'SKILL.md')) ? join(pl.skills, 'alpha') : staged;
@@ -237,7 +238,9 @@ describe('the review\'s probes (B, B2, C, D)', () => {
     expect(codeOf(r)).toBe('target_changed');
     expect(race.fs.readFileSync(join(s.p.home, 'lock.json'), 'utf8')).toBe(s.lockBefore);
     const staged = stagedOf(r);
-    expect(stagingEntries(s.p).map((e) => join(s.p.home, 'staging', e))).toEqual(staged === undefined ? [] : [staged]);
+    // Everything left in staging is named: one folder by its path, several by the staging folder itself.
+    expect(staged === stagingDir(s.p) ? stagingEntries(s.p).length > 1 : true).toBe(true);
+    if (staged !== stagingDir(s.p)) expect(stagingEntries(s.p)).toEqual(staged === undefined ? [] : [staged]);
     return { text, staged };
   }
 
@@ -310,5 +313,51 @@ describe('the review\'s probes (B, B2, C, D)', () => {
     expect(tree(join(v, 'alpha'))).toEqual(['canary']);
     // The person's copy wasn't touched: it's in the real folder, which the swap moved aside.
     expect(race.fs.readFileSync(join(`${s.skills}.real`, 'alpha', 'SKILL.md'), 'utf8')).toBe(skillMd('alpha', 'The alpha skill.', 'Body.\n'));
+  });
+
+  it('the take-back re-pointed: skills links to V as the new copy goes in, then to V2 (holding alpha/canary) as it is taken back; V2\'s folder is never deleted', async () => {
+    const s = await installed();
+    const v = join(s.p.dir, 'v');
+    const v2 = join(s.p.dir, 'v2');
+    race.fs.mkdirSync(v);
+    folder(v2, { 'alpha/canary': 'keep me\n' });
+    // The new copy's move in (from the staging folder to the skill's path), then the first move out of the skill's path
+    // after it (the take-back).
+    let placing = true;
+    race.onRename = (from, to) => {
+      if (placing && to === s.dest && from.includes('.skills-catalog-staging')) {
+        placing = false;
+        relink(s.skills, v);
+      } else if (!placing && from === s.dest) {
+        race.onRename = undefined;
+        relink(s.skills, v2);
+      }
+    };
+    const { staged } = await run(s);
+    const canaryAt = [join(v2, 'alpha'), ...stagingEntries(s.p)].map((d) => join(d, 'canary')).find((f) => race.fs.existsSync(f));
+    expect(staged, 'whatever is left in staging is named').toBeDefined();
+    expect(canaryAt && race.fs.readFileSync(canaryAt, 'utf8')).toBe('keep me\n');
+  });
+
+  it('swapped to V as the new copy goes in and straight back: the result says the new copy may be elsewhere, and names the replaced one', async () => {
+    const s = await installed();
+    const v = join(s.p.dir, 'v');
+    race.fs.mkdirSync(v);
+    race.onRename = (from, to) => {
+      if (to !== s.dest || !from.includes('.skills-catalog-staging')) return;
+      race.onRename = undefined;
+      relink(s.skills, v);
+    };
+    race.afterRename = (_from, to) => {
+      if (to !== s.dest) return;
+      race.afterRename = undefined;
+      race.fs.unlinkSync(s.skills);
+      race.fs.renameSync(`${s.skills}.real`, s.skills);
+    };
+    const { text, staged } = await run(s);
+    expect(text).toContain('"elsewhere":true');
+    // The new copy went where the link pointed; the person's copy is in staging, named.
+    expect(race.fs.readFileSync(join(v, 'alpha', 'SKILL.md'), 'utf8')).toContain('Second, markdown only.');
+    expect(race.fs.readFileSync(join(staged!, 'SKILL.md'), 'utf8')).toBe(skillMd('alpha', 'The alpha skill.', 'Body.\n'));
   });
 });

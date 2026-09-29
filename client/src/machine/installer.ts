@@ -13,7 +13,7 @@
 // Node has no directory-relative file operations, so another program running as the same person can still race these
 // checks; the installer narrows the window.
 
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, renameSync, rmSync, statSync, writeFileSync, type Stats } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync, type Stats } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CatalogError, shellQuote, validateInput, type Catalog, type Surface, type VersionsResult } from '@skills-catalog/core';
 import { checkFetched, checkName, diffTrees, flagText, type RiskFlag, type TreeDiff, type TreeFile } from '@skills-catalog/core/skill-tree';
@@ -72,14 +72,21 @@ function skillsFolderFor(dest: string): Anchor[] {
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
     }
-    const s = lstatOf(path);
-    if (!s || s.isSymbolicLink()) throw new CatalogError('target_symlink', { path });
-    if (!s.isDirectory()) throw new CatalogError('exists_untracked', { path });
-    return { path, id: { dev: s.dev, ino: s.ino } };
+    return realFolder(path);
   });
 }
 
-// A folder's identity on disk, to tell whether a path still names the folder that was checked or installed.
+// A folder that must be a real folder, not a link, with its identity taken from the same lstat.
+function realFolder(path: string): Anchor {
+  const s = lstatOf(path);
+  if (!s || s.isSymbolicLink()) throw new CatalogError('target_symlink', { path });
+  if (!s.isDirectory()) throw new CatalogError('exists_untracked', { path });
+  return { path, id: idFrom(s) };
+}
+
+// A folder's identity on disk, to tell whether a path still names the folder that was checked or installed: device,
+// inode and birth time (left out where the file system reads it as 0). Entries recorded without a birth time compare on
+// the other two.
 type Id = FolderId;
 function lstatOf(path: string): Stats | undefined {
   try {
@@ -88,13 +95,24 @@ function lstatOf(path: string): Stats | undefined {
     return undefined;
   }
 }
+const idFrom = (s: Stats): Id => (s.birthtimeMs ? { dev: s.dev, ino: s.ino, birth: s.birthtimeMs } : { dev: s.dev, ino: s.ino });
 function idOf(path: string): Id | undefined {
   const s = lstatOf(path);
-  return s && { dev: s.dev, ino: s.ino };
+  return s && idFrom(s);
 }
-const same = (a: Id | undefined, b: Id | undefined) => a !== undefined && b !== undefined && a.dev === b.dev && a.ino === b.ino;
+const same = (a: Id | undefined, b: Id | undefined) =>
+  a !== undefined && b !== undefined && a.dev === b.dev && a.ino === b.ino && (a.birth === undefined || b.birth === undefined || a.birth === b.birth);
 /** A real folder (not a link) with this identity. */
-const isCopy = (s: Stats | undefined, id: Id | undefined) => s !== undefined && s.isDirectory() && !s.isSymbolicLink() && same({ dev: s.dev, ino: s.ino }, id);
+const isCopy = (s: Stats | undefined, id: Id | undefined) => s !== undefined && s.isDirectory() && !s.isSymbolicLink() && same(idFrom(s), id);
+/** Removes a folder only while it's a real folder with an identity the installer recorded; never by path alone. */
+function removeIfOurs(path: string, id: Id | undefined): boolean {
+  if (!isCopy(lstatOf(path), id)) return false;
+  rmSync(path, { recursive: true, force: true });
+  return true;
+}
+
+// Where a copy is staged: beside the skills folder, on the target's own volume, so every move is a rename.
+export const STAGING = '.skills-catalog-staging';
 
 // A rename that failed because something else is at (or gone from) one of its paths: a change under us, not a fault.
 const RACED = new Set(['ENOENT', 'EEXIST', 'ENOTEMPTY', 'ENOTDIR', 'EISDIR']);
@@ -108,46 +126,59 @@ function moved(from: string, to: string): boolean {
   }
 }
 
-// The files into a temp folder in SKILLS_HOME, then renamed into place (contract §4.5, "Replacing an installed copy,
-// safely"). `entry` is the lock's entry for this path, if any.
+// The files into a staging folder beside the skills folder, then renamed into place (contract §4.5, "Replacing an
+// installed copy, safely"). `entry` is the lock's entry for this path, if any.
 // - A first install finds nothing at the skill's path, or refuses without moving anything.
 // - A replace moves the installed folder aside and deletes it only when it's a real folder with the identity the lock
 //   recorded. An entry recorded before identities were kept never has its folder deleted: it's kept in staging, named.
-// - After every move, .claude and .claude/skills must still be the real folders checked, and the moved folder where it
-//   should be. Otherwise the move is undone as far as it safely can be, and the call refuses with target_changed, naming
-//   the staging path of any folder that couldn't be put back. It never reports success after a failed check.
+// - After every move, .claude, .claude/skills and the staging folder must still be the real folders checked, and the
+//   moved folder where it should be. Otherwise the move is undone as far as it safely can be, and the call refuses with
+//   target_changed: `staging` names where a folder that couldn't be put back sits, and `elsewhere` says the new copy
+//   may have gone where a swapped-in link pointed. It never reports success after a failed check.
+// - Nothing is removed by path unless its identity is one recorded here.
 // Returns the new copy's identity, for the lock, and where a replaced copy was kept, if it was.
-function writeSkill(ctx: Context, dest: string, files: readonly TreeFile[], entry: LockEntry | undefined): { copy: Id; kept?: string } {
-  const staging = join(ctx.settings.home, 'staging');
-  mkdirSync(staging, { recursive: true, mode: 0o700 });
-  const tmp = mkdtempSync(join(staging, 'install-'));
+function writeSkill(dest: string, files: readonly TreeFile[], entry: LockEntry | undefined): { copy: Id; kept?: string } {
+  const anchors = skillsFolderFor(dest);
+  const stagingDir = join(anchors[0]!.path, STAGING);
   try {
+    mkdirSync(stagingDir, { mode: 0o700 });
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+  }
+  const staging = realFolder(stagingDir);
+  anchors.push(staging);
+  const tmp = mkdtempSync(join(stagingDir, 'install-'));
+  const copy = idOf(tmp)!;
+  try {
+    const anchored = () => anchors.every((a) => isCopy(lstatOf(a.path), a.id));
+    // Nothing is written until the folders are still the ones checked.
+    if (!anchored()) throw new CatalogError('target_changed', { path: dest });
     for (const f of files) {
       const full = join(tmp, f.path);
       mkdirSync(dirname(full), { recursive: true });
       writeFileSync(full, f.bytes, { mode: f.mode === '0755' ? 0o755 : 0o644 });
     }
-    const copy = idOf(tmp)!;
-    const anchors = skillsFolderFor(dest);
-    const anchored = () => anchors.every((a) => isCopy(lstatOf(a.path), a.id));
-    const refuse = (staged?: string): never => {
-      throw new CatalogError('target_changed', staged === undefined ? { path: dest } : { path: dest, staging: staged });
+    // Folders left in staging because they couldn't be put back: named in the refusal (the staging folder itself when
+    // more than one is there).
+    const left: string[] = [];
+    const refuse = (elsewhere = false): never => {
+      const at = left.length === 0 ? {} : { staging: left.length === 1 ? left[0] : stagingDir };
+      throw new CatalogError('target_changed', { path: dest, ...at, ...(elsewhere ? { elsewhere: true } : {}) });
     };
-    // The folder the skill's path is in right now, through any link: where a folder moved aside came from.
-    const parentNow = () => {
+    // The folder the skill's path is in right now, through any link: where a folder moved out of it came from.
+    const parentNow = (): Id | undefined => {
       try {
-        const s = statSync(dirname(dest));
-        return { dev: s.dev, ino: s.ino };
+        return idFrom(statSync(dirname(dest)));
       } catch {
         return undefined;
       }
     };
-    // Put back a folder moved aside from the skill's path, into the folder it came from. If it landed anywhere else (the
-    // path now leads elsewhere), take it out again: it stays in staging, named.
-    const putBack = (aside: string, id: Id | undefined, from: Id | undefined): never => {
-      if (!moved(aside, dest)) return refuse(aside);
-      if (anchored() || same(parentNow(), from)) return refuse();
-      return isCopy(lstatOf(dest), id) && moved(dest, aside) ? refuse(aside) : refuse();
+    // Puts a folder moved out of the skill's path back into the folder it came from. If the path now leads elsewhere, it's
+    // taken out again and left in staging, named.
+    const restore = (aside: string, id: Id | undefined, from: Id | undefined): void => {
+      if (!moved(aside, dest)) return void left.push(aside);
+      if (anchored() || same(parentNow(), from)) return;
+      if (isCopy(lstatOf(dest), id) && moved(dest, aside)) left.push(aside);
     };
 
     const there = lstatOf(dest);
@@ -159,25 +190,49 @@ function writeSkill(ctx: Context, dest: string, files: readonly TreeFile[], entr
       old = { path: `${tmp}-replaced`, id: undefined, from: parentNow() };
       if (!moved(dest, old.path)) refuse();
       const s = lstatOf(old.path);
-      old.id = s && { dev: s.dev, ino: s.ino };
+      old.id = s && idFrom(s);
       const real = s !== undefined && s.isDirectory() && !s.isSymbolicLink();
       const ours = real && (entry.copy === undefined || same(old.id, entry.copy));
-      if (!ours || !anchored()) putBack(old.path, old.id, old.from);
+      if (!ours || !anchored()) {
+        restore(old.path, old.id, old.from);
+        refuse();
+      }
     }
-    if (!moved(tmp, dest)) return old ? putBack(old.path, old.id, old.from) : refuse();
-    // The new copy must be where it was meant to go. If not, take it back out; a replaced copy can't be put back safely
-    // then, so it stays in staging, named.
+    if (!moved(tmp, dest)) {
+      if (old) restore(old.path, old.id, old.from);
+      refuse();
+    }
+    // The new copy must be where it was meant to go. If not, take it back out into a fresh staging path, and delete it
+    // there only if it's still the copy made here; anything else is put back or kept, and named. A replaced copy can't be
+    // put back safely then, so it stays in staging, named.
     if (!anchored() || !isCopy(lstatOf(dest), copy)) {
-      if (isCopy(lstatOf(dest), copy)) moved(dest, tmp);
-      return refuse(old?.path);
+      let elsewhere = true;
+      if (isCopy(lstatOf(dest), copy)) {
+        const from = parentNow();
+        const back = `${tmp}-back`;
+        if (moved(dest, back)) {
+          const s = lstatOf(back);
+          if (removeIfOurs(back, copy)) elsewhere = false;
+          else restore(back, s && idFrom(s), from);
+        }
+      }
+      if (old) left.push(old.path);
+      refuse(elsewhere);
     }
     if (!old) return { copy };
     // Deleted only when it's still the recorded copy; otherwise it's kept, and named.
-    if (entry?.copy === undefined || !isCopy(lstatOf(old.path), entry.copy)) return { copy, kept: old.path };
-    rmSync(old.path, { recursive: true, force: true });
+    if (entry?.copy === undefined || !removeIfOurs(old.path, entry.copy)) return { copy, kept: old.path };
     return { copy };
   } finally {
-    rmSync(tmp, { recursive: true, force: true });
+    removeIfOurs(tmp, copy);
+    // The staging folder goes when it's empty (rmdir removes only an empty folder), and only while it's the one made here.
+    if (isCopy(lstatOf(stagingDir), staging.id)) {
+      try {
+        rmdirSync(stagingDir);
+      } catch {
+        // not empty: a kept copy is named in the result
+      }
+    }
   }
 }
 
@@ -340,7 +395,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
     const text = s.format(ctx.face === 'cli' ? w.held_cli : w.held, { name: req.name, version, reasons: reasons(s, flags), confirm, flags: JSON.stringify(kinds(flags)), command: acceptCommand(s, req.name, target) });
     return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held' };
   }
-  const written = writeSkill(ctx, dest, to.files, existing);
+  const written = writeSkill(dest, to.files, existing);
   const entry = record(ctx, lock, dest, { name: req.name, target }, to, req.policy ?? existing?.policy, existing?.accepted ?? [], written.copy);
   const w = s.word('install');
   const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + keptLine(s, req.name, written.kept) + '\n' + s.format(w.live, { name: req.name });
@@ -398,7 +453,7 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   if (to.fingerprint !== t.fingerprint) throw conflict();
   const flags = gate(existing ? await installedSide(catalog, existing) : null, to).risk_flags;
   if (!sameSet(req.flags, kinds(flags))) throw conflict();
-  const written = writeSkill(ctx, dest, to.files, existing);
+  const written = writeSkill(dest, to.files, existing);
   const entry = record(ctx, lock, dest, { name: req.name, target: t.target }, to, existing?.policy, [...(existing?.accepted ?? []), { version: to.version, flags: kinds(flags) }], written.copy);
   const text =
     (existing
@@ -507,7 +562,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     // A folder that changed while it was being written is that skill's refused line; the other skills go on.
     let written: ReturnType<typeof writeSkill>;
     try {
-      written = writeSkill(ctx, dest, to.files, e);
+      written = writeSkill(dest, to.files, e);
     } catch (err) {
       if (!(err instanceof CatalogError)) throw err;
       lines.push(refusedTarget(s, at, err));

@@ -32,7 +32,7 @@ export type LockEntry = {
   copy?: FolderId;
 };
 
-export type FolderId = { dev: number; ino: number };
+export type FolderId = { dev: number; ino: number; birth?: number };
 
 export type Lock = { skills: Record<string, LockEntry> };
 export type Config = { update_policy?: Policy; [key: string]: unknown };
@@ -57,7 +57,8 @@ function entryWhy(e: unknown): Why | undefined {
   if (!isObject(e)) return 'wrong_shape';
   const strings = ['name', 'fingerprint', 'publisher', 'path', 'installed_at', 'catalog'].every((k) => typeof e[k] === 'string');
   const accepted = Array.isArray(e['accepted']) && e['accepted'].every((a) => isObject(a) && isCount(a['version']) && isStrings(a['flags']));
-  const copy = e['copy'] === undefined || (isObject(e['copy']) && [e['copy']['dev'], e['copy']['ino']].every((n) => Number.isSafeInteger(n) && (n as number) >= 0));
+  const c = e['copy'];
+  const copy = c === undefined || (isObject(c) && [c['dev'], c['ino']].every((n) => Number.isSafeInteger(n) && (n as number) >= 0) && (c['birth'] === undefined || (typeof c['birth'] === 'number' && Number.isFinite(c['birth']) && c['birth'] > 0)));
   if (!strings || !TARGETS.includes(e['target'] as string) || !isCount(e['version']) || !accepted || !copy) return 'wrong_shape';
   return policyWhy(e['policy']);
 }

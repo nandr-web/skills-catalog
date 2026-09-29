@@ -68,7 +68,9 @@ const tree = (dir: string, rel = ''): Record<string, string> => {
   return out;
 };
 const lockOf = (p: Place) => readLock(p.home).skills;
-const nothingStaged = (p: Place) => !existsSync(join(p.home, 'staging')) || readdirSync(join(p.home, 'staging')).length === 0;
+// Staging sits beside each target's skills folder (.claude/.skills-catalog-staging) and is gone, or empty, after a call.
+const stagingDirs = (p: Place) => [join(p.osHome, '.claude', '.skills-catalog-staging'), join(p.dir, 'project', '.claude', '.skills-catalog-staging')];
+const nothingStaged = (p: Place) => stagingDirs(p).every((d) => !existsSync(d) || readdirSync(d).length === 0);
 
 const fingerprintOf = (files: File[]) => fingerprint(files.map((f) => ({ path: f.path, mode: (f.mode ?? '0644') as Mode, sha256: sha256Hex(Buffer.from(f.text)) })));
 
@@ -584,7 +586,7 @@ describe('a project folder replaced by a link to someone else\'s folder (the sec
 describe('replacing an installed copy deletes only the copy the lock recorded (contract §4.5)', () => {
   const idOf = (path: string) => {
     const s = lstatSync(path);
-    return { dev: s.dev, ino: s.ino };
+    return s.birthtimeMs ? { dev: s.dev, ino: s.ino, birth: s.birthtimeMs } : { dev: s.dev, ino: s.ino };
   };
   const kept = (text: string) => /"staging":"([^"]+)"|was kept at (\S+?):/.exec(text);
 
@@ -598,6 +600,8 @@ describe('replacing an installed copy deletes only the copy the lock recorded (c
     await publish(p, 'alpha', plain('alpha', 'Second.\n'));
     await update(ctx, {});
     expect(lockOf(p)[dest]!.copy).toEqual(idOf(dest));
+    // Staging sits beside the skills folder, on its volume, and is gone once the call is done.
+    expect(existsSync(join(p.osHome, '.claude', '.skills-catalog-staging'))).toBe(false);
     expect(nothingStaged(p)).toBe(true);
   });
 
@@ -636,6 +640,7 @@ describe('replacing an installed copy deletes only the copy the lock recorded (c
     const r = await update(ctx, {});
     const at = kept(r.text);
     const staging = (at?.[1] ?? at?.[2])!;
+    expect(staging.startsWith(join(p.osHome, '.claude', '.skills-catalog-staging') + '/')).toBe(true);
     expect(readFileSync(join(staging, 'SKILL.md'), 'utf8')).toBe(skillMd('alpha', 'The alpha skill.'));
     expect(readFileSync(join(dest, 'SKILL.md'), 'utf8')).toContain('Second.');
     expect(lockOf(p)[dest]).toMatchObject({ version: 2, copy: idOf(dest) });
