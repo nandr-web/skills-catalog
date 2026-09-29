@@ -1,37 +1,9 @@
 // Setup's edits to the person's assistant files, by splicing text (setup build notes §2 and its byte pins): a member or
 // item goes last in its container, laid out as JSON.stringify at the container's indent step with the file's own line
 // ending; every byte outside the spliced span stays; removing what was inserted gives the file back byte for byte.
-import { loadGolden } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
-import { scanJson, type JsonContainer, type JsonNode } from '../src/machine/json-text.ts';
 import { appendItem, freshText, insertMember, removeItem, removeMember, replaceValue } from '../src/machine/json-splice.ts';
-
-const golden = loadGolden('setup.yaml').setup as Record<string, any>;
-// The golden's placeholders, filled with fixed values.
-const FILL: [string, string][] = [['<node>', '/opt/node/bin/node'], ['<script>', '/opt/pkg/cli.ts'], ['<id>', '0123456789abcdef0123456789abcdef'], ['$H', '/h'], ['$A', '/a'], ['$M', '/m']];
-const LINE = 'the hook line';
-const fill = (s: string) => FILL.reduce((t, [k, v]) => t.split(k).join(v), s).split('<line>').join(LINE);
-// A golden file: {text, crlf?, final_newline?}, or plain text.
-const fileOf = (f: string | { text: string; crlf?: boolean; final_newline?: boolean }) => {
-  const g = typeof f === 'string' ? { text: f } : f;
-  let t = fill(g.text);
-  if (g.final_newline === false) t = t.replace(/\n$/, '');
-  return g.crlf ? t.replace(/\n/g, '\r\n') : t;
-};
-const MCP_ENTRY = JSON.parse(fill(golden.mcp_entry));
-const HOOK_GROUP = { hooks: [{ type: 'command', command: LINE, timeout: 10 }] };
-const RULES = golden.allow_rules as string[];
-
-const everything = () => true;
-const at = (text: string, ...keys: string[]): JsonContainer => {
-  let n: JsonNode = scanJson(text, everything);
-  for (const k of keys) {
-    if (n.kind !== 'object') throw new Error(`no ${k}`);
-    n = n.members.find((m) => m.key === k)!.value;
-  }
-  if (n.kind !== 'object' && n.kind !== 'array') throw new Error('not a container');
-  return n;
-};
+import { at, fileOf, golden, HOOK_GROUP, LINE, MCP_ENTRY, RULES } from './setup-golden.ts';
 
 describe('setup\'s edits by splicing (golden setup.yaml)', () => {
   it('a fresh file is the pinned layout: 2 spaces, LF, a final LF', () => {
