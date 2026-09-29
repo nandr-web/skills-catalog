@@ -26,7 +26,7 @@ const MUTATIONS = [
   // test that calls 20 tools and closes at once stays, for a catalog whose storage waits (the hosted one).
   ['operations.ts', 'a catalog that failed to open is never tried again', '        opened = undefined;\n', ''],
   // the words an assistant reads
-  ['operations.ts', 'a bug\'s traceback reaches the assistant', ": renderError(words, err), target: NONE, result: log.error(err.code) };", ": (err.code === 'internal_error' && e instanceof Error ? String(e.stack) : renderError(surface, err)), target: NONE, result: log.error(err.code) };"],
+  ['operations.ts', 'a bug\'s traceback reaches the assistant', ": renderError(words, err), target: NONE, result: log.error(err.code) };", ": (err.code === 'internal_error' && e instanceof Error ? String(e.stack) : renderError(words, err)), target: NONE, result: log.error(err.code) };"],
   ['operations.ts', 'errors don\'t say who you act as', 'return { text: settings.developer ?', 'return { text: settings.developer && !isError ?'],
   ['operations.ts', 'the acting line is data, not the words', "s.format(s.word('acting_as'), { developer })", '`acting_as: ${developer}`'],
   ['operations.ts', 'a SKILLS_AS that isn\'t a developer name is ignored', 'if (settings.developerInvalid) throw', 'if (false) throw'],
@@ -54,7 +54,7 @@ const MUTATIONS = [
   ['activity.ts', 'the target comes before the result (a long one shifts the columns)', '${a.result.padEnd(resultWidth)}  ${a.target}', '${a.target.padEnd(26)}  ${a.result}'],
   ['settings.ts', 'SKILLS_ACTIVITY_LOG is ignored', "resolve(env['SKILLS_ACTIVITY_LOG'] || join(home, 'activity.log'))", "resolve(join(home, 'activity.log'))"],
   // publishing a folder over MCP (the MCP-level tests in publish.test.ts)
-  ['mcp/server.ts', 'the MCP server asks as the CLI (an input only a person may give gets through)', "contextFor(o.settings, surface, 'mcp', o.now)", "contextFor(o.settings, surface, 'cli', o.now)"],
+  ['mcp/server.ts', 'the MCP server asks as the CLI (an input only a person may give gets through)', "contextFor(o.settings, words, 'mcp', o.now)", "contextFor(o.settings, words, 'cli', o.now)"],
   ['operations.ts', 'no developer name on a local catalog says to run login', "const local = err.code === 'unauthenticated' && settings.catalog.startsWith('file:');", 'const local = false;'],
   // the folder is read as it was checked (publish-folder.test.ts). Taking out only O_NOFOLLOW is masked by the inode
   // check, and only the inode check by O_NOFOLLOW for a link: the "another regular file" and "hard link" swaps catch the

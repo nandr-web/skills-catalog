@@ -17,7 +17,7 @@ if (dir.startsWith(realpathSync(homedir()) + sep)) {
   throw new Error(`refusing ${dir}: it is under your home folder`);
 }
 
-const surface = Words.load();
+const words = Words.load();
 const ana = actAs('ana');
 const bob = actAs('bob');
 type File = { path: string; mode: string; content_base64: string };
@@ -58,7 +58,7 @@ const refused = async (fn: () => Promise<unknown>) => {
     show('(it went through, which it should not have)');
   } catch (e) {
     if (!(e instanceof CatalogError)) throw e;
-    show(renderError(surface, e));
+    show(renderError(words, e));
   }
 };
 
@@ -88,27 +88,27 @@ try {
 
   const q1 = 'changelog for a release';
   step('bob', `searches "${q1}"`);
-  show(renderSearch(surface, await catalog.search({ query: q1 }), { query: q1 }));
+  show(renderSearch(words, await catalog.search({ query: q1 }), { query: q1 }));
 
   step('bob', 'reads release-note-draft');
-  show(renderRead(surface, await catalog.read({ name: 'release-note-draft' }), randomIds));
+  show(renderRead(words, await catalog.read({ name: 'release-note-draft' }), randomIds));
 
   step('ana', 'publishes version 2, which adds a script');
   const v2 = await catalog.publish({ name: 'release-note-draft', files: releaseNotesV2, message: 'add a script that lists merged PRs' }, ana);
   show(`published ${v2.name} v${v2.version}; risk flags: ${v2.risk_flags.map((f) => `${f.kind} (${f.path})`).join(', ') || 'none'}`);
 
   step('bob', 'looks at the history');
-  show(renderVersions(surface, await catalog.versions({ name: 'release-note-draft' })));
+  show(renderVersions(words, await catalog.versions({ name: 'release-note-draft' })));
 
   step('bob', 'compares version 1 with version 2');
-  show(renderDiff(surface, await catalog.diff({ name: 'release-note-draft', from: 1, to: 2 }), randomIds));
+  show(renderDiff(words, await catalog.diff({ name: 'release-note-draft', from: 1, to: 2 }), randomIds));
 
   step('bob', 'tries to publish over release-note-draft (only ana, who published it first, may)');
   await refused(() => catalog.publish({ name: 'release-note-draft', files: releaseNotesV1 }, bob));
 
   const q2 = 'graphql schema';
   step('bob', `searches "${q2}" (nothing in the catalog is about GraphQL)`);
-  show(renderSearch(surface, await catalog.search({ query: q2 }), { query: q2 }));
+  show(renderSearch(words, await catalog.search({ query: q2 }), { query: q2 }));
 
   step('bob', 'mistypes a name: relase-note-draft');
   await refused(() => catalog.read({ name: 'relase-note-draft' }));

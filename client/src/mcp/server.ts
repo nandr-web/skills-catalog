@@ -33,10 +33,10 @@ const failure = (id: string | number | null, code: number, message: string) => (
 export type ServerOptions = { settings: Settings; version: string; words?: Words; now?: () => Date };
 
 export function createMcpServer(o: ServerOptions) {
-  const surface = o.words ?? Words.load();
-  const { ctx, close } = contextFor(o.settings, surface, 'mcp', o.now);
+  const words = o.words ?? Words.load();
+  const { ctx, close } = contextFor(o.settings, words, 'mcp', o.now);
   const tools = new Map(
-    surface
+    words
       .toolDefs()
       .filter((d) => RUNS[d.op])
       .map((d) => [d.name, d]),
@@ -55,11 +55,11 @@ export function createMcpServer(o: ServerOptions) {
       case 'initialize': {
         const asked = isObject(params) ? params['protocolVersion'] : undefined;
         const protocolVersion = PROTOCOL_VERSIONS.find((v) => v === asked) ?? PROTOCOL_VERSIONS[0];
-        const instructions = surface.instructions;
+        const instructions = words.instructions;
         return {
           protocolVersion,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: surface.serverName, version: o.version },
+          serverInfo: { name: words.serverName, version: o.version },
           ...(instructions ? { instructions } : {}),
         };
       }
