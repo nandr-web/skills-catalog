@@ -20,6 +20,7 @@ import {
   foldKey,
   flagText,
   RESERVED_NAMES_FILE,
+  CASE_FOLDING_FILE,
 } from '../src/skill-tree/index.ts';
 import { GOLDEN, catalogNameOf, filesOf, generated, historyVersion, loadGolden, rawFilesOf, type RawFile } from './golden.ts';
 
@@ -140,14 +141,26 @@ describe('hostile file lists are refused (golden/skills.yaml hostile, the raw re
   it('the fold is full Unicode case folding, over every code point', () => {
     // Idempotent everywhere; a character, its upper case and its lower case fold alike, except the one character
     // Unicode's full folding treats specially (dotless ı, whose upper case is I). The comparison uses the runtime's own
-    // case tables, so it covers the characters this runtime's Unicode knows: an older Node (24) doesn't know the newest
-    // letters, and its path rules refuse them anyway (unassigned counts as an invisible character), so the fold never
-    // differs between two machines on a path either accepts.
+    // case tables. When the runtime's Unicode is the table's, every assigned code point is compared. When it isn't
+    // (Node's ICU moves on its own schedule, per build), a code point the table knows nothing about (neither it nor its
+    // runtime upper or lower case is in the table) is a letter of the other Unicode version and is skipped; a misfold
+    // of any letter the table does know still fails.
+    const table = readFileSync(CASE_FOLDING_FILE, 'utf8');
+    const tableUnicode = /^# Unicode (\d+\.\d+)\./m.exec(table)?.[1];
+    expect(tableUnicode).toMatch(/^\d+\.\d+$/);
+    const sameUnicode = process.versions.unicode === tableUnicode;
+    const known = new Set<number>();
+    for (const line of table.split('\n')) {
+      if (line === '' || line.startsWith('#')) continue;
+      for (const h of line.split(' ')) known.add(parseInt(h, 16));
+    }
+    const inTable = (s: string) => [...s].some((ch) => known.has(ch.codePointAt(0)!));
     const differs: number[] = [];
     for (let cp = 0; cp < 0x110000; cp++) {
       if (cp >= 0xd800 && cp <= 0xdfff) continue;
       const c = String.fromCodePoint(cp);
       if (/\p{Cn}/u.test(c)) continue;
+      if (!sameUnicode && !inTable(c) && !inTable(c.toUpperCase()) && !inTable(c.toLowerCase())) continue;
       const f = foldKey(c);
       if (foldKey(f) !== f || foldKey(c.toUpperCase()) !== f || foldKey(c.toLowerCase()) !== f) differs.push(cp);
     }
