@@ -9,7 +9,7 @@ import { runProcesses } from '../src/check.ts';
 import { machineFor } from '../src/machine.ts';
 import { testPid, watchParent } from '../src/parent-watch.ts';
 import { sandboxBase } from '../src/sandbox.ts';
-import { cleanup, machine, qaDetached, qaOrphaned, type TestMachine } from './machine.ts';
+import { cleanup, machine, qaDetached, qaOrphaned, stopQaGroup, type TestMachine } from './machine.ts';
 
 const alive = (pid: number) => {
   try {
@@ -76,8 +76,11 @@ afterEach(cleanup);
 
 describe('a qa command and the test that started it', () => {
   it('left without its test, it ends itself', { timeout: 20_000 }, async () => {
-    const qa = qaOrphaned(machine(), LONG);
+    const m = machine();
+    const qa = qaOrphaned(m, LONG);
+    expect(stopQaGroup(qa, m.dir, { signal: () => {} })).toBe(true);   // its real command line names this test's machine
     expect(await until(() => !alive(qa), 15_000)).toBe(true);
+    expect(stopQaGroup(qa, m.dir, { signal: () => {} })).toBe(false);   // gone: nothing to signal
   });
 
   it('while its test lives, it runs on (the watch fires only on a change); stopped, it stops its run', { timeout: 30_000 }, async () => {
@@ -94,5 +97,24 @@ describe('a qa command and the test that started it', () => {
     qa.kill('SIGTERM');
     await exited;
     expect(runProcesses(ids[0]!)).toEqual([]);
+  });
+});
+
+describe('stopping an orphaned qa\'s group when its test finishes', () => {
+  const dir = '/tmp/qa-test-AbC123';
+  const stop = (command: string | undefined) => {
+    const sent: number[] = [];
+    const done = stopQaGroup(4242, dir, { commandOf: () => command, signal: (pid) => sent.push(pid) });
+    return { done, sent };
+  };
+
+  it('signals the group only while its leader is still the qa command this test started on its own machine', () => {
+    expect(stop(`/usr/local/bin/node /x/qa/src/cli.ts run --fake-machine ${dir} -- node -e 1`)).toEqual({ done: true, sent: [-4242] });
+  });
+
+  it('a leader that has exited, or a number that is someone else\'s by now, gets no signal', () => {
+    expect(stop(undefined)).toEqual({ done: false, sent: [] });   // gone
+    expect(stop('-zsh')).toEqual({ done: false, sent: [] });   // the number reused by one of the person's own shells
+    expect(stop(`/usr/local/bin/node /x/qa/src/cli.ts run --fake-machine ${dir}-other -- node -e 1`)).toEqual({ done: false, sent: [] });   // another test's
   });
 });

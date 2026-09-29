@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { onTestFinished } from 'vitest';
-import { runProcesses } from '../src/check.ts';
+import { PS, runProcesses } from '../src/check.ts';
 import { fakeMachine, type Machine } from '../src/machine.ts';
 import { RUN_ID } from '../src/safe-delete.ts';
 import { sandboxBase } from '../src/sandbox.ts';
@@ -109,8 +109,24 @@ export function qaOrphaned(m: TestMachine, a: string[]): number {
   const start = `const c = require('child_process').spawn(process.execPath, ${JSON.stringify([CLI, ...args(m, a)])}, { detached: true, stdio: 'ignore', env: { ...process.env, QA_TEST_PID: String(process.pid) } }); console.log(c.pid); c.unref();`;
   const pid = Number(spawnSync(process.execPath, ['-e', start], { encoding: 'utf8', timeout: 30_000 }).stdout.trim());
   if (!(pid > 0)) throw new Error('the stand-in parent never said the pid of qa');
-  onTestFinished(() => kill(-pid));
+  onTestFinished(() => { stopQaGroup(pid, m.dir); });
   return pid;
+}
+
+/** A process's command line, by the system's ps; undefined once it's gone. */
+const commandOf = (pid: number): string | undefined => {
+  const r = spawnSync(PS, ['-ww', '-o', 'command=', '-p', String(pid)], { encoding: 'utf8' });
+  return r.status === 0 && r.stdout.trim() ? r.stdout.trim() : undefined;
+};
+
+/** Kills the group of a qa command line a test started on its own machine `dir`, only while its leader is still that
+ *  command (its command line names that machine), looked at right before the signal: a leader that exited long ago may
+ *  have left its number to someone else's program, maybe one of the person's own shells. Returns whether it signalled. */
+export function stopQaGroup(pid: number, dir: string, o: { commandOf?: (pid: number) => string | undefined; signal?: (pid: number) => void } = {}): boolean {
+  const command = (o.commandOf ?? commandOf)(pid);
+  if (command === undefined || !command.split(/\s+/).some((w, i, all) => w === dir && all[i - 1] === '--fake-machine')) return false;
+  (o.signal ?? kill)(-pid);
+  return true;
 }
 
 /** Only for the guard test: the qa command line in a test process without --fake-machine must refuse to start. */
