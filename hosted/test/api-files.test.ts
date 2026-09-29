@@ -18,7 +18,7 @@ function lookups(named: boolean, blob: Blob) {
   const asked: string[] = [];
   const p: FileLookups = {
     named: async (s) => (asked.push(`named ${s}`), named),
-    inspect: async (s) => (asked.push(`inspect ${s}`), blob),
+    glance: async (s) => (asked.push(`glance ${s}`), blob),
   };
   return { asked, p };
 }

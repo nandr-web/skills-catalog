@@ -1,10 +1,11 @@
-// A stored file as the commit, the upload links and the sweep see it (contract §1.1), one way for all three. Its bytes
+// A stored file as the commit, the upload links and the sweep see it (contract §1.1), one way for all three (the files
+// route's look, glance, reads only its head). Its bytes
 // must hash to its name: a file uploaded without the checksum S3 verifies, or with other bytes, can never be committed.
 // Its age is the later of its upload and its last claim (the `claimed` tag); the sweep marks a file `deleting` before
 // it deletes it. Tags are read and written as a whole set (a put replaces them all), so nothing assumes a tag survived.
 
 import { createHash } from 'node:crypto';
-import { GetObjectCommand, GetObjectTaggingCommand, PutObjectTaggingCommand, type S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, GetObjectTaggingCommand, HeadObjectCommand, PutObjectTaggingCommand, type HeadObjectCommandOutput, type S3Client } from '@aws-sdk/client-s3';
 import { blobKey, type Place } from './place.ts';
 
 const HOUR = 3_600_000;
@@ -48,6 +49,21 @@ export async function inspect(s3: S3Client, place: Place, sha256: string): Promi
   }
   const matches = createHash('sha256').update(bytes).digest('hex') === sha256;
   return { kind: 'stored', matches, uploaded, tags: await readTags(s3, place, sha256) };
+}
+
+/** The file named `sha256` as the files route sees it, never reading its bytes: a head with S3's checksum asked for, and
+ *  its tags. S3 gives the SHA-256 it checked at the upload (the upload link signs it); a different one is another file.
+ *  None given (a stand-in that keeps no checksums) trusts the link's signed checksum; the commit's check is inspect's. */
+export async function glance(s3: S3Client, place: Place, sha256: string): Promise<Blob> {
+  let r: HeadObjectCommandOutput;
+  try {
+    r = await s3.send(new HeadObjectCommand({ Bucket: place.bucket, Key: blobKey(sha256), ChecksumMode: 'ENABLED' }));
+  } catch (e) {
+    if (notThere(e)) return { kind: 'absent' };
+    throw e;
+  }
+  const matches = r.ChecksumSHA256 === undefined || r.ChecksumSHA256 === Buffer.from(sha256, 'hex').toString('base64');
+  return { kind: 'stored', matches, uploaded: r.LastModified ?? new Date(0), tags: await readTags(s3, place, sha256) };
 }
 
 /** How old a stored file is: from the later of its upload and its last claim. */
