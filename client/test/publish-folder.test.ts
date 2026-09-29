@@ -2,7 +2,7 @@
 // published before it is. Step 1 lists what it would send and skip, stores nothing and gives a confirm tied to the
 // folder's fingerprint; step 2 with that confirm publishes, unless the folder or the catalog changed in between. The
 // folder is read as regular files only (golden/skills.yaml hostile), and the ignore list is skipped and reported.
-import { chmodSync, linkSync, mkdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, linkSync, mkdirSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { CatalogError, Surface, actAs } from '@skills-catalog/core';
@@ -45,6 +45,11 @@ const refusal = async (fn: () => Promise<unknown>): Promise<CatalogError> => {
 };
 
 const confirmOf = (text: string) => /confirm "([^"]+)"/.exec(text)?.[1];
+// Step 2's values, as the preview gives them.
+const step2Of = (text: string) => {
+  const m = /confirm "([^"]*)", name "([^"]*)", version (\d+), files (\d+) and flags (\[[^\]]*\])/.exec(text)!;
+  return { confirm: m[1]!, name: m[2]!, version: Number(m[3]), files: Number(m[4]), flags: JSON.parse(m[5]!) as string[] };
+};
 const versionsOf = async (p: Place, name: string) => {
   const c = await open(p);
   try {
@@ -74,13 +79,13 @@ describe('publish a folder, in two steps (contract §3)', () => {
     expect(preview.text).toBe(
       S.format(S.word('publish.preview'), {
         name: 'ignore-list', version: 1, change: S.word('publish.new_skill'), n_send: 1, send: '"SKILL.md"', n_skip: 5,
-        skip: ['".DS_Store"', '".env"', '".git/config"', '"id_fake"', '"key.pem"'].join(', '), review: '', folder: dir, confirm,
+        skip: ['".DS_Store"', '".env"', '".git/"', '"id_fake"', '"key.pem"'].join(', '), review: '', folder: JSON.stringify(dir), confirm, flags: '[]',
       }),
     );
     expect(preview.result).toBe(S.doc.log.result.publish.preview);
     expect(await versionsOf(p, 'ignore-list')).toBe(0);
 
-    const done = await publish(ctx, { folder: dir, message: 'First version.', confirm });
+    const done = await publish(ctx, { folder: dir, message: 'First version.', ...step2Of(preview.text) });
     expect(done.text).toBe(S.format(S.word('publish.published'), { name: 'ignore-list', version: 1 }));
     expect(done.target).toBe('ignore-list v1');
     const c = await open(p);
@@ -94,23 +99,23 @@ describe('publish a folder, in two steps (contract §3)', () => {
     for (const t of [preview.text, done.text]) expect(t).not.toContain(SENTINEL);
     // The same folder again: nothing new.
     const again = await publish(ctx, { folder: dir });
-    expect(again.text).toBe(S.format(S.word('publish.identical'), { folder: dir, name: 'ignore-list', latest: 1 }));
+    expect(again.text).toBe(S.format(S.word('publish.identical'), { folder: JSON.stringify(dir), name: 'ignore-list', latest: 1 }));
   });
 
   it('refuses at step 2 when the folder changed since the preview, or another version landed: nothing stored', async () => {
     const p = place();
     const dir = folder(p, 'moving', { 'SKILL.md': skillMd('moving', 'Changes between the steps.') });
     const ctx = ctxFor(p, 'ana');
-    const confirm = confirmOf((await publish(ctx, { folder: dir })).text)!;
+    const step2 = step2Of((await publish(ctx, { folder: dir })).text);
     writeFileSync(join(dir, 'notes.md'), 'added after the preview\n');
-    expect((await refusal(() => publish(ctx, { folder: dir, confirm }))).toJSON()).toMatchObject({ code: 'conflict', name: 'moving', folder: dir });
+    expect((await refusal(() => publish(ctx, { folder: dir, ...step2 }))).toJSON()).toMatchObject({ code: 'conflict', name: 'moving', folder: realpathSync(dir) });
     expect(await versionsOf(p, 'moving')).toBe(0);
 
-    const confirm2 = confirmOf((await publish(ctx, { folder: dir })).text)!;
+    const step2b = step2Of((await publish(ctx, { folder: dir })).text);
     const c = await open(p);
     await c.publish(request('moving', [{ path: 'SKILL.md', text: skillMd('moving', 'Published in between.') }]), actAs('ana'));
     c.close();
-    const e = await refusal(() => publish(ctx, { folder: dir, confirm: confirm2 }));
+    const e = await refusal(() => publish(ctx, { folder: dir, ...step2b }));
     expect(e.toJSON()).toMatchObject({ code: 'conflict', name: 'moving', latest: 1 });
     expect(e.data['folder']).toBeUndefined();
     expect(await versionsOf(p, 'moving')).toBe(1);

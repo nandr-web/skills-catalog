@@ -39,12 +39,13 @@ function folder(p: Place, name: string, body = 'Body.\n', extra: Record<string, 
   return dir;
 }
 
-/** The confirm value in a preview: the surface's words end with `confirm "<value>"`. */
-function confirmIn(text: string): string {
-  expect(S.word('publish').preview).toContain('confirm "{confirm}"');
-  const m = /confirm "([^"]+)"/.exec(text);
-  if (!m) throw new Error(`no confirm value in: ${text.slice(0, 300)}`);
-  return m[1]!;
+/** Step 2's values in a preview: the surface's words end with `confirm "<value>", name "<name>", version <n>, files <n>
+ *  and flags [<kinds>]`. */
+function step2In(text: string) {
+  expect(S.word('publish').preview).toContain('confirm "{confirm}", name "{name}", version {version}, files {n_send} and flags {flags}');
+  const m = /confirm "([^"]*)", name "([^"]*)", version (\d+), files (\d+) and flags (\[[^\]]*\])/.exec(text);
+  if (!m) throw new Error(`no step-2 values in: ${text.slice(0, 300)}`);
+  return { confirm: m[1]!, name: m[2]!, version: Number(m[3]), files: Number(m[4]), flags: JSON.parse(m[5]!) as string[] };
 }
 
 async function versionsOf(c: Catalog, name: string): Promise<number[]> {
@@ -73,22 +74,22 @@ async function setup(env: Record<string, string> = { SKILLS_AS: 'dev2' }) {
 }
 
 describe('publish_skill_to_catalog over MCP', () => {
-  it('is served with folder, message and confirm; the person-only override (allow_suspected_secrets) is never in its schema', async () => {
+  it('is served with folder, message, confirm and step 2\'s values; the person-only override (allow_suspected_secrets) is never in its schema', async () => {
     const { s } = await setup();
     const tool = ((await s.send('tools/list')).result.tools as { name: string; inputSchema: { properties: Record<string, unknown> } }[]).find((t) => t.name === P);
     expect(tool, 'the publish tool is listed').toBeDefined();
-    expect(Object.keys(tool!.inputSchema.properties).sort()).toEqual(['confirm', 'folder', 'message']);
+    expect(Object.keys(tool!.inputSchema.properties).sort()).toEqual(['confirm', 'files', 'flags', 'folder', 'message', 'name', 'version']);
   });
 
   it('a preview stores nothing and gives a confirm; the confirm publishes exactly the folder\'s files, as the acting developer; the log says so', async () => {
     const { p, c, s } = await setup();
     const dir = folder(p, 'weekly-report-writer');
-    const preview = await s.call(P, { folder: dir });
+    const preview = await s.call(P, { folder: dir, message: 'First version.' });
     expect(preview.isError, preview.content[0]!.text).toBeUndefined();
-    expect(preview.content[0]!.text).toContain(dir);
+    expect(preview.content[0]!.text).toContain(JSON.stringify(dir));
     expect(await versionsOf(c, 'weekly-report-writer')).toEqual([]);   // nothing stored by a preview
 
-    const done = await s.call(P, { folder: dir, confirm: confirmIn(preview.content[0]!.text), message: 'First version.' });
+    const done = await s.call(P, { folder: dir, ...step2In(preview.content[0]!.text), message: 'First version.' });
     expect(done.isError, done.content[0]!.text).toBeUndefined();
     expect(await versionsOf(c, 'weekly-report-writer')).toEqual([1]);
     expect(await stored(c, 'weekly-report-writer', 1)).toEqual({
@@ -112,7 +113,7 @@ describe('publish_skill_to_catalog over MCP', () => {
     const preview = await s.call(P, { folder: dir });
     expect(preview.content[0]!.text).not.toContain(sentinel);
     if (!preview.isError) {
-      await s.call(P, { folder: dir, confirm: confirmIn(preview.content[0]!.text) });
+      await s.call(P, { folder: dir, ...step2In(preview.content[0]!.text) });
       for (const v of await versionsOf(c, 'link-holder')) {
         const files = await stored(c, 'link-holder', v);
         for (const f of IGNORED) expect(Object.keys(files), f).not.toContain(f);
@@ -124,12 +125,11 @@ describe('publish_skill_to_catalog over MCP', () => {
   it('a folder changed between the preview and the confirm is refused (preview again); nothing stored', async () => {
     const { p, c, s } = await setup();
     const dir = folder(p, 'changing-skill');
-    const confirm = confirmIn((await s.call(P, { folder: dir })).content[0]!.text);
+    const step2 = step2In((await s.call(P, { folder: dir })).content[0]!.text);
     writeFileSync(join(dir, 'SKILL.md'), skillMd('changing-skill', 'The changing-skill skill.', 'Edited after the preview.\n'));
-    const r = await s.call(P, { folder: dir, confirm });
+    const r = await s.call(P, { folder: dir, ...step2 });
     expect(r.isError).toBe(true);
-    expect(r.content[0]!.text).toMatch(/^conflict: /);
-    expect(r.content[0]!.text).toContain(dir);
+    expect(r.content[0]!.text.split('\n')[0]).toBe(S.word('errors').publish_conflict);   // then the acting line
     expect(await versionsOf(c, 'changing-skill')).toEqual([]);
   });
 
@@ -137,8 +137,8 @@ describe('publish_skill_to_catalog over MCP', () => {
     const { p, c, s } = await setup();
     const a = folder(p, 'skill-a');
     const b = folder(p, 'skill-b');
-    const confirmA = confirmIn((await s.call(P, { folder: a })).content[0]!.text);
-    const r = await s.call(P, { folder: b, confirm: confirmA });
+    const step2A = step2In((await s.call(P, { folder: a })).content[0]!.text);
+    const r = await s.call(P, { folder: b, ...step2A });
     expect(r.isError).toBe(true);
     expect(await versionsOf(c, 'skill-a')).toEqual([]);
     expect(await versionsOf(c, 'skill-b')).toEqual([]);
@@ -148,9 +148,9 @@ describe('publish_skill_to_catalog over MCP', () => {
     const { p, c, s } = await setup();
     await c.publish(request('racing-skill', [{ path: 'SKILL.md', text: skillMd('racing-skill', 'The racing-skill skill.') }]), actAs('dev2'));
     const dir = folder(p, 'racing-skill', 'The folder\'s version.\n');
-    const confirm = confirmIn((await s.call(P, { folder: dir })).content[0]!.text);
+    const step2 = step2In((await s.call(P, { folder: dir })).content[0]!.text);
     await c.publish(request('racing-skill', [{ path: 'SKILL.md', text: skillMd('racing-skill', 'The racing-skill skill.', 'Landed in between.\n') }]), actAs('dev2'));
-    const r = await s.call(P, { folder: dir, confirm });
+    const r = await s.call(P, { folder: dir, ...step2 });
     expect(r.isError).toBe(true);
     expect(r.content[0]!.text).toMatch(/^conflict: /);
     expect(await versionsOf(c, 'racing-skill')).toEqual([1, 2]);
@@ -197,7 +197,7 @@ describe('publish_skill_to_catalog over MCP', () => {
     const { p, c, s } = await setup();
     const dir = folder(p, 'steady-skill');
     const first = await s.call(P, { folder: dir });
-    await s.call(P, { folder: dir, confirm: confirmIn(first.content[0]!.text) });
+    await s.call(P, { folder: dir, ...step2In(first.content[0]!.text) });
     const again = await s.call(P, { folder: dir });
     expect(again.isError).toBeUndefined();
     expect(again.content[0]!.text).toMatch(/steady-skill/);

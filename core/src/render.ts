@@ -154,6 +154,13 @@ export function renderDiff(s: Surface, r: DiffResult, ids: Ids): string {
   return lines.join('\n');
 }
 
+// A path or name placed in a command the person is told to run (contract §5.2): bare when it's only letters, digits and
+// @ % + = : , . / _ - ; otherwise in POSIX single quotes, a ' inside written '\''. So it stays one argument, and nothing
+// in it runs.
+export function shellQuote(text: string): string {
+  return /^[A-Za-z0-9@%+=:,./_-]+$/.test(text) ? text : `'${text.replaceAll("'", "'\\''")}'`;
+}
+
 export function renderError(s: Surface, e: CatalogError): string {
   if (!s.guided) return JSON.stringify({ error: e.toJSON() });
   const w = s.word('errors');
@@ -218,7 +225,9 @@ export function renderError(s: Surface, e: CatalogError): string {
       return e.data['why'] === 'hosted_not_available' ? fill(w.forbidden_hosted, d) : fill(w.forbidden, d);
     case 'secret_suspected': {
       const kind = w.secret_kind?.[String(d['kind'])];
-      return kind === undefined ? asData(e.code, d) : fill(w.secret_suspected, { ...d, kind });
+      // Its words hold the command that allows the secret for one publish: the folder goes in it shell-quoted.
+      const folder = d['folder'] === undefined ? {} : { folder: shellQuote(String(d['folder'])) };
+      return kind === undefined ? asData(e.code, d) : fill(w.secret_suspected, { ...d, kind, ...folder });
     }
     case 'internal_error':
       return d['log'] === undefined ? fill(w.internal_error_no_log, d) : fill(w.internal_error, d);

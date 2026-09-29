@@ -8,7 +8,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const src = (f) => new URL(`../src/${f}`, import.meta.url);
+// A client file by its path under src/; a core file the client's tests cover as core:<path under core/src/>.
+const src = (f) => new URL(f.startsWith('core:') ? `../../core/src/${f.slice(5)}` : `../src/${f}`, import.meta.url);
 const MUTATIONS = [
   // the protocol
   ['mcp/server.ts', 'a notification gets a reply', "if (!('id' in msg)) return undefined;", "if (!('id' in msg)) return reply(0, {});"],
@@ -55,9 +56,31 @@ const MUTATIONS = [
   // publishing a folder over MCP (the MCP-level tests in publish.test.ts)
   ['mcp/server.ts', 'the MCP server asks as the CLI (an input only a person may give gets through)', "contextFor(o.settings, surface, 'mcp', o.now)", "contextFor(o.settings, surface, 'cli', o.now)"],
   ['operations.ts', 'no developer name on a local catalog says to run login', "const local = err.code === 'unauthenticated' && settings.catalog.startsWith('file:');", 'const local = false;'],
-  ['machine/publish-folder.ts', 'a link in the folder is followed to its target', "import { lstatSync, readdirSync, readFileSync, type Stats } from 'node:fs';", "import { statSync as lstatSync, readdirSync, readFileSync, type Stats } from 'node:fs';"],
-  ['machine/publish-folder.ts', 'the ignore list is sent', 'if (ignoredFile(e.name)) skipped.push(r);', 'if (false) skipped.push(r);'],
-  ['machine/publish-folder.ts', 'the confirm isn\'t tied to the folder and the skill', 'if (t.name !== name || t.fingerprint !== fp) throw', 'if (false) throw'],
+  // the folder is read as it was checked (publish-folder.test.ts). Taking out only O_NOFOLLOW is masked by the inode
+  // check, and only the inode check by O_NOFOLLOW for a link: the "another regular file" and "hard link" swaps catch the
+  // inode check on its own.
+  ['machine/publish-folder.ts', 'a link in the folder is followed to its target', 'const st = lstatSync(full);', 'const st = lstatSync(realpathSync(full));'],
+  ['machine/publish-folder.ts', 'the handle isn\'t checked against the file that was checked', 'if (!st.isFile() || st.nlink !== 1 || !same(st, checked)) notRegular(rel);', 'if (!st.isFile()) notRegular(rel);'],
+  ['machine/publish-folder.ts', 'a fifo swapped in blocks the read', 'fd = openSync(full, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);', 'fd = openSync(full, constants.O_RDONLY | constants.O_NOFOLLOW);'],
+  ['machine/publish-folder.ts', 'a folder swapped for a link is listed', "if (!now.isDirectory() || !same(now, checked)) notRegular(rel || '.');", "if (false) notRegular(rel || '.');"],
+  // the ignore list and the skipped list (golden hostile ignore-list, ignored-folders, skipped-cap)
+  ['machine/publish-folder.ts', 'the ignore list is sent', 'if (ignored(e.name)) {', 'if (false) {'],
+  ['machine/publish-folder.ts', 'an ignored folder is walked', 'if (ignored(e.name)) {', 'if (ignored(e.name) && !st.isDirectory()) {'],
+  ['machine/publish-folder.ts', 'the skipped list has no cap', 'skipped.slice(0, SKIPPED_SHOWN)', 'skipped.slice(0)'],
+  // step 2 (golden publish_steps and request_checks)
+  ['machine/publish-folder.ts', 'step 2\'s values without a confirm are ignored', 'if (STEP2.some((k) => req[k] !== undefined)) throw', 'if (false) throw'],
+  ['machine/publish-folder.ts', 'a malformed confirm is taken as one that changed', 'if (!CONFIRM_FORM.test(req.confirm)) throw', 'if (false) throw'],
+  ['machine/publish-folder.ts', 'the confirm isn\'t checked', 'if (given.length !== expected.length || !timingSafeEqual(given, expected)) throw', 'if (false) throw'],
+  ['machine/publish-folder.ts', 'the flags are compared as a list, not a set', 'const kinds = (flags: readonly string[]) => [...new Set(flags)].sort(byCodePoint);', 'const kinds = (flags: readonly string[]) => [...flags];'],
+  ['machine/publish-folder.ts', 'the confirm doesn\'t bind the message', 'b.latest, b.message, b.files', 'b.latest, null, b.files'],
+  ['machine/publish-folder.ts', 'the confirm binds the path as given, not the real path', 'real = realpathSync(req.folder);', 'real = req.folder;'],
+  ['machine/publish-folder.ts', 'a key with a wider mode is kept', '(st.mode & 0o777) === 0o600 && st.uid', '(st.mode & 0o700) === 0o600 && st.uid'],
+  ['machine/publish-folder.ts', 'a link in the key\'s place is written through', 'renameSync(tmp, path); // replaces', 'writeFileSync(path, key); unlinkSync(tmp); // replaces'],
+  // the person-only override: the face the caller gives, never a fixed one
+  ['machine/publish-folder.ts', 'publish always checks as the CLI (the override gets through MCP)', "validateInput<Input>('publish_skill_to_catalog', args, ctx.face)", "validateInput<Input>('publish_skill_to_catalog', args, 'cli')"],
+  ['machine/publish-folder.ts', 'publish always checks as MCP (the person\'s CLI override is refused)', "validateInput<Input>('publish_skill_to_catalog', args, ctx.face)", "validateInput<Input>('publish_skill_to_catalog', args, 'mcp')"],
+  // the core's words for a command the person runs (golden command_quoting)
+  ['core:render.ts', 'a folder in a command isn\'t shell-quoted', "{ folder: shellQuote(String(d['folder'])) }", "{ folder: String(d['folder']) }"],
 ];
 
 // A mutant is caught by its first failing test, so mutant runs stop there (--bail 1); the baseline runs everything.
