@@ -1,6 +1,6 @@
 // The before/after check (the QA plan §6.6): folders as well as files, in the places a run could write outside its
 // sandbox. Other live sessions write under ~/.claude all the time, so it looks only at entries a run could create: the user
-// skills folder, project and tmp folders named after this sandbox, this run's session envs, the product's default places,
+// skills folder, project, tmp and cache folders named after this sandbox, this run's session envs, the product's default places,
 // in ~/.claude.json and settings.json only the keys a run could add, and the run's processes and listening ports (every
 // process a run starts carries its QA_RUN_ID). Any difference fails the run. It only reads.
 import { spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
@@ -196,6 +196,7 @@ export function snapshot(w: Watch): Snapshot {
   for (const n of named(join(w.claudeDir, 'projects'))) walk(join(w.claudeDir, 'projects', n), out);
   for (const id of w.sessions) walk(join(w.claudeDir, 'session-env', id), out);
   for (const n of named(w.claudeTmp)) walk(join(w.claudeTmp, n), out);
+  for (const n of named(w.claudeCache)) walk(join(w.claudeCache, n), out);
   for (const p of w.productDefaults) walk(p, out);
   for (const file of ['claudeJson', 'settingsJson'] as const) {
     const data = readJson(w[file]);

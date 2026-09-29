@@ -92,6 +92,16 @@ const MUTATIONS = [
   ['test/machine.ts', 'a test\'s detached child outlives the test', 'onTestFinished(() => stopGroup(child));', ''],
   ['test/machine.ts', 'a test\'s child is never stopped', 'if (child.pid) signalGroup(child.pid, \'SIGKILL\', child);', ''],
   ['test/machine.ts', 'cleanup leaves a timed-out run\'s processes running', 'for (const d of made) for (const id of runsIn(d))', 'for (const d of []) for (const id of runsIn(d))'],
+  // MCP servers' logs in Claude Code's cache (the QA plan §3)
+  ['safe-delete.ts', 'the tripwire leaves the real Claude cache out', 'realClaudeTmp(), realClaudeCache(), join(canonical(tmpdir()), BASE_NAME)]', 'realClaudeTmp(), join(canonical(tmpdir()), BASE_NAME)]'],
+  ['leftovers.ts', 'the cache folder named after the run is left behind', 'm.roots.claudeTmp, m.roots.claudeCache];', 'm.roots.claudeTmp];'],
+  ['leftovers.ts', 'a linked log file is copied (the link followed)', 'constants.O_RDONLY | constants.O_NOFOLLOW', 'constants.O_RDONLY'],
+  ['leftovers.ts', 'a log folder that is a link is read', "if (!realDir(logs)) { out.skipped.push({ path: logs, why: 'not a real folder (a link is never followed): its logs not kept' }); continue; }", ''],
+  ['leftovers.ts', 'a cache folder from before the run has its logs copied', 'if (preexisting.has(folder) || !realDir(folder)) continue;', 'if (!realDir(folder)) continue;'],
+  ['teardown.ts', 'the logs are copied after their folder is removed', 'logs = keepMcpLogs(sb.root, o.machine, o.keepLogsIn, sb.preexisting);', 'removeRunLeftovers(sb.root, o.machine, { preexisting: sb.preexisting }); logs = keepMcpLogs(sb.root, o.machine, o.keepLogsIn, sb.preexisting);'],
+  ['check.ts', 'the check doesn\'t look in the cache', '  for (const n of named(w.claudeCache)) walk(join(w.claudeCache, n), out);\n', ''],
+  ['janitor.ts', 'the janitor doesn\'t report a cache folder whose run is gone', 'machine.roots.claudeTmp, machine.roots.claudeCache]) {', 'machine.roots.claudeTmp]) {'],
+  ['agent/runner.ts', 'the runner doesn\'t keep the servers\' logs', ", keepLogsIn: tracePath.replace(/\\.jsonl$/, '.mcp-logs') });", ' });'],
 ];
 
 // A mutant is caught by its first failing test, so mutant runs stop there (--bail 1); the baseline runs everything.

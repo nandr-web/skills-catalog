@@ -1,10 +1,11 @@
-// Teardown (the QA plan §6.4): runs on every ending. Kills each process group the run started, removes the run's own
-// leftovers (exact names, session ids from the run's own stream, never a folder that existed before the run), then the
-// sandbox itself, last, so an interrupted teardown leaves the run folder for the janitor (§6.5a).
+// Teardown (the QA plan §6.4): runs on every ending. Kills each process group the run started, keeps the MCP servers'
+// logs with the run's transcripts (when it has somewhere to keep them), removes the run's own leftovers (exact names,
+// session ids from the run's own stream, never a folder that existed before the run), then the sandbox itself, last,
+// so an interrupted teardown leaves the run folder for the janitor (§6.5a).
 import type { ChildProcess } from 'node:child_process';
 import { dirname } from 'node:path';
 import { exists, groupIsOurs } from './groups.ts';
-import { removeRunLeftovers, type Cleanup } from './leftovers.ts';
+import { keepMcpLogs, removeRunLeftovers, type Cleanup } from './leftovers.ts';
 import type { Machine } from './machine.ts';
 import { removeRun, verifyBase } from './safe-delete.ts';
 import type { Sandbox } from './sandbox.ts';
@@ -33,13 +34,27 @@ export async function killGroups(pgids: number[], graceMs = 2000, o: { leaderAli
 /** `sessions`: ids from the run's own stream, kept in memory by the runner (never read back from the sandbox);
  *  `sessionEnvsBefore`: the session-env folder's names before the assistant started; `processGroups`: the groups the
  *  run's programs lead; `leaders`: those programs, when the caller still has them (a leader still running holds its
- *  group's number). */
-export async function teardown(sb: Pick<Sandbox, 'root' | 'runId' | 'preexisting'>, o: { machine: Machine; sessions?: string[]; sessionEnvsBefore?: ReadonlySet<string>; processGroups?: number[]; leaders?: ChildProcess[] }): Promise<Cleanup> {
+ *  group's number); `keepLogsIn`: where the MCP servers' logs go before their cache folder is removed (beside the try's
+ *  transcript). */
+export async function teardown(sb: Pick<Sandbox, 'root' | 'runId' | 'preexisting'>, o: { machine: Machine; sessions?: string[]; sessionEnvsBefore?: ReadonlySet<string>; processGroups?: number[]; leaders?: ChildProcess[]; keepLogsIn?: string }): Promise<Cleanup> {
   const leaderAlive = (g: number) => (o.leaders ?? []).some((c) => c.pid === g && c.exitCode === null && c.signalCode === null);
   await killGroups(o.processGroups ?? [], 2000, { leaderAlive });
   const base = dirname(sb.root);
   verifyBase(base);
+  // Keeping the logs never stops the cleanup: if it fails, that's reported and the leftovers go all the same.
+  let logs: ReturnType<typeof keepMcpLogs> | undefined;
+  if (o.keepLogsIn) {
+    try {
+      logs = keepMcpLogs(sb.root, o.machine, o.keepLogsIn, sb.preexisting);
+    } catch (e) {
+      logs = { kept: [], skipped: [{ path: o.keepLogsIn, why: `the MCP servers' logs weren't kept: ${(e as Error).message}` }] };
+    }
+  }
   const out = removeRunLeftovers(sb.root, o.machine, { preexisting: sb.preexisting, sessions: o.sessions, sessionEnvsBefore: o.sessionEnvsBefore });
   out.removed.push(removeRun(base, sb.runId));
+  if (logs) {
+    out.kept = logs.kept;
+    out.skipped.push(...logs.skipped);
+  }
   return out;
 }

@@ -5,8 +5,8 @@
 //  - A run folder is named by a run id and must be a real directory directly in the base.
 //  - Outside the base: one exact name in one expected parent, which must itself be a real directory at its real path.
 //  - No link is followed: a link is removed, never its target (fs.rm removes links inside a folder, never their targets).
-//  - A test process (vitest) that asks to create or delete anything under the real home, the real Claude tmp folder or
-//    the real base fails before anything is looked at.
+//  - A test process (vitest) that asks to create or delete anything under the real home, the real Claude tmp folder, the
+//    real Claude cache or the real base fails before anything is looked at.
 import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync, unlinkSync } from 'node:fs';
 import { platform, tmpdir, userInfo } from 'node:os';
 import { basename, dirname, join, sep } from 'node:path';
@@ -22,6 +22,9 @@ export class UnsafeError extends Error {
 /** The real home, from the OS user record: `HOME` can point anywhere, this can't. */
 export const realHome = () => userInfo().homedir;
 export const realClaudeTmp = () => join(realpathSync.native('/tmp'), `claude-${userInfo().uid}`);
+/** Claude Code's cache, where MCP servers' logs go: ~/Library/Caches/claude-cli-nodejs on macOS, ~/.cache/claude-cli-nodejs
+ *  elsewhere (a run's assistant never gets XDG_CACHE_HOME: it isn't on the allow-list). */
+export const realClaudeCache = () => (platform() === 'darwin' ? join(realHome(), 'Library', 'Caches', 'claude-cli-nodejs') : join(realHome(), '.cache', 'claude-cli-nodejs'));
 /** A test process: vitest marks its workers, and the children they start inherit the mark. */
 export const inTestProcess = () => !!process.env.VITEST;
 
@@ -45,11 +48,15 @@ export function within(p: string, dir: string): boolean {
   return a === b || a.startsWith(b + sep);
 }
 
+/** The real places a test process never creates or deletes anything in. The cache sits under the real home today, and
+ *  is named on its own so it stays guarded wherever it moves. */
+export const realPlaces = () => [realHome(), realClaudeTmp(), realClaudeCache(), join(canonical(tmpdir()), BASE_NAME)];
+
 /** In a test process, refuse to create or delete anything under the real places (the QA plan §6.5a). */
 export function tripwire(path: string, what: 'create' | 'delete' = 'delete'): void {
   if (!inTestProcess()) return;
   const p = canonical(path);
-  for (const real of [realHome(), realClaudeTmp(), join(canonical(tmpdir()), BASE_NAME)]) {
+  for (const real of realPlaces()) {
     if (within(p, canonical(real))) throw new UnsafeError(`test tripwire: a test process asked to ${what} ${p}, under the real ${real} (the QA plan §6.5a); nothing done`);
   }
 }

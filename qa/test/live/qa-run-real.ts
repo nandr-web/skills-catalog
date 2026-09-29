@@ -7,12 +7,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compare, snapshot, watchOn } from '../../src/check.ts';
-import { realClaudeTmp, realHome } from '../../src/safe-delete.ts';
+import { realClaudeCache, realClaudeTmp, realHome } from '../../src/safe-delete.ts';
 import { sandboxBase } from '../../src/sandbox.ts';
 
 if (process.env.VITEST) { console.error('qa-run-real: run this by hand, never from a test process'); process.exit(2); }
 const home = realHome();
-const real = { tmp: tmpdir(), home, roots: { claudeDir: join(home, '.claude'), claudeTmp: realClaudeTmp() } };
+const real = { tmp: tmpdir(), home, roots: { claudeDir: join(home, '.claude'), claudeTmp: realClaudeTmp(), claudeCache: realClaudeCache() } };
 const every = watchOn(real, { sandboxRoot: sandboxBase(real.tmp) });   // its slug prefixes every qa run's leftover names
 const before = snapshot(every);
 const cli = fileURLToPath(new URL('../../src/cli.ts', import.meta.url));

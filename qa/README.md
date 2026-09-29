@@ -117,7 +117,7 @@ changed, leftover processes and open ports included (on Linux, the processes are
 - **Tests never use the real machine.** Every function that creates, checks or deletes takes a machine (its tmp folder,
   home and Claude Code's folders) explicitly. Only the command line picks the real one, and it refuses to in a test
   process; tests pass `--fake-machine <dir>`. A test process that asks to create or delete anything under the real home,
-  the real Claude tmp folder or the real sandbox base fails before anything is looked at.
+  the real Claude tmp folder, the real Claude cache or the real sandbox base fails before anything is looked at.
 - **No secrets reach a run.** Every process a run starts (the command, the assistant, the MCP servers) gets only an
   allow-listed environment (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `LANG`, `LC_*`, `TERM`,
   `SKILLS_*` (set by the sandbox, never passed from yours), `QA_*`); tokens and keys never pass. The assistant keeps the real `HOME`, where its login lives. Each assistant run
@@ -129,9 +129,10 @@ changed, leftover processes and open ports included (on Linux, the processes are
 - **One place deletes: `src/safe-delete.ts`.** Run folders only inside `<tmp>/skills-catalog-qa`, which must be a real
   directory you own, mode 0700, at its exact real path; each run folder is named by a run id
   (`20260929T001234Z-1a2b3c4d`) and holds a `run.json`. A link is removed, never followed.
-- **Outside the sandbox, only the run's own leftovers,** at exact paths built from its own sandbox: the project and tmp
-  folders Claude Code names after it, and session folders for the ids in the run's own stream, when they're UUIDs and
-  weren't there before the run. Nothing is globbed.
+- **Outside the sandbox, only the run's own leftovers,** at exact paths built from its own sandbox: the project, tmp and
+  cache folders Claude Code names after it, and session folders for the ids in the run's own stream, when they're UUIDs
+  and weren't there before the run. Nothing is globbed. The cache folder holds the MCP servers' logs: an agent run keeps
+  them beside the try's transcript (`traces/<try>.mcp-logs/`) before removing it, copying regular files only.
 - **The janitor never guesses.** A run whose process is alive, a folder without `run.json`, a leftover whose run folder is
   gone, a session folder named in a sandbox file: each is reported, never deleted.
 

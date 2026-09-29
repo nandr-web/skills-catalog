@@ -188,8 +188,9 @@ async function oneTry(a: {
     installDirsNew = readdirSync(sb.dirs.install).filter((n) => statSync(join(sb.dirs.install, n)).isDirectory());
     sentinelInStorage = grep(sb.dirs.catalog, sentinel);
   } finally {
-    // The session ids come from the stream this runner read, never from a file in the sandbox.
-    await teardown(sb, { machine: m, sessions: trace.sessions, sessionEnvsBefore, processGroups: pgid ? [pgid] : [], leaders: leader ? [leader] : [] });
+    // The session ids come from the stream this runner read, never from a file in the sandbox. The MCP servers' logs are
+    // kept beside the transcript (<trace>.mcp-logs/), then their cache folder goes with the other leftovers.
+    await teardown(sb, { machine: m, sessions: trace.sessions, sessionEnvsBefore, processGroups: pgid ? [pgid] : [], leaders: leader ? [leader] : [], keepLogsIn: tracePath.replace(/\.jsonl$/, '.mcp-logs') });
   }
   const differences = compare(before, snapshot(watch(trace.sessions, pgid ? [pgid] : [])));
   await stopEscaped(runId);

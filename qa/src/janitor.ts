@@ -48,7 +48,7 @@ export function janitor({ machine, ttlMs = DEFAULT_TTL_MS, now = Date.now, dryRu
   // Leftovers named like a qa run whose run folder is gone: reported, never deleted (nothing is globbed).
   const owned = new Set(runs.filter((n) => RUN_ID.test(n)).flatMap((n) => leftoverNames(join(base, n))));
   const prefix = slug(base) + '-';
-  for (const dir of [join(machine.roots.claudeDir, 'projects'), machine.roots.claudeTmp]) {
+  for (const dir of [join(machine.roots.claudeDir, 'projects'), machine.roots.claudeTmp, machine.roots.claudeCache]) {
     if (!existsSync(dir)) continue;
     for (const n of readdirSync(dir)) if (n.startsWith(prefix) && !owned.has(n) && !out.removed.includes(join(dir, n))) skip(join(dir, n), 'its run folder is gone: not deleted (nothing is globbed); remove it by hand');
   }

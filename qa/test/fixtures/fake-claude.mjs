@@ -6,7 +6,8 @@
 //   (write its pid there), QA_FAKE_CLAUDE_SLEEP_MS (wait first), QA_FAKE_CLAUDE_LEAK (make that folder, outside the
 //   sandbox: a leak), QA_FAKE_CLAUDE_CRASH (exit 1 with no output), QA_FAKE_CLAUDE_ENV_OUT (record its environment),
 //   QA_FAKE_CLAUDE_START_MCP (start each MCP server in its config as Claude Code does: its own environment plus the
-//   server's `env`, then initialize it).
+//   server's `env`, then initialize it), QA_FAKE_CLAUDE_MCP_LOGS (the Claude cache folder to write each MCP server's log
+//   in, as Claude Code does: <cache>/<working folder's slug>/mcp-logs-<server's slug>/<time>.jsonl).
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -41,6 +42,14 @@ if (E.QA_FAKE_CLAUDE_START_MCP) {
       p.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'fake-claude', version: '0' } } }) + '\n');
     });
     p.kill();
+  }
+}
+if (E.QA_FAKE_CLAUDE_MCP_LOGS) {
+  const slug = (s) => s.replace(/[^A-Za-z0-9]/g, '-');
+  for (const name of Object.keys(config.mcpServers)) {
+    const dir = join(E.QA_FAKE_CLAUDE_MCP_LOGS, slug(process.cwd()), `mcp-logs-${slug(name)}`);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '2026-09-29T01-00-00-000Z.jsonl'), JSON.stringify({ debug: `${name}: server started`, timestamp: '2026-09-29T01:00:00.000Z' }) + '\n');
   }
 }
 if (E.QA_FAKE_CLAUDE_SLEEP_MS) await new Promise((ok) => setTimeout(ok, Number(E.QA_FAKE_CLAUDE_SLEEP_MS)));
