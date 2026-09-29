@@ -17,11 +17,13 @@ const repo = fileURLToPath(new URL('../../', import.meta.url));
 const WORDS = join(repo, 'core', 'words', 'words.yaml');
 
 describe("the stack's code", () => {
-  it("is the hosted package's three entries, each exporting its handler", async () => {
-    expect([CATALOG_CODE.api, CATALOG_CODE.indexer, CATALOG_CODE.sweep]).toEqual(['api', 'indexer', 'sweep'].map((n) => join(repo, 'hosted', 'src', 'entries', `${n}.ts`)));
-    for (const entry of [CATALOG_CODE.api, CATALOG_CODE.indexer, CATALOG_CODE.sweep]) {
+  it("is the hosted package's three handlers, each the very function the hosted entry exports", async () => {
+    const entries = { api: CATALOG_CODE.api, indexer: CATALOG_CODE.indexer, sweep: CATALOG_CODE.sweep };
+    for (const [name, entry] of Object.entries(entries)) {
       expect(existsSync(entry), entry).toBe(true);
-      expect(typeof (await import(pathToFileURL(entry).href)).handler, entry).toBe('function');
+      const hosted = (await import(pathToFileURL(join(repo, 'hosted', 'src', 'entries', `${name}.ts`)).href)).handler;
+      expect(typeof hosted, name).toBe('function');
+      expect((await import(pathToFileURL(entry).href)).handler, name).toBe(hosted);
     }
   });
 

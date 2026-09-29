@@ -18,6 +18,9 @@ export type StageConfig = {
   githubSecretParameter: string;
   /** The origin secret CloudFront sends the API, current and previous (the deploy script creates and rotates them). */
   originSecretParameters: { current: string; previous: string };
+  /** The current origin secret parameter's version, which CloudFront's header refers to: a rotation writes a new version
+   *  and deploys with it, so the distribution changes and gets the new value (an unversioned reference never would). */
+  originSecretVersion: number;
   /** Requests from one address in 5 minutes before the edge blocks it. */
   rateLimitPer5Min: number;
   /** Demo: the exact Lambda runtime version the throwaway smoke test proved (manual runtime updates). */
@@ -43,6 +46,8 @@ function named(preset: PresetName) {
     env: { account: ACCOUNT, region: REGION },
     githubSecretParameter: `${p}/github-oauth-secret`,
     originSecretParameters: { current: `${p}/origin-secret`, previous: `${p}/origin-secret-previous` },
+    // The first value's version; the deploy script passes each new one.
+    originSecretVersion: 1,
   };
 }
 

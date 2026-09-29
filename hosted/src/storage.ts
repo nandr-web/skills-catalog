@@ -17,7 +17,7 @@ import type { Clock, CommitResult, NewVersion, SkillRecord, Storage, VersionPubl
 import { committable, glance, inspect } from './blobs.ts';
 import { fileState, type FileState } from './api/files.ts';
 import { isNamed } from './names.ts';
-import { blobKey, versionSk, type Place } from './place.ts';
+import { blobKey, EVENTS_PK, versionSk, type Place } from './place.ts';
 
 const S = (s: string): AttributeValue => ({ S: s });
 const N = (n: number): AttributeValue => ({ N: String(n) });
@@ -158,7 +158,7 @@ export class HostedStorage implements Storage {
             }
           : { Put: { TableName: this.table, Item: { pk: S('skills'), sk: S(v.name), owners: { L: [S(v.publisher)] }, latest: N(version) }, ConditionExpression: 'attribute_not_exists(pk)' } },
         { Put: { TableName: this.table, Item: { pk: S(`fp#${v.fingerprint}`), sk: S(`${v.name}#${versionSk(version)}`) } } },
-        { Put: { TableName: this.table, Item: { pk: S('events'), sk: S(`${e.at}#${v.name}#${versionSk(version)}`), event: S(JSON.stringify(e)), delivered: { BOOL: false } } } },
+        { Put: { TableName: this.table, Item: { pk: S(EVENTS_PK), sk: S(`${e.at}#${v.name}#${versionSk(version)}`), event: S(JSON.stringify(e)), delivered: { BOOL: false } } } },
       ];
       try {
         await this.p.ddb.send(new TransactWriteItemsCommand({ TransactItems: items }));

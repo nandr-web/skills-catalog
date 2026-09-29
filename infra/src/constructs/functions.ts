@@ -4,7 +4,7 @@
 // can delete as well as put, and no condition narrows it.
 
 import { Duration, Stack, type RemovalPolicy } from 'aws-cdk-lib';
-import { HttpApi, HttpStage, LogGroupLogDestination } from 'aws-cdk-lib/aws-apigatewayv2';
+import { CfnStage, HttpApi, HttpMethod, HttpStage, LogGroupLogDestination } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { Rule, Schedule } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
@@ -15,10 +15,23 @@ import { Construct } from 'constructs';
 import { catalogFunction } from './function.ts';
 import { BLOB_PREFIX, type Storage } from './storage.ts';
 
-const SEARCH_KEY = 'search/cards.json';
+export const SEARCH_KEY = 'search/cards.json';
 
-type Props = { entry: string; projectRoot: string; storage: Storage; removal: RemovalPolicy; runtimeVersionArn?: string | undefined };
-export type ApiProps = Props & { throttle: { rate: number; burst: number }; githubSecretParameter: string; originSecretParameters: { current: string; previous: string } };
+/** Signing in, the one route that takes no token: its path, its route, and its own throttle for all callers together,
+ *  below GitHub's hourly allowance for our app (5,000), so a flood of made-up tokens can't use it up (contract §1.1). */
+export const SIGN_IN_PATH = '/api/v1/sign_in_with_github';
+export const SIGN_IN_ROUTE = `POST ${SIGN_IN_PATH}`;
+export const SIGN_IN_THROTTLE = { rate: 1, burst: 5 };
+
+type Props = { entry: string; projectRoot: string; lockFile: string; storage: Storage; removal: RemovalPolicy; runtimeVersionArn?: string | undefined };
+export type ApiProps = Props & {
+  throttle: { rate: number; burst: number };
+  githubSecretParameter: string;
+  originSecretParameters: { current: string; previous: string };
+  /** The GitHub app's client id and the sign-in list, as the deploy's parameters give them. */
+  signIn: { clientId: string; logins: string };
+  words: string;
+};
 
 const records = (s: Storage, actions: string[]) => new PolicyStatement({ actions: actions.map((a) => `dynamodb:${a}`), resources: [s.table.tableArn] });
 const files = (s: Storage, actions: string[], key = `${BLOB_PREFIX}*`) => new PolicyStatement({ actions: actions.map((a) => `s3:${a}`), resources: [s.bucket.arnForObjects(key)] });
@@ -32,7 +45,16 @@ export class Api extends Construct {
   constructor(scope: Construct, id: string, p: ApiProps) {
     super(scope, id);
     const origin = p.originSecretParameters;
-    this.fn = catalogFunction(this, { ...p, environment: { GITHUB_SECRET_PARAMETER: p.githubSecretParameter, ORIGIN_SECRET_PARAMETER: origin.current, ORIGIN_SECRET_PREVIOUS_PARAMETER: origin.previous } });
+    this.fn = catalogFunction(this, {
+      ...p,
+      environment: {
+        GITHUB_SECRET_PARAMETER: p.githubSecretParameter,
+        GITHUB_CLIENT_ID: p.signIn.clientId,
+        SIGN_IN_LOGINS: p.signIn.logins,
+        ORIGIN_SECRET_PARAMETER: origin.current,
+        ORIGIN_SECRET_PREVIOUS_PARAMETER: origin.previous,
+      },
+    });
     // Records: read, the commit's transaction (put, conditional update, condition checks), token revokes (an update).
     this.fn.addToRolePolicy(records(p.storage, ['GetItem', 'Query', 'PutItem', 'UpdateItem', 'ConditionCheckItem']));
     // Files: upload links (put-if-absent), reading bytes to check them, claims (tags); the search file, read only.
@@ -44,13 +66,19 @@ export class Api extends Construct {
     const parameter = (name: string) => `arn:${stack.partition}:ssm:${stack.region}:${stack.account}:parameter${name}`;
     this.fn.addToRolePolicy(new PolicyStatement({ actions: ['ssm:GetParameter'], resources: [p.githubSecretParameter, origin.current, origin.previous].map(parameter) }));
 
-    this.http = new HttpApi(this, 'Http', { defaultIntegration: new HttpLambdaIntegration('Handler', this.fn), createDefaultStage: false });
-    new HttpStage(this, 'Stage', {
+    const integration = new HttpLambdaIntegration('Handler', this.fn);
+    this.http = new HttpApi(this, 'Http', { defaultIntegration: integration, createDefaultStage: false });
+    // Signing in goes to the same function by a route of its own, so the stage can throttle it on its own.
+    this.http.addRoutes({ path: SIGN_IN_PATH, methods: [HttpMethod.POST], integration });
+    const stage = new HttpStage(this, 'Stage', {
       httpApi: this.http,
       stageName: '$default',
       autoDeploy: true,
       throttle: { rateLimit: p.throttle.rate, burstLimit: p.throttle.burst },
       accessLogSettings: { destination: new LogGroupLogDestination(new LogGroup(this, 'AccessLogs', { retention: RetentionDays.ONE_MONTH, removalPolicy: p.removal })) },
+    });
+    (stage.node.defaultChild as CfnStage).addPropertyOverride('RouteSettings', {
+      [SIGN_IN_ROUTE]: { ThrottlingRateLimit: SIGN_IN_THROTTLE.rate, ThrottlingBurstLimit: SIGN_IN_THROTTLE.burst },
     });
   }
 }

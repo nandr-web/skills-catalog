@@ -20,6 +20,8 @@ export type Place = { table: string; bucket: string };
 
 export const BLOB_PREFIX = 'blobs/';
 export const SEARCH_KEY = 'search/cards.json';
+/** The partition every version_published item is written under (the stack's pipe takes inserts of these only). */
+export const EVENTS_PK = 'events';
 export const blobKey = (sha256: string) => `${BLOB_PREFIX}${sha256}`;
 export const versionSk = (version: number) => String(version).padStart(10, '0');
 

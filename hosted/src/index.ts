@@ -10,7 +10,7 @@ export { fileState, type FileState } from './api/files.ts';
 export { HostedTokenStore, type TokenHolder, type TokenKind, type TokenScope } from './tokens.ts';
 export { GITHUB_API, HostedGitHubSignIn } from './github.ts';
 export { COMMIT_AGE_MS, MARK_WAIT_MS, SWEEP_AGE_MS, ageOf, committable, inspect } from './blobs.ts';
-export { BLOB_PREFIX, SEARCH_KEY, blobKey, createStores, versionSk, type Place } from './place.ts';
+export { BLOB_PREFIX, EVENTS_PK, SEARCH_KEY, blobKey, createStores, versionSk, type Place } from './place.ts';
 export { createHostedHandler, type HostedHandlerParts, type HostedRequest } from './api/handler.ts';
 export { lambdaAdapter, type HttpApiEvent, type HttpApiResult } from './api/lambda.ts';
 export { mayRun, whoIsAsking, type Asking } from './api/who.ts';

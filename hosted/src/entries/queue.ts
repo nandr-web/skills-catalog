@@ -5,6 +5,7 @@
 // alarm sees it, rather than being dropped.
 
 import type { VersionPublished } from '@skills-catalog/core';
+import { EVENTS_PK } from '../place.ts';
 
 /** The parts of an SQS event the indexer reads. */
 export type QueueEvent = { Records: { messageId: string; body: string }[] };
@@ -16,7 +17,7 @@ type Image = Record<string, { S?: string } | undefined>;
 export function versionPublishedOf(body: string): VersionPublished {
   const record = JSON.parse(body) as { dynamodb?: { NewImage?: Image } };
   const image = record.dynamodb?.NewImage;
-  if (image?.['pk']?.S !== 'events' || typeof image['event']?.S !== 'string') throw new Error('the message is not an event item');
+  if (image?.['pk']?.S !== EVENTS_PK || typeof image['event']?.S !== 'string') throw new Error('the message is not an event item');
   const e = JSON.parse(image['event'].S) as Partial<VersionPublished>;
   if (e.type !== 'version_published' || typeof e.name !== 'string' || !e.name || !Number.isInteger(e.version)) throw new Error('the event is not a version_published');
   return e as VersionPublished;

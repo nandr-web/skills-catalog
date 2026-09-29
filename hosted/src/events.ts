@@ -6,7 +6,7 @@
 
 import { QueryCommand, UpdateItemCommand, type DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import type { Events, VersionPublished } from '@skills-catalog/core';
-import type { Place } from './place.ts';
+import { EVENTS_PK, type Place } from './place.ts';
 
 /** Events as deployed: the table's stream carries each event item to the indexer's queue, so the API function delivers
  *  nothing itself (its subscribers never run there; the indexer function runs the same steps on each queued event). */
@@ -33,7 +33,7 @@ export class HostedEvents implements Events {
           TableName: this.p.place.table,
           KeyConditionExpression: 'pk = :pk',
           FilterExpression: 'delivered = :no',
-          ExpressionAttributeValues: { ':pk': { S: 'events' }, ':no': { BOOL: false } },
+          ExpressionAttributeValues: { ':pk': { S: EVENTS_PK }, ':no': { BOOL: false } },
           ExclusiveStartKey: start,
           ConsistentRead: true,
         }),
