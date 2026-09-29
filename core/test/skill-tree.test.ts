@@ -479,6 +479,15 @@ describe('the secret scan finds a secret by its shape, in any variable name or q
     ['client_secret: abcdefghijklmnopqrst', 'password_or_token'],
     ['OPENAI_SECRET_KEY = "abcdefghijklmnopqrst"', 'password_or_token'],
     ['service.private-key=abcdefghijklmnopqrst', 'password_or_token'],
+    // the word as a whole part anywhere, spaces inside the words, :=, => and --flags, any value that isn't a space or quote
+    ['SECRET_KEY_BASE=abcdefghijklmnopqrst', 'password_or_token'],
+    ['DB_PASSWORD_PROD=correct-horse-battery', 'password_or_token'],
+    ['"api key": "abcdefghijklmnopqrst"', 'password_or_token'],
+    ['token := "abcdefghijklmnopqrst"', 'password_or_token'],
+    [':password => "abcdefghijklmnopqrst"', 'password_or_token'],
+    ['mysql --password s3cr3t-value-1234 -u root', 'password_or_token'],
+    ['curl --auth-token=abcdefghijklmnopqrst https://example.com', 'password_or_token'],
+    ['password=abc!def#ghi%jkl&', 'password_or_token'],
     ['KEY_ID=prefix_AKIAIOSFODNN7EXAMPLE', 'aws_access_key'],
   ];
   for (const [line, kind] of flagged) {
@@ -493,8 +502,32 @@ describe('the secret scan finds a secret by its shape, in any variable name or q
     'The token comes from the environment, never from this file.',
     'TOKENS=abcdefghijklmnopqrst',
     'password_hint=the-name-of-my-first-dog',
+    'DB_PASSWORD_FILE=/run/secrets/db_password',
+    // a value that refers to a secret instead of holding one (contract §2)
+    'const token = process.env.GITHUB_TOKEN;',
+    'token = process.env["GITHUB_TOKEN"]',
+    'secret = os.environ["APP_SECRET_VALUE"]',
+    'secret = os.environ.get("APP_SECRET_VALUE")',
+    'password = os.getenv("DB_PASSWORD_VALUE")',
+    'API_TOKEN = ENV["API_TOKEN_VALUE"]',
+    'String password = System.getenv("DB_PASSWORD");',
+    'githubToken = self.tokenizer.encode(text)',
+    'api_key: config.api_key_from_vault',
+    'token = get_token_from_keychain()',
+    'password: <your-password-here>',
+    'token: $env:GITHUB_TOKEN_VALUE',
+    'password: $DB_PASSWORD_VALUE',
   ];
   for (const line of passed) {
     it(`leaves alone ${line}`, () => expect(scan(line)).toBeNull());
   }
+
+  // The scan never backtracks badly: a line of a megabyte is scanned in well under a second, whatever it holds.
+  it('scans a megabyte-long line in well under a second', () => {
+    for (const line of ['password_'.repeat(110_000) + '=' + 'x'.repeat(20), 'ghp_' + 'a'.repeat(1_000_000), 'AKIA'.repeat(250_000), 'a: '.repeat(330_000), 'x'.repeat(200) + '='.repeat(1_000_000)]) {
+      const start = performance.now();
+      scan(line);
+      expect(performance.now() - start, line.slice(0, 30)).toBeLessThan(1000);
+    }
+  });
 });
