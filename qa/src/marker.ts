@@ -16,10 +16,12 @@ import { pidFrom } from './pids.ts';
 export type Marker = { path: string; dev: number; ino: number; since: number };
 
 /** Makes the marker in the run's own sandbox (never an existing file, never through a link) and opens it for the run's
- *  command's descriptor 3. The caller closes `fd` once the command has started. */
+ *  command's descriptor 3. The caller closes `fd` once the command has started. The file has no permissions: the open
+ *  that makes it still gives this descriptor, and every later open fails, so a program of this user that opens the
+ *  marker by its path (it would usually get descriptor 3) never holds it. root ignores permissions. */
 export function createMarker(sandboxRoot: string, since: number): { marker: Marker; fd: number } {
   const path = join(sandboxRoot, '.run-marker');
-  const fd = openSync(path, constants.O_RDONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  const fd = openSync(path, constants.O_RDONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o000);
   try {
     const st = fstatSync(fd);
     // ps gives start times to the second: a holder started in the run's first second must still count

@@ -118,14 +118,21 @@ describe('qa run', () => {
     expect(r.stopped).toContain(sleeper);
   });
 
-  it('[6] a program of this user that opens the run\'s marker itself (another descriptor, no run id) is never counted or signalled', async () => {
+  it('[6] a program of this user that opens the run\'s marker itself (no run id) can\'t, and is never counted or signalled', async () => {
     const m = machine();
     let stranger: ChildProcess | undefined;
+    let opened = '';
     const r = await qaRun({
       machine: m, command: ['/bin/sleep', '0.5'],
-      // started by the test, not the run: an indexer or a backup agent reading the file stands for it
-      onStart: (sb) => { stranger = spawnDetached(process.execPath, ['-e', `require('fs').openSync(${JSON.stringify(join(sb.root, '.run-marker'))}, 'r'); setTimeout(() => {}, 30000)`], { env: { PATH: '/usr/bin:/bin' } }); },
+      // started by the test, not the run: an indexer or a backup agent reading the file stands for it. It says whether
+      // its open worked, and stays alive either way.
+      onStart: (sb) => {
+        stranger = spawnDetached(process.execPath, ['-e', `let r = 'opened'; try { require('fs').openSync(${JSON.stringify(join(sb.root, '.run-marker'))}, 'r'); } catch (e) { r = e.code; } console.log(r); setTimeout(() => {}, 30000)`], { env: { PATH: '/usr/bin:/bin' }, stdio: ['ignore', 'pipe', 'ignore'] });
+        stranger.stdout!.on('data', (b) => { opened += String(b); });
+      },
     });
+    for (let waited = 0; waited < 5000 && !opened.includes('\n'); waited += 20) await new Promise((ok) => setTimeout(ok, 20));
+    expect(opened.trim()).toBe('EACCES');
     expect(r.status).toBe('pass');
     expect(r.stopped).not.toContain(stranger!.pid);
     expect(stranger!.exitCode === null && stranger!.signalCode === null).toBe(true);

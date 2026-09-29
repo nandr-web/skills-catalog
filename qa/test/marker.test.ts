@@ -3,12 +3,13 @@
 // system program on macOS); so the check also lists the processes holding it. Only those holding that very file (by
 // device and inode) on descriptor 3, of this user, started at or after the run did, count as the run's; any other
 // holder (an indexer, a backup agent, anything opened later on another descriptor) is never listed or signalled.
-import { fstatSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { closeSync, fstatSync, openSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CheckBlind, DEFAULT_TOOLS, markedProcesses } from '../src/check.ts';
 import { qaRun, stopEscaped } from '../src/run.ts';
 import { cleanup, machine } from './machine.ts';
-import { heldOnFd3, sortHolders, type Marker } from '../src/marker.ts';
+import { createMarker, heldOnFd3, sortHolders, type Marker } from '../src/marker.ts';
 
 const MARKER: Marker = { path: '/x/.run-marker', dev: 16777231, ino: 63215361, since: Date.parse('Tue Sep 29 03:31:30 2026') };
 
@@ -83,5 +84,31 @@ describe('the marker\'s number stays the run\'s until the check is done', () => 
       beforeStop: ({ fd, marker }) => { const st = fstatSync(fd); seen = { nlink: st.nlink, same: st.ino === marker.ino && st.dev === marker.dev }; },
     });
     expect(seen).toEqual({ nlink: 0, same: true });
+  });
+});
+
+describe('a program that opens the marker by its path', () => {
+  afterEach(cleanup);
+
+  // Only the run's descriptor 3 holds the marker. A program of this user that opens the file itself (tail -f, an
+  // editor, a crawler) usually gets descriptor 3 too, so were it allowed to open it, it would count as the run's and be
+  // signalled. The marker has no permissions: the open that makes it still gives qa its descriptor, every later one
+  // fails. (root ignores permissions, so this can't hold for a run as root.)
+  it.skipIf(process.getuid?.() === 0)("can't open it, so it's never counted as the run's", { timeout: 30_000 }, async () => {
+    const m = machine();
+    const made = createMarker(m.dir, Date.now());
+    const stranger = spawn('/bin/sh', ['-c', 'exec 3<"$1" && echo held && exec sleep 30', 'sh', made.marker.path], { stdio: ['ignore', 'pipe', 'ignore'] });
+    const gone = new Promise((ok) => stranger.once('exit', ok));
+    try {
+      const outcome = await new Promise<'held' | 'refused'>((ok) => { stranger.stdout!.once('data', () => ok('held')); stranger.once('exit', () => ok('refused')); });
+      const counted = markedProcesses(made.marker).ours.some((p) => p.pid === stranger.pid);
+      let reopened: string;
+      try { closeSync(openSync(made.marker.path, 'r')); reopened = 'opened'; } catch (e) { reopened = (e as NodeJS.ErrnoException).code ?? 'error'; }
+      expect({ outcome, counted, reopened, mode: fstatSync(made.fd).mode & 0o777 }).toEqual({ outcome: 'refused', counted: false, reopened: 'EACCES', mode: 0 });
+    } finally {
+      closeSync(made.fd);
+      stranger.kill('SIGKILL');
+      await gone;
+    }
   });
 });
