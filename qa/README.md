@@ -44,10 +44,11 @@ login, no cost), on the real catalog: its MCP server (this repository's own, one
 and updating, its command line. With `--core` they call the catalog's core in their own process instead, and the
 installing and updating steps show as planned.
 
-Needs Node 24.15 or later, tmux 3.2 or later, and macOS or Linux. On macOS, tmux from Homebrew (`brew install tmux`);
-on Linux, from a distribution whose tmux is 3.2 or later, e.g. Debian 12 or Ubuntu 22.04 and later
-(`sudo apt install tmux`). It's laid out for a terminal of about 200 columns by 50 rows (a laptop screen, full size);
-it plays down to 80 by 24, with more lines wrapped. Once, from this folder:
+Needs Node 24.15 or later, tmux 3.2 or later, lsof, and macOS or Linux. On macOS, tmux from Homebrew
+(`brew install tmux`; lsof comes with macOS); on Linux, from a distribution whose tmux is 3.2 or later, e.g. Debian 12
+or Ubuntu 22.04 and later (`sudo apt install tmux lsof`). Without lsof, the demo stops before it starts and says so:
+it uses lsof to check that it cleans up after itself. It's laid out for a terminal of about 200 columns by 50 rows (a
+laptop screen, full size); it plays down to 80 by 24, with more lines wrapped. Once, from this folder:
 `(cd ../core && npm ci --ignore-scripts) && (cd ../client && npm ci --ignore-scripts) && npm ci --ignore-scripts`
 (without `../client` installed, the demo runs as with `--core`, and says so). Then:
 

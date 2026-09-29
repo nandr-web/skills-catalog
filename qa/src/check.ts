@@ -132,6 +132,8 @@ function listening(pids: number[], tools: Tools = DEFAULT_TOOLS): { pid: number;
  *  show up in both. If it doesn't (a sandbox that hides other processes' environments, a missing lsof), the run is
  *  refused, since a process or a port it leaves behind would go unseen. The marker is stopped before anything else. */
 export async function checkSees(runId: string, tools: Tools = DEFAULT_TOOLS): Promise<void> {
+  // Not installed (common on a minimal Linux): say how to fix it, before anything starts.
+  if (!existsSync(tools.lsof)) throw new CheckBlind("this run needs lsof to check that it cleans up after itself, and it isn't installed. Install it (e.g. `sudo apt install lsof`) and run again. Nothing was run");
   const marker = spawn(process.execPath, ['-e', "const s = require('net').createServer().listen(0, '127.0.0.1', () => console.log(s.address().port)); setTimeout(() => process.exit(0), 60000)"], {
     stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, QA_RUN_ID: runId },
   });

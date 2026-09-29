@@ -2,11 +2,12 @@
 // this run, a run is refused before anything starts, never passed with "no processes left". Tools are given by full
 // path (never looked up on PATH), and a test swaps in a blind one to prove the refusal.
 import { existsSync, readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CheckBlind, DEFAULT_TOOLS, checkSees, runProcesses } from '../src/check.ts';
 import { newRunId, qaRun } from '../src/run.ts';
 import { sandboxBase } from '../src/sandbox.ts';
-import { cleanup, machine, PROCESS_TEST_MS } from './machine.ts';
+import { cleanup, machine, PROCESS_TEST_MS, qaSync } from './machine.ts';
 
 vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start processes (see PROCESS_TEST_MS)
 
@@ -32,6 +33,17 @@ describe('the process and port checks fail closed', () => {
     await expect(checkSees(newRunId(), { ...DEFAULT_TOOLS, ps: BLIND })).rejects.toThrow(/can't see this run's own marker process/);
     await expect(checkSees(newRunId(), { ...DEFAULT_TOOLS, lsof: BLIND })).rejects.toThrow(/can't see the port/);
     await expect(checkSees(newRunId(), { ...DEFAULT_TOOLS, lsof: '/nonexistent/lsof' })).rejects.toThrow(CheckBlind);
+  });
+
+  it('a machine without lsof: qa run says to install it and exits 3, with no sandbox and no command started', () => {
+    const m = machine();
+    const noLsof = fileURLToPath(new URL('./fixtures/no-lsof.mjs', import.meta.url));
+    const marker = `${m.dir}/ran`;
+    const r = qaSync(m, ['run', '--', '/usr/bin/touch', marker], { NODE_OPTIONS: `${process.env['NODE_OPTIONS'] ?? ''} --import=${noLsof}`.trim() });
+    expect(r.status, r.stderr).toBe(3);
+    expect(r.stderr).toContain('needs lsof to check that it cleans up after itself, and it isn\'t installed. Install it (e.g. `sudo apt install lsof`) and run again.');
+    expect(existsSync(marker)).toBe(false);
+    expect(existsSync(sandboxBase(m.tmp)) ? readdirSync(sandboxBase(m.tmp)) : []).toEqual([]);
   });
 
   it('a run on a machine the check can\'t see is refused before anything starts: no sandbox, no command', async () => {
