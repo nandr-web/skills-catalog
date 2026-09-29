@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { chmodSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sandbox } from '@skills-catalog/core/testing';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { holdWithinADay, readUsage, recordUsage, USAGE_DAYS, USAGE_READ_MAX_BYTES } from '../src/usage/record.ts';
 
 const day = (iso: string) => new Date(`${iso}T12:00:00Z`);
@@ -159,6 +159,32 @@ describe('a day file hard-linked to a file elsewhere', () => {
     expect(readFileSync(outside, 'utf8').trimEnd().split('\n')).toHaveLength(1);
     expect(statSync(outside).mode & 0o777).toBe(0o644);
     expect(readUsage(h, day('2026-09-29'))).toEqual([]);
+  });
+});
+
+describe('files another user owns', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+  // The recorder reads this user's id once, when it loads: a fresh copy of it loaded after the stand-in sees what's on
+  // disk as someone else's.
+  const asAnotherUser = async () => {
+    vi.spyOn(process, 'getuid').mockReturnValue(process.getuid!() + 1);
+    vi.resetModules();
+    return import('../src/usage/record.ts');
+  };
+
+  it('a usage folder or day file another user owns is neither written, tightened nor read', async () => {
+    const h = home();
+    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'));
+    chmodSync(join(h, 'usage'), 0o755);
+    const other = await asAnotherUser();
+    other.recordUsage(h, { event: 'notice', surface: 'hook', waiting: 2 }, day('2026-09-29'));
+    expect(lines(h, '2026-09-29').map((e) => e.waiting)).toEqual([1]);
+    expect(statSync(join(h, 'usage')).mode & 0o777).toBe(0o755);
+    expect(other.readUsage(h, day('2026-09-29'))).toEqual([]);
+    expect(readUsage(h, day('2026-09-29'))).toHaveLength(1);   // this user's own copy still reads it
   });
 });
 
