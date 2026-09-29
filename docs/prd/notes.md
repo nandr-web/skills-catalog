@@ -1,6 +1,6 @@
 # The owner's notes on the PRD
 
-The owner read the Skills Catalog PRD (v0.1.0, Pax8's take-home brief, not included here) section by section, and wrote these notes before any design work began. They're copied exactly, per section. Two remarks about the review tooling itself are left out, because they aren't about the product.
+The owner read the Skills Catalog PRD (v0.1.0, not included here) section by section, and wrote these notes before any design work began. They're copied exactly, per section. Two remarks about the review tooling itself are left out, because they aren't about the product.
 
 The design answers each note; [decisions.md](../decisions.md) says how.
 

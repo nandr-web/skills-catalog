@@ -526,7 +526,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 > As the owner, I want a designer and an architect to come up with mock-ups that I can review, so that I shape the UI before it's built.
 
 - **Source:** the owner's notes on the PRD
-- **Done when:** Mock-ups of the main web pages (browse, a skill and its history, the delta view, editing, bundles) are on the review page as a card for the owner's review.
+- **Done when:** Mock-ups of the main web pages (browse, a skill and its history, the delta view, editing, bundles) are in front of the owner for review.
 - **Where it lives:** the web UI
 - **Checked by:**
   - web: Playwright view and publish on the local server (the web plan)
