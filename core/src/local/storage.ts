@@ -95,9 +95,11 @@ export class LocalStorage implements Storage {
           const missing: string[] = [];
           for (const f of files) {
             if (this.blobs.has(f.sha256)) continue;
-            // Presence only: the ages a stored file must be under are the hosted adapter's (contract §1.1).
-            if (!f.bytes) missing.push(f.sha256);
-            else if (this.blobs.put(f.sha256, f.bytes)) added.add(f.sha256);
+            // Presence only: the ages a stored file must be under are the hosted adapter's (contract §1.1). Each
+            // missing file is named once, however many files share its bytes.
+            if (!f.bytes) {
+              if (!missing.includes(f.sha256)) missing.push(f.sha256);
+            } else if (this.blobs.put(f.sha256, f.bytes)) added.add(f.sha256);
           }
           if (missing.length) return { kind: 'not_uploaded', missing };
           const out = this.meta.append(v, cond, event);

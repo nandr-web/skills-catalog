@@ -12,7 +12,7 @@ type File = { etag?: string | undefined; cards: SearchCard[] };
 
 export class S3SearchIndex implements SearchIndex {
   private readonly p: { s3: S3Client; place: Place };
-  private ranked: { etag: string | undefined; index: SearchIndex } | undefined;
+  private ranked: { etag: string | undefined; index: SearchIndex & { close(): void } } | undefined;
 
   constructor(parts: { s3: S3Client; place: Place }) {
     this.p = parts;
@@ -57,6 +57,8 @@ export class S3SearchIndex implements SearchIndex {
     if (!this.ranked || this.ranked.etag === undefined || this.ranked.etag !== f.etag) {
       const index = memorySearchIndex();
       await index.rebuild(f.cards);
+      // The index for the file as it was goes: one in-memory database at a time.
+      this.ranked?.index.close();
       this.ranked = { etag: f.etag, index };
     }
     return this.ranked.index.query(words, filters);

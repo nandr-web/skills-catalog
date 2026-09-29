@@ -88,6 +88,7 @@ export class SqliteSearchIndex implements SearchIndex {
 
 /** The same index on an in-memory database: another adapter keeps its cards elsewhere and ranks them here, so its
  *  results (the words matched, the stemming, the ranking and its ties) are the local catalog's by construction. */
-export function memorySearchIndex(): SearchIndex {
-  return new SqliteSearchIndex(new LocalDb(':memory:'));
+export function memorySearchIndex(): SearchIndex & { close(): void } {
+  const db = new LocalDb(':memory:');
+  return Object.assign(new SqliteSearchIndex(db), { close: () => db.close() });
 }
