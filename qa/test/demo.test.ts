@@ -482,6 +482,16 @@ describe.skipIf(!!noTmux)(`qa demo with real tmux${noTmux ? ` (skipped: ${noTmux
     expect(existsSync(r.sandbox)).toBe(false);
   }, RUN_MS);
 
+  it('the layout has its final sizes before any program starts: a window attaching changes no pane\'s width', async () => {
+    const { t, dir } = await tmuxServer();
+    buildLayout(t, { developers: [{ id: 'ana', title: 'Developer 1 · ana' }, { id: 'bob', title: 'Developer 2 · bob' }], size: { cols: 200, rows: 50 }, cwd: dir });
+    const sizes = () => t('list-panes', '-t', 'demo', '-F', '#{@title} #{pane_width}x#{pane_height}').trim();
+    const before = sizes();   // what each pane's program reads when it starts
+    await drawn(dir);         // a client attaches: the layout's hooks run
+    await new Promise((r) => setTimeout(r, 200));
+    expect(sizes()).toBe(before);
+  }, 60_000);
+
   it('the layout keeps the log at 10 rows and the 38/38/24 split when the window is resized', async () => {
     const dir = scratch('qa-demo-tmux-');
     const server = startServer(dir, { PATH: process.env.PATH ?? '' });

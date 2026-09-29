@@ -59,8 +59,9 @@ export type Stage = {
   surface: Surface;
   /** The pane (ANSI colours included). */
   out: (text: string) => void;
-  /** The pane's width in columns: the product's lines wrap at it (0 or none: no wrapping). */
-  width?: number;
+  /** The pane's width in columns: the product's lines wrap at it (0 or none: no wrapping). A function is asked each time
+   *  an answer is shown, so a pane resized after the stand-in started still fits. */
+  width?: number | (() => number);
   /** $QA_SANDBOX/demo: turns.jsonl, and activity.log unless logFile says otherwise. */
   demoDir: string;
   logFile?: string;
@@ -362,10 +363,16 @@ export function wrap(line: string, width: number): string[] {
  *  space, so no escape sequence reaches the terminal. */
 export const printable = (text: string) => text.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, ' ');
 
-/** The product's words, each line behind the gutter; at the pane's width a line goes on under the gutter, whole words. */
+/** The product's words as the pane's lines, each behind the gutter; at `pane` columns a line goes on under the gutter,
+ *  whole words (0: no wrapping). No line is wider than the pane. */
+export function shown(text: string, pane: number, alert: number[] = []): string[] {
+  const width = pane ? pane - GUTTER.length : 0;
+  return printable(text).split('\n').flatMap((l, i) => wrap(l, width).map((w) => (alert.includes(i) ? paint(ORANGE, `${GUTTER}${w}`) : `${paint(DIM, GUTTER.trimEnd())} ${w}`)));
+}
+
 function show(st: Stage, text: string, alert: number[] = []): void {
-  const width = st.width ? st.width - GUTTER.length : 0;
-  st.out(printable(text).split('\n').flatMap((l, i) => wrap(l, width).map((w) => (alert.includes(i) ? paint(ORANGE, `${GUTTER}${w}`) : `${paint(DIM, GUTTER.trimEnd())} ${w}`))).join('\n') + '\n');
+  const pane = typeof st.width === 'function' ? st.width() : st.width ?? 0;
+  st.out(shown(text, pane, alert).join('\n') + '\n');
 }
 
 function log(st: Stage, tool: string, target: string, result: string): void {
@@ -474,7 +481,7 @@ async function main(): Promise<number> {
   const stage: Omit<Stage, 'backend'> = {
     who, scenes, surface,
     out: (s) => { process.stdout.write(s); },
-    width: process.stdout.columns || 0,
+    width: () => process.stdout.columns || 0,   // asked each time: the pane may be resized after this starts
     demoDir: join(root, 'demo'),
     ...(process.env.SKILLS_ACTIVITY_LOG ? { logFile: process.env.SKILLS_ACTIVITY_LOG } : {}),
     pace: process.env.DEMO_PACE === '0' ? 0 : 300,

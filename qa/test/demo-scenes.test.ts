@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stringify } from 'yaml';
 import { afterEach, describe, expect, it } from 'vitest';
 import { actAs, CatalogError, openLocalCatalog, Surface, type Catalog } from '../../core/src/index.ts';
-import { answer, coreBackend, logLine, logWords, RESULT_WIDTH, type Backend, type Stage, wrap } from '../src/demo/assistant.ts';
+import { answer, coreBackend, GUTTER, logLine, logWords, RESULT_WIDTH, shown, type Backend, type Stage, wrap } from '../src/demo/assistant.ts';
 import { CLI_OPS, loadScenes, parseScenes, SCENES_FILE, ScenesError, SKILLS_DIR, type Scenes } from '../src/demo/scenes.ts';
 import { keyCommand, renderSteps, type StepsState } from '../src/demo/steps-view.ts';
 import { cleanup, scratch } from './machine.ts';
@@ -614,5 +614,41 @@ describe('the stand-in wraps the product\'s words at the pane\'s width', () => {
     expect(wrap('short', 30)).toEqual(['short']);
     expect(wrap('abcdefghij', 4)).toEqual(['abcd', 'efgh', 'ij']);
     expect(wrap(line, 0)).toEqual([line]);
+  });
+
+  it('a line of exactly the width stays one line; one character more makes two; one less, one', () => {
+    const w = 20;
+    for (const [len, pieces] of [[w - 1, 1], [w, 1], [w + 1, 2]] as const) {
+      const path = 'x'.repeat(len);                  // no space to cut at, like a long path
+      expect(wrap(path, w), `a word of ${len}`).toHaveLength(pieces);
+      const words = `${'ab '.repeat(len)}`.slice(0, len);   // spaces to cut at
+      expect(wrap(words, w).every((l) => l.length <= w), `words of ${len}`).toBe(true);
+      expect(wrap(words, w).length, `words of ${len}`).toBe(len <= w ? 1 : 2);
+    }
+  });
+
+  it('the pane\'s width is read when each answer is shown, so a pane made narrower after the stand-in started still fits', async () => {
+    const scenes = loadScenes(SCENES_FILE);
+    const { stages: st, panes } = await stages(scenes, sandbox(scenes));
+    let cols = 90;
+    const ana = { ...st.ana!, width: () => cols };   // the pane as tmux sizes it, now
+    const widest = () => Math.max(...plain(panes.ana!).split('\n').map((l) => l.length));
+    await answer(ana, 'publish my skills, release-note-draft and sql-migrations');
+    expect(widest()).toBeLessThanOrEqual(90);
+    expect(widest()).toBeGreaterThan(60);           // it did wrap at 90, not narrower
+    panes.ana = '';
+    cols = 60;                                       // the window attached, the layout resized the pane
+    await answer(ana, 'publish v2 of release-note-draft, it adds a script');
+    expect(widest()).toBeLessThanOrEqual(60);
+  });
+
+  it('behind the gutter, no line is wider than the pane: exactly the width, one more and one less', () => {
+    const pane = 40, room = pane - GUTTER.length;
+    for (const len of [room - 1, room, room + 1, 3 * room + 2]) {
+      const text = `"${'/'.repeat(len - 2)}"`;       // a quoted path, no space to cut at
+      const lines = shown(text, pane).map(plain);
+      expect(lines.every((l) => l.length <= pane), `a line of ${len}`).toBe(true);
+      expect(lines.map((l) => l.slice(GUTTER.length)).join(''), `a line of ${len}`).toBe(text);
+    }
   });
 });

@@ -114,7 +114,11 @@ export function buildLayout(t: Tmux, o: { developers: { id: string; title: strin
     title(panes.steps, 'Steps'), title(panes.log, 'Catalog server log'), ['select-pane', '-t', panes.steps],
   ]));
   const share = Math.floor(76 / o.developers.length);
-  const sizes = [`resize-pane -t ${panes.log} -y 10`, `resize-pane -t ${panes.steps} -x 24%`, ...o.developers.slice(0, -1).map((d) => `resize-pane -t ${panes[d.id]} -x ${share}%`)].join(' ; ');
+  const resizes = [['resize-pane', '-t', panes.log, '-y', '10'], ['resize-pane', '-t', panes.steps, '-x', '24%'], ...o.developers.slice(0, -1).map((d) => ['resize-pane', '-t', panes[d.id], '-x', `${share}%`])];
+  // The sizes now, as the hooks will keep them: a pane's program reads its width when it starts, and a window attaching
+  // later must not change it (the product's lines wrap at that width; one column less leaves a letter on its own line).
+  t(...batch(resizes));
+  const sizes = resizes.map((r) => r.join(' ')).join(' ; ');
   const hooks = ['window-resized', 'client-attached', 'client-resized'];
   try { t(...batch(hooks.map((h) => ['set-hook', '-g', h, sizes]))); } catch {
     for (const h of hooks) { try { t('set-hook', '-g', h, sizes); } catch { /* an older tmux without this hook */ } }
