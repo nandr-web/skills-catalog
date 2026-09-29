@@ -17,11 +17,13 @@ import { BLOB_PREFIX, type Storage } from './storage.ts';
 
 export const SEARCH_KEY = 'search/cards.json';
 
-/** Signing in, the one route that takes no token: its path, its route, and its own throttle for all callers together,
- *  below GitHub's hourly allowance for our app (5,000), so a flood of made-up tokens can't use it up (contract §1.1). */
+/** Signing in, the one route that takes no token: its path, its route, and its own throttle for all callers together:
+ *  at most half of GitHub's hourly allowance for an OAuth app (5,000 requests an hour,
+ *  https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api#primary-rate-limit-for-oauth-apps),
+ *  so a flood of made-up tokens can't use it up (contract §1.1). 0.6 a second is 2,160 an hour, plus one burst. */
 export const SIGN_IN_PATH = '/api/v1/sign_in_with_github';
 export const SIGN_IN_ROUTE = `POST ${SIGN_IN_PATH}`;
-export const SIGN_IN_THROTTLE = { rate: 1, burst: 5 };
+export const SIGN_IN_THROTTLE = { rate: 0.6, burst: 5 };
 
 type Props = { entry: string; projectRoot: string; lockFile: string; storage: Storage; removal: RemovalPolicy; runtimeVersionArn?: string | undefined };
 export type ApiProps = Props & {

@@ -40,8 +40,8 @@ describe('the HTTP API', () => {
     expect(targets.size).toBe(1);
     const stage = Object.values(t.findResources('AWS::ApiGatewayV2::Stage'))[0] as any;
     expect(stage.Properties.RouteSettings[SIGN_IN_ROUTE]).toEqual({ ThrottlingRateLimit: SIGN_IN_THROTTLE.rate, ThrottlingBurstLimit: SIGN_IN_THROTTLE.burst });
-    // An hour at the rate, and one burst, stay under GitHub's 5,000 requests an hour for an OAuth app.
-    expect(SIGN_IN_THROTTLE.rate * 3600 + SIGN_IN_THROTTLE.burst).toBeLessThan(5000);
+    // An hour at the rate, and one burst, stay within half of GitHub's 5,000 requests an hour for an OAuth app.
+    expect(SIGN_IN_THROTTLE.rate * 3600 + SIGN_IN_THROTTLE.burst).toBeLessThanOrEqual(2500);
   });
 });
 
@@ -90,5 +90,24 @@ describe('the sweep and sign-in', () => {
     t.hasResourceProperties('AWS::IAM::Policy', { PolicyDocument: { Statement: Match.arrayWith([Match.objectLike({ Action: 'ssm:GetParameter' })]) } });
     t.resourceCountIs('AWS::SSM::Parameter', 0);
     t.resourceCountIs('AWS::SecretsManager::Secret', 0);
+  });
+});
+
+describe("each function's role", () => {
+  it('has no managed policy, and writes logs only to its own log group', () => {
+    // the catalog's three (CDK's own auto-delete helper on the throwaway preset is not one of them)
+    const fns = (Object.values(t.findResources('AWS::Lambda::Function')) as any[]).filter((f) => f.Properties.LoggingConfig);
+    expect(fns.length).toBe(3);
+    const roles = t.findResources('AWS::IAM::Role') as Record<string, any>;
+    const policies = Object.values(t.findResources('AWS::IAM::Policy')) as any[];
+    for (const fn of fns) {
+      const roleId = fn.Properties.Role['Fn::GetAtt'][0];
+      expect(roles[roleId].Properties.ManagedPolicyArns ?? [], roleId).toEqual([]);
+      const logGroup = fn.Properties.LoggingConfig.LogGroup.Ref;
+      const statements = policies.filter((p) => p.Properties.Roles.some((r: any) => r.Ref === roleId)).flatMap((p) => p.Properties.PolicyDocument.Statement);
+      const logs = statements.filter((s) => [s.Action].flat().some((a: string) => a.startsWith('logs:')));
+      expect(logs.length, roleId).toBeGreaterThan(0);
+      for (const s of logs) for (const r of [s.Resource].flat()) expect(JSON.stringify(r), roleId).toContain(logGroup);
+    }
   });
 });

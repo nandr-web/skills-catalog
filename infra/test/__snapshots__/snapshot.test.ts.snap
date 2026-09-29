@@ -168,7 +168,7 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
       "UpdateReplacePolicy": "Retain",
       "DeletionPolicy": "Retain"
     },
-    "ApiHandlerServiceRole6221F92E": {
+    "ApiRoleDE7A08EC": {
       "Type": "AWS::IAM::Role",
       "Properties": {
         "AssumeRolePolicyDocument": {
@@ -182,28 +182,27 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
             }
           ],
           "Version": "2012-10-17"
-        },
-        "ManagedPolicyArns": [
-          {
-            "Fn::Join": [
-              "",
-              [
-                "arn:",
-                {
-                  "Ref": "AWS::Partition"
-                },
-                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-              ]
-            ]
-          }
-        ]
+        }
       }
     },
-    "ApiHandlerServiceRoleDefaultPolicy72087A41": {
+    "ApiRoleDefaultPolicyEAA3579A": {
       "Type": "AWS::IAM::Policy",
       "Properties": {
         "PolicyDocument": {
           "Statement": [
+            {
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "ApiLogsCD139AD4",
+                  "Arn"
+                ]
+              }
+            },
             {
               "Action": [
                 "dynamodb:GetItem",
@@ -316,10 +315,10 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
           ],
           "Version": "2012-10-17"
         },
-        "PolicyName": "ApiHandlerServiceRoleDefaultPolicy72087A41",
+        "PolicyName": "ApiRoleDefaultPolicyEAA3579A",
         "Roles": [
           {
-            "Ref": "ApiHandlerServiceRole6221F92E"
+            "Ref": "ApiRoleDE7A08EC"
           }
         ]
       }
@@ -362,7 +361,7 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
         "MemorySize": 1024,
         "Role": {
           "Fn::GetAtt": [
-            "ApiHandlerServiceRole6221F92E",
+            "ApiRoleDE7A08EC",
             "Arn"
           ]
         },
@@ -374,8 +373,8 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
         "Timeout": 29
       },
       "DependsOn": [
-        "ApiHandlerServiceRoleDefaultPolicy72087A41",
-        "ApiHandlerServiceRole6221F92E"
+        "ApiRoleDefaultPolicyEAA3579A",
+        "ApiRoleDE7A08EC"
       ]
     },
     "ApiHttp17514DA7": {
@@ -531,7 +530,7 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
         },
         "RouteSettings": {
           "POST /api/v1/sign_in_with_github": {
-            "ThrottlingRateLimit": 1,
+            "ThrottlingRateLimit": 0.6,
             "ThrottlingBurstLimit": 5
           }
         },
@@ -546,7 +545,7 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
       "UpdateReplacePolicy": "Retain",
       "DeletionPolicy": "Retain"
     },
-    "IndexerHandlerServiceRoleD76A58F9": {
+    "IndexerRoleEAB0B441": {
       "Type": "AWS::IAM::Role",
       "Properties": {
         "AssumeRolePolicyDocument": {
@@ -560,28 +559,27 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
             }
           ],
           "Version": "2012-10-17"
-        },
-        "ManagedPolicyArns": [
-          {
-            "Fn::Join": [
-              "",
-              [
-                "arn:",
-                {
-                  "Ref": "AWS::Partition"
-                },
-                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-              ]
-            ]
-          }
-        ]
+        }
       }
     },
-    "IndexerHandlerServiceRoleDefaultPolicyF332A20D": {
+    "IndexerRoleDefaultPolicy0CFD6089": {
       "Type": "AWS::IAM::Policy",
       "Properties": {
         "PolicyDocument": {
           "Statement": [
+            {
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "IndexerLogs8FF9DFD2",
+                  "Arn"
+                ]
+              }
+            },
             {
               "Action": [
                 "dynamodb:GetItem",
@@ -637,10 +635,10 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
           ],
           "Version": "2012-10-17"
         },
-        "PolicyName": "IndexerHandlerServiceRoleDefaultPolicyF332A20D",
+        "PolicyName": "IndexerRoleDefaultPolicy0CFD6089",
         "Roles": [
           {
-            "Ref": "IndexerHandlerServiceRoleD76A58F9"
+            "Ref": "IndexerRoleEAB0B441"
           }
         ]
       }
@@ -674,7 +672,7 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
         "MemorySize": 1024,
         "Role": {
           "Fn::GetAtt": [
-            "IndexerHandlerServiceRoleD76A58F9",
+            "IndexerRoleEAB0B441",
             "Arn"
           ]
         },
@@ -686,8 +684,8 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
         "Timeout": 60
       },
       "DependsOn": [
-        "IndexerHandlerServiceRoleDefaultPolicyF332A20D",
-        "IndexerHandlerServiceRoleD76A58F9"
+        "IndexerRoleDefaultPolicy0CFD6089",
+        "IndexerRoleEAB0B441"
       ]
     },
     "IndexerHandlerSqsEventSourceskillscatalogdemoEventsQueue02704B3A63D28382": {
@@ -716,7 +714,7 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
       "UpdateReplacePolicy": "Retain",
       "DeletionPolicy": "Retain"
     },
-    "SweepHandlerServiceRoleC223771A": {
+    "SweepRole8A7451E2": {
       "Type": "AWS::IAM::Role",
       "Properties": {
         "AssumeRolePolicyDocument": {
@@ -730,28 +728,27 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
             }
           ],
           "Version": "2012-10-17"
-        },
-        "ManagedPolicyArns": [
-          {
-            "Fn::Join": [
-              "",
-              [
-                "arn:",
-                {
-                  "Ref": "AWS::Partition"
-                },
-                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-              ]
-            ]
-          }
-        ]
+        }
       }
     },
-    "SweepHandlerServiceRoleDefaultPolicy3EADB2F8": {
+    "SweepRoleDefaultPolicy646E75C8": {
       "Type": "AWS::IAM::Policy",
       "Properties": {
         "PolicyDocument": {
           "Statement": [
+            {
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "SweepLogsA7192123",
+                  "Arn"
+                ]
+              }
+            },
             {
               "Action": "dynamodb:Scan",
               "Effect": "Allow",
@@ -815,10 +812,10 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
           ],
           "Version": "2012-10-17"
         },
-        "PolicyName": "SweepHandlerServiceRoleDefaultPolicy3EADB2F8",
+        "PolicyName": "SweepRoleDefaultPolicy646E75C8",
         "Roles": [
           {
-            "Ref": "SweepHandlerServiceRoleC223771A"
+            "Ref": "SweepRole8A7451E2"
           }
         ]
       }
@@ -852,7 +849,7 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
         "MemorySize": 1024,
         "Role": {
           "Fn::GetAtt": [
-            "SweepHandlerServiceRoleC223771A",
+            "SweepRole8A7451E2",
             "Arn"
           ]
         },
@@ -864,8 +861,8 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
         "Timeout": 900
       },
       "DependsOn": [
-        "SweepHandlerServiceRoleDefaultPolicy3EADB2F8",
-        "SweepHandlerServiceRoleC223771A"
+        "SweepRoleDefaultPolicy646E75C8",
+        "SweepRole8A7451E2"
       ]
     },
     "SweepSchedule5ECAB4A7": {
@@ -1987,7 +1984,7 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
       "UpdateReplacePolicy": "Delete",
       "DeletionPolicy": "Delete"
     },
-    "ApiHandlerServiceRole6221F92E": {
+    "ApiRoleDE7A08EC": {
       "Type": "AWS::IAM::Role",
       "Properties": {
         "AssumeRolePolicyDocument": {
@@ -2001,28 +1998,27 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
             }
           ],
           "Version": "2012-10-17"
-        },
-        "ManagedPolicyArns": [
-          {
-            "Fn::Join": [
-              "",
-              [
-                "arn:",
-                {
-                  "Ref": "AWS::Partition"
-                },
-                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-              ]
-            ]
-          }
-        ]
+        }
       }
     },
-    "ApiHandlerServiceRoleDefaultPolicy72087A41": {
+    "ApiRoleDefaultPolicyEAA3579A": {
       "Type": "AWS::IAM::Policy",
       "Properties": {
         "PolicyDocument": {
           "Statement": [
+            {
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "ApiLogsCD139AD4",
+                  "Arn"
+                ]
+              }
+            },
             {
               "Action": [
                 "dynamodb:GetItem",
@@ -2135,10 +2131,10 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
           ],
           "Version": "2012-10-17"
         },
-        "PolicyName": "ApiHandlerServiceRoleDefaultPolicy72087A41",
+        "PolicyName": "ApiRoleDefaultPolicyEAA3579A",
         "Roles": [
           {
-            "Ref": "ApiHandlerServiceRole6221F92E"
+            "Ref": "ApiRoleDE7A08EC"
           }
         ]
       }
@@ -2181,7 +2177,7 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
         "MemorySize": 1024,
         "Role": {
           "Fn::GetAtt": [
-            "ApiHandlerServiceRole6221F92E",
+            "ApiRoleDE7A08EC",
             "Arn"
           ]
         },
@@ -2189,8 +2185,8 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
         "Timeout": 29
       },
       "DependsOn": [
-        "ApiHandlerServiceRoleDefaultPolicy72087A41",
-        "ApiHandlerServiceRole6221F92E"
+        "ApiRoleDefaultPolicyEAA3579A",
+        "ApiRoleDE7A08EC"
       ]
     },
     "ApiHttp17514DA7": {
@@ -2346,7 +2342,7 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
         },
         "RouteSettings": {
           "POST /api/v1/sign_in_with_github": {
-            "ThrottlingRateLimit": 1,
+            "ThrottlingRateLimit": 0.6,
             "ThrottlingBurstLimit": 5
           }
         },
@@ -2361,7 +2357,7 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
       "UpdateReplacePolicy": "Delete",
       "DeletionPolicy": "Delete"
     },
-    "IndexerHandlerServiceRoleD76A58F9": {
+    "IndexerRoleEAB0B441": {
       "Type": "AWS::IAM::Role",
       "Properties": {
         "AssumeRolePolicyDocument": {
@@ -2375,28 +2371,27 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
             }
           ],
           "Version": "2012-10-17"
-        },
-        "ManagedPolicyArns": [
-          {
-            "Fn::Join": [
-              "",
-              [
-                "arn:",
-                {
-                  "Ref": "AWS::Partition"
-                },
-                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-              ]
-            ]
-          }
-        ]
+        }
       }
     },
-    "IndexerHandlerServiceRoleDefaultPolicyF332A20D": {
+    "IndexerRoleDefaultPolicy0CFD6089": {
       "Type": "AWS::IAM::Policy",
       "Properties": {
         "PolicyDocument": {
           "Statement": [
+            {
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "IndexerLogs8FF9DFD2",
+                  "Arn"
+                ]
+              }
+            },
             {
               "Action": [
                 "dynamodb:GetItem",
@@ -2452,10 +2447,10 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
           ],
           "Version": "2012-10-17"
         },
-        "PolicyName": "IndexerHandlerServiceRoleDefaultPolicyF332A20D",
+        "PolicyName": "IndexerRoleDefaultPolicy0CFD6089",
         "Roles": [
           {
-            "Ref": "IndexerHandlerServiceRoleD76A58F9"
+            "Ref": "IndexerRoleEAB0B441"
           }
         ]
       }
@@ -2489,7 +2484,7 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
         "MemorySize": 1024,
         "Role": {
           "Fn::GetAtt": [
-            "IndexerHandlerServiceRoleD76A58F9",
+            "IndexerRoleEAB0B441",
             "Arn"
           ]
         },
@@ -2497,8 +2492,8 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
         "Timeout": 60
       },
       "DependsOn": [
-        "IndexerHandlerServiceRoleDefaultPolicyF332A20D",
-        "IndexerHandlerServiceRoleD76A58F9"
+        "IndexerRoleDefaultPolicy0CFD6089",
+        "IndexerRoleEAB0B441"
       ]
     },
     "IndexerHandlerSqsEventSourceskillscatalogthrowawayEventsQueue25350972A5A259B7": {
@@ -2527,7 +2522,7 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
       "UpdateReplacePolicy": "Delete",
       "DeletionPolicy": "Delete"
     },
-    "SweepHandlerServiceRoleC223771A": {
+    "SweepRole8A7451E2": {
       "Type": "AWS::IAM::Role",
       "Properties": {
         "AssumeRolePolicyDocument": {
@@ -2541,28 +2536,27 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
             }
           ],
           "Version": "2012-10-17"
-        },
-        "ManagedPolicyArns": [
-          {
-            "Fn::Join": [
-              "",
-              [
-                "arn:",
-                {
-                  "Ref": "AWS::Partition"
-                },
-                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-              ]
-            ]
-          }
-        ]
+        }
       }
     },
-    "SweepHandlerServiceRoleDefaultPolicy3EADB2F8": {
+    "SweepRoleDefaultPolicy646E75C8": {
       "Type": "AWS::IAM::Policy",
       "Properties": {
         "PolicyDocument": {
           "Statement": [
+            {
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "SweepLogsA7192123",
+                  "Arn"
+                ]
+              }
+            },
             {
               "Action": "dynamodb:Scan",
               "Effect": "Allow",
@@ -2626,10 +2620,10 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
           ],
           "Version": "2012-10-17"
         },
-        "PolicyName": "SweepHandlerServiceRoleDefaultPolicy3EADB2F8",
+        "PolicyName": "SweepRoleDefaultPolicy646E75C8",
         "Roles": [
           {
-            "Ref": "SweepHandlerServiceRoleC223771A"
+            "Ref": "SweepRole8A7451E2"
           }
         ]
       }
@@ -2663,7 +2657,7 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
         "MemorySize": 1024,
         "Role": {
           "Fn::GetAtt": [
-            "SweepHandlerServiceRoleC223771A",
+            "SweepRole8A7451E2",
             "Arn"
           ]
         },
@@ -2671,8 +2665,8 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
         "Timeout": 900
       },
       "DependsOn": [
-        "SweepHandlerServiceRoleDefaultPolicy3EADB2F8",
-        "SweepHandlerServiceRoleC223771A"
+        "SweepRoleDefaultPolicy646E75C8",
+        "SweepRole8A7451E2"
       ]
     },
     "SweepSchedule5ECAB4A7": {
