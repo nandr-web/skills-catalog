@@ -90,35 +90,35 @@ export async function qaRun(o: RunOptions): Promise<RunResult> {
   const onAbort = () => stopGroup('interrupted');
   let cleanup: Cleanup | undefined;
   try {
-    // The run's marker as the command's descriptor 3: what it starts keeps it (marker.ts). qa keeps its own descriptor
-    // open until the leftovers are stopped: while a file is open its inode number can't go to another file, so no later
-    // program's descriptor 3 can match it after the sandbox (and the marker) are deleted.
-    const made = createMarker(sb.root, startNow(o.tools));   // the run's start as ps reads it (check.ts)
-    marker = made.marker;
-    held = made.fd;
-    const io = o.stdio ?? 'ignore';
-    const started = spawn(o.command[0], o.command.slice(1), { cwd: sb.dirs.work, env: childEnv(sb), detached: true, stdio: [io, io, io, made.fd] });
-    child = started;
-    pgid = started.pid!;
-    recordProcessGroup(sb, pgid);
-    o.onStart?.(sb, pgid);
-    // Infinity: no time limit (an attached demo, which the person stops); setTimeout would read it as 1 ms
-    const limit = o.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    if (limit !== Infinity) timer = setTimeout(() => stopGroup('timeout'), limit);
-    o.signal?.addEventListener('abort', onAbort, { once: true });
-    if (o.signal?.aborted) onAbort();
-    exitCode = await new Promise<number | null>((ok) => {
-      started.on('exit', (code, sig) => ok(code ?? (sig ? 128 + (({ SIGTERM: 15, SIGKILL: 9, SIGINT: 2 } as Record<string, number>)[sig] ?? 0) : null)));
-      started.on('error', () => ok(127));
-    });
-  } finally {
-    clearTimeout(timer);
-    clearTimeout(kill);
-    o.signal?.removeEventListener('abort', onAbort);
-    // A command's session ids aren't trusted (it can write anything into its sandbox): qa run deletes no session folder.
-    cleanup = await teardown(sb, { machine: m, processGroups: pgid ? [pgid] : [], leaders: child ? [child] : [] });
-  }
-  try {
+    try {
+      // The run's marker as the command's descriptor 3: what it starts keeps it (marker.ts). qa keeps its own descriptor
+      // open until the leftovers are stopped: while a file is open its inode number can't go to another file, so no later
+      // program's descriptor 3 can match it after the sandbox (and the marker) are deleted.
+      const made = createMarker(sb.root, startNow(o.tools));   // the run's start as ps reads it (check.ts)
+      marker = made.marker;
+      held = made.fd;
+      const io = o.stdio ?? 'ignore';
+      const started = spawn(o.command[0], o.command.slice(1), { cwd: sb.dirs.work, env: childEnv(sb), detached: true, stdio: [io, io, io, made.fd] });
+      child = started;
+      pgid = started.pid!;
+      recordProcessGroup(sb, pgid);
+      o.onStart?.(sb, pgid);
+      // Infinity: no time limit (an attached demo, which the person stops); setTimeout would read it as 1 ms
+      const limit = o.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+      if (limit !== Infinity) timer = setTimeout(() => stopGroup('timeout'), limit);
+      o.signal?.addEventListener('abort', onAbort, { once: true });
+      if (o.signal?.aborted) onAbort();
+      exitCode = await new Promise<number | null>((ok) => {
+        started.on('exit', (code, sig) => ok(code ?? (sig ? 128 + (({ SIGTERM: 15, SIGKILL: 9, SIGINT: 2 } as Record<string, number>)[sig] ?? 0) : null)));
+        started.on('error', () => ok(127));
+      });
+    } finally {
+      clearTimeout(timer);
+      clearTimeout(kill);
+      o.signal?.removeEventListener('abort', onAbort);
+      // A command's session ids aren't trusted (it can write anything into its sandbox): qa run deletes no session folder.
+      cleanup = await teardown(sb, { machine: m, processGroups: pgid ? [pgid] : [], leaders: child ? [child] : [] });
+    }
     const differences = compare(before, snapshot(watch(pgid ? [pgid] : [])));
     // Holders of the marker that aren't the run's (another user's, or started before the run): named, never signalled.
     let notTheRuns: (Holder & { why: string })[] = [];
@@ -128,6 +128,6 @@ export async function qaRun(o: RunOptions): Promise<RunResult> {
     const status: RunStatus = ending ?? (differences.length ? 'leak' : exitCode === 0 ? 'pass' : 'fail');
     return { status, exitCode, differences, sandbox: sb.root, runId, stopped, janitor: swept, teardown: cleanup, notTheRuns };
   } finally {
-    if (held !== undefined) closeSync(held);
+    if (held !== undefined) closeSync(held);   // however the run ends, teardown failing included
   }
 }
