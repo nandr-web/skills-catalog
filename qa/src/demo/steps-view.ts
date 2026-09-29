@@ -9,19 +9,32 @@ const GREEN = '\x1b[32m', BOLD_GREEN = '\x1b[1;32m', ORANGE = '\x1b[38;5;208m', 
 const paint = (colour: string, s: string) => `${colour}${s}${RESET}`;
 
 export type StepView = { id: number; title: string; see: string; state: 'pending' | 'now' | 'seen' | 'missed' | 'planned'; missing?: string[] };
-/** What the conductor is doing (done: its Done line says so). Optional: a steps.json written before it existed still draws. */
-export type RunState = 'playing' | 'paused' | 'waiting' | 'done';
+/** What the conductor is doing: starting (waiting for the assistants), playing, pausing (paused while an assistant
+ *  answers: it holds after that), paused (holding), waiting (for Enter, step by step) or done (its Done line says so).
+ *  Optional: a steps.json written before it existed still draws. */
+export type RunState = 'starting' | 'playing' | 'pausing' | 'paused' | 'waiting' | 'done';
 export type StepsState = { title: string; mode: 'auto' | 'step'; paused: boolean; state?: RunState; message: string; steps: StepView[] };
 export type Command = 'next' | 'pause' | 'quit';
 
-/** Each key and its word; the keys line is these, joined by " · ". */
-const KEYS = [['Enter', 'next'], ['p', 'pause'], ['q', 'quit']] as const;
-export const KEYS_LINE = KEYS.map((k) => k.join(' ')).join(' · ');
-const KEY_NAMES = new Set<string>(KEYS.map(([k]) => k));
+/** A line of parts: joined by " · " where they fit, one under another where they don't (the rest after `rest`). Its
+ *  words are painted by WORD_COLOUR, the others in `base` (plain without one). */
+type Line = { parts: readonly string[]; base?: string; rest?: string };
+/** In the state and keys lines, green on a word means a key to press; orange marks a pause. */
+const WORD_COLOUR: Record<string, string> = { Enter: GREEN, p: GREEN, q: GREEN, paused: ORANGE, pausing: ORANGE };
+const KEYS = {
+  usual: { parts: ['Enter next', 'p pause', 'q quit'], base: DIM },
+  paused: { parts: ['Enter next', 'p carry on', 'q quit'], base: DIM },
+  done: { parts: ['q close'], base: DIM },
+} satisfies Record<string, Line>;
+export const KEYS_LINE = KEYS.usual.parts.join(' · ');
 /** The line just above the keys, for each state but done. Each glyph is one column wide (a test checks it in tmux). */
-const STATE_LINE = {
-  playing: ['▶ playing', DIM], paused: ['‖ paused: p to carry on', ORANGE], waiting: ['↵ waiting: Enter for the next step', GREEN],
-} as const;
+const STATE_LINE: Record<Exclude<RunState, 'done'>, Line> = {
+  starting: { parts: ['starting: waiting for both assistants'], base: DIM },
+  playing: { parts: ['playing: p to pause'], base: DIM },
+  pausing: { parts: ['‖ pausing after this: p to carry on'], rest: '  ' },
+  paused: { parts: ['‖ paused: Enter for one step', 'p to carry on'], rest: '  ' },
+  waiting: { parts: ['step by step: Enter for the next step'] },
+};
 const MARK = { seen: '✓', now: '▶', planned: '◌', missed: '✗', pending: ' ' } as const;
 const COLOUR = { now: BOLD_GREEN, planned: DIM, missed: ORANGE } as Record<StepView['state'], string>;
 const INDENT = '     ';
@@ -45,23 +58,50 @@ function wrap(text: string, width: number, first = '', rest = INDENT): string[] 
  *  what to look for. */
 const seeLine = (see: string) => (/^(planned|next in this demo|not in this demo)\b/.test(see) ? see : `see: ${see}`);
 
-/** The keys line, wrapped at `width`: each key name in green (light, not bold), the words after it dimmed. */
-function keysLines(width: number): string[] {
-  return wrap(KEYS_LINE, width, '', '').map((line) => {
-    const runs: { key: boolean; words: string[] }[] = [];
-    for (const word of line.split(' ')) {
-      const key = KEY_NAMES.has(word), last = runs.at(-1);
-      if (last && !key && !last.key) last.words.push(word); else runs.push({ key, words: [word] });
-    }
-    return runs.map((r) => paint(r.key ? GREEN : DIM, r.words.join(' '))).join(' ');
+/** A line's words painted: a word in WORD_COLOUR in its colour (a colon after it stays in `base`), the others in `base`;
+ *  neighbours of one colour share one paint. */
+function paintWords(line: string, base?: string): string {
+  const indent = /^ */.exec(line)![0];
+  const pieces: { colour?: string; text: string; space: boolean }[] = [];
+  line.slice(indent.length).split(' ').forEach((word, i) => {
+    const m = /^(.+?)(:?)$/.exec(word), colour = m ? WORD_COLOUR[m[1]!] : undefined;
+    if (!colour) { pieces.push({ colour: base, text: word, space: i > 0 }); return; }
+    pieces.push({ colour, text: m![1]!, space: i > 0 });
+    if (m![2]) pieces.push({ colour: base, text: m![2]!, space: false });
   });
+  let out = indent, run: { colour?: string; text: string } | null = null;
+  const flush = () => { if (run) out += run.colour ? paint(run.colour, run.text) : run.text; };
+  for (const p of pieces) {
+    if (run && p.colour === run.colour) { run.text += (p.space ? ' ' : '') + p.text; continue; }
+    flush();
+    if (run && p.space) out += ' ';
+    run = { colour: p.colour, text: p.text };
+  }
+  flush();
+  return out;
+}
+
+/** A Line at `width`: its parts joined by " · " while they fit; a part that doesn't starts a line after `rest`, and a
+ *  part longer than a line wraps by words. */
+function drawLine(l: Line, width: number): string[] {
+  const rest = l.rest ?? '', lines: string[] = [];
+  let line: string | null = null;
+  for (const part of l.parts) {
+    if (line !== null && line.length + 3 + part.length <= width) { line += ` · ${part}`; continue; }
+    if (line !== null) lines.push(line);
+    const pieces = wrap(part, width, line === null ? '' : rest, rest);
+    lines.push(...pieces.slice(0, -1));
+    line = pieces.at(-1)!;
+  }
+  if (line !== null) lines.push(line);
+  return lines.map((s) => paintWords(s, l.base));
 }
 
 /** The pane's text for a steps.json (null: the conductor hasn't written one yet). */
 export function renderSteps(state: StepsState | null, o: { width?: number } = {}): string {
   const width = o.width ?? Infinity;
   const block = (text: string, colour?: string, first = '', rest = INDENT) => wrap(text, width, first, rest).map((l) => (colour ? paint(colour, l) : l));
-  if (!state) return [...block('waiting for the demo to start…', DIM, '', ''), '', ...keysLines(width)].join('\n');
+  if (!state) return [...block('waiting for the demo to start…', DIM, '', ''), '', ...drawLine(KEYS.usual, width)].join('\n');
   const out = [...block(state.title, BOLD, '', ''), ''];
   for (const s of state.steps) {
     const head = wrap(`${MARK[s.state]} ${s.id}  ${s.title}`, width);
@@ -75,8 +115,8 @@ export function renderSteps(state: StepsState | null, o: { width?: number } = {}
   out.push('', ...block(`${MARK.seen} = the demo checked it too`, DIM, '', ''));
   if (state.message) out.push(...block(state.message, undefined, '', ''));
   const run = state.state ?? (state.paused ? 'paused' : undefined);   // an older steps.json: only paused is known
-  if (run && run !== 'done') out.push(...block(STATE_LINE[run][0], STATE_LINE[run][1], '', ''));
-  out.push(...keysLines(width));
+  if (run && run !== 'done') out.push(...drawLine(STATE_LINE[run], width));
+  out.push(...drawLine(run === 'paused' || run === 'pausing' ? KEYS.paused : run === 'done' ? KEYS.done : KEYS.usual, width));
   return out.join('\n');
 }
 

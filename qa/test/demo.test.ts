@@ -485,9 +485,9 @@ describe.skipIf(!!noTmux)(`qa demo with real tmux${noTmux ? ` (skipped: ${noTmux
       title: 'what to look for', mode: 'step', paused: false, message: '', steps: (['seen', 'now', 'planned', 'missed', 'pending'] as const)
         .map((state, i) => ({ id: i + 1, title: `a step ${state}`, see: 'a text', state, ...(state === 'missed' ? { missing: ['a text'] } : {}) })),
     };
-    const text = [null, ...(['playing', 'paused', 'waiting', 'done'] as const).map((state) => ({ ...steps, state }))].map((s) => renderSteps(s, { width: 48 })).join('\n');
+    const text = [null, ...(['starting', 'playing', 'pausing', 'paused', 'waiting', 'done'] as const).map((state) => ({ ...steps, state }))].map((s) => renderSteps(s, { width: 48 })).join('\n');
     const glyphs = [...new Set(text.replace(/\x1b\[[0-9;]*m/g, ''))].filter((c) => c > '~');
-    expect(glyphs).toEqual(expect.arrayContaining(['▶', '‖', '↵', '·', '✓', '◌', '✗']));
+    expect(glyphs).toEqual(expect.arrayContaining(['▶', '‖', '·', '✓', '◌', '✗']));
     for (const g of glyphs) {
       t('set-option', '-t', 'demo', '@glyph', g);
       expect(t('display-message', '-p', '-t', pane, '#{w:@glyph}').trim(), `${g} U+${g.codePointAt(0)!.toString(16)}`).toBe('1');
@@ -661,7 +661,8 @@ describe('send-keys text', () => {
 
 // The conductor on its own, with fake panes that answer the test scene: every wait is counted, and yields, never sleeps.
 type Answer = { print: string; turn?: Partial<Turn> | null };
-type World = { io: ConductorIo; panes: Record<string, string>; writes: StepsFile[]; typed: { who: string; text: string; instant: boolean }[]; slept: number; queue: (word: string) => void };
+/** `answered`: the turn of an ask whose answer said `turn: null`, arriving now (an assistant still answering until then). */
+type World = { io: ConductorIo; panes: Record<string, string>; writes: StepsFile[]; typed: { who: string; text: string; instant: boolean }[]; slept: number; queue: (word: string) => void; answered: (who: string, say: string) => void };
 const ANSWERS: Record<string, string> = { 'set me up': '● setup: arrives with the installer', 'publish my skill, hello': 'published hello as ana', 'find a skill that says hello': 'search done' };
 const MARK: Record<string, string> = { seen: '✓', now: '▶', planned: '◌', missed: '✗', pending: ' ' };
 function world(o: { answer?: (who: string, say: string) => Answer; onWrite?: (s: StepsFile, w: World) => void; onSleep?: (w: World) => void } = {}): World {
@@ -670,6 +671,7 @@ function world(o: { answer?: (who: string, say: string) => Answer; onWrite?: (s:
   const w: World = {
     panes: { ana: 'ana\n› ', bob: 'bob\n› ', steps: '', log: '' }, writes: [], typed: [], slept: 0,
     queue: (word) => { control.push(word); },
+    answered: (who, say) => { turns.push({ who, say, step: 1, ok: true, at: '' }); },
     io: {
       async type(who, text, instant) {
         w.typed.push({ who, text, instant });
@@ -701,7 +703,7 @@ describe('the conductor', () => {
     const r = await conduct(scenes(), w.io, { mode: 'auto', pace: 0, attached: false });
     expect(r.counts).toEqual({ seen: 2, planned: 1, missed: 0 });
     expect(r.quit).toBe(false);
-    expect(w.writes[0]).toMatchObject({ title: 'what to look for', mode: 'auto', paused: false, state: 'playing' });
+    expect(w.writes[0]).toMatchObject({ title: 'what to look for', mode: 'auto', paused: false, state: 'starting' });
     expect(w.writes.map(states)).toContainEqual(['now', 'pending', 'pending']);
     expect(w.writes.map(states)).toContainEqual(['planned', 'now', 'pending']);
     expect(w.writes.map(states)).toContainEqual(['planned', 'seen', 'now']);
@@ -805,7 +807,8 @@ describe('the conductor', () => {
     const resumed = at.findIndex((x, i) => i > paused && x.state !== 'paused');
     expect(at[resumed]).toMatchObject({ state: 'playing', paused: false });
     expect(at[resumed].slept - again).toBeLessThanOrEqual(50);
-    expect(at.slice(0, paused).every((x) => x.state === 'playing')).toBe(true);
+    expect(at[0].state).toBe('starting');   // until every developer's prompt shows
+    expect(at.slice(1, paused).every((x) => x.state === 'playing')).toBe(true);
     expect(at.at(-1)!.state).toBe('done');
     expect(w.writes.every((s) => !/^(Paused|Press Enter)/.test(s.message))).toBe(true);   // the state says it, not the message
 
@@ -819,8 +822,58 @@ describe('the conductor', () => {
     });
     await conduct(scenes(), w.io, { mode: 'step', pace: 3, attached: false });
     expect(w.writes.map((s) => s.state).filter((s, i, a) => s !== a[i - 1])).toEqual([
-      'playing', 'waiting', 'paused', 'waiting', 'playing', 'waiting', 'playing', 'waiting', 'playing', 'done',
+      'starting', 'waiting', 'paused', 'waiting', 'playing', 'waiting', 'playing', 'waiting', 'playing', 'done',
     ]);
+  });
+
+  // Step 1 of the test scene has two asks (ana's, then bob's). ana's assistant answers only when the test says so.
+  const slowAna = (w: () => World) => (who: string, say: string): Answer =>
+    ({ print: ANSWERS[say], turn: who === 'ana' && say === 'set me up' && w().typed.length === 1 ? null : undefined });
+  const runs = (w: World) => w.writes.map((s) => s.state).filter((s, i, a) => s !== a[i - 1]);
+
+  it('p while an assistant answers: pausing until the answer comes, then paused before the next ask, nothing typed; p again plays on', async () => {
+    let phase = 0, heldAt = -1, typedWhileHeld = -1;
+    const w: World = world({
+      answer: slowAna(() => w),
+      onSleep: (w) => {
+        const now = w.writes.at(-1)!.state;
+        if (phase === 0 && w.typed.length === 1) { phase = 1; w.queue('pause'); }   // ana's assistant is answering
+        else if (phase === 1 && now === 'pausing') { phase = 2; w.answered('ana', 'set me up'); }
+        else if (phase === 2 && now === 'paused') { phase = 3; heldAt = w.slept; }
+        else if (phase === 3 && w.slept - heldAt >= 10_000) { phase = 4; typedWhileHeld = w.typed.length; w.queue('pause'); }
+      },
+    });
+    const r = await conduct(scenes(), w.io, { mode: 'auto', pace: 3, attached: false });
+    expect(phase).toBe(4);
+    expect(typedWhileHeld).toBe(1);   // 10 s paused: bob's ask not typed
+    expect(runs(w).slice(0, 5)).toEqual(['starting', 'playing', 'pausing', 'paused', 'playing']);
+    expect(w.writes.find((s) => s.state === 'pausing')!.paused).toBe(true);
+    expect(w.typed.map((t) => t.who)).toEqual(['ana', 'bob', 'ana', 'bob']);
+    expect(r.counts).toEqual({ seen: 2, planned: 1, missed: 0 });
+  });
+
+  it('Enter while paused plays one ask, or one step between steps, then holds again; p plays on', async () => {
+    let phase = 0, heldAt = -1;
+    const typedAt: number[] = [];
+    const w: World = world({
+      answer: slowAna(() => w),
+      onSleep: (w) => {
+        const now = w.writes.at(-1)!.state, held = () => w.slept - heldAt >= 10_000;
+        if (phase === 0 && w.typed.length === 1) { phase = 1; w.queue('pause'); }
+        else if (phase === 1 && now === 'pausing') { phase = 2; w.answered('ana', 'set me up'); }
+        else if (phase === 2 && now === 'paused') { phase = 3; typedAt.push(w.typed.length); w.queue('next'); }   // before bob's ask
+        else if (phase === 3 && now === 'paused' && w.typed.length === 2) { phase = 4; heldAt = w.slept; }   // after step 1
+        else if (phase === 4 && held()) { phase = 5; typedAt.push(w.typed.length); w.queue('next'); }
+        else if (phase === 5 && now === 'paused' && w.typed.length === 3) { phase = 6; heldAt = w.slept; }   // after step 2
+        else if (phase === 6 && held()) { phase = 7; typedAt.push(w.typed.length); w.queue('pause'); }
+      },
+    });
+    const r = await conduct(scenes(), w.io, { mode: 'auto', pace: 3, attached: false });
+    expect(phase).toBe(7);
+    expect(typedAt).toEqual([1, 2, 3]);   // each Enter: one more ask (bob's), then one more step (step 2's one ask)
+    expect(runs(w)).toEqual(['starting', 'playing', 'pausing', 'paused', 'pausing', 'paused', 'pausing', 'paused', 'playing', 'done']);
+    expect(w.typed.map((t) => t.text)).toEqual(['set me up', 'set me up', 'publish my skill, hello', 'find a skill that says hello']);
+    expect(r.counts).toEqual({ seen: 2, planned: 1, missed: 0 });
   });
 
   it('q ends early and leaves the rest pending: stopped after the last step played, and how many were not', async () => {

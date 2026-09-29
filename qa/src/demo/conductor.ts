@@ -2,8 +2,9 @@
 // checks what shows. Per step: mark it now; per ask, type it into that developer's pane and wait for the assistant's
 // turns.jsonl line; then look for each expected text in the panes the step names (only text that appeared during the
 // step counts; in the steps pane, which redraws itself, all of it). A step is seen, planned (a planned call and nothing
-// expected) or missed. Between steps it waits the pace, or for Enter; p pauses; q ends. Everything goes through
-// ConductorIo, so the tests run it without tmux.
+// expected) or missed. Between steps it waits the pace, or for Enter; q ends. p pauses: it holds before the next ask or
+// answer it would type (pausing until then), and Enter lets one ask (or, between steps, one step) through. Everything
+// goes through ConductorIo, so the tests run it without tmux.
 import { CLI_OPS, type Scenes, type Step } from './scenes.ts';
 import type { RunState } from './steps-view.ts';
 
@@ -55,7 +56,7 @@ const count = (steps: StepView[]): Counts => {
 
 /** steps.json before the first step. */
 export const initialSteps = (scenes: Scenes, mode: StepsFile['mode']): StepsFile => ({
-  title: TITLE, mode, paused: false, state: 'playing', message: '', steps: scenes.steps.map((s) => ({ id: s.id, title: s.title, see: s.see, state: 'pending' })),
+  title: TITLE, mode, paused: false, state: 'starting', message: '', steps: scenes.steps.map((s) => ({ id: s.id, title: s.title, see: s.see, state: 'pending' })),
 });
 
 /** What a pane showed after `before` was captured: from before's last line on, less what that line already had (the
@@ -72,9 +73,15 @@ export const joined = (text: string) => text.replace(/ *\n {2}│ /g, ' ');
 export async function conduct(scenes: Scenes, io: ConductorIo, o: ConductorOptions): Promise<Conducted> {
   const view = initialSteps(scenes, o.mode);
   const timeout = o.turnTimeoutMs ?? 30_000, settle = o.settleMs ?? 3000;
-  let quit = false, done = false, nexts = 0, waiting: 'no' | 'enter' | 'pace' = 'no';
+  let quit = false, done = false, ready = false, nexts = 0, waiting: 'no' | 'enter' | 'pace' = 'no';
+  // holding: in a wait or a hold, where a pause really stops it; pass: an Enter while paused between steps lets the
+  // step's first ask through.
+  let holding = false, pass = false;
   // The steps pane says the state; the message is left for the end.
-  const render = () => { view.state = done ? 'done' : view.paused ? 'paused' : waiting === 'enter' ? 'waiting' : 'playing'; io.writeSteps(view); };
+  const render = () => {
+    view.state = done ? 'done' : view.paused ? (holding ? 'paused' : 'pausing') : !ready ? 'starting' : waiting === 'enter' ? 'waiting' : 'playing';
+    io.writeSteps(view);
+  };
   const poll = () => {
     for (const w of io.control()) {
       if (w === 'quit') quit = true;
@@ -86,14 +93,29 @@ export async function conduct(scenes: Scenes, io: ConductorIo, o: ConductorOptio
   // Between steps: `seconds` (not counting a pause), or until Enter; for Enter only in step mode.
   const wait = async (seconds: number, forEnter: boolean) => {
     waiting = forEnter ? 'enter' : 'pace';
+    holding = true;
     render();
     for (let waited = 0; !poll(); ) {
-      if (nexts) { nexts--; break; }
+      if (nexts) { nexts--; pass = view.paused; break; }
       if (!forEnter && !view.paused && waited >= seconds * 1000) break;
       await io.sleep(TICK);
       if (!view.paused) waited += TICK;
     }
     waiting = 'no';
+    holding = false;
+  };
+  // Before typing an ask or an answer: while paused, hold until p again, or Enter lets this one through.
+  const hold = async () => {
+    if (poll() || !view.paused) { pass = false; return; }
+    if (pass) { pass = false; return; }
+    holding = true;
+    render();
+    while (!poll() && view.paused) {
+      if (nexts) { nexts--; break; }
+      await io.sleep(TICK);
+    }
+    holding = false;
+    if (view.paused && !quit) render();   // let through by Enter: pausing again after it (p again already drew playing)
   };
   // The ask's turn; meanwhile each `then` is typed once the pane shows its `after` (the person's y at a question). If
   // the turn comes first (the question never asked, e.g. the step is planned here), the rest is skipped.
@@ -102,7 +124,11 @@ export async function conduct(scenes: Scenes, io: ConductorIo, o: ConductorOptio
     for (let waited = 0; ; waited += TICK) {
       const turn = io.turns().slice(seen).find((t) => t.who === who);
       if (turn || waited >= timeout || poll()) return turn;
-      if (next < then.length && joined(since(from, io.capture(who))).includes(then[next]!.after)) await io.type(who, then[next++]!.type, instant);
+      if (next < then.length && joined(since(from, io.capture(who))).includes(then[next]!.after)) {
+        await hold();
+        if (quit) return undefined;
+        await io.type(who, then[next++]!.type, instant);
+      }
       await io.sleep(TICK);
     }
   };
@@ -117,6 +143,8 @@ export async function conduct(scenes: Scenes, io: ConductorIo, o: ConductorOptio
     const panes = Object.keys(expected);
     const before = Object.fromEntries(panes.filter((p) => p !== 'steps').map((p) => [p, io.capture(p)]));
     for (const ask of step.asks) {
+      await hold();
+      if (quit) return missing;
       const seen = io.turns().length;
       const from = io.capture(ask.who);
       await io.type(ask.who, ask.say, instant);
@@ -138,6 +166,7 @@ export async function conduct(scenes: Scenes, io: ConductorIo, o: ConductorOptio
 
   io.writeSteps(view);
   for (let waited = 0; waited < (o.readyMs ?? 30_000) && !scenes.developers.every((d) => io.capture(d.id).includes(PROMPT)) && !poll(); waited += TICK) await io.sleep(TICK);
+  ready = true;
   o.onMark?.('ready');
   const only = o.only?.map(String);
   const last = only ? Math.max(...scenes.steps.map((s, i) => (only.includes(String(s.id)) ? i : -1))) : scenes.steps.length - 1;
@@ -148,6 +177,7 @@ export async function conduct(scenes: Scenes, io: ConductorIo, o: ConductorOptio
     v.state = 'now';
     render();
     const missing = await play(step, fast || o.pace === 0);
+    pass = false;   // an Enter's pass never carries into the next step
     if (quit) { v.state = 'pending'; break; }
     // Planned: a planned call, or, without the server, a command-line op (it shows as planned there).
     const planned = step.asks.some((a) => a.calls.some((c) => 'planned' in c || (!o.server && CLI_OPS.includes(c.op))));

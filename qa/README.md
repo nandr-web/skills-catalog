@@ -86,7 +86,9 @@ npm run demo
 
 It plays on its own, a few seconds per step. **Enter**: the next step now. **p**: pause. **q** or **Ctrl-C**: stop,
 remove everything and say whether anything was left behind (before the last step, it also says after which step it
-stopped and how many weren't played).
+stopped and how many weren't played). The line above the keys in the Steps pane says what the demo is doing: starting,
+playing, pausing (it stops before the next thing it types), paused, or waiting for Enter. While paused, Enter plays one
+more step (in the middle of a step, one more ask) and pauses again; p carries on.
 
 Exit codes: 0 every step seen or planned; 1 a step missed (it says what didn't show), a flag refused (it says which) or
 the director failed (it says why); 2 something was left behind; 3 a pre-flight check refused to start (it says why);
