@@ -12,6 +12,8 @@ import { userInfo } from 'node:os';
 
 const skills = loadGolden('skills.yaml');
 const histories = loadGolden('histories.yaml');
+// Read before this file imports the fail-safe itself: only the run's setup file can have set it.
+const guardedFromTheStart = (globalThis as Record<symbol, unknown>)[Symbol.for('skills-catalog.fail-safe')] === true;
 
 function validFixtures(): [string, string, RawFile[]][] {
   return Object.entries<any>(skills.valid).map(([key, fx]) => {
@@ -25,6 +27,41 @@ describe('the fail-safe (contract §8)', () => {
     expect(() => refuseRealPlaces(userInfo().homedir)).toThrow(/fail-safe/);
     expect(() => refuseRealPlaces('/tmp')).toThrow(/fail-safe/);
     expect(refuseRealPlaces(sandbox())).toBeTruthy();
+  });
+
+  it('is run-wide: the real home, ~/.claude and Claude Code\'s /private/tmp/claude-* folders are refused in every test file', async () => {
+    expect(guardedFromTheStart).toBe(true);
+    const { REFUSED_ROOTS, refusedPlace } = await import('./fail-safe.ts');
+    const { join } = await import('node:path');
+    expect(REFUSED_ROOTS).toEqual([userInfo().homedir, join(userInfo().homedir, '.claude')]);
+    for (const p of [join(userInfo().homedir, 'x'), join(userInfo().homedir, '.claude', 'skills', 'x'), '/private/tmp/claude-501/x', '/tmp/claude-501/x']) expect(refusedPlace(p), p).toBeDefined();
+    expect(refusedPlace(sandbox())).toBeUndefined();
+    expect(Object.keys(process.env).filter((k) => k.startsWith('SKILLS_'))).toEqual([]);
+  });
+
+  it('checks every write, through named imports, promises and SQLite alike (shown on a sandbox refused for this test)', async () => {
+    const { alsoRefuse } = await import('./fail-safe.ts');
+    const { mkdirSync, readdirSync, renameSync, writeFileSync } = await import('node:fs');
+    const { writeFile } = await import('node:fs/promises');
+    const { DatabaseSync } = await import('node:sqlite');
+    const { join } = await import('node:path');
+    const standIn = sandbox();
+    const outside = join(sandbox(), 'a.txt');
+    writeFileSync(outside, 'a');
+    const allow = alsoRefuse(standIn);
+    try {
+      expect(() => writeFileSync(join(standIn, 'x'), 'x')).toThrow(/fail-safe/);
+      expect(() => mkdirSync(join(standIn, 'd'))).toThrow(/fail-safe/);
+      expect(() => renameSync(outside, join(standIn, 'a.txt'))).toThrow(/fail-safe/);
+      await expect(writeFile(join(standIn, 'y'), 'y')).rejects.toThrow(/fail-safe/);
+      expect(() => new DatabaseSync(join(standIn, 'c.db'))).toThrow(/fail-safe/);
+      const { openCatalog } = await import('../src/open.ts');
+      const { pathToFileURL } = await import('node:url');
+      await expect(openCatalog(pathToFileURL(join(standIn, 'catalog')).href)).rejects.toThrow(/fail-safe/);
+    } finally {
+      allow();
+    }
+    expect(readdirSync(standIn)).toEqual([]);
   });
 
   it('with the temp folder at /tmp (Linux): allows only its own test folders there, and never the home', async () => {

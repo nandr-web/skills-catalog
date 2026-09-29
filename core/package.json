@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test",
     "vendor-surface": "node scripts/vendor-surface.ts",
-    "perf": "node scripts/perf-search.ts"
+    "perf": "node --disable-warning=ExperimentalWarning scripts/perf-search.ts"
   },
   "dependencies": {
     "yaml": "2.9.1"
