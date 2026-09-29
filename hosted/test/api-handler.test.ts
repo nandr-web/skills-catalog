@@ -26,6 +26,8 @@ const HOLDERS: Record<string, TokenHolder> = {
   't-dev1': { owner: HTTP_DEVELOPER, scope: 'publish', kind: 'personal' },
   't-reader': { owner: 'reader', scope: 'read', kind: 'session' },
 };
+// Every request here came through the edge; the origin guard's own tests are api-origin.test.ts.
+const THROUGH_THE_EDGE = { allows: async () => true };
 
 async function world(file: (sha256: string) => Promise<FileAnswer> = async () => ({ kind: 'unknown' })) {
   const store = hostedAdapter(() => emu!.endpoint).store();
@@ -40,6 +42,7 @@ async function world(file: (sha256: string) => Promise<FileAnswer> = async () =>
     catalog,
     tokens: { verify: async (t) => (looked.push(t), HOLDERS[t]) },
     words,
+    origin: THROUGH_THE_EDGE,
     file: async (sha) => (asked.push(sha), file(sha)),
   });
   return { handler, looked, asked, close: () => catalog.close() };
@@ -75,7 +78,7 @@ describe('the files route, hosted, answered by the catalog', () => {
       const s = HTTP_SEED[0]!;
       await catalog.publish({ name: s.name, files: [{ path: 'SKILL.md', mode: '0644', content_base64: Buffer.from(skillMd(s.name, s.description)).toString('base64') }] }, { actor: async () => HTTP_DEVELOPER }, 'web');
       const published = createHash('sha256').update(skillMd(s.name, s.description)).digest('hex');
-      const handler = createHostedHandler({ catalog, tokens: { verify: async (t) => HOLDERS[t] }, words });
+      const handler = createHostedHandler({ catalog, tokens: { verify: async (t) => HOLDERS[t] }, words, origin: THROUGH_THE_EDGE });
       // The test catalog runs the names indexer right after each publish.
       const r = await handler.handle(req({ method: 'GET', path: `/api/v1/files/${published}` }));
       expect(r.status).toBe(302);
@@ -174,7 +177,7 @@ describe('who is asking, hosted', () => {
   it('a bug is internal_error in the envelope, never a stack trace; the log gets where it happened, never its message or the token', async () => {
     const w = await world();
     const logged: string[] = [];
-    const broken = createHostedHandler({ catalog: new Proxy({}, { get: () => () => Promise.reject(new Error('skill text: release notes body')) }) as never, tokens: { verify: async (t) => HOLDERS[t] }, words, file: async () => ({ kind: 'unknown' }), log: (l) => logged.push(l) });
+    const broken = createHostedHandler({ catalog: new Proxy({}, { get: () => () => Promise.reject(new Error('skill text: release notes body')) }) as never, tokens: { verify: async (t) => HOLDERS[t] }, words, origin: THROUGH_THE_EDGE, file: async () => ({ kind: 'unknown' }), log: (l) => logged.push(l) });
     try {
       const r = await broken.handle(req(search));
       expect(r.status).toBe(200);

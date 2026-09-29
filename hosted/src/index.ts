@@ -13,3 +13,4 @@ export { BLOB_PREFIX, SEARCH_KEY, blobKey, createStores, versionSk, type Place }
 export { createHostedHandler, type HostedHandlerParts, type HostedRequest } from './api/handler.ts';
 export { lambdaAdapter, type HttpApiEvent, type HttpApiResult } from './api/lambda.ts';
 export { mayRun, whoIsAsking, type Asking } from './api/who.ts';
+export { ORIGIN_HEADER, ORIGIN_VALUES_MS, originGuard, type OriginGuard } from './api/origin.ts';

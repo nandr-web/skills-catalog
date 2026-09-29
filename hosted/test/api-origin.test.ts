@@ -112,7 +112,8 @@ const req = (path: string, headers: Record<string, string | undefined>, body = '
 describe('the handler checks the origin first', () => {
   it('without the origin value: 403 before the acting-as header, the token, the route or the body, the same fixed answer for a wrong or missing value', async () => {
     const w = handler();
-    const answers = [];
+    const answers: string[] = [];
+    const bodies: string[] = [];
     for (const [path, headers] of [
       ['/api/v1/search_shared_skills', { authorization: 'Bearer t-dev1' }],
       ['/api/v1/search_shared_skills', { authorization: 'Bearer t-dev1', [ORIGIN_HEADER]: 'wrong' }],
@@ -124,9 +125,10 @@ describe('the handler checks the origin first', () => {
       const r = await w.h.handle(req(path, headers));
       expect(r.status, path).toBe(403);
       answers.push(JSON.stringify(r));
+      bodies.push(String(r.body));
     }
     expect(new Set(answers).size).toBe(1);
-    expect(answers[0]!.toLowerCase()).not.toMatch(/origin|secret|header/);
+    expect(bodies[0]!.toLowerCase()).not.toMatch(/origin|secret|header|guard/);
     expect(w.looked).toEqual([]);
     expect(w.touched).toEqual([]);
     expect(w.logged).toEqual([]);

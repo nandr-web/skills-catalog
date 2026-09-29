@@ -1,12 +1,14 @@
 // The hosted API's handler (contract §1.1), without a transport: the Lambda adapter only turns its event into a request
 // (body read whole, or 'cut' past the limit) and the answer back. The shared half comes from the core (routes, the
-// envelope, the status table, the files route); hosted adds who's asking: the Bearer token, checked before anything
-// under /api/v1/ is looked up or read, so a caller without a good token learns nothing of what exists; the acting-as
-// header refused; a read-scope token refused whatever changes the catalog, before it runs. No pairing route.
+// envelope, the status table, the files route); hosted adds the origin guard first (a request that skipped the edge is
+// 403 before anything else), then who's asking: the Bearer token, checked before anything under /api/v1/ is looked up
+// or read, so a caller without a good token learns nothing of what exists; the acting-as header refused; a read-scope
+// token refused whatever changes the catalog, before it runs. No pairing route.
 
 import { CatalogError, type Catalog, type Words } from '@skills-catalog/core';
 import { STATUS, envelope, fileResponse, operationResponse, refuse, route, type FileAnswer, type HttpResponse } from '@skills-catalog/core/http';
 import type { TokenHolder } from '../tokens.ts';
+import { ORIGIN_HEADER, type OriginGuard } from './origin.ts';
 import { mayRun, whoIsAsking } from './who.ts';
 
 export type HostedRequest = { method: string; path: string; headers: Record<string, string | undefined>; body: Uint8Array | 'cut' };
@@ -15,6 +17,8 @@ export type HostedHandlerParts = {
   catalog: Catalog;
   tokens: { verify(token: string): Promise<TokenHolder | undefined> };
   words: Words;
+  /** Whether the request came through the edge (its origin header's value). */
+  origin: OriginGuard;
   /** A file by its fingerprint: a link when a version names it, on its way, or unknown. The catalog's own by default. */
   file?: (sha256: string) => Promise<FileAnswer>;
   /** Where a bug's details go (the function's log): never skill text or a token. */
@@ -26,6 +30,8 @@ export function createHostedHandler(p: HostedHandlerParts): { handle(req: Hosted
   const log = p.log ?? ((line: string) => console.error(line));
 
   async function answer(req: HostedRequest): Promise<HttpResponse> {
+    // One fixed 403 for a missing or wrong value, naming no guard.
+    if (!(await p.origin.allows(req.headers[ORIGIN_HEADER]))) return refuse('refused', s);
     const r = route(req.method, req.path);
     // Outside the versioned API (the page, pairing) nothing is served here.
     if (r.kind === 'pair' || (r.kind === 'not_found' && !r.operationPath)) return refuse('not_found', s);
