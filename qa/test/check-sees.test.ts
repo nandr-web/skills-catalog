@@ -20,9 +20,10 @@ const BLIND = '/usr/bin/true';
 const blindList = () => (DEFAULT_TOOLS.proc ? { ...DEFAULT_TOOLS, proc: scratch() } : { ...DEFAULT_TOOLS, ps: BLIND });
 
 describe('the process and port checks fail closed', () => {
-  it('uses ps and lsof by their full paths; on Linux, the processes from /proc', () => {
-    if (process.platform === 'darwin') expect(DEFAULT_TOOLS).toEqual({ ps: '/bin/ps', lsof: '/usr/sbin/lsof' });
-    if (process.platform === 'linux') expect(DEFAULT_TOOLS).toMatchObject({ proc: '/proc' });
+  it('uses ps and lsof by their full paths (where macOS and Linux keep them); on Linux, the processes from /proc', () => {
+    expect(['/bin/ps', '/usr/bin/ps']).toContain(DEFAULT_TOOLS.ps);
+    expect(['/usr/sbin/lsof', '/usr/bin/lsof', '/sbin/lsof']).toContain(DEFAULT_TOOLS.lsof);
+    expect(DEFAULT_TOOLS.proc).toBe(process.platform === 'linux' ? '/proc' : undefined);
   });
 
   it('a ps (or /proc) that is missing is an error, never "no processes"', () => {
@@ -42,7 +43,7 @@ describe('the process and port checks fail closed', () => {
 
   it('an lsof that fails (an exit other than 0, or 1 for "nothing found") refuses, never "no ports"', async () => {
     // /bin/sh given lsof's arguments fails (127: it looks for a script by the first one's name)
-    await expect(checkSees(newRunId(), { ...DEFAULT_TOOLS, lsof: '/bin/sh' })).rejects.toThrow(/can't run \/bin\/sh \(exit (?!0\)|1\))\d+\)/);
+    await expect(checkSees(newRunId(), { ...DEFAULT_TOOLS, lsof: '/bin/sh' })).rejects.toThrow(/needs \/bin\/sh to see what a run leaves behind, and it failed \(exit (?!0\)|1\))\d+\); nothing was run\. Run `\/bin\/sh -nP/);
   });
 
   it('a machine without lsof: qa run says to install it and exits 3, with no sandbox and no command started', () => {

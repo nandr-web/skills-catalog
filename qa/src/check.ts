@@ -44,7 +44,7 @@ function run(path: string, args: string[], ok: (status: number) => boolean): Spa
   const r = spawnSync(path, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   if (r.error || r.status === null || !ok(r.status)) {
     const why = r.error ? ((r.error as NodeJS.ErrnoException).code ?? r.error.message) : `exit ${r.status ?? r.signal}`;
-    throw new CheckBlind(`the before/after check can't run ${path} (${why}), so it can't see what a run leaves behind; nothing was run`);
+    throw new CheckBlind(`the before/after check needs ${path} to see what a run leaves behind, and it failed (${why}); nothing was run. Run \`${[path, ...args].join(' ')}\` in a terminal to see why`);
   }
   return r;
 }
@@ -165,10 +165,11 @@ export async function checkSees(runId: string, tools: Tools = DEFAULT_TOOLS): Pr
   const marker = spawn(process.execPath, ['-e', "const s = require('net').createServer().listen(0, '127.0.0.1', () => console.log(s.address().port)); setTimeout(() => process.exit(0), 60000)"], {
     stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, QA_RUN_ID: runId },
   });
-  const gone = new Promise((ok) => marker.once('exit', ok));
+  const gone = new Promise((ok) => { marker.once('exit', ok); marker.once('error', ok); });
   try {
     const port = await new Promise<string>((ok, no) => {
       const t = setTimeout(() => no(new CheckBlind("the before/after check's marker process never said its port (10 s); nothing was run")), 10_000);
+      marker.once('error', (e) => (clearTimeout(t), no(new CheckBlind(`the before/after check couldn't start its marker process (${(e as NodeJS.ErrnoException).code ?? e.message}); nothing was run`))));
       marker.stdout!.once('data', (b) => (clearTimeout(t), ok(String(b).trim())));
     });
     if (!runProcesses(runId, tools).some((p) => p.pid === marker.pid)) {
