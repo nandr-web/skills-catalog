@@ -3,7 +3,7 @@
 export { HostedStorage, type HostedParts } from './storage.ts';
 export { HostedEvents } from './events.ts';
 export { S3SearchIndex } from './search.ts';
-export { HostedBlobLinks, LINK_SECONDS, type UploadAnswer } from './links.ts';
+export { HostedBlobLinks, LINK_SECONDS } from './links.ts';
 export { HostedSweep } from './sweep.ts';
 export { HostedFileNames, fileNamePk, isNamed, namesClient, namesIndexer, type NamesClient } from './names.ts';
 export { fileState, type FileState } from './api/files.ts';

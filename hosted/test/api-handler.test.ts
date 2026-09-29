@@ -4,7 +4,7 @@
 // token is refused whatever changes the catalog, before it runs.
 
 import { createHash } from 'node:crypto';
-import { OPERATIONS, Words } from '@skills-catalog/core';
+import { OPERATIONS, Words, type Catalog } from '@skills-catalog/core';
 import { HTTP_DEVELOPER, HTTP_SEED, SHA, checkHttpCase, httpCases, skillMd } from '@skills-catalog/core/testing/http';
 import { API_HEADERS, SECURITY_HEADERS, type FileAnswer } from '@skills-catalog/core/http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -12,7 +12,7 @@ import { createHostedHandler, type HostedRequest } from '../src/api/handler.ts';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { S3Client } from '@aws-sdk/client-s3';
 import { createStores, HostedTokenStore, type Place, type TokenHolder } from '../src/index.ts';
-import { hostedAdapter } from './adapter.ts';
+import { hostedAdapter, isInline, toUploaded } from './adapter.ts';
 import { FAKE, startEmulator, type Emulator } from './emulator.ts';
 
 let emu: Emulator | undefined;
@@ -47,7 +47,20 @@ async function world(file: (sha256: string) => Promise<FileAnswer> = async () =>
     origin: THROUGH_THE_EDGE,
     file: async (sha) => (asked.push(sha), file(sha)),
   });
-  return { handler, looked, asked, close: () => catalog.close() };
+  return { handler, catalog, looked, asked, close: () => catalog.close() };
+}
+
+/** A publish's body as a hosted caller sends it: an inline one's files uploaded first, then named by sha256 (the
+ *  shared cases are written inline, as a local caller sends them). Any other body goes as it is. */
+async function hostedBody(catalog: Catalog, r: { path: string; body?: string | 'cut' }): Promise<{ path: string; body?: string | 'cut' }> {
+  if (r.path !== '/api/v1/publish_version' || r.body === undefined || r.body === 'cut') return r;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(r.body);
+  } catch {
+    return r;
+  }
+  return isInline(parsed) ? { ...r, body: JSON.stringify(await toUploaded(catalog, parsed, { actor: async () => HTTP_DEVELOPER })) } : r;
 }
 
 const req = (r: { method: string; path: string; body?: string | 'cut' }, headers: Record<string, string | undefined> = { authorization: 'Bearer t-dev1' }): HostedRequest => ({
@@ -62,7 +75,7 @@ describe("the web API's shared cases, hosted", () => {
     it(c.name, async () => {
       const w = await world(async () => c.file ?? { kind: 'unknown' });
       try {
-        const r = await w.handler.handle(req(c.request!));
+        const r = await w.handler.handle(req({ ...c.request!, ...(await hostedBody(w.catalog, c.request!)) }));
         expect(checkHttpCase(c, r)).toEqual([]);
         // A malformed fingerprint never reaches the catalog.
         if (c.request!.path.startsWith('/api/v1/files/') && !c.file) expect(w.asked).toEqual([]);
@@ -172,8 +185,8 @@ describe('who is asking, hosted', () => {
   it('the developer acting is the token holder: a publish by the token of dev1 acts as dev1', async () => {
     const w = await world();
     try {
-      const body = JSON.stringify({ name: 'hosted-published', dry_run: true, files: [{ path: 'SKILL.md', mode: '0644', content_base64: Buffer.from(skillMd('hosted-published', 'From the hosted API.')).toString('base64') }] });
-      const r = await w.handler.handle(req({ method: 'POST', path: '/api/v1/publish_version', body }));
+      const inline = JSON.stringify({ name: 'hosted-published', dry_run: true, files: [{ path: 'SKILL.md', mode: '0644', content_base64: Buffer.from(skillMd('hosted-published', 'From the hosted API.')).toString('base64') }] });
+      const r = await w.handler.handle(req({ method: 'POST', ...(await hostedBody(w.catalog, { path: '/api/v1/publish_version', body: inline })) }));
       expect(JSON.parse(String(r.body))).toMatchObject({ ok: true, data: { publisher: HTTP_DEVELOPER } });
     } finally {
       w.close();

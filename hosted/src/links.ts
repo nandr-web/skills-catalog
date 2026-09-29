@@ -5,21 +5,16 @@
 
 import { GetObjectCommand, PutObjectCommand, type S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { Clock } from '@skills-catalog/core';
+import type { BlobLinks, Clock, UploadAnswer } from '@skills-catalog/core';
 import { changeTags, inspect, MARK_WAIT_MS } from './blobs.ts';
 import { blobKey, type Place } from './place.ts';
 
 /** How long a link works. */
 export const LINK_SECONDS = 300;
 
-export type UploadAnswer =
-  | { kind: 'upload'; sha256: string; url: string; headers: Record<string, string> }
-  | { kind: 'stored'; sha256: string }
-  | { kind: 'removing'; sha256: string; retry_after: string };
-
 const base64Of = (hex: string) => Buffer.from(hex, 'hex').toString('base64');
 
-export class HostedBlobLinks {
+export class HostedBlobLinks implements BlobLinks {
   private readonly p: { s3: S3Client; place: Place; clock: Clock };
 
   constructor(parts: { s3: S3Client; place: Place; clock: Clock }) {
