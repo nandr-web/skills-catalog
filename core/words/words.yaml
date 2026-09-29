@@ -755,7 +755,9 @@ results:
       read_only: "publishing isn't turned on here: start skills-catalog serve with --publish to allow it"
       token_only: can't be used with a hosted catalog, where who is acting comes only from the sign-in token (leave the header out)
       not_uploaded: "names a file that hasn't been uploaded yet: upload it through the links request_upload_links gives, then publish again"
-      read_scope: this sign-in token can only read the catalog; changing it needs a token with the publish scope
+      size_mismatch: "asks for the same file (SHA-256) as an earlier entry but gives a different size: one file has one size"
+      not_a_token_id: isn't a token id (list_tokens shows the ids; the value sent isn't repeated here)
+      read_scope: this sign-in token can only read; publishing, or revoking a publish token, needs a token with the publish scope
     invalid_manifest_problem:
       missing: is missing
       name: has no name in its front matter
@@ -856,7 +858,8 @@ results:
     forbidden: "forbidden: the catalog doesn't allow this for the person signed in, so nothing was done. Tell them; don't look for another way around it."
     forbidden_hosted: "forbidden: {catalog} is a hosted catalog, and this version runs locally only, so nothing was done. Tell the person; ${cli} setup points it at a local folder."
     forbidden_read_only: "forbidden: publishing isn't turned on here (this page's server was started without --publish), so nothing was published. To allow it, stop the server and start it again with ${cli} serve --publish."
-    forbidden_read_scope: "forbidden: the sign-in token in use can only read the catalog, so nothing was changed. Publishing needs a token with the publish scope: tell the person; don't look for another token yourself."
+    forbidden_read_scope: "forbidden: the sign-in token in use can only read, so nothing was changed. Publishing, or revoking a publish token, needs a token with the publish scope: tell the person; don't look for another token yourself."
+    forbidden_too_many_tokens: "forbidden: this person already has {limit} live catalog tokens (not revoked, not expired), so no sign-in was made and no token was issued. Revoking some makes room: list_tokens shows their ids and revoke_token revokes one by id. Tell the person; don't revoke any yourself."
     port_in_use: "port_in_use: port {port} is already in use on this machine, so the server didn't start. Choose another with --port, or leave --port out to take a free one."
     person_only_serve: "The local web page runs only in the person's own terminal: it prints a private link for their browser, so nothing was started. Give them the command to run there: {command}"
     internal_error: "internal_error: this tool (${cli}) hit a bug (the details are in {log}). The bug is in ${cli}, not in the person's setup: nothing on this machine needs fixing, and don't edit ${cli}'s files. Tell the person, and give them the log's path."
