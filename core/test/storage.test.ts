@@ -1,18 +1,22 @@
 // Storage tests (golden/histories.yaml `concurrent` and `fault`): a refused or failed publish leaves no version behind,
-// and no version ever points at a missing blob. Nothing lost across processes is in storage-processes.test.ts.
+// and no version ever points at a missing blob. The ports' shared tests run on every adapter (test/shared/storage.ts);
+// these are the local adapter's own (the open-time cleanup of publishes that didn't finish, the blob put back under its
+// lock). Nothing lost across processes is in storage-processes.test.ts.
 
 import { createHash } from 'node:crypto';
 import { readdirSync, rmSync, utimesSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { basename, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { SearchIndex, Storage } from '../src/ports.ts';
+import type { Storage } from '../src/ports.ts';
 import { actAs, openLocalCatalog } from '../src/local/index.ts';
 import { FolderBlobStore } from '../src/local/blobs.ts';
 import type { SqliteMetadataStore } from '../src/local/metadata.ts';
-import { historyVersion, loadGolden, type RawFile } from './golden.ts';
+import { ADAPTERS } from './adapters.ts';
+import { historyVersion, loadGolden } from './golden.ts';
 import { counterIds, errorOf, fixedClock, openTest, request, versionsIn } from './helpers.ts';
 import { sandbox } from './sandbox.ts';
+import { storageSuite } from './shared/storage.ts';
 
 const histories = loadGolden('histories.yaml');
 const ana = actAs('ana');
@@ -25,10 +29,6 @@ function storedBlobs(dir: string): Set<string> {
       .filter((d) => d.isFile())
       .map((d) => basename(d.parentPath) + d.name),
   );
-}
-
-function renamed(files: RawFile[], name: string): RawFile[] {
-  return files.map((f) => (f.path === 'SKILL.md' ? { ...f, bytes: Buffer.from(Buffer.from(f.bytes).toString().replace('pr-review-checklist', name)) } : f));
 }
 
 // Another publish lands just before this catalog's next commit (after its pre-checks).
@@ -46,92 +46,9 @@ function raceBeforeCommit(rival: () => Promise<void>): (s: Storage) => Storage {
     });
 }
 
+for (const a of ADAPTERS) storageSuite(a);
+
 describe('fault injection (histories.fault)', () => {
-  it('the version append fails after the blobs were stored: an error, no version, not searchable; the retry succeeds', async () => {
-    let failNext = true;
-    const { dir, catalog } = await openTest({
-      wrapMeta: (m: SqliteMetadataStore) =>
-        Object.assign(Object.create(m), {
-          append: (...args: Parameters<SqliteMetadataStore['append']>) => {
-            if (failNext) {
-              failNext = false;
-              throw new Error('injected: disk full');
-            }
-            return m.append(...args);
-          },
-        }),
-    });
-    const v1 = renamed(historyVersion(histories.versions['prc.v1']), 'fault-skill');
-    await expect(catalog.publish(request('fault-skill', v1), ana)).rejects.toThrow(/injected/);
-    expect(versionsIn(dir, 'fault-skill')).toEqual([]);
-    expect((await catalog.search({ query: 'checklist' })).results).toEqual([]);
-    expect((await errorOf(() => catalog.read({ name: 'fault-skill' }))).code).toBe('not_found');
-    expect(await catalog.publish(request('fault-skill', v1), ana)).toMatchObject({ created: true, version: 1 });
-    expect((await catalog.fetch({ name: 'fault-skill', version: 1 })).files).toHaveLength(2);
-  });
-
-  it('a publish that loses the race at its commit point takes back the blobs it added: storage is exactly as it was', async () => {
-    const dir = sandbox();
-    const { catalog } = await openTest(
-      {
-        wrapStorage: raceBeforeCommit(async () => {
-          const bo = await openLocalCatalog(join(dir, 'catalog'), { clock: fixedClock(), ids: counterIds() });
-          await bo.publish(request('pr-review-checklist', historyVersion(histories.versions['prc.v2'])), actAs('bo'));
-          bo.close();
-        }),
-      },
-      dir,
-    );
-    const e = await errorOf(() => catalog.publish(request('pr-review-checklist', historyVersion(histories.versions['prc.v3'])), ana));
-    expect(e.code).toBe('not_owner');
-    expect(e.data['owners']).toEqual(['bo']);
-    const referenced = new Set((await catalog.fetch({ name: 'pr-review-checklist', version: 1 })).files.map((f) => sha(Buffer.from(f.content_base64, 'base64'))));
-    expect(storedBlobs(dir)).toEqual(referenced);
-  });
-
-  it('two publishes with the same expected_latest race: one lands, the other is conflict; the blob they share survives', async () => {
-    const dir = sandbox();
-    const base = historyVersion(histories.versions['prc.v1']);
-    const variant = (n: string) => base.map((f) => (f.path === 'SKILL.md' ? { ...f, bytes: Buffer.concat([Buffer.from(f.bytes), Buffer.from(`Variant ${n}.\n`)]) } : f));
-    const setup = await openTest({}, dir);
-    for (let n = 1; n <= 21; n++) await setup.catalog.publish(request('pr-review-checklist', variant(String(n))), ana);
-    setup.catalog.close();
-    const { catalog } = await openTest(
-      {
-        wrapStorage: raceBeforeCommit(async () => {
-          const rival = await openLocalCatalog(join(dir, 'catalog'), { clock: fixedClock(), ids: counterIds() });
-          expect(await rival.publish(request('pr-review-checklist', variant('rival'), { expected_latest: 21 }), ana)).toMatchObject({ created: true, version: 22 });
-          rival.close();
-        }),
-      },
-      dir,
-    );
-    const e = await errorOf(() => catalog.publish(request('pr-review-checklist', variant('loser'), { expected_latest: 21 }), ana));
-    expect(e.code).toBe('conflict');
-    expect(e.data['latest']).toBe(22);
-    const referenced = new Set<string>();
-    for (let v = 1; v <= 22; v++) {
-      for (const f of (await catalog.fetch({ name: 'pr-review-checklist', version: v })).files) referenced.add(sha(Buffer.from(f.content_base64, 'base64')));
-    }
-    expect(storedBlobs(dir)).toEqual(referenced);
-  });
-
-  it('the search index fails once: the publish still succeeds, and the next search catches up from the outbox', async () => {
-    let failNext = true;
-    const { catalog } = await openTest();
-    const index = (catalog as any).p.index as SearchIndex;
-    const upsert = index.upsert.bind(index);
-    index.upsert = async (card) => {
-      if (failNext) {
-        failNext = false;
-        throw new Error('injected: index write failed');
-      }
-      await upsert(card);
-    };
-    expect(await catalog.publish(request('pr-review-checklist', historyVersion(histories.versions['prc.v1'])), ana)).toMatchObject({ created: true, version: 1 });
-    expect((await catalog.search({ query: 'checklist' })).results.map((c) => c.name)).toEqual(['pr-review-checklist']);
-  });
-
   // The open-time cleanup reads only the publishes that didn't finish (their pending rows), never the blob folder
   // (contract §5.1). A crash is a publish whose error handling never ran: here, its take-back fails too.
   const crashing = (at: 'put' | 'append') => {
@@ -353,14 +270,5 @@ describe('fault injection (histories.fault)', () => {
     utimesSync(join(root, 'blobs', sha(bytes).slice(0, 2), sha(bytes).slice(2)), old, old);
     expect(blobs.put(sha(bytes), bytes)).toBe(false);
     expect(blobs.storedAt(sha(bytes))!.getTime()).toBeGreaterThan(Date.now() - 60_000);
-  });
-
-  it('the index is rebuildable from the versions at any time', async () => {
-    const { catalog } = await openTest();
-    await catalog.publish(request('pr-review-checklist', historyVersion(histories.versions['prc.v1'])), ana);
-    await catalog.publish(request('release-note-draft', historyVersion(histories.versions['h1.v1'])), actAs('bo'));
-    const before = await catalog.search({});
-    await catalog.rebuildIndex();
-    expect(await catalog.search({})).toEqual(before);
   });
 });
