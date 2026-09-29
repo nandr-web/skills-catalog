@@ -132,7 +132,7 @@ export function renderVersions(s: Surface, r: VersionsResult): string {
 // One sentence per risk flag, from the update gate's reasons.
 export function reasons(s: Surface, flags: readonly RiskFlag[]): string {
   const w = s.word('update.reason');
-  return flags.map((f) => s.format(w[f.kind], { path: flagText(f.path ?? ''), detail: flagText(f.detail) })).join('; ');
+  return flags.map((f) => s.format(w[f.kind], { path: flagText(f.path ?? ''), detail: flagText(f.detail), ...(f.line === undefined ? {} : { line: f.line }) })).join('; ');
 }
 
 // `ids` makes the fence token for the changed lines, which are the publishers' data, like a read's text (§5.2).

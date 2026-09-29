@@ -8,7 +8,7 @@ import { parse } from 'yaml';
 import { readFileSync } from 'node:fs';
 import { DEFAULT_SEARCH_LIMIT, MAX_READ_NAMES, MAX_READ_PATHS, MAX_SEARCH_LIMIT, OPERATIONS, validateInput } from '../src/registry.ts';
 import { MAX_TAGS, SECRET_KINDS, TAG_MAX_LENGTH, checkTree, diffTrees } from '../src/skill-tree/index.ts';
-import { WORD_GAPS, renderDiff, renderError, renderRead, renderSearch, renderVersions } from '../src/render.ts';
+import { WORD_GAPS, reasons, renderDiff, renderError, renderRead, renderSearch, renderVersions } from '../src/render.ts';
 import { SURFACE_FILE, Surface } from '../src/surface.ts';
 import { toCatalogError } from '../src/internal-error.ts';
 import { CatalogError } from '../src/errors.ts';
@@ -325,6 +325,13 @@ describe('the surface (vendored, recommended variant)', () => {
     expect(renderError(s, new CatalogError('invalid_path', { path: 'notes/link.md', why: 'not_regular_file', folder: '/work/x' }))).toBe(s.format(w.invalid_path_not_regular, { path: 'notes/link.md' }));
     expect(renderError(s, new CatalogError('invalid_request', { field: 'confirm', why: 'not_a_confirm' }))).toBe(s.format(w.invalid_confirm));
     expect(renderError(s, new CatalogError('invalid_path', { path: 'a/../b', why: 'dot_segment' }))).toBe(s.format(w.invalid_path, { path: 'a/../b', why: w.why.dot_segment }));
+  });
+
+  it('a hold\'s reasons name the line of a flag that has one (a command that runs at load)', () => {
+    const s = Surface.load();
+    const w = s.word('update.reason');
+    const flags = [{ kind: 'runs_at_load' as const, path: 'SKILL.md', line: 6, detail: 'echo hi' }, { kind: 'runnable_file' as const, path: 'run.sh', detail: 'executable' }];
+    expect(reasons(s, flags)).toBe([s.format(w.runs_at_load, { path: 'SKILL.md', line: 6 }), s.format(w.runnable_file, { path: 'run.sh' })].join('; '));
   });
 
   it('a damaged lock or config file names the file by its path, says why, and what removing it would do', () => {
