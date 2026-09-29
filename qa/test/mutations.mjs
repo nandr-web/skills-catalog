@@ -41,7 +41,7 @@ const MUTATIONS = [
   ['check.ts', 'the product repo checkout is not hashed', 'if (w.productRepo) walkRepo(w.productRepo, out);', ''],
   ['check.ts', 'the check misses processes that left the run\'s group, and their ports', 'if (w.runId) {', 'if (false) {'],
   ['run.ts', 'a leak with exit code 0 still passes', "(differences.length ? 'leak' : exitCode === 0 ? 'pass' : 'fail')", "(exitCode === 0 ? 'pass' : 'fail')"],
-  ['run.ts', 'no teardown after an interrupted run', "cleanup = await teardown(sb, { machine: m, processGroups: pgid ? [pgid] : [] });", "cleanup = ending === 'interrupted' ? { removed: [], skipped: [] } : await teardown(sb, { machine: m, processGroups: pgid ? [pgid] : [] });"],
+  ['run.ts', 'no teardown after an interrupted run', "cleanup = await teardown(sb, { machine: m, processGroups: pgid ? [pgid] : [], leaders: child ? [child] : [] });", "cleanup = ending === 'interrupted' ? { removed: [], skipped: [] } : await teardown(sb, { machine: m, processGroups: pgid ? [pgid] : [], leaders: child ? [child] : [] });"],
   // the agent scenario runner and its scorer
   ['agent/score.ts', "no_request_to_modify misses Claude Code's update-config skill", "(u.name === 'Skill' && /update-config/.test(JSON.stringify(u.input))) || ", ''],
   ['agent/score.ts', 'answer_says_none ignores the phrase list', "case 'answer_says_none': return { ok: says(ctx.phrases, 'none', answer) };", "case 'answer_says_none': return { ok: true };"],

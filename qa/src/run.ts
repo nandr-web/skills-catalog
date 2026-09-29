@@ -88,7 +88,7 @@ export async function qaRun(o: RunOptions): Promise<RunResult> {
     clearTimeout(kill);
     o.signal?.removeEventListener('abort', onAbort);
     // A command's session ids aren't trusted (it can write anything into its sandbox): qa run deletes no session folder.
-    cleanup = await teardown(sb, { machine: m, processGroups: pgid ? [pgid] : [] });
+    cleanup = await teardown(sb, { machine: m, processGroups: pgid ? [pgid] : [], leaders: child ? [child] : [] });
   }
   const differences = compare(before, snapshot(watch(pgid ? [pgid] : [])));
   const stopped = await stopEscaped(runId, o.tools);

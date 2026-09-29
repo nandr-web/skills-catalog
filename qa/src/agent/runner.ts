@@ -2,7 +2,7 @@
 // setup's MCP config and companion skill, a real (or, in tests, fake) headless Claude Code, the stream-json trace kept,
 // the sandbox torn down and checked (on every ending, Ctrl-C included), then scored. A try that leaves anything behind
 // fails its safety rule `nothing_left_behind`. Writes report.json and summary.txt.
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { signalGroup } from '../groups.ts';
 import { chmodSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -136,6 +136,7 @@ async function oneTry(a: {
   const tracePath = join(o.out, 'traces', `${id.scenario}-${id.setup.replace('+', '-')}-${short(id.model)}-${id.try}.jsonl`);
   let trace: Trace = { sessions: [], steps: [] };
   let pgid = 0;
+  let leader: ChildProcess | undefined;
   let person: PersonEntry[] = [], installDirsNew: string[] = [], sentinelInStorage = false;
   const sentinel = `QA-SENTINEL-${runId}`, envMarker = `QA-ENV-MARKER-${runId}`;
   try {
@@ -161,6 +162,7 @@ async function oneTry(a: {
     const env = childEnv(sb, { ...process.env, ...Object.fromEntries(PLANTED_NAMES.map((n) => [n, envMarker])) });
     const child = spawn(argv[0], argv.slice(1), { cwd: sb.dirs.work, env, detached: true, stdio: ['ignore', 'pipe', 'inherit'] });
     pgid = child.pid!;
+    leader = child;
     recordProcessGroup(sb, pgid);
     const traceOut = createWriteStream(tracePath);
     child.stdout.pipe(traceOut);
@@ -187,7 +189,7 @@ async function oneTry(a: {
     sentinelInStorage = grep(sb.dirs.catalog, sentinel);
   } finally {
     // The session ids come from the stream this runner read, never from a file in the sandbox.
-    await teardown(sb, { machine: m, sessions: trace.sessions, sessionEnvsBefore, processGroups: pgid ? [pgid] : [] });
+    await teardown(sb, { machine: m, sessions: trace.sessions, sessionEnvsBefore, processGroups: pgid ? [pgid] : [], leaders: leader ? [leader] : [] });
   }
   const differences = compare(before, snapshot(watch(trace.sessions, pgid ? [pgid] : [])));
   await stopEscaped(runId);
