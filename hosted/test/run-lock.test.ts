@@ -5,7 +5,7 @@
 
 import { spawn } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
-import { takeRunLock, waitForFreePorts } from './run-lock.ts';
+import { countTimeWait, takeRunLock, waitForFreePorts } from './run-lock.ts';
 
 // Not the real lock's port: these tests run inside a run that holds it.
 const PORT = 47_391;
@@ -71,5 +71,35 @@ describe('waiting for free ports', () => {
     let asked = 0;
     await expect(waitForFreePorts({ count: async () => (asked++, undefined), limit: 4000, timeoutMs: 50, pollMs: 10 })).rejects.toThrow(/can't count local ports waiting to close.*won't start blind/);
     expect(asked).toBeGreaterThan(1);
+  });
+});
+
+describe('counting the ports waiting to close, per platform', () => {
+  const PROC = [
+    '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode',
+    '   0: 0100007F:B8A6 0100007F:1F90 06 00000000:00000000 03:00000F3A 00000000     0        0 0 3 0000000000000000',
+    '   1: 0100007F:B8A7 0100007F:1F90 06 00000000:00000000 03:00000F3A 00000000     0        0 0 3 0000000000000000',
+    '   2: 00000000:1F90 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 12345 1 0000000000000000',
+  ].join('\n');
+  const NETSTAT = ['Active Internet connections (including servers)', 'tcp4  0  0  127.0.0.1.52899  127.0.0.1.50001  TIME_WAIT', 'tcp4  0  0  127.0.0.1.52898  127.0.0.1.50001  ESTABLISHED', 'tcp4  0  0  127.0.0.1.52897  127.0.0.1.50001  TIME_WAIT'].join('\n');
+
+  it('on Linux, the TIME_WAIT rows (state 06) of /proc/net/tcp and tcp6, from a file read', async () => {
+    const read = async (f: string) => (f === '/proc/net/tcp' ? PROC : f === '/proc/net/tcp6' ? PROC.split('\n').slice(0, 2).join('\n') : undefined);
+    expect(await countTimeWait('linux', { read, netstat: async () => undefined })).toBe(3);
+  });
+
+  it('on Linux without tcp6, tcp alone; with neither, it can\'t count', async () => {
+    expect(await countTimeWait('linux', { read: async (f) => (f === '/proc/net/tcp' ? PROC : undefined), netstat: async () => undefined })).toBe(2);
+    expect(await countTimeWait('linux', { read: async () => undefined, netstat: async () => NETSTAT })).toBeUndefined();
+  });
+
+  it('on macOS, the TIME_WAIT lines of netstat; unreadable, it can\'t count', async () => {
+    expect(await countTimeWait('darwin', { read: async () => PROC, netstat: async () => NETSTAT })).toBe(2);
+    expect(await countTimeWait('darwin', { read: async () => PROC, netstat: async () => undefined })).toBeUndefined();
+  });
+
+  it('anywhere else it can\'t count, and the refusal names the platform', async () => {
+    expect(await countTimeWait('win32', { read: async () => PROC, netstat: async () => NETSTAT })).toBeUndefined();
+    await expect(waitForFreePorts({ count: async () => undefined, platform: 'win32', timeoutMs: 30, pollMs: 10 })).rejects.toThrow(/on win32/);
   });
 });
