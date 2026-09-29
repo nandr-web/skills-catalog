@@ -73,7 +73,7 @@ requirements:
       - {layer: interface, name: every card lists matched_words; the common-words list equals the adapter's, golden: queries.corpus, auto: true}
       - {layer: interface, name: "every page says catalog_size 64 on the corpus; total_matches equals the distinct cards across all pages, and is 0 exactly when match is none", golden: queries.corpus, auto: true}
       - {layer: agent, name: "A1, A2 discover by keyword and by paraphrase", golden: "agent.A1, agent.A2", auto: true}
-      - {layer: agent, name: every run records recall, tokens per discovery and first-query time, golden: agent.all, auto: true}
+      - {layer: agent, name: "every run records recall, tokens per discovery and first-query time", golden: agent.all, auto: true}
 
   - id: discover-nothing-matches
     source: {doc: prd, ref: "FR-02 AC3, UC-02 exception"}
@@ -94,7 +94,7 @@ requirements:
     text: "Search with no words lists skills with filters; read takes several names up to a limit; over a limit is a typed error."
     oracles: [limits-on-reads, found]
     checks:
-      - {layer: interface, name: search with no query and each filter (tags, publisher, updated_since) returns exactly the matching fixtures, golden: queries.corpus, auto: true}
+      - {layer: interface, name: "search with no query and each filter (tags, publisher, updated_since) returns exactly the matching fixtures", golden: queries.corpus, auto: true}
       - {layer: interface, name: "tags filter: [docs] returns exactly tagged, tags-deduped, tags-at-limit; [docs, release] only the skills with both; a top-level tags list is never a tag", golden: skills.valid, auto: true}
       - {layer: unit, name: "metadata.tags parsing: trimmed, deduplicated in order, ≤10 of 1-32 [a-z0-9-]; each bad form is invalid_manifest {fields: [metadata.tags]}", golden: "skills.valid, skills.invalid", auto: true}
       - {layer: interface, name: "read_shared_skill with 20 names works; 21 gives invalid_request {field: names, limit: 20}; search limit 51 gives invalid_request {field: limit, limit: 50}; each with a why", auto: true}
@@ -120,7 +120,7 @@ requirements:
     oracles: [not-found]
     checks:
       - {layer: interface, name: "not_found per name on every face, with suggestions by spelling only", golden: skills.missing-names, auto: true}
-      - {layer: agent, name: A5 says not found, installs nothing, invents nothing, offers no search-based closest, golden: agent.A5, auto: true}
+      - {layer: agent, name: "A5 says not found, installs nothing, invents nothing, offers no search-based closest", golden: agent.A5, auto: true}
 
   - id: end-to-end
     source: {doc: prd, ref: "Goals row 1: Developer 1 publishes; Developer 2, through an AI assistant, discovers and retrieves the same skill"}
@@ -181,7 +181,7 @@ requirements:
     text: "A retrieved skill is complete and unchanged from what was published."
     oracles: [round-trip]
     checks:
-      - {layer: unit, name: round-trip property test over generated trees (paths, bytes, modes), auto: true}
+      - {layer: unit, name: "round-trip property test over generated trees (paths, bytes, modes)", auto: true}
       - {layer: storage, name: round trip on every adapter, golden: skills.valid, auto: true}
       - {layer: storage, name: "a failed publish deletes the blobs it created (not ones it found); a killed process or a failed delete leaves them, and the next open removes them only once over an hour old (injected clock); a blob shared with a version, or written by a publish in flight, is never removed", golden: histories.fault, auto: true}
       - {layer: storage, name: "a publish that fails and deletes its blob never breaks a concurrent publish of the same content: that one re-puts the blob and lands", golden: histories.fault, auto: true}
@@ -203,7 +203,7 @@ requirements:
     text: "Discovery and retrieval feel interactive within an assistant conversation."
     oracles: [budgets]
     checks:
-      - {layer: perf, name: search/read/publish p95 on the 10,000-skill corpus, golden: scale.10k, auto: true}
+      - {layer: perf, name: "search/read/publish p95 on the 10,000-skill corpus", golden: scale.10k, auto: true}
       - {layer: perf, name: update at session start for 50 skills; initialize answered first, auto: true}
       - {layer: agent, name: median scenario wall time and catalog calls, golden: agent.all, auto: true}
 
@@ -230,6 +230,17 @@ requirements:
       - {layer: cleanup, name: "assistant-run leftovers (projects, session-env, tmp, and the MCP-log cache ~/Library/Caches/claude-cli-nodejs/<working-folder slug>/) removed by session id and sandbox path; each server's log is first kept with the run's transcripts", auto: true}
       - {layer: cleanup, name: "pre-flight starts the catalog's MCP server with exactly the runs' settings (environment, paths, MCP config), and a server that dies at start stops the round", auto: true}
       - {layer: agent, name: "no_read_outside_sandbox holds in every run: reads are allowed only under the sandbox, and the MCP setups have no Bash", golden: agent.all, auto: true}
+
+  - id: qa-no-secrets-in-runs
+    source: {doc: design, ref: "security review of the QA tools: the assistant under test got the runner's whole environment"}
+    backlog: [skill-qa-first]
+    phase: 1
+    text: "No secret variable reaches the assistant under test or any MCP server it starts: both get only an allow-listed environment; the real HOME is the one documented exception (the assistant's sign-in lives there)."
+    oracles: [no-secrets-in-the-run]
+    checks:
+      - {layer: unit, name: "the child environment is exactly the allow-list (PATH, HOME, USER, LOGNAME, SHELL, TMPDIR, LANG, LC_*, TERM, SKILLS_*, QA_*): given a parent with AWS_*, GITHUB_TOKEN, GH_TOKEN, ANTHROPIC_API_KEY, NPM_TOKEN, SSH_AUTH_SOCK and an ordinary-named MY_NOTES carrying markers, none is kept", auto: true}
+      - {layer: cleanup, name: "a fake assistant and the MCP server started from the run's own mcp.json each record their environment: no planted marker, and only allow-listed names", auto: true}
+      - {layer: agent, name: "every live run: a marker planted in the runner's environment never appears in any tool result or answer", golden: agent.all, auto: true}
       - {layer: unit, name: "fail-safe guard is on in every run, and trips when HOME points elsewhere (real home from the OS)", auto: true}
       - {layer: unit, name: "safe deletion: a symlinked base deletes nothing; a symlinked run folder is skipped; a run id with '..' is rejected; a live run is kept; an entry without run.json is skipped, never judged by mtime", auto: true}
       - {layer: unit, name: "safe deletion outside the base: only the run's own leftovers; a non-UUID session id, a slug outside the base's prefix or colliding with another run, and a path differing only in case are refused", auto: true}
@@ -257,7 +268,7 @@ requirements:
     oracles: [same-result-every-face, round-trip, budgets]
     checks:
       - {layer: storage, name: "one suite unchanged on every adapter (SQLite + folder now; others plug in later)", auto: true}
-      - {layer: agent, name: A11 finds a skill in a 10,000-skill catalog within the tool-result budget, golden: agent.A11, auto: true}
+      - {layer: agent, name: "A11 finds a skill in a 10,000-skill catalog within the tool-result budget", golden: agent.A11, auto: true}
 
   - id: auto-updates
     source: {doc: notes, ref: "personas; the owner's answer on auto-updates"}
@@ -414,7 +425,7 @@ requirements:
     oracles: [clean-run, same-result-every-face, budgets]
     checks:
       - {layer: web, name: CDK assertions and cdk-nag, auto: true}
-      - {layer: storage, name: the suite on moto every change and on a throwaway stack on request, destroyed after, auto: true}
+      - {layer: storage, name: "the suite on moto every change and on a throwaway stack on request, destroyed after", auto: true}
       - {layer: cleanup, name: janitor finds leftovers by run tag and by name prefix (untagged log groups), auto: true}
 
   - id: signed-in-read

@@ -84,7 +84,7 @@ claude -p "<ask>" --model <m> --no-session-persistence --setting-sources project
   --allowedTools <per setup> --output-format stream-json --verbose
 ```
 
-It runs with its working folder in the sandbox, with every `SKILLS_*` setting pointing into the sandbox (also in the MCP server's environment). The stream holds every tool call and result, so the rules read the transcript, not the prose.
+It runs with its working folder in the sandbox, with every `SKILLS_*` setting pointing into the sandbox (also in the MCP server's environment), and with an allow-listed environment that carries no tokens (§6, step 3). The stream holds every tool call and result, so the rules read the transcript, not the prose.
 
 ### What the first trials showed
 
@@ -141,6 +141,7 @@ One pass/fail rule per requirement, and what the rule trusts. The tests compute 
 | **README walk** | The README's one quickstart command, run word for word in a fresh home, ends with a skill published and found; its diagram renders and its links resolve | The README |
 | **Budgets** | §7's numbers | The perf script and the runner |
 | **Clean run** | Nothing outside the sandbox differs before and after (§6) | A snapshot before the run |
+| **No secrets in the run** | The assistant and every MCP server it starts get only the allow-listed environment (§6, step 3); markers planted in the runner's own environment, under credential names and an ordinary one, never reach either process, a tool result or an answer | The markers planted |
 
 ## 5. Golden sets
 
@@ -185,6 +186,8 @@ sequenceDiagram
 1. **One command**, `qa run`, with local dependencies only (Node ≥ 24.15, with a first test that SQLite's FTS5 works).
 2. **A sandbox per run** under one base directory: the catalog, the skills home, the install folder, the assistant's home (everything setup and teardown touch), the working folder, a canary folder and `bin/`. Every `SKILLS_*` setting points into it.
 3. **A fail-safe in the runner's shared setup** refuses to start if any path the run will write resolves under the real home. It takes the home from the OS user record, not `$HOME`, and compares realpaths case-sensitively. Tests check the guard itself.
+   - **The one exception: the assistant under test keeps the real `HOME`**, because Claude Code's sign-in lives there (a separate config folder loses it). What it writes there is only the leftovers teardown removes (steps 4 and 6), and the before/after check watches them.
+   - **Its environment is an allow-list**, for the assistant and for every MCP server it starts: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `LANG`, `LC_*`, `TERM`, `SKILLS_*`, `QA_*`. Tokens and credentials (cloud, GitHub, Anthropic, SSH agent) are never passed. Tests plant markers in the runner's own environment and check that none reaches either process.
 4. **Teardown always runs** (pass, fail, timeout, Ctrl-C). It kills each process group, deletes the sandbox, and removes the assistant's leftovers for the run's own sessions.
 5. **A janitor**, run after the fail-safe, clears what a crashed run left.
 6. **Safe deletion**, each rule with a test:

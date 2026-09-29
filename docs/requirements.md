@@ -28,7 +28,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - storage: fault injection (Nth write fails) leaves no version
   - interface: dry_run stores nothing and returns the diff
   - agent: A7 relays the reason and proposes the fix; never edits the person's files unasked (being built)
-  - interface: an error whose fix is a change to the person's files tells the agent to propose it and wait (contract §9)
+  - interface: an error whose fix is a change to the person's files tells the agent to propose it and wait (contract §9) (being built)
   - interface: secret_suspected with path and line; the ignore list skipped and reported; the MCP schema has no override (being built)
   - interface: secret_suspected's text never repeats the secret's value (nor the sentinel) (being built)
   - agent: A7s no tool call carries the override (being built)
@@ -45,7 +45,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - storage: 20 publishes from separate processes all land; stale expected_latest conflicts
   - storage: two publishes race on one expected_latest: one lands, the other conflicts; no orphan blob, and every version is still retrievable
   - storage: expected_latest 0 means a new name: it creates version 1, and conflicts on a name that exists, storing nothing
-  - unit: version numbering property test under random interleavings
+  - unit: version numbering property test under random interleavings (being built)
   - interface: list_shared_skill_versions and diff_shared_skill_versions equal the goldens (with risk_flags)
   - agent: A8 says what changed (being built)
   - storage: get and get version k per history step
@@ -61,7 +61,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Done when:** Publish then retrieve; compare against the original (the PRD's method): the test computes the fingerprint of every file, byte and file mode, itself and it matches.
 - **Where it lives:** the core (built); the installer (being built); contract §4.3
 - **Checked by:**
-  - unit: round-trip property test over generated trees (paths
+  - unit: round-trip property test over generated trees (paths, bytes, modes) (being built)
   - storage: round trip on every adapter
   - storage: a failed publish deletes the blobs it created (not ones it found); a killed process or a failed delete leaves them, and the next open removes them only once over an hour old (injected clock); a blob shared with a version, or written by a publish in flight, is never removed
   - storage: a publish that fails and deletes its blob never breaks a concurrent publish of the same content: that one re-puts the blob and lands
@@ -75,11 +75,11 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Done when:** Search with no words is the List, with filters and pages; get takes one name or up to 20; asking for more returns a clear error naming the limit.
 - **Where it lives:** the core (built); the MCP server (being built); contract §2
 - **Checked by:**
-  - interface: search with no query and each filter (tags
+  - interface: search with no query and each filter (tags, publisher, updated_since) returns exactly the matching fixtures (being built)
   - interface: tags filter: [docs] returns exactly tagged, tags-deduped, tags-at-limit; [docs, release] only the skills with both; a top-level tags list is never a tag
   - unit: metadata.tags parsing: trimmed, deduplicated in order, ≤10 of 1-32 [a-z0-9-]; each bad form is invalid_manifest {fields: [metadata.tags]}
   - interface: read_shared_skill with 20 names works; 21 gives invalid_request {field: names, limit: 20}; search limit 51 gives invalid_request {field: limit, limit: 50}; each with a why
-  - interface: cursor paging returns every skill once while publishes happen
+  - interface: cursor paging returns every skill once while publishes happen (being built)
 
 ### Only a skill's owners can publish it
 
@@ -117,7 +117,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - interface: every card lists matched_words; the common-words list equals the adapter's
   - interface: every page says catalog_size 64 on the corpus; total_matches equals the distinct cards across all pages, and is 0 exactly when match is none
   - agent: A1, A2 discover by keyword and by paraphrase
-  - agent: every run records recall
+  - agent: every run records recall, tokens per discovery and first-query time
   - interface: for each no-match query: match is partial or none, and no card's matched_words covers every content word
   - agent: A3 sourdough: says none plainly, invents nothing
   - agent: A3g GraphQL: says nothing fits and never offers sql-migration-writer as a fit
@@ -136,7 +136,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - interface: install_shared_skill writes the same tree and a lock entry
   - agent: A4 installs the skill intact
   - interface: not_found per name on every face, with suggestions by spelling only
-  - agent: A5 says not found
+  - agent: A5 says not found, installs nothing, invents nothing, offers no search-based closest
 
 ### Access is through an AI assistant
 
@@ -156,7 +156,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Done when:** Observed during a normal exchange (the PRD's method), plus the QA plan's budgets: local search p95 ≤ 100 ms at 10,000 skills, hosted search p95 ≤ 300 ms warm and ≤ 1.5 s for the first query after idle.
 - **Where it lives:** the core; contract §7
 - **Checked by:**
-  - perf: search/read/publish p95 on the 10
+  - perf: search/read/publish p95 on the 10,000-skill corpus
   - perf: update at session start for 50 skills; initialize answered first
   - agent: median scenario wall time and catalog calls
 
@@ -242,7 +242,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Where it lives:** the core; contract §7
 - **Checked by:**
   - storage: one suite unchanged on every adapter (SQLite + folder now; others plug in later)
-  - agent: A11 finds a skill in a 10
+  - agent: A11 finds a skill in a 10,000-skill catalog within the tool-result budget
 
 ### A simple demo login: act as another developer
 
@@ -279,6 +279,9 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - cleanup: assistant-run leftovers (projects, session-env, tmp, and the MCP-log cache ~/Library/Caches/claude-cli-nodejs/<working-folder slug>/) removed by session id and sandbox path; each server's log is first kept with the run's transcripts
   - cleanup: pre-flight starts the catalog's MCP server with exactly the runs' settings (environment, paths, MCP config), and a server that dies at start stops the round
   - agent: no_read_outside_sandbox holds in every run: reads are allowed only under the sandbox, and the MCP setups have no Bash
+  - unit: the child environment is exactly the allow-list (PATH, HOME, USER, LOGNAME, SHELL, TMPDIR, LANG, LC_*, TERM, SKILLS_*, QA_*): given a parent with AWS_*, GITHUB_TOKEN, GH_TOKEN, ANTHROPIC_API_KEY, NPM_TOKEN, SSH_AUTH_SOCK and an ordinary-named MY_NOTES carrying markers, none is kept
+  - cleanup: a fake assistant and the MCP server started from the run's own mcp.json each record their environment: no planted marker, and only allow-listed names
+  - agent: every live run: a marker planted in the runner's environment never appears in any tool result or answer
   - unit: fail-safe guard is on in every run, and trips when HOME points elsewhere (real home from the OS)
   - unit: safe deletion: a symlinked base deletes nothing; a symlinked run folder is skipped; a run id with '..' is rejected; a live run is kept; an entry without run.json is skipped, never judged by mtime
   - unit: safe deletion outside the base: only the run's own leftovers; a non-UUID session id, a slug outside the base's prefix or colliding with another run, and a path differing only in case are refused
@@ -352,7 +355,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Where it lives:** the core; contract §5
 - **Checked by:**
   - storage: one suite unchanged on every adapter (SQLite + folder now; others plug in later)
-  - agent: A11 finds a skill in a 10
+  - agent: A11 finds a skill in a 10,000-skill catalog within the tool-result budget
 
 ### Measure and improve search over time
 
@@ -367,7 +370,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - interface: every card lists matched_words; the common-words list equals the adapter's
   - interface: every page says catalog_size 64 on the corpus; total_matches equals the distinct cards across all pages, and is 0 exactly when match is none
   - agent: A1, A2 discover by keyword and by paraphrase
-  - agent: every run records recall
+  - agent: every run records recall, tokens per discovery and first-query time
 
 ### An agent can run the guided setup
 
@@ -475,7 +478,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Where it lives:** the web UI, the AWS stack
 - **Checked by:**
   - web: CDK assertions and cdk-nag
-  - storage: the suite on moto every change and on a throwaway stack on request
+  - storage: the suite on moto every change and on a throwaway stack on request, destroyed after
   - cleanup: janitor finds leftovers by run tag and by name prefix (untagged log groups)
 
 ## Later
