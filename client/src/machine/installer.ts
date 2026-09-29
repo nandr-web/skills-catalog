@@ -683,6 +683,11 @@ function record(ctx: Context, lock: Lock, dest: string, at: { name: string; targ
   return entry;
 }
 
+/** Whether a skill's lock entry, as read under the lock, is still the one a decision was made from (read before the lock):
+ *  there or not, and the same catalog, version and policy. Another run may have pinned, moved, updated or removed it. */
+const sameDecision = (was: LockEntry | undefined, now: LockEntry | undefined): boolean =>
+  was === undefined || now === undefined ? was === now : was.catalog === now.catalog && was.version === now.version && was.policy === now.policy;
+
 type AcceptInput = { name: string; target: Target; version: number; confirm: string; flags: string[] };
 
 export async function accept(ctx: Context, args: unknown): Promise<Done> {
@@ -704,6 +709,7 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   if (!sameSet(req.flags, kinds(flags))) throw conflict();
   const { written, entry } = await withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
     const now = fresh.skills[dest];
+    if (!sameDecision(existing, now)) throw conflict();
     const written = writeSkill(dest, t.target, to.files, now);
     return { written, entry: record(ctx, fresh, dest, { name: req.name, target: t.target }, to, now?.policy, [...(now?.accepted ?? []), { version: to.version, flags: kinds(flags) }], toLock(written.copy)) };
   });

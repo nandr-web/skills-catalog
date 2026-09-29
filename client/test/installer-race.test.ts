@@ -7,6 +7,7 @@ import { CatalogError, actAs, renderError } from '@skills-catalog/core';
 import { describe, expect, it, vi } from 'vitest';
 import { cliSurface } from '../src/cli/words.ts';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
+import { pendingHold } from '../src/machine/installer.ts';
 import { contextFor, perform } from '../src/operations.ts';
 import { settingsFrom } from '../src/settings.ts';
 import { race } from './race-fs.ts';
@@ -765,6 +766,65 @@ describe('the temp folder is checked before every use', () => {
       expect(race.fs.existsSync(join(p.dir, 'project', '.claude', 'skills', 'alpha'))).toBe(false);
     }
   });
+});
+
+// A yes is decided from lock.json as read before the lock is taken. Another run may change the skill's entry in between
+// (pin it, move it to another catalog, update or remove it): under the lock the entry is compared with the one the
+// decision used, and a changed one is conflict, with nothing written and the other run's change kept.
+describe('the lock entry a decision used, changed by another run before the lock is taken', () => {
+  type Entry = Record<string, unknown>;
+  const changes: [string, (e: Entry) => Entry | undefined][] = [
+    ['pinned', (e) => ({ ...e, policy: 'pin' })],
+    ['moved to another catalog', (e) => ({ ...e, catalog: 'file:///elsewhere/catalog' })],
+    ['updated to another version', (e) => ({ ...e, version: 7 })],
+    ['removed', () => undefined],
+  ];
+  for (const [what, change] of changes) {
+    it(`accept: ${what} → conflict, nothing installed, the other run's change kept`, async () => {
+      const p = place();
+      await publish(p, 'alpha', 'First.\n');
+      const ctx = ctxFor(p);
+      await install(ctx, { name: 'alpha' });
+      const c = await open(p);
+      try {
+        await c.publish(request('alpha', [{ path: 'SKILL.md', text: skillMd('alpha', 'The alpha skill.') }, { path: 'run.sh', text: '#!/bin/sh\n', mode: '0755' }]), actAs('ana'));
+      } finally {
+        c.close();
+      }
+      const held = await pendingHold(ctx, 'alpha');
+      expect(held && 'confirm' in held).toBe(true);
+      const { target, version, confirm, flags } = held as { target: 'user'; version: number; confirm: string; flags: string[] };
+      const lockFile = join(p.home, 'lock.json');
+      const dest = join(p.osHome, '.claude', 'skills', 'alpha');
+      // The other run's change lands after accept has read lock.json, at its first look at the skill's folder.
+      race.onLstat = (path) => {
+        if (path !== dest) return;
+        race.onLstat = undefined;
+        const lock = JSON.parse(race.fs.readFileSync(lockFile, 'utf8')) as { skills: Record<string, Entry> };
+        const next = change(lock.skills[dest]!);
+        if (next) lock.skills[dest] = next;
+        else delete lock.skills[dest];
+        race.fs.writeFileSync(lockFile, JSON.stringify(lock));
+      };
+      let r: unknown;
+      let after: string;
+      try {
+        r = await accept(ctx, { name: 'alpha', target, version, confirm, flags }).catch((e: unknown) => e);
+      } finally {
+        clearHooks();
+        after = race.fs.readFileSync(lockFile, 'utf8');
+      }
+      expect([(r as CatalogError).code, (r as CatalogError).data]).toEqual(['conflict', { name: 'alpha', held: true }]);
+      expect(race.fs.existsSync(join(dest, 'run.sh'))).toBe(false);
+      const kept = (JSON.parse(after) as { skills: Record<string, Entry> }).skills[dest];
+      expect(kept === undefined ? undefined : { policy: kept['policy'], catalog: kept['catalog'], version: kept['version'] }).toEqual(
+        (() => {
+          const e = change({ policy: undefined, catalog: p.catalogUrl, version: 1 });
+          return e && { policy: e['policy'], catalog: e['catalog'], version: e['version'] };
+        })(),
+      );
+    });
+  }
 });
 
 // Inode numbers past 2^53 (overlay and some network file systems): compared exactly, and kept in the lock as decimal
