@@ -19,9 +19,13 @@ export type Settings = {
   developer?: string;
   /** SKILLS_AS was set to something that isn't a developer's name: every call says so, and nothing is done. */
   developerInvalid: boolean;
+  /** SKILLS_ASSISTANT_HOME (default: the OS home): the assistant's own files; the user target is <it>/.claude/skills. */
+  assistantHome: string;
+  /** The project a project install goes into (<it>/.claude/skills): the folder the client was started in. */
+  projectDir: string;
 };
 
-export function settingsFrom(env: Record<string, string | undefined>): Settings {
+export function settingsFrom(env: Record<string, string | undefined>, cwd: string = process.cwd()): Settings {
   const home = resolve(env['SKILLS_HOME'] || join(homedir(), '.skills-catalog'));
   const as = env['SKILLS_AS'] || undefined;
   const valid = as !== undefined && ACTOR.test(as);   // a developer's name, by the core's rule for a publisher
@@ -33,5 +37,7 @@ export function settingsFrom(env: Record<string, string | undefined>): Settings 
     activityLogInHome: dirname(activityLog) === home,
     ...(valid ? { developer: as } : {}),
     developerInvalid: as !== undefined && !valid,
+    assistantHome: resolve(env['SKILLS_ASSISTANT_HOME'] || homedir()),
+    projectDir: resolve(cwd),
   };
 }
