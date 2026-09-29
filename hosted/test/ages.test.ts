@@ -8,7 +8,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import type { NewVersion, VersionPublished } from '@skills-catalog/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { blobKey, createStores, HostedBlobLinks, HostedStorage, HostedSweep, inspect, type Place } from '../src/index.ts';
+import { blobKey, createStores, HostedBlobLinks, HostedEvents, HostedStorage, HostedSweep, inspect, type Place } from '../src/index.ts';
 import { changeTags } from '../src/blobs.ts';
 import { FAKE, startEmulator, type Emulator } from './emulator.ts';
 
@@ -43,9 +43,9 @@ async function world() {
     return sha(text);
   }
   let versions = 0;
-  async function commit(shas: string[]) {
-    const v: NewVersion = { name: 'aged', fingerprint: `sha256:${sha(`v${++versions}`)}`, publisher: 'ana', message: '', published_at: clock.now().toISOString(), files: shas.map((s, i) => ({ path: `f${i}.md`, mode: '0644', sha256: s, size: 1 }) as never), description: 'Aged.', tags: [], frontmatter: {} };
-    const event = (version: number): VersionPublished => ({ type: 'version_published', name: 'aged', version, fingerprint: v.fingerprint, publisher: 'ana', at: v.published_at });
+  async function commit(shas: string[], publisher = 'ana') {
+    const v: NewVersion = { name: 'aged', fingerprint: `sha256:${sha(`v${++versions}`)}`, publisher, message: '', published_at: clock.now().toISOString(), files: shas.map((s, i) => ({ path: `f${i}.md`, mode: '0644', sha256: s, size: 1 }) as never), description: 'Aged.', tags: [], frontmatter: {} };
+    const event = (version: number): VersionPublished => ({ type: 'version_published', name: 'aged', version, fingerprint: v.fingerprint, publisher, at: v.published_at });
     return storage.commit(v, shas.map((s) => ({ sha256: s })), {}, event);
   }
   const stored = async (s: string) => (await inspect(s3, place, s)).kind === 'stored';
@@ -197,5 +197,30 @@ describe('the sweep marks, then deletes', () => {
     await w.sweep.run();
     expect(await w.stored(s)).toBe(true);
     expect(await w.tags(s)).not.toHaveProperty('deleting');
+  });
+});
+
+describe('the hosted commit and its events', () => {
+  it('a publish by someone else naming a file never uploaded is not_owner, as the refusal order says, not not_uploaded', async () => {
+    const w = await world();
+    const s = await w.upload('owned\n');
+    expect(await w.commit([s])).toMatchObject({ kind: 'created' });
+    expect(await w.commit([w.sha('never uploaded\n')], 'bo')).toEqual({ kind: 'not_owner', owners: ['ana'] });
+  });
+
+  it('two deliveries at once mark each event delivered once, and each is handed on at least once', async () => {
+    const w = await world();
+    const s = await w.upload('evented\n');
+    for (let i = 0; i < 3; i++) {
+      w.clock.advance(1000);
+      expect(await w.commit([s])).toMatchObject({ kind: 'created' });
+    }
+    const handled: number[] = [];
+    const events = new HostedEvents({ ddb: w.ddb, place: w.place });
+    events.subscribe(async (e) => void handled.push(e.version));
+    const [a, b] = await Promise.all([events.deliver(), events.deliver()]);
+    expect(a + b).toBe(3);
+    expect(new Set(handled)).toEqual(new Set([1, 2, 3]));
+    expect(await events.deliver()).toBe(0);
   });
 });
