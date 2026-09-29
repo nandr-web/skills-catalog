@@ -199,6 +199,9 @@ describe('request_upload_links, hosted only', () => {
       const odd = await errorOf(() => s.catalog.uploadLinks(ask([{ sha256: sha256Of('fine'), size: 1 }, { sha256: bad, size: 1 }])));
       expect([bad, odd.code, odd.data]).toEqual([bad, 'invalid_request', { field: 'files[1].sha256', why: 'not_sha256' }]);
     }
+    // A pure input check, before anything is looked up: even on a name someone else owns.
+    const notMine = await errorOf(() => s.catalog.uploadLinks(ask([{ sha256: 'A'.repeat(64), size: 1 }], 'erins')));
+    expect([notMine.code, notMine.data]).toEqual(['invalid_request', { field: 'files[0].sha256', why: 'not_sha256' }]);
     expect(s.linkCalls).toEqual([]);
   });
 
