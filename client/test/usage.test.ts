@@ -1,0 +1,117 @@
+// Usage metrics, the recorder (contract §3): events as JSON lines in $SKILLS_HOME/usage/, one file per
+// UTC day, kept 90 days and never sent anywhere. A skill's name is stored only as a keyed hash made with a secret this
+// machine keeps, and each event keeps only its own fields, so nothing a person or a publisher typed is ever written.
+// Recording never fails or slows what it records.
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { sandbox } from '@skills-catalog/core/testing';
+import { describe, expect, it } from 'vitest';
+import { readUsage, recordUsage, USAGE_DAYS } from '../src/usage/record.ts';
+
+const day = (iso: string) => new Date(`${iso}T12:00:00Z`);
+const home = () => join(sandbox(), 'skills-home');
+const lines = (h: string, date: string) => readFileSync(join(h, 'usage', `${date}.jsonl`), 'utf8').trimEnd().split('\n').map((l) => JSON.parse(l));
+
+describe('recording usage', () => {
+  it('writes one line per event to that UTC day\'s file, only the client can read it', () => {
+    const h = home();
+    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 2 }, new Date('2026-09-29T23:59:59Z'));
+    recordUsage(h, { event: 'policy', from: 'auto', to: 'notify', scope: 'catalog', near_hold: false }, new Date('2026-09-30T00:00:01Z'));
+    expect(lines(h, '2026-09-29')).toEqual([{ v: 1, at: '2026-09-29T23:59:59.000Z', event: 'notice', surface: 'hook', waiting: 2 }]);
+    expect(lines(h, '2026-09-30')).toEqual([{ v: 1, at: '2026-09-30T00:00:01.000Z', event: 'policy', from: 'auto', to: 'notify', scope: 'catalog', near_hold: false }]);
+    expect(statSync(join(h, 'usage')).mode & 0o777).toBe(0o700);
+    expect(statSync(join(h, 'usage', '2026-09-29.jsonl')).mode & 0o777).toBe(0o600);
+  });
+
+  it('stores a skill\'s name only as a keyed hash: the same on this machine, different on another, never the name', () => {
+    const h = home();
+    const at = day('2026-09-29');
+    recordUsage(h, { event: 'hold', skill: 'release-notes-kit', version: 2, reason: 'flagged', flags: ['runnable_file'], behind: 1 }, at);
+    recordUsage(h, { event: 'look', skill: 'release-notes-kit', version: 2, surface: 'cli' }, at);
+    recordUsage(h, { event: 'look', skill: 'sql-migration-helper', version: 3, surface: 'assistant' }, at);
+    const [hold, look, other] = lines(h, '2026-09-29');
+    expect(hold.skill).toMatch(/^[A-Za-z0-9_-]{16}$/);
+    expect(look.skill).toBe(hold.skill);
+    expect(other.skill).not.toBe(hold.skill);
+    expect(readFileSync(join(h, 'usage', '2026-09-29.jsonl'), 'utf8')).not.toMatch(/release|notes|sql|migration/);
+    const elsewhere = home();
+    recordUsage(elsewhere, { event: 'look', skill: 'release-notes-kit', version: 2, surface: 'cli' }, at);
+    expect(lines(elsewhere, '2026-09-29')[0].skill).not.toBe(hold.skill);
+  });
+
+  it('keeps only each event\'s own fields, so no text can ride along', () => {
+    const h = home();
+    const sneaky = { event: 'notice', surface: 'mcp', waiting: 1, query: 'my secret project', text: 'x' } as unknown as Parameters<typeof recordUsage>[1];
+    recordUsage(h, sneaky, day('2026-09-29'));
+    recordUsage(h, { event: 'answer', skill: 'a', version: 1, answer: 'maybe' as 'yes', together: 1 }, day('2026-09-29'));
+    recordUsage(h, { event: 'frobnicate' } as unknown as Parameters<typeof recordUsage>[1], day('2026-09-29'));
+    expect(lines(h, '2026-09-29')).toEqual([{ v: 1, at: '2026-09-29T12:00:00.000Z', event: 'notice', surface: 'mcp', waiting: 1 }]);
+  });
+
+  it('use: one per operation, its code only; mode: the sync\'s surface, its mode once detection is built', () => {
+    const h = home();
+    const at = day('2026-09-29');
+    recordUsage(h, { event: 'use', op: 'search_shared_skills', result: 'none' }, at);
+    recordUsage(h, { event: 'use', op: 'install_shared_skill', result: 'exists_untracked' }, at);
+    recordUsage(h, { event: 'use', op: 'no_such_operation', result: 'ok' }, at);
+    recordUsage(h, { event: 'use', op: 'read_shared_skill', result: 'release notes for acme' }, at);
+    recordUsage(h, { event: 'mode', surface: 'hook' }, at);
+    recordUsage(h, { event: 'mode', surface: 'update', mode: 'bypass' }, at);
+    recordUsage(h, { event: 'mode', surface: 'hook', mode: 'sometimes' as 'auto' }, at);
+    expect(lines(h, '2026-09-29').map(({ v, at: _, ...e }) => e)).toEqual([
+      { event: 'use', op: 'search_shared_skills', result: 'none' },
+      { event: 'use', op: 'install_shared_skill', result: 'exists_untracked' },
+      { event: 'mode', surface: 'hook' },
+      { event: 'mode', surface: 'update', mode: 'bypass' },
+    ]);
+  });
+
+  it(`keeps ${USAGE_DAYS} days:a day's file goes once it's older, and nothing else in the folder is touched`, () => {
+    const h = home();
+    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-06-30'));
+    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-07-01'));
+    writeFileSync(join(h, 'usage', 'notes.txt'), 'the person\'s own file\n');
+    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'));
+    expect(readdirSync(join(h, 'usage')).sort()).toEqual(['2026-07-01.jsonl', '2026-09-29.jsonl', 'notes.txt']);
+  });
+
+  it('never follows a link in its folder\'s place, and never fails what it records', () => {
+    const h = home();
+    const outside = join(sandbox(), 'outside');
+    mkdirSync(outside);
+    mkdirSync(h, { recursive: true });
+    symlinkSync(outside, join(h, 'usage'));
+    expect(() => recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'))).not.toThrow();
+    expect(readdirSync(outside)).toEqual([]);
+    const file = join(sandbox(), 'a-file');
+    writeFileSync(file, '');
+    expect(() => recordUsage(file, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'))).not.toThrow();
+    const locked = home();
+    mkdirSync(join(locked, 'usage'), { recursive: true });
+    chmodSync(join(locked, 'usage'), 0o500);
+    expect(() => recordUsage(locked, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'))).not.toThrow();
+    chmodSync(join(locked, 'usage'), 0o700);
+  });
+});
+
+describe('reading usage back', () => {
+  it('reads the kept days in time order, skipping lines it can\'t read', () => {
+    const h = home();
+    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'));
+    recordUsage(h, { event: 'notice', surface: 'mcp', waiting: 3 }, day('2026-09-28'));
+    writeFileSync(join(h, 'usage', '2026-09-28.jsonl'), 'not json\n{"v":9,"event":"notice"}\n', { flag: 'a' });
+    const events = readUsage(h, day('2026-09-29'));
+    expect(events.map((e) => [e.at, e.event, e.event === 'notice' ? e.waiting : null])).toEqual([
+      ['2026-09-28T12:00:00.000Z', 'notice', 3],
+      ['2026-09-29T12:00:00.000Z', 'notice', 1],
+    ]);
+  });
+
+  it('reads nothing past the kept days, and nothing when there is no folder', () => {
+    const h = home();
+    expect(readUsage(h, day('2026-09-29'))).toEqual([]);
+    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-06-01'));
+    expect(existsSync(join(h, 'usage', '2026-06-01.jsonl'))).toBe(true);
+    expect(readUsage(h, day('2026-09-29'))).toEqual([]);
+  });
+});
