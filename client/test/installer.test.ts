@@ -677,23 +677,41 @@ describe('replacing an installed copy deletes only the copy the lock recorded (c
     expect(nothingStaged(p)).toBe(true);
   });
 
-  it('a folder at the skill\'s path that is not the recorded copy is never deleted: target_changed, and it is back in place', async () => {
+  // A real folder with another identity while .claude and the skills folder hold was recreated by the person or their
+  // tools (a restore, a branch switch): it may hold their edits, so it's kept in staging, never deleted (contract §4.5).
+  it('a folder the person recreated at the skill\'s path is never deleted: the update goes in, and it is kept in staging and named', async () => {
     const p = place();
     await publish(p, 'alpha', plain('alpha'));
     const ctx = ctxFor(p);
     await install(ctx, { name: 'alpha' });
     await publish(p, 'alpha', plain('alpha', 'Second.\n'));
     const dest = join(userSkills(p), 'alpha');
-    // Someone else's folder now stands where the installed copy was.
     rmSync(dest, { recursive: true });
     mkdirSync(dest);
     writeFileSync(join(dest, 'canary'), 'keep me\n');
+    const r = await update(ctx, {});
+    expect(r.result).toBe(S.doc.log.result.update.updated);
+    const at = kept(r.text);
+    const staging = (at?.[1] ?? at?.[2])!;
+    expect(staging.startsWith(join(p.osHome, '.claude', '.skills-catalog-staging') + '/')).toBe(true);
+    expect(readFileSync(join(staging, 'canary'), 'utf8')).toBe('keep me\n');
+    expect(readFileSync(join(dest, 'SKILL.md'), 'utf8')).toContain('Second.');
+    expect(lockOf(p)[dest]).toMatchObject({ version: 2, copy: idOf(dest) });
+  });
+
+  it('a file, not a folder, at the skill\'s path is refused as something not installed from the catalog, and left as it is', async () => {
+    const p = place();
+    await publish(p, 'alpha', plain('alpha'));
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha' });
+    await publish(p, 'alpha', plain('alpha', 'Second.\n'));
+    const dest = join(userSkills(p), 'alpha');
+    rmSync(dest, { recursive: true });
+    writeFileSync(dest, 'a file\n');
     const lockBefore = readFileSync(join(p.home, 'lock.json'), 'utf8');
     const r = await update(ctx, {});
-    // That skill's own target_changed line (shown as data until its words are vendored), and no success line.
-    expect(r.text.split('\n')[1]).toBe(`- target_changed: ${JSON.stringify({ name: 'alpha', from: 1, to: 2, path: dest })}`);
-    expect(r.result).toBe(S.doc.log.error.target_changed ?? 'refused: target_changed');
-    expect(readdirSync(dest)).toEqual(['canary']);
+    expect(r.text).toContain(S.format(S.word('update.target_reason').exists_untracked, { path: dest }));
+    expect(readFileSync(dest, 'utf8')).toBe('a file\n');
     expect(readFileSync(join(p.home, 'lock.json'), 'utf8')).toBe(lockBefore);
     expect(nothingStaged(p)).toBe(true);
   });

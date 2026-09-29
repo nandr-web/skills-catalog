@@ -413,9 +413,31 @@ describe('the review\'s probes (B, B2, C, D)', () => {
     };
     const { text, staged } = await run(s);
     expect(text).toContain('"elsewhere":true');
-    // The new copy went where the link pointed; the person's copy is in staging, named.
+    // The new copy went where the link pointed; the person's copy is back in place, since the path leads home again.
     expect(race.fs.readFileSync(join(v, 'alpha', 'SKILL.md'), 'utf8')).toContain('Second, markdown only.');
-    expect(race.fs.readFileSync(join(staged!, 'SKILL.md'), 'utf8')).toBe(skillMd('alpha', 'The alpha skill.', 'Body.\n'));
+    expect(staged).toBeUndefined();
+    expect(race.fs.readFileSync(join(s.dest, 'SKILL.md'), 'utf8')).toBe(skillMd('alpha', 'The alpha skill.', 'Body.\n'));
+  });
+
+  it('the refusal names the first folder that failed its check: .claude or the skills folder, swapped once the copy is moved aside', async () => {
+    for (const which of ['claude', 'skills'] as const) {
+      const s = await installed();
+      const v = join(s.p.dir, 'v');
+      race.fs.mkdirSync(join(v, 'skills'), { recursive: true });
+      const swapped = which === 'claude' ? s.claude : s.skills;
+      race.afterRename = (from) => {
+        if (from !== s.dest) return;
+        race.afterRename = undefined;
+        relink(swapped, which === 'claude' ? v : join(v, 'skills'));
+      };
+      let text: string;
+      try {
+        text = (await update(s.ctx, {})).text;
+      } finally {
+        clearHooks();
+      }
+      expect([which, codeOf({ text }), JSON.parse(/"path":("[^"]+")/.exec(text)![1]!)]).toEqual([which, 'target_changed', swapped]);
+    }
   });
 });
 
@@ -627,7 +649,7 @@ describe('the temp folder is checked before every use', () => {
       clearHooks();
     }
     expect(seen.planted).toBe(false);
-    expect([codeOf(r), refused(r).data]).toEqual(['target_changed', { path: tmp, elsewhere: true }]);
+    expect([codeOf(r), refused(r).data]).toEqual(['target_changed', { path: tmp, temp: true, elsewhere: true }]);
     expect(race.fs.existsSync(dest)).toBe(false);
   });
 
@@ -654,7 +676,7 @@ describe('the temp folder is checked before every use', () => {
       clearHooks();
     }
     expect(seen.planted).toBe(false);
-    expect([codeOf(r), refused(r).data]).toEqual(['target_changed', { path: tmp, elsewhere: true }]);
+    expect([codeOf(r), refused(r).data]).toEqual(['target_changed', { path: tmp, temp: true, elsewhere: true }]);
     expect(race.fs.readFileSync(join(dest, 'SKILL.md'), 'utf8')).toContain('First.');
   });
 
@@ -683,7 +705,7 @@ describe('the temp folder is checked before every use', () => {
       } finally {
         clearHooks();
       }
-      expect([at, codeOf(r), refused(r).data]).toEqual([at, 'target_changed', { path: tmp, ...(elsewhere ? { elsewhere: true } : {}) }]);
+      expect([at, codeOf(r), refused(r).data]).toEqual([at, 'target_changed', { path: tmp, temp: true, ...(elsewhere ? { elsewhere: true } : {}) }]);
       expect(race.fs.readdirSync(join(p.dir, 'moved-tmp'))).toEqual(elsewhere ? ['SKILL.md'] : []);
       expect(race.fs.existsSync(join(p.dir, 'project', '.claude', 'skills', 'alpha'))).toBe(false);
     }

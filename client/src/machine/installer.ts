@@ -210,7 +210,13 @@ function writeSkill(dest: string, target: Target, files: readonly TreeFile[], en
   const made = makeFolder(stagingDir, 0o700);
   const staging = realFolder(stagingDir, target);
   anchors.push(staging);
-  const anchored = () => anchors.every((a) => isCopy(lstatOf(a.path), a.id));
+  // The first path that failed its check, for the refusal: a checked folder, the skill's path or the temp folder.
+  let failed: string | undefined;
+  const anchored = () => {
+    const bad = anchors.find((a) => !isCopy(lstatOf(a.path), a.id));
+    if (bad) failed ??= bad.path;
+    return bad === undefined;
+  };
   // A kept copy may hold the person's local edits: git ignores everything here, so `git add -A` can't commit it.
   if (made) writeFileSync(join(stagingDir, '.gitignore'), '*\n', { flag: 'wx', mode: 0o600 });
   const tmp = mkdtempSync(join(stagingDir, 'install-'));
@@ -220,9 +226,9 @@ function writeSkill(dest: string, target: Target, files: readonly TreeFile[], en
     // Nothing is written until the folders are still the ones checked, and each file only while the temp folder is still
     // the one made here; files are created, never opened where something already stands. Once a file was written, a temp
     // folder that fails its check may have taken it somewhere else: the refusal says so.
-    if (!anchored()) throw new CatalogError('target_changed', { path: dest });
+    if (!anchored()) throw new CatalogError('target_changed', { path: failed, ...(failed === stagingDir ? { temp: true } : {}) });
     let wrote = false;
-    const tmpChanged = () => new CatalogError('target_changed', { path: tmp, ...(wrote ? { elsewhere: true } : {}) });
+    const tmpChanged = () => new CatalogError('target_changed', { path: tmp, temp: true, ...(wrote ? { elsewhere: true } : {}) });
     for (const f of files) {
       if (!isCopy(lstatOf(tmp), copy)) throw tmpChanged();
       const parts = f.path.split('/');
@@ -234,9 +240,12 @@ function writeSkill(dest: string, target: Target, files: readonly TreeFile[], en
     // Folders left in staging because they couldn't be put back: named in the refusal (the staging folder itself when
     // more than one is there).
     const left: string[] = [];
-    const refuse = (elsewhere = false, path = dest): never => {
+    // `path` is the first path that failed its check; `temp` says it's a staging folder (the temp folder, or staging itself).
+    const refuse = (elsewhere = false): never => {
       const at = left.length === 0 ? {} : { staging: left.length === 1 ? left[0] : stagingDir };
-      throw new CatalogError('target_changed', { path, ...at, ...(elsewhere ? { elsewhere: true } : {}) });
+      const path = failed ?? dest;
+      const temp = path === tmp || path === stagingDir;
+      throw new CatalogError('target_changed', { path, ...(temp ? { temp: true } : {}), ...at, ...(elsewhere ? { elsewhere: true } : {}) });
     };
     // The folder the skill's path is in right now, through any link: where a folder moved out of it came from.
     const parentNow = (): Id | undefined => {
@@ -261,35 +270,47 @@ function writeSkill(dest: string, target: Target, files: readonly TreeFile[], en
     if (!entry) {
       if (there) throw new CatalogError('exists_untracked', { path: dest });
     } else if (there) {
+      // Only a real folder can be the installed copy, or the person's recreation of it.
+      if (!there.isDirectory()) throw new CatalogError('exists_untracked', { path: dest });
       if (!anchored()) refuse();
       old = { path: `${tmp}-replaced`, id: undefined, from: undefined };
       // Where it came from is known only when the path led to the same folder just before and just after the move.
       const before = parentNow();
-      if (!moved(dest, old.path)) refuse();
+      if (!moved(dest, old.path)) {
+        failed ??= dest;
+        refuse();
+      }
       const after = parentNow();
       old.from = same(before, after) ? after : undefined;
       const s = lstatOf(old.path);
       old.id = s && idFrom(s);
+      // A real folder whose identity isn't the recorded copy's, while the checked folders hold, was recreated by the
+      // person or their tools (a restore, a branch switch): it's replaced like any copy but kept in staging, never
+      // deleted, below. Anything else moved out, or checked folders that changed, is put back and refused.
       const real = s !== undefined && s.isDirectory() && !s.isSymbolicLink();
-      const ours = real && (entry.copy === undefined || same(old.id, fromLock(entry.copy)));
-      if (!ours || !anchored()) {
+      const held = anchored();
+      if (!real) failed ??= dest;
+      if (!real || !held) {
         restore(old.path, old.id, old.from);
         refuse();
       }
     }
     // The temp folder is checked once more just before it's moved in, so a folder swapped in for it is never moved in.
     if (!isCopy(lstatOf(tmp), copy)) {
+      failed ??= tmp;
       if (old) restore(old.path, old.id, old.from);
-      refuse(wrote, tmp);
+      refuse(wrote);
     }
     if (!anchored() || !moved(tmp, dest)) {
+      failed ??= dest;
       if (old) restore(old.path, old.id, old.from);
       refuse();
     }
     // The new copy must be where it was meant to go. If not, take it back out into a fresh staging path, and delete it
-    // there only if it's still the copy made here; anything else is put back or kept, and named. A replaced copy can't be
-    // put back safely then, so it stays in staging, named.
+    // there only if it's still the copy made here; anything else is put back or kept, and named. Then a replaced copy
+    // goes back if the path still leads home, and otherwise stays in staging, named.
     if (!anchored() || !isCopy(lstatOf(dest), copy)) {
+      failed ??= dest;
       let elsewhere = true;
       if (isCopy(lstatOf(dest), copy)) {
         const from = parentNow();
@@ -300,7 +321,7 @@ function writeSkill(dest: string, target: Target, files: readonly TreeFile[], en
           else restore(back, s && idFrom(s), from);
         }
       }
-      if (old) left.push(old.path);
+      if (old) restore(old.path, old.id, old.from);
       refuse(elsewhere);
     }
     if (!old) return { copy };
