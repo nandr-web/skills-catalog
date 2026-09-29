@@ -1037,6 +1037,53 @@ describe('the lock entry a decision used, changed by another run before the lock
     expect(r.outcome).toBe('installed');
     expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('Three.\n');
   });
+
+  it('install, set to tell-first meanwhile: held as tell-first, nothing written', async () => {
+    const p = place();
+    await versionsOf(p, [NOTES('One.\n')]);
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha' });
+    await versionsOf(p, [NOTES('Two.\n')]);
+    const dest = meanwhile(p, (e) => ({ ...e!, policy: 'notify' }));
+    const r = await installing(ctx);
+    expect([r.outcome, r.result]).toEqual(['held', logWords(S).result('install', 'held_notify')]);
+    expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('One.\n');
+  });
+
+  // Nothing newer and a copy the person recreated: its identity is recorded again, but only onto the entry the decision
+  // read. Another run's entry, written meanwhile, keeps the identity that run recorded.
+  it('update, nothing newer, a recreated copy while another run records another version: that run\'s entry stays as it wrote it', async () => {
+    const p = place();
+    await versionsOf(p, [NOTES('One.\n')]);
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha' });
+    const dest = join(p.osHome, '.claude', 'skills', 'alpha');
+    const fresh = `${dest}.fresh`;
+    race.fs.cpSync(dest, fresh, { recursive: true });
+    race.fs.rmSync(dest, { recursive: true });
+    race.fs.renameSync(fresh, dest);
+    let theirs: Entry | undefined;
+    meanwhile(p, (e) => (theirs = { ...recorded(e!, 2, [NOTES('Two.\n')]), copy: { dev: 1, ino: 2 } }));
+    const lines = await updating(ctx);
+    expect(lines).toEqual([header, S.format(W.unchanged, { n: 1 })]);
+    const after = (JSON.parse(race.fs.readFileSync(join(p.home, 'lock.json'), 'utf8')) as { skills: Record<string, Entry> }).skills[dest];
+    expect(after).toEqual(theirs);
+  });
+
+  it('update, nothing newer, an entry recorded before identities were kept: the intact copy\'s identity is recorded', async () => {
+    const p = place();
+    await versionsOf(p, [NOTES('One.\n')]);
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha' });
+    const dest = join(p.osHome, '.claude', 'skills', 'alpha');
+    const lockFile = join(p.home, 'lock.json');
+    const lock = JSON.parse(race.fs.readFileSync(lockFile, 'utf8')) as { skills: Record<string, Entry> };
+    const copy = lock.skills[dest]!['copy'];
+    delete lock.skills[dest]!['copy'];
+    race.fs.writeFileSync(lockFile, JSON.stringify(lock, null, 2) + '\n');
+    expect(await updating(ctx)).toEqual([header, S.format(W.unchanged, { n: 1 })]);
+    expect((JSON.parse(race.fs.readFileSync(lockFile, 'utf8')) as { skills: Record<string, Entry> }).skills[dest]!['copy']).toEqual(copy);
+  });
 });
 
 // Inode numbers past 2^53 (overlay and some network file systems): compared exactly, and kept in the lock as decimal

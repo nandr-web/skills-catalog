@@ -94,6 +94,8 @@ const MUTATIONS = [
   ['machine/installer.ts', 'staging isn\'t looked at again before the temp folder is made', '  stagingThere();\n  const tmp', '  const tmp'],
   ['machine/installer.ts', 'a .gitignore already in a new staging folder is a failure of the tool', "      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;\n      failed ??= stagingDir;", '      throw e;\n      failed ??= stagingDir;'],
   ['machine/installer.ts', 'an update with nothing newer never records a recreated copy again', '          if (folderFingerprint(here) === e.fingerprint) await recordAgain(ctx, here, e.target, e, hold.change);\n', ''],
+  ['machine/installer.ts', 'a recreated copy is recorded onto whatever entry is there under the lock', "    if (entry && entry.version === e.version && entry.fingerprint === e.fingerprint && (entry.copy === undefined ? e.copy === undefined : same(fromLock(entry.copy), fromLock(e.copy)))) fresh", '    if (entry) fresh'],
+  ['machine/installer.ts', 'an entry with no recorded copy never has one recorded', '(entry.copy === undefined ? e.copy === undefined : same(fromLock(entry.copy), fromLock(e.copy)))', 'same(fromLock(entry.copy), fromLock(e.copy))'],
   ['machine/installer.ts', 'an update with nothing newer skips the folder checks', '          const here = checkTarget(ctx, e.target, e.name, lock);', '          const here = destOf(ctx, e.target, e.name);'],
   // installing over an installed copy (held-table.test.ts)
   ['machine/installer.ts', 'the same version from another catalog replaces the installed copy', 'const otherCatalog = existing !== undefined && existing.catalog !== ctx.settings.catalog;', 'const otherCatalog = false;'],

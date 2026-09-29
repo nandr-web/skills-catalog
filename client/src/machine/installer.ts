@@ -679,9 +679,10 @@ async function recordAgain(ctx: Context, dest: string, target: Target, e: LockEn
   if (now === undefined || same(now, fromLock(e.copy))) return;
   skillsFolderFor(dest, target);
   if (!isCopy(lstatOf(dest), now)) return;
+  // Only onto the entry this was decided from: another run may have installed, updated or recorded it since (§4.5).
   await write((fresh) => {
     const entry = fresh.skills[dest];
-    if (entry) fresh.skills[dest] = { ...entry, copy: toLock(now) };
+    if (entry && entry.version === e.version && entry.fingerprint === e.fingerprint && (entry.copy === undefined ? e.copy === undefined : same(fromLock(entry.copy), fromLock(e.copy)))) fresh.skills[dest] = { ...entry, copy: toLock(now) };
   });
 }
 
