@@ -364,7 +364,8 @@ describe('the golden installer cases (golden/histories.yaml installer)', () => {
     const line = r.text.split('\n')[1]!;
     expect(line.startsWith(head('update.refused', { name: 'stale-rules', from: 1, to: 2 }))).toBe(true);
     expect(line).toContain('invalid_yaml');
-    expect(r.result).toBe(S.doc.log.result.update.unchanged);
+    // The log's word is the refusal's own error word.
+    expect(r.result).toBe(S.doc.log.error.invalid_manifest);
     expect(readFileSync(join(p.home, 'lock.json'), 'utf8')).toBe(lockBefore);
     expect(readFileSync(join(userSkills(p), 'stale-rules', 'SKILL.md'), 'utf8')).toBe(skillMd('stale-rules', 'The stale-rules skill.'));
   });
@@ -585,8 +586,8 @@ describe('a project folder replaced by a link to someone else\'s folder (the sec
 // deleted only when it is that copy. The races are in installer-race.test.ts.
 describe('replacing an installed copy deletes only the copy the lock recorded (contract §4.5)', () => {
   const idOf = (path: string) => {
-    const s = lstatSync(path);
-    return s.birthtimeMs ? { dev: s.dev, ino: s.ino, birth: s.birthtimeMs } : { dev: s.dev, ino: s.ino };
+    const s = lstatSync(path, { bigint: true });
+    return s.birthtimeMs ? { dev: Number(s.dev), ino: Number(s.ino), birth: Number(s.birthtimeMs) } : { dev: Number(s.dev), ino: Number(s.ino) };
   };
   const kept = (text: string) => /"staging":"([^"]+)"|was kept at (\S+?):/.exec(text);
 
@@ -618,10 +619,9 @@ describe('replacing an installed copy deletes only the copy the lock recorded (c
     writeFileSync(join(dest, 'canary'), 'keep me\n');
     const lockBefore = readFileSync(join(p.home, 'lock.json'), 'utf8');
     const r = await update(ctx, {});
-    // That skill's refused line (its reason shown as data until the words are vendored), and no success line.
-    expect(r.text.split('\n')[1]).toBe(
-      S.format(S.word('update.refused_target'), { name: 'alpha', from: 1, to: 2, path: dest, reason: `target_changed: ${JSON.stringify({ path: dest })}` }),
-    );
+    // That skill's own target_changed line (shown as data until its words are vendored), and no success line.
+    expect(r.text.split('\n')[1]).toBe(`- target_changed: ${JSON.stringify({ name: 'alpha', from: 1, to: 2, path: dest })}`);
+    expect(r.result).toBe(S.doc.log.error.target_changed ?? 'refused: target_changed');
     expect(readdirSync(dest)).toEqual(['canary']);
     expect(readFileSync(join(p.home, 'lock.json'), 'utf8')).toBe(lockBefore);
     expect(nothingStaged(p)).toBe(true);

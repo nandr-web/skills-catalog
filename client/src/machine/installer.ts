@@ -13,7 +13,7 @@
 // Node has no directory-relative file operations, so another program running as the same person can still race these
 // checks; the installer narrows the window.
 
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync, type Stats } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync, type BigIntStats } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CatalogError, shellQuote, validateInput, type Catalog, type Surface, type VersionsResult } from '@skills-catalog/core';
 import { checkFetched, checkName, diffTrees, flagText, type RiskFlag, type TreeDiff, type TreeFile } from '@skills-catalog/core/skill-tree';
@@ -76,21 +76,36 @@ function skillsFolderFor(dest: string): Anchor[] {
   });
 }
 
-// A folder that must be a real folder, not a link, with its identity taken from the same lstat.
+// A folder that must be a real folder, not a link, private to the person, with its identity taken from the same lstat.
 function realFolder(path: string): Anchor {
   const s = lstatOf(path);
   if (!s || s.isSymbolicLink()) throw new CatalogError('target_symlink', { path });
   if (!s.isDirectory()) throw new CatalogError('exists_untracked', { path });
+  if (!isPrivate(s)) throw new CatalogError('target_not_private', { path });
   return { path, id: idFrom(s) };
+}
+
+// Private to the person (§4.5): owned by them, never world-writable, and group-writable only with their own private group
+// (a umask of 002 with per-user groups). Otherwise another user could swap what the installer writes there.
+function isPrivate(s: Stats): boolean {
+  const uid = process.getuid?.();
+  if (uid === undefined) return true;
+  if (s.uid !== BigInt(uid) || (s.mode & 0o002n) !== 0n) return false;
+  // Group-write only with the user's private group (its gid is the uid); never a shared group such as macOS's staff (20).
+  return (s.mode & 0o020n) === 0n || (s.gid === BigInt(uid) && s.gid !== 20n);
 }
 
 // A folder's identity on disk, to tell whether a path still names the folder that was checked or installed: device,
 // inode and birth time (left out where the file system reads it as 0). Entries recorded without a birth time compare on
 // the other two.
-type Id = FolderId;
+// Stats are read as bigints, so identities compare exactly even where inode numbers pass 2^53 (overlay and network file
+// systems); the lock stores them as numbers, and leaves `copy` out when they don't fit (such a copy is then kept, never
+// deleted, like an entry from before identities were recorded).
+type Stats = BigIntStats;
+type Id = { dev: bigint; ino: bigint; birth?: bigint };
 function lstatOf(path: string): Stats | undefined {
   try {
-    return lstatSync(path);
+    return lstatSync(path, { bigint: true });
   } catch {
     return undefined;
   }
@@ -102,6 +117,14 @@ function idOf(path: string): Id | undefined {
 }
 const same = (a: Id | undefined, b: Id | undefined) =>
   a !== undefined && b !== undefined && a.dev === b.dev && a.ino === b.ino && (a.birth === undefined || b.birth === undefined || a.birth === b.birth);
+/** An identity as the lock stores it, or nothing when it doesn't fit a safe integer. */
+function toLock(id: Id): FolderId | undefined {
+  const [dev, ino, birth] = [Number(id.dev), Number(id.ino), id.birth === undefined ? undefined : Number(id.birth)];
+  if (![dev, ino, ...(birth === undefined ? [] : [birth])].every(Number.isSafeInteger)) return undefined;
+  return birth === undefined ? { dev, ino } : { dev, ino, birth };
+}
+const fromLock = (c: FolderId | undefined): Id | undefined =>
+  c && { dev: BigInt(c.dev), ino: BigInt(c.ino), ...(c.birth === undefined ? {} : { birth: BigInt(Math.trunc(c.birth)) }) };
 /** A real folder (not a link) with this identity. */
 const isCopy = (s: Stats | undefined, id: Id | undefined) => s !== undefined && s.isDirectory() && !s.isSymbolicLink() && same(idFrom(s), id);
 /** Removes a folder only while it's a real folder with an identity the installer recorded; never by path alone. */
@@ -140,23 +163,29 @@ function moved(from: string, to: string): boolean {
 function writeSkill(dest: string, files: readonly TreeFile[], entry: LockEntry | undefined): { copy: Id; kept?: string } {
   const anchors = skillsFolderFor(dest);
   const stagingDir = join(anchors[0]!.path, STAGING);
+  let made = false;
   try {
     mkdirSync(stagingDir, { mode: 0o700 });
+    made = true;
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
   }
   const staging = realFolder(stagingDir);
   anchors.push(staging);
+  const anchored = () => anchors.every((a) => isCopy(lstatOf(a.path), a.id));
+  // A kept copy may hold the person's local edits: git ignores everything here, so `git add -A` can't commit it.
+  if (made) writeFileSync(join(stagingDir, '.gitignore'), '*\n', { flag: 'wx', mode: 0o600 });
   const tmp = mkdtempSync(join(stagingDir, 'install-'));
   const copy = idOf(tmp)!;
   try {
-    const anchored = () => anchors.every((a) => isCopy(lstatOf(a.path), a.id));
-    // Nothing is written until the folders are still the ones checked.
+    // Nothing is written until the folders are still the ones checked, and each file only while the temp folder is still
+    // the one made here; files are created, never opened where something already stands.
     if (!anchored()) throw new CatalogError('target_changed', { path: dest });
     for (const f of files) {
+      if (!isCopy(lstatOf(tmp), copy)) throw new CatalogError('target_changed', { path: dest });
       const full = join(tmp, f.path);
       mkdirSync(dirname(full), { recursive: true });
-      writeFileSync(full, f.bytes, { mode: f.mode === '0755' ? 0o755 : 0o644 });
+      writeFileSync(full, f.bytes, { mode: f.mode === '0755' ? 0o755 : 0o644, flag: 'wx' });
     }
     // Folders left in staging because they couldn't be put back: named in the refusal (the staging folder itself when
     // more than one is there).
@@ -168,16 +197,17 @@ function writeSkill(dest: string, files: readonly TreeFile[], entry: LockEntry |
     // The folder the skill's path is in right now, through any link: where a folder moved out of it came from.
     const parentNow = (): Id | undefined => {
       try {
-        return idFrom(statSync(dirname(dest)));
+        return idFrom(statSync(dirname(dest), { bigint: true }));
       } catch {
         return undefined;
       }
     };
-    // Puts a folder moved out of the skill's path back into the folder it came from. If the path now leads elsewhere, it's
-    // taken out again and left in staging, named.
+    // Puts a folder moved out of the skill's path back into the folder it came from, checking first that the path still
+    // leads there; otherwise it stays in staging, named. If the path changed during the move back, it's taken out again.
     const restore = (aside: string, id: Id | undefined, from: Id | undefined): void => {
-      if (!moved(aside, dest)) return void left.push(aside);
-      if (anchored() || same(parentNow(), from)) return;
+      const home = () => anchored() || same(parentNow(), from);
+      if (!home() || !moved(aside, dest)) return void left.push(aside);
+      if (home()) return;
       if (isCopy(lstatOf(dest), id) && moved(dest, aside)) left.push(aside);
     };
 
@@ -187,18 +217,23 @@ function writeSkill(dest: string, files: readonly TreeFile[], entry: LockEntry |
     if (!entry) {
       if (there) throw new CatalogError('exists_untracked', { path: dest });
     } else if (there) {
-      old = { path: `${tmp}-replaced`, id: undefined, from: parentNow() };
+      if (!anchored()) refuse();
+      old = { path: `${tmp}-replaced`, id: undefined, from: undefined };
+      // Where it came from is known only when the path led to the same folder just before and just after the move.
+      const before = parentNow();
       if (!moved(dest, old.path)) refuse();
+      const after = parentNow();
+      old.from = same(before, after) ? after : undefined;
       const s = lstatOf(old.path);
       old.id = s && idFrom(s);
       const real = s !== undefined && s.isDirectory() && !s.isSymbolicLink();
-      const ours = real && (entry.copy === undefined || same(old.id, entry.copy));
+      const ours = real && (entry.copy === undefined || same(old.id, fromLock(entry.copy)));
       if (!ours || !anchored()) {
         restore(old.path, old.id, old.from);
         refuse();
       }
     }
-    if (!moved(tmp, dest)) {
+    if (!anchored() || !moved(tmp, dest)) {
       if (old) restore(old.path, old.id, old.from);
       refuse();
     }
@@ -221,16 +256,20 @@ function writeSkill(dest: string, files: readonly TreeFile[], entry: LockEntry |
     }
     if (!old) return { copy };
     // Deleted only when it's still the recorded copy; otherwise it's kept, and named.
-    if (entry?.copy === undefined || !removeIfOurs(old.path, entry.copy)) return { copy, kept: old.path };
+    if (entry?.copy === undefined || !removeIfOurs(old.path, fromLock(entry.copy))) return { copy, kept: old.path };
     return { copy };
   } finally {
     removeIfOurs(tmp, copy);
-    // The staging folder goes when it's empty (rmdir removes only an empty folder), and only while it's the one made here.
+    // The staging folder goes when nothing but its .gitignore is left, and only while it's the one checked here.
     if (isCopy(lstatOf(stagingDir), staging.id)) {
       try {
-        rmdirSync(stagingDir);
+        const ignore = join(stagingDir, '.gitignore');
+        if (readdirSync(stagingDir).every((f) => f === '.gitignore') && (lstatOf(ignore)?.isFile() ?? true)) {
+          rmSync(ignore, { force: true });
+          rmdirSync(stagingDir);
+        }
       } catch {
-        // not empty: a kept copy is named in the result
+        // something else is there now: a kept copy is named in the result
       }
     }
   }
@@ -396,7 +435,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
     return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held' };
   }
   const written = writeSkill(dest, to.files, existing);
-  const entry = record(ctx, lock, dest, { name: req.name, target }, to, req.policy ?? existing?.policy, existing?.accepted ?? [], written.copy);
+  const entry = record(ctx, lock, dest, { name: req.name, target }, to, req.policy ?? existing?.policy, existing?.accepted ?? [], toLock(written.copy));
   const w = s.word('install');
   const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + keptLine(s, req.name, written.kept) + '\n' + s.format(w.live, { name: req.name });
   return { text, target: `${req.name} v${version}`, result: log.result('install', 'installed'), outcome: 'installed' };
@@ -404,6 +443,11 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
 
 /** An update's line for a skill whose folder failed a check: the reason worded per code, else shown as its data. */
 function refusedTarget(s: Surface, at: { name: string; from: number; to: number }, err: CatalogError): string {
+  // A folder that changed mid-write may have left something in staging or elsewhere: its own line, not "nothing was written".
+  if (err.code === 'target_changed') {
+    const w = s.word('update.target_changed');
+    return typeof w === 'string' ? s.format(w, { ...at, ...err.data }) : `- ${asData('target_changed', { ...at, ...err.data })}`;
+  }
   const path = String(err.data['path']);
   const reason = s.word('update.target_reason')?.[err.code];
   return s.format(s.word('update.refused_target'), { ...at, path, reason: typeof reason === 'string' ? s.format(reason, { path }) : asData(err.code, err.data) });
@@ -416,7 +460,7 @@ function keptLine(s: Surface, name: string, kept: string | undefined): string {
   return '\n' + (typeof w === 'string' ? s.format(w, { name, staging: kept }) : asData('kept_in_staging', { name, staging: kept }));
 }
 
-function record(ctx: Context, lock: Lock, dest: string, at: { name: string; target: Target }, to: Side, policy: Policy | undefined, accepted: LockEntry['accepted'], copy: FolderId): LockEntry {
+function record(ctx: Context, lock: Lock, dest: string, at: { name: string; target: Target }, to: Side, policy: Policy | undefined, accepted: LockEntry['accepted'], copy: FolderId | undefined): LockEntry {
   const entry: LockEntry = {
     name: at.name,
     target: at.target,
@@ -428,7 +472,7 @@ function record(ctx: Context, lock: Lock, dest: string, at: { name: string; targ
     installed_at: ctx.now().toISOString(),
     catalog: ctx.settings.catalog,
     accepted,
-    copy,
+    ...(copy ? { copy } : {}),
   };
   lock.skills[dest] = entry;
   writeLock(ctx.settings.home, lock);
@@ -454,7 +498,7 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const flags = gate(existing ? await installedSide(catalog, existing) : null, to).risk_flags;
   if (!sameSet(req.flags, kinds(flags))) throw conflict();
   const written = writeSkill(dest, to.files, existing);
-  const entry = record(ctx, lock, dest, { name: req.name, target: t.target }, to, existing?.policy, [...(existing?.accepted ?? []), { version: to.version, flags: kinds(flags) }], written.copy);
+  const entry = record(ctx, lock, dest, { name: req.name, target: t.target }, to, existing?.policy, [...(existing?.accepted ?? []), { version: to.version, flags: kinds(flags) }], toLock(written.copy));
   const text =
     (existing
       ? s.format(s.word('update.accepted'), { name: req.name, from: existing.version, to: to.version, path: quoted(dest) })
@@ -490,10 +534,16 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
   const targets: string[] = [];
   let unchanged = 0;
   // The log's one word for the call: the outcome that most needs the person, else updated, else up to date.
-  const RANK = ['unchanged', 'updated', 'held_pin', 'held_notify', 'held_flagged'];
+  const RANK = ['unchanged', 'updated', 'refused', 'held_pin', 'held_notify', 'held_flagged'];
   let outcome = 'unchanged';
   const saw = (o: string) => {
     if (RANK.indexOf(o) > RANK.indexOf(outcome)) outcome = o;
+  };
+  // A refused skill: the log's word for it is the first refusal's error word.
+  let refusal: string | undefined;
+  const refused = (code: string) => {
+    refusal ??= code;
+    saw('refused');
   };
   for (const e of chosen) {
     const v = await allVersions(catalog, e.name);
@@ -503,6 +553,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     } catch (err) {
       if (!(err instanceof CatalogError)) throw err;
       lines.push(s.format(w.refused, { name: e.name, from: e.version, to: v.latest, reason: refusalReason(s, err) }));
+      refused(err.code);
       continue;
     }
     if (v.latest === e.version) {
@@ -524,6 +575,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     } catch (err) {
       if (!(err instanceof CatalogError)) throw err;
       lines.push(refusedTarget(s, at, err));
+      refused(err.code);
       continue;
     }
     let to: Side;
@@ -537,6 +589,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
           ? typeof refusedFingerprint === 'string' ? s.format(refusedFingerprint, at) : asData('refused', { ...at, error: err.toJSON() })
           : s.format(w.refused, { ...at, reason: refusalReason(s, err) }),
       );
+      refused(err.code);
       continue;
     }
     const d = gate(await installedSide(catalog, e), to);
@@ -566,15 +619,16 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     } catch (err) {
       if (!(err instanceof CatalogError)) throw err;
       lines.push(refusedTarget(s, at, err));
+      refused(err.code);
       continue;
     }
-    record(ctx, lock, dest, e, to, e.policy, e.accepted, written.copy);
+    record(ctx, lock, dest, e, to, e.policy, e.accepted, toLock(written.copy));
     lines.push(s.format(w.updated, { ...at, changes: changesOf(s, d) }) + keptLine(s, e.name, written.kept));
     saw('updated');
   }
   if (unchanged) lines.push(s.format(w.unchanged, { n: unchanged }));
   const text = [s.format(w.header, { checked: chosen.length }), ...lines].join('\n');
-  return { text, target: targets.join(', ') || '-', result: log.result('update', outcome), outcome };
+  return { text, target: targets.join(', ') || '-', result: outcome === 'refused' ? log.error(refusal!) : log.result('update', outcome), outcome };
 }
 
 export async function list(ctx: Context): Promise<Done> {

@@ -18,13 +18,19 @@ const race = vi.hoisted(() => ({
   onLstat: undefined as undefined | ((path: string) => void),
   onRename: undefined as undefined | ((from: string, to: string) => void),
   afterRename: undefined as undefined | ((from: string, to: string) => void),
+  // Rewrites what an lstat reports (an owner or mode another user's folder would have).
+  stats: undefined as undefined | ((path: string, s: import('node:fs').Stats) => Partial<import('node:fs').Stats> | undefined),
 }));
 vi.mock('node:fs', async (original) => {
   const fs = await original<Fs>();
   race.fs = fs;
   const lstatSync = ((path: string, ...rest: unknown[]) => {
     race.onLstat?.(String(path));
-    return (fs.lstatSync as (...a: unknown[]) => unknown)(path, ...rest);
+    const s = (fs.lstatSync as (...a: unknown[]) => unknown)(path, ...rest) as import('node:fs').Stats | undefined;
+    const change = s && race.stats?.(String(path), s);
+    // The installer reads bigint stats: numbers in a change become bigints to match.
+    const fit = change && typeof (s as { mode: unknown }).mode === 'bigint' ? Object.fromEntries(Object.entries(change).map(([k, v]) => [k, typeof v === 'number' ? BigInt(v) : v])) : change;
+    return fit ? Object.assign(Object.create(Object.getPrototypeOf(s)), s, fit) : s;
   }) as Fs['lstatSync'];
   const renameSync = (from: string, to: string) => {
     race.onRename?.(String(from), String(to));
@@ -57,15 +63,17 @@ const refused = (e: unknown) => e as { code?: string; data?: Record<string, unkn
 const codeOf = (r: unknown) => refused(r).code ?? /(target_changed|target_symlink|exists_untracked)/.exec(refused(r).text ?? '')?.[1];
 const stagedOf = (r: unknown) => (refused(r).data?.['staging'] as string | undefined) ?? /"staging":"([^"]+)"/.exec(refused(r).text ?? '')?.[1];
 const stagingDir = (p: Place) => join(p.dir, 'project', '.claude', '.skills-catalog-staging');
-const stagingEntries = (p: Place) => (race.fs.existsSync(stagingDir(p)) ? race.fs.readdirSync(stagingDir(p)).map((e) => join(stagingDir(p), e)) : []);
+// What's in staging besides its .gitignore.
+const stagingEntries = (p: Place) => (race.fs.existsSync(stagingDir(p)) ? race.fs.readdirSync(stagingDir(p)).filter((e) => e !== '.gitignore').map((e) => join(stagingDir(p), e)) : []);
 
 // The project's skills folder S, and victim/ V holding alpha/canary: someone else's folder a link can point at.
-function places(p: Place) {
+// `holds`: what V has at alpha: a canary (someone's folder), nothing, or an empty folder.
+function places(p: Place, holds: 'canary' | 'none' | 'empty' = 'canary') {
   const skills = join(p.dir, 'project', '.claude', 'skills');
   const victim = join(p.dir, 'victim');
   const canary = join(victim, 'alpha', 'canary');
-  race.fs.mkdirSync(join(victim, 'alpha'), { recursive: true });
-  race.fs.writeFileSync(canary, 'keep me\n');
+  race.fs.mkdirSync(holds === 'none' ? victim : join(victim, 'alpha'), { recursive: true });
+  if (holds === 'canary') race.fs.writeFileSync(canary, 'keep me\n');
   const aside = join(p.dir, 'aside');
   const toVictim = () => {
     race.fs.mkdirSync(skills, { recursive: true });
@@ -106,10 +114,14 @@ function doubleSwapAt(p: Place, k: number, pl: ReturnType<typeof places>, side: 
   };
 }
 
+// The sweeps run a whole install or update per interleaving (about 3 s together here); room for a loaded machine.
+const SWEEP_MS = 30_000;
+
 const clearHooks = () => {
   race.onLstat = undefined;
   race.onRename = undefined;
   race.afterRename = undefined;
+  race.stats = undefined;
 };
 
 describe('links swapped in while the installer replaces a copy (the security review\'s races)', () => {
@@ -168,7 +180,7 @@ describe('links swapped in while the installer replaces a copy (the security rev
       const staged = stagedOf(r);
       expect(stagingEntries(p), `${side} k=${k}`).toEqual(staged === undefined ? [] : [staged]);
     }
-  });
+  }, SWEEP_MS);
 
   // §4.5: a folder moved aside that isn't the recorded copy is moved back, or, when it can't be (the real copy is back in
   // its place), left where it was moved to and named by target_changed's `staging`. Never deleted either way.
@@ -198,7 +210,48 @@ describe('links swapped in while the installer replaces a copy (the security rev
       const installedAt = race.fs.existsSync(join(pl.skills, 'alpha', 'SKILL.md')) ? join(pl.skills, 'alpha') : staged;
       expect(installedAt && race.fs.readFileSync(join(installedAt, 'SKILL.md'), 'utf8'), `${side} k=${k}`).toMatch(/Body\.|Second, markdown only\./);
     }
-  });
+  }, SWEEP_MS);
+
+  // Around the new copy's move in: V holds nothing at alpha, or an empty folder, so the move can land there. Whenever a
+  // copy made here ends up in V, the result says so (`elsewhere`), and never reports success.
+  it('a new copy that lands where a swapped-in link pointed is always reported (V without alpha, or with an empty alpha)', async () => {
+    let landings = 0;
+    for (const holds of ['none', 'empty'] as const) {
+      for (const op of ['install', 'update'] as const) {
+        for (const side of ['before', 'after'] as const) {
+          for (let k = 0; k < 16; k++) {
+            const p = place();
+            await publish(p, 'alpha', 'Body.\n');
+            const ctx = ctxFor(p);
+            if (op === 'update') {
+              await install(ctx, { name: 'alpha', target: 'project' });
+              await publish(p, 'alpha', 'Second, markdown only.\n');
+            }
+            const pl = places(p, holds);
+            const swapped = doubleSwapAt(p, k, pl, side);
+            let r: unknown;
+            try {
+              r = await (op === 'install' ? install(ctx, { name: 'alpha', target: 'project' }) : update(ctx, {})).catch((e: unknown) => e);
+            } finally {
+              clearHooks();
+            }
+            if (!swapped()) break;
+            const label = `${holds} ${op} ${side} k=${k}`;
+            const landed = race.fs.existsSync(join(pl.victim, 'alpha', 'SKILL.md'));
+            const text = refused(r).text ?? '';
+            const saidElsewhere = refused(r).data?.['elsewhere'] === true || text.includes('"elsewhere":true');
+            if (landed) landings++;
+            if (landed) expect(saidElsewhere, label).toBe(true);
+            if (landed) expect(text, label).not.toMatch(/^Installed|Updated/m);
+            const staged = stagedOf(r);
+            expect(stagingEntries(p).length === 0 || staged !== undefined, label).toBe(true);
+          }
+        }
+      }
+    }
+    // The sweep reaches the case it's about.
+    expect(landings).toBeGreaterThan(0);
+  }, SWEEP_MS * 2);
 });
 
 // The review's probes, each at one exact point. An update of alpha, installed in the project, to a markdown-only v2.
@@ -359,5 +412,117 @@ describe('the review\'s probes (B, B2, C, D)', () => {
     // The new copy went where the link pointed; the person's copy is in staging, named.
     expect(race.fs.readFileSync(join(v, 'alpha', 'SKILL.md'), 'utf8')).toContain('Second, markdown only.');
     expect(race.fs.readFileSync(join(staged!, 'SKILL.md'), 'utf8')).toBe(skillMd('alpha', 'The alpha skill.', 'Body.\n'));
+  });
+});
+
+// §4.5 (fd91737): the staging folder, .claude and .claude/skills must be private to the person before anything is written
+// there: owned by them, never world-writable, group-writable only with their own group. Otherwise target_not_private
+// {path}, and nothing changes. In a shared checkout another user could otherwise swap what the installer writes.
+describe('folders another user could control are refused (target_not_private)', () => {
+  const uid = process.getuid!();
+
+  const cases: { what: string; at: (claude: string) => string; change: Partial<import('node:fs').Stats> }[] = [
+    { what: 'the staging folder owned by another user', at: (c) => join(c, '.skills-catalog-staging'), change: { uid: uid + 1 } },
+    { what: '.claude owned by another user', at: (c) => c, change: { uid: uid + 1 } },
+    { what: '.claude/skills world-writable', at: (c) => join(c, 'skills'), change: { mode: 0o040777 } },
+    { what: 'the staging folder group-writable with another group', at: (c) => join(c, '.skills-catalog-staging'), change: { mode: 0o040770, gid: uid + 1 } },
+    { what: '.claude group-writable with a shared group (macOS staff, 20)', at: (c) => c, change: { mode: 0o040775, gid: 20 } },
+  ];
+
+  it('each is refused before anything is written, and nothing changes', async () => {
+    for (const c of cases) {
+      const p = place();
+      await publish(p, 'alpha', 'Body.\n');
+      const claude = join(p.dir, 'project', '.claude');
+      const path = c.at(claude);
+      race.stats = (at) => (at === path ? c.change : undefined);
+      let r: unknown;
+      try {
+        r = await install(ctxFor(p), { name: 'alpha', target: 'project' }).catch((e: unknown) => e);
+      } finally {
+        clearHooks();
+      }
+      expect([c.what, codeOf(r), refused(r).data]).toEqual([c.what, 'target_not_private', { path }]);
+      expect(race.fs.existsSync(join(claude, 'skills', 'alpha')), c.what).toBe(false);
+      expect(stagingEntries(p).filter((e) => !e.endsWith('.gitignore')), c.what).toEqual([]);
+    }
+  });
+
+  it('group-writable with the person\'s private group (its gid is their uid) is allowed (umask 002 with per-user groups)', async () => {
+    const p = place();
+    await publish(p, 'alpha', 'Body.\n');
+    const claude = join(p.dir, 'project', '.claude');
+    race.stats = (at, s) => (at.startsWith(claude) && s.isDirectory() ? { mode: Number(s.mode) | 0o020, gid: uid } : undefined);
+    try {
+      await install(ctxFor(p), { name: 'alpha', target: 'project' });
+    } finally {
+      clearHooks();
+    }
+    expect(race.fs.existsSync(join(claude, 'skills', 'alpha', 'SKILL.md'))).toBe(true);
+  });
+
+  it('the temp folder swapped for a link between its making and the first write: refused, nothing written where it points', async () => {
+    const p = place();
+    await publish(p, 'alpha', 'Body.\n');
+    const elsewhere = join(p.dir, 'elsewhere');
+    race.fs.mkdirSync(elsewhere);
+    race.onLstat = (path) => {
+      if (!/\.skills-catalog-staging\/install-[^/]+$/.test(path)) return;
+      race.onLstat = undefined;
+      race.fs.renameSync(path, join(p.dir, 'moved-tmp'));
+      race.fs.symlinkSync(elsewhere, path);
+    };
+    let r: unknown;
+    try {
+      r = await install(ctxFor(p), { name: 'alpha', target: 'project' }).catch((e: unknown) => e);
+    } finally {
+      clearHooks();
+    }
+    expect(codeOf(r)).toBe('target_changed');
+    expect(race.fs.readdirSync(elsewhere)).toEqual([]);
+    expect(race.fs.existsSync(join(p.dir, 'project', '.claude', 'skills', 'alpha'))).toBe(false);
+  });
+
+  it('the staging folder ignores everything in it for git, and is removed with its .gitignore when nothing else is left', async () => {
+    const p = place();
+    await publish(p, 'alpha', 'Body.\n');
+    const staging = stagingDir(p);
+    let seen: string | undefined;
+    race.onRename = (from) => {
+      if (from.startsWith(staging) && seen === undefined) seen = race.fs.readFileSync(join(staging, '.gitignore'), 'utf8');
+    };
+    try {
+      await install(ctxFor(p), { name: 'alpha', target: 'project' });
+    } finally {
+      clearHooks();
+    }
+    expect(seen).toBe('*\n');
+    expect(race.fs.existsSync(staging)).toBe(false);
+  });
+});
+
+// Inode numbers past 2^53 (overlay and some network file systems): compared exactly, and left out of the lock rather than
+// written as numbers its own reader would refuse (every command would then stop with invalid_local_file).
+describe('identities past 2^53', () => {
+  it('install and update work, the lock stays readable, and a copy without a stored identity is kept, never deleted', async () => {
+    const p = place();
+    await publish(p, 'alpha', 'Body.\n');
+    const claude = join(p.dir, 'project', '.claude');
+    race.stats = (at, s) => (at.startsWith(claude) ? ({ ino: BigInt(s.ino) + 2n ** 60n } as unknown as Partial<import('node:fs').Stats>) : undefined);
+    try {
+      const ctx = ctxFor(p);
+      await install(ctx, { name: 'alpha', target: 'project' });
+      const lock = JSON.parse(race.fs.readFileSync(join(p.home, 'lock.json'), 'utf8'));
+      const entry = lock.skills[join(claude, 'skills', 'alpha')];
+      expect(entry.copy).toBeUndefined();
+      await publish(p, 'alpha', 'Second, markdown only.\n');
+      const r = await update(ctx, {});
+      expect(r.text).toContain(S.format(S.word('update.updated'), { name: 'alpha', from: 1, to: 2, changes: '"SKILL.md" changed' }));
+      const kept = /"staging":"([^"]+)"/.exec(r.text)?.[1];
+      expect(kept && race.fs.readFileSync(join(kept, 'SKILL.md'), 'utf8')).toBe(skillMd('alpha', 'The alpha skill.', 'Body.\n'));
+      expect((await MACHINE_RUNS['list_installed_skills']!(ctx, {})).text).toContain('alpha');
+    } finally {
+      clearHooks();
+    }
   });
 });
