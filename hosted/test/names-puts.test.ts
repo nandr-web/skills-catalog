@@ -2,9 +2,9 @@
 // batch write can delete. A few puts run at once; the client's own retries absorb throttling (six attempts, its jittered
 // backoff), and a put that still fails fails the record, so the event is delivered again.
 
-import { BatchWriteItemCommand, PutItemCommand, type DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { BatchWriteItemCommand, DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import { describe, expect, it } from 'vitest';
-import { HostedFileNames, NAMES_PUTS_AT_ONCE, namesClient } from '../src/names.ts';
+import { HostedFileNames, NAMES_PUTS_AT_ONCE, namesClient, type NamesClient } from '../src/names.ts';
 
 const sha = (i: number) => i.toString(16).padStart(64, '0');
 const record = (shas: string[]) => ({ name: 'named', version: 3, files: shas.map((s) => ({ sha256: s })) }) as never;
@@ -24,7 +24,7 @@ function table(opts: { failOn?: string } = {}) {
       if (cmd instanceof PutItemCommand && opts.failOn && cmd.input.Item!['pk']!.S === `file#${opts.failOn}`) throw new Error('ProvisionedThroughputExceededException');
       return {};
     },
-  } as unknown as DynamoDBClient;
+  } as unknown as NamesClient;
   return { ddb, sent, most: () => most };
 }
 
@@ -55,6 +55,17 @@ describe('file names, one put per file', () => {
     const t = table({ failOn: sha(5) });
     const names = new HostedFileNames({ ddb: t.ddb, place: { table: 't', bucket: 'b' } });
     await expect(names.record(record(Array.from({ length: 12 }, (_, i) => sha(i))))).rejects.toThrow(/ProvisionedThroughput/);
+  });
+
+  it('the names are written only through that client: a plain DynamoDB client is refused at the type check', () => {
+    const plain = new DynamoDBClient({ region: 'us-east-1' });
+    try {
+      // @ts-expect-error a plain client would retry three times, not six
+      const writer = () => new HostedFileNames({ ddb: plain, place: { table: 't', bucket: 'b' } });
+      expect(typeof writer).toBe('function');
+    } finally {
+      plain.destroy();
+    }
   });
 
   it("the indexer's DynamoDB client tries each call six times (its own jittered backoff), whatever else it's given", async () => {
