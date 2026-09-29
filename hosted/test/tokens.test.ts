@@ -50,6 +50,21 @@ describe('tokens', () => {
     expect(await w.tokens.verify(other)).toBeUndefined();
   });
 
+  it('revoking keeps the record, marked revoked, and never deletes anything; the token is nobody from then on', async () => {
+    const w = await world();
+    const token = await w.tokens.issue({ owner: 'ana', scope: 'publish', kind: 'personal', expiresAt: new Date(w.clock.now().getTime() + 3_600_000) });
+    const sent: string[] = [];
+    const send = w.ddb.send.bind(w.ddb);
+    w.ddb.send = ((cmd: { constructor: { name: string } }, ...rest: unknown[]) => (sent.push(cmd.constructor.name), (send as any)(cmd, ...rest))) as typeof w.ddb.send;
+    w.clock.advance(1000);
+    await w.tokens.revoke(token);
+    expect(sent.filter((c) => /Delete/.test(c))).toEqual([]);
+    expect(await w.tokens.verify(token)).toBeUndefined();
+    const items = (await w.ddb.send(new ScanCommand({ TableName: w.place.table }))).Items ?? [];
+    const record = items.find((i) => i['sk']?.S === 'token');
+    expect(record?.['revoked_at']?.S).toBe(w.clock.now().toISOString());
+  });
+
   it('only a read or publish scope, and an expiry in the future, can be issued', async () => {
     const w = await world();
     const later = new Date(w.clock.now().getTime() + 1000);

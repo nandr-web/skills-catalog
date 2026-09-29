@@ -9,6 +9,7 @@ import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import type { NewVersion, VersionPublished } from '@skills-catalog/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { blobKey, createStores, HostedBlobLinks, HostedStorage, HostedSweep, inspect, type Place } from '../src/index.ts';
+import { changeTags } from '../src/blobs.ts';
 import { FAKE, startEmulator, type Emulator } from './emulator.ts';
 
 const HOUR = 3_600_000;
@@ -64,6 +65,14 @@ describe('a commit takes a file only under a day old', () => {
     expect(await w.commit([young])).toMatchObject({ kind: 'created' });
     w.clock.advance(2 * HOUR);
     expect(await w.commit([old])).toEqual({ kind: 'not_uploaded', missing: [old] });
+  });
+
+  it('a file marked for removal is not_uploaded however young, and the commit changes nothing', async () => {
+    const w = await world();
+    const s = await w.upload('fresh but marked\n');
+    await changeTags(w.s3, w.place, s, (tags) => ({ ...tags, deleting: w.clock.now().toISOString() }));
+    expect(await w.commit([s])).toEqual({ kind: 'not_uploaded', missing: [s] });
+    expect(await w.storage.version('aged', 1)).toBeUndefined();
   });
 
   it('a claim refreshes a stale file: asked for again at 25 hours, it is answered as stored and a commit takes it', async () => {
@@ -156,6 +165,25 @@ describe('the sweep marks, then deletes', () => {
     // The sweep doesn't run again for over a week: the file is old from its claim as well, and still marked.
     w.clock.advance(7 * DAY + 2 * HOUR);
     await w.sweep.run();
+    expect(await w.stored(s)).toBe(true);
+    expect(await w.tags(s)).not.toHaveProperty('deleting');
+  });
+
+  it('a version committed after the sweep first looks and before the second pass reads the versions again keeps the file, and the mark comes off', async () => {
+    const w = await world();
+    const s = await w.upload('late commit\n');
+    w.clock.advance(7 * DAY + HOUR);
+    await w.sweep.run();
+    expect(await w.tags(s)).toHaveProperty('deleting');
+    w.clock.advance(HOUR);
+    // A publish that checked the file just before its mark lands now: its version references the file.
+    await w.sweep.run({
+      beforeRecheck: async () => {
+        await changeTags(w.s3, w.place, s, ({ deleting: _, ...rest }) => ({ ...rest, claimed: w.clock.now().toISOString() }));
+        expect(await w.commit([s])).toMatchObject({ kind: 'created' });
+        await changeTags(w.s3, w.place, s, (tags) => ({ ...tags, deleting: new Date(w.clock.now().getTime() - 2 * HOUR).toISOString(), claimed: new Date(w.clock.now().getTime() - 8 * DAY).toISOString() }));
+      },
+    });
     expect(await w.stored(s)).toBe(true);
     expect(await w.tags(s)).not.toHaveProperty('deleting');
   });
