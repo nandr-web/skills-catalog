@@ -11,20 +11,25 @@ import type { TokenHolder } from '../tokens.ts';
 
 export type Asking =
   | { kind: 'holder'; holder: TokenHolder }
+  // An operation called with no token (signing in, which is how one is got): nobody acts.
+  | { kind: 'nobody' }
   | { kind: 'refused'; status: 400 | 401; error: CatalogError };
 
 const BEARER = /^Bearer ([A-Za-z0-9\-._~+/]+=*)$/i;
 // The 401's Bearer challenge is the transport's refusal (core/http), not part of who's asking.
 const unauthenticated = (): Asking => ({ kind: 'refused', status: 401, error: new CatalogError('unauthenticated', {}) });
 
-/** Headers by lower-case name, as the transport gives them. */
+/** Headers by lower-case name, as the transport gives them. `tokenless`: the operation's row takes no token, so none
+ *  is looked up, even one sent along; the acting-as header is still refused. */
 export async function whoIsAsking(
   headers: Record<string, string | undefined>,
   tokens: { verify(token: string): Promise<TokenHolder | undefined> },
+  tokenless = false,
 ): Promise<Asking> {
   if (headers['x-skills-catalog-as'] !== undefined) {
     return { kind: 'refused', status: 400, error: new CatalogError('invalid_request', { field: 'X-Skills-Catalog-As', why: 'token_only' }) };
   }
+  if (tokenless) return { kind: 'nobody' };
   const m = BEARER.exec(headers['authorization'] ?? '');
   if (!m) return unauthenticated();
   const holder = await tokens.verify(m[1]!);

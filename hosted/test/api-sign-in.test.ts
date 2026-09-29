@@ -16,7 +16,9 @@ function world(origin = true) {
     {},
     {
       get: (_, k) =>
-        (...args: unknown[]) => {
+        k === 'where'
+          ? 'hosted'
+          : (...args: unknown[]) => {
           called.push([String(k), args[0]]);
           return Promise.resolve({ token: 'issued', id: 'id1', scope: 'read', expires_at: '2026-10-06T12:00:00.000Z' });
         },

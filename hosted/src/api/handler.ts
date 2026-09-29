@@ -5,7 +5,7 @@
 // or read, so a caller without a good token learns nothing of what exists; the acting-as header refused; a read-scope
 // token refused whatever changes the catalog, before it runs. No pairing route.
 
-import { CatalogError, type Catalog, type Words } from '@skills-catalog/core';
+import { CatalogError, OPERATIONS, type Catalog, type Words } from '@skills-catalog/core';
 import { API_HEADERS, STATUS, envelope, fileResponse, operationResponse, refuse, route, type FileAnswer, type HttpResponse } from '@skills-catalog/core/http';
 import type { TokenHolder } from '../tokens.ts';
 import { ORIGIN_HEADER, type OriginGuard } from './origin.ts';
@@ -36,10 +36,13 @@ export function createHostedHandler(p: HostedHandlerParts): { handle(req: Hosted
     // Outside the versioned API (the page, pairing) nothing is served here.
     if (r.kind === 'pair' || (r.kind === 'not_found' && !r.operationPath)) return refuse('not_found', s);
 
-    const asking = await whoIsAsking(req.headers, p.tokens);
+    // Signing in is how a token is got, so its row takes none (and one sent along is never looked up).
+    const tokenless = r.kind === 'operation' && OPERATIONS[r.op]?.token === 'none';
+    const asking = await whoIsAsking(req.headers, p.tokens, tokenless);
     if (asking.kind === 'refused') {
       return asking.status === STATUS.token_only ? refuse('token_only', s) : refuse('no_token', { ...s, challenge: 'Bearer' });
     }
+    if (asking.kind === 'nobody') return operationResponse({ ...s, op: (r as { op: string }).op, raw: req.body, catalog: p.catalog, developer: undefined });
 
     if (r.kind === 'file') return fileResponse({ file: p.file ?? ((sha) => p.catalog.file(sha)) }, r.sha256);
     if (r.kind === 'method') return refuse('method', { ...s, allow: r.allow });
