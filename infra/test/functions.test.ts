@@ -25,7 +25,26 @@ function allowed(t: Template, fn: string): string[] {
   }
   return actions;
 }
-const deletes = (actions: string[]) => actions.filter((a) => /^s3:Delete|^s3:\*|^dynamodb:(DeleteItem|\*|BatchWriteItem)|^\*$/.test(a));
+// Anything that can delete: a delete action, a batch write (it deletes too), a PartiQL delete, or any wildcard.
+const deletes = (actions: string[]) => actions.filter((a) => /^s3:Delete|^dynamodb:(DeleteItem|BatchWriteItem|PartiQLDelete)$|\*/.test(a));
+/** Every allowed action that could delete or reaches too wide, in a standalone policy or inline on a role. */
+function badActions(t: Template): string[] {
+  const bad: string[] = [];
+  const check = (where: string, doc: { Statement: Statement[] }) => {
+    for (const s of doc.Statement) for (const a of [s.Action].flat()) if (s.Effect === 'Allow' && /\*|^dynamodb:(DeleteItem|BatchWriteItem|PartiQLDelete)$/.test(a)) bad.push(`${where}: ${a}`);
+  };
+  for (const [id, r] of Object.entries(t.toJSON().Resources as Resources)) {
+    if (r.Type === 'AWS::IAM::Policy') check(id, r.Properties!['PolicyDocument']);
+    if (r.Type === 'AWS::IAM::Role') for (const p of (r.Properties!['Policies'] ?? []) as { PolicyDocument: { Statement: Statement[] } }[]) check(id, p.PolicyDocument);
+    // Resource policies grant too: a bucket or queue policy's Allow reaches whoever it names.
+    if (r.Type === 'AWS::S3::BucketPolicy' || r.Type === 'AWS::SQS::QueuePolicy') check(id, r.Properties!['PolicyDocument']);
+  }
+  return bad.map((b) => b.replace(/^([A-Za-z]+?)[0-9A-F]{8}:/, '$1:')).sort();
+}
+// Throwaway empties its bucket when the stack goes: the bucket policy lets the CDK's own auto-delete provider list and
+// delete every object. That's the stack's teardown, never a request path, and demo has none of it.
+const THROWAWAY_ONLY = ['StorageFilesPolicy: s3:DeleteObject*', 'StorageFilesPolicy: s3:GetBucket*', 'StorageFilesPolicy: s3:List*'];
+const dynamo = (actions: string[]) => actions.filter((a) => a.startsWith('dynamodb:')).sort();
 
 describe('functions', () => {
   // A fake docker first on PATH: bundling that fell back to Docker would leave its mark.
@@ -61,6 +80,15 @@ describe('functions', () => {
       expect(Object.keys(p.Environment.Variables), id).toEqual(expect.arrayContaining(['CATALOG_TABLE', 'CATALOG_BUCKET']));
       expect(p.LoggingConfig?.LogGroup, id).toBeDefined();
     }
+  });
+
+  it("the API's records are exactly what reads and the commit's transaction need: never a delete or a batch write", () => {
+    expect(dynamo(allowed(t, 'Api'))).toEqual(['dynamodb:ConditionCheckItem', 'dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:Query', 'dynamodb:UpdateItem']);
+  });
+
+  it('no role anywhere in the stack, in a policy or inline, gets a wildcard action or a DynamoDB batch write or delete', () => {
+    expect(badActions(t)).toEqual(THROWAWAY_ONLY);
+    expect(badActions(synth('demo'))).toEqual([]);
   });
 
   it('the API and the indexer can delete nothing; the API can tag files (claims)', () => {
