@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { actAs, renderError, CatalogError } from '@skills-catalog/core';
+import { actAs, renderError, CatalogError, Words } from '@skills-catalog/core';
 import { refuseRealPlaces } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
 import { readLock } from '../src/machine/lock.ts';
@@ -63,6 +63,16 @@ describe('the CLI face', () => {
     const r = await cli(p, ['install', 'release-notes-kit', '--version', '1', '--target', 'project']);
     expect(r.code).toBe(0);
     expect(readFileSync(join(p.dir, 'project', '.claude', 'skills', 'release-notes-kit', 'SKILL.md'), 'utf8')).toBe(skillMd('release-notes-kit', 'Draft release notes from merged pull requests.'));
+  });
+
+  it('install from a hosted catalog address is refused before anything is fetched: forbidden, hosted_not_available, nothing written', async () => {
+    const p = place();
+    const catalog = 'https://catalog.example.invalid';
+    const r = await cli(p, ['install', 'release-notes-kit'], { env: { SKILLS_CATALOG: catalog } });
+    expect(r.code).toBe(1);
+    expect(r.err).toContain(renderError(Words.load(), new CatalogError('forbidden', { catalog, why: 'hosted_not_available' })));
+    expect(existsSync(skills(p))).toBe(false);
+    expect(existsSync(join(p.dir, 'project', '.claude'))).toBe(false);
   });
 
   it('install: a plain skill installs; one with a script is held and says to take it in the person\'s own terminal', async () => {
