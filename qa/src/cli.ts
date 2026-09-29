@@ -14,7 +14,7 @@ import type { StepView } from './demo/conductor.ts';
 import type { Scenes } from './demo/scenes.ts';
 import { janitor } from './janitor.ts';
 import type { Cleanup } from './leftovers.ts';
-import { fakeMachine, realMachine, type Machine } from './machine.ts';
+import { machineFor, type Machine } from './machine.ts';
 import { UnsafeError } from './safe-delete.ts';
 import { CheckBlind } from './check.ts';
 import { traceCheck } from './trace-check.ts';
@@ -94,7 +94,7 @@ async function main(argv: string[]): Promise<number> {
   const seconds = (v?: string) => (v === undefined ? undefined : Number(v) * 1000);
   if (!name || name === '-h' || name === '--help' || flags.includes('--help') || flags.includes('-h')) return console.log(USAGE), name ? 0 : 1;
   const opts = (options: ParseArgsOptionsConfig) => parseArgs({ args: flags, options: { ...options, 'fake-machine': { type: 'string' } } }).values as Record<string, any>;
-  const machineOf = (v: Record<string, any>): Machine => (v['fake-machine'] ? fakeMachine(v['fake-machine']) : realMachine());
+  const machineOf = (v: Record<string, any>): Machine => machineFor(v['fake-machine']);
   switch (name) {
     case 'run': {
       const values = opts({ timeout: { type: 'string' }, ttl: { type: 'string' } });

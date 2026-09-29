@@ -14,7 +14,8 @@ const using = (list: string[], re: RegExp) => list.filter((f) => re.test(readFil
 
 describe('the QA tools\' own guards', () => {
   it('only the command line asks for the real machine (every library function takes one explicitly)', () => {
-    expect(using(src, /realMachine\(\)/)).toEqual(['src/cli.ts', 'src/machine.ts']);
+    expect(using(src, /realMachine\(\)/)).toEqual(['src/machine.ts']);   // machineFor, for the command line only
+    expect(using(src, /\bmachineFor\(/)).toEqual(['src/cli.ts', 'src/machine.ts']);
     expect(using(src, /\btmpdir\(\)/)).toEqual(['src/machine.ts', 'src/safe-delete.ts', 'src/trace-check.ts']);   // trace-check: its own scratch folder only
   });
 

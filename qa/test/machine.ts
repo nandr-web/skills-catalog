@@ -72,13 +72,16 @@ const MACHINE_COMMANDS = new Set(['run', 'janitor', 'agent', 'demo']);
 /** qa's own flags go before `--`; --fake-machine goes right after the command's name. */
 const args = (m: TestMachine | null, a: string[]) => (m && MACHINE_COMMANDS.has(a[0]) ? [a[0], '--fake-machine', m.dir, ...a.slice(1)] : a);
 
+/** Which process started a qa command: it watches this test process and stops itself once it's gone (src/parent-watch.ts). */
+const TEST_PID = { QA_TEST_PID: String(process.pid) };
+
 /** The qa command line as a process, on a fake machine (null only for commands that touch no machine, like trace-check). */
 export function qaSync(m: TestMachine | null, a: string[], env: Record<string, string> = {}) {
   if (!m && MACHINE_COMMANDS.has(a[0])) throw new Error(`qa ${a[0]} in a test needs a fake machine`);
-  return spawnSync(process.execPath, [CLI, ...args(m, a)], { encoding: 'utf8', env: { ...process.env, ...env }, timeout: 120_000 });
+  return spawnSync(process.execPath, [CLI, ...args(m, a)], { encoding: 'utf8', env: { ...process.env, ...TEST_PID, ...env }, timeout: 120_000 });
 }
 export function qaSpawn(m: TestMachine, a: string[], o: SpawnOptions = {}): ChildProcess {
-  return spawn(process.execPath, [CLI, ...args(m, a)], { stdio: ['ignore', 'pipe', 'pipe'], ...o, env: { ...process.env, ...(o.env ?? {}) } });
+  return spawn(process.execPath, [CLI, ...args(m, a)], { stdio: ['ignore', 'pipe', 'pipe'], ...o, env: { ...process.env, ...TEST_PID, ...(o.env ?? {}) } });
 }
 
 /** The same in a terminal of its own (a pseudo-terminal from script(1)), for the attached demo: everything it shows, its
@@ -91,10 +94,23 @@ export function qaSpawnInTerminal(m: TestMachine, a: string[], o: SpawnOptions =
   const command = [process.execPath, CLI, ...args(m, a)];
   const quoted = command.map((w) => `'${w.replace(/'/g, `'\\''`)}'`).join(' ');
   const script = process.platform === 'darwin' ? ['script', '-q', '/dev/null', ...command] : ['script', '-qec', quoted, '/dev/null'];
-  const p = spawn('sh', ['-c', 'f=$1; shift; cat "$f" | "$@"', 'sh', keys, ...script], { stdio: ['ignore', 'pipe', 'pipe'], ...o, env: { ...process.env, ...(o.env ?? {}) } });
+  const p = spawn('sh', ['-c', 'f=$1; shift; cat "$f" | "$@"', 'sh', keys, ...script], { stdio: ['ignore', 'pipe', 'pipe'], ...o, env: { ...process.env, ...TEST_PID, ...(o.env ?? {}) } });
   const writer = open(keys, 'w');   // resolves once cat reads the FIFO
   let closed: Promise<void> | undefined;
   return { p, type: async (s: string) => { await (await writer).write(s); }, close: () => (closed ??= writer.then((h) => h.close())) };
+}
+
+/** The qa command line in a group of its own, stopped when the test finishes (as spawnDetached). */
+export const qaDetached = (m: TestMachine, a: string[]): ChildProcess => spawnDetached(process.execPath, [CLI, ...args(m, a)], { env: { ...process.env, ...TEST_PID } });
+
+/** The qa command line left without its parent on purpose: a stand-in parent starts it in a group of its own, says its
+ *  pid and exits at once. Returns that pid; the group is killed when the test finishes, whatever it did. */
+export function qaOrphaned(m: TestMachine, a: string[]): number {
+  const start = `const c = require('child_process').spawn(process.execPath, ${JSON.stringify([CLI, ...args(m, a)])}, { detached: true, stdio: 'ignore', env: { ...process.env, QA_TEST_PID: String(process.pid) } }); console.log(c.pid); c.unref();`;
+  const pid = Number(spawnSync(process.execPath, ['-e', start], { encoding: 'utf8', timeout: 30_000 }).stdout.trim());
+  if (!(pid > 0)) throw new Error('the stand-in parent never said the pid of qa');
+  onTestFinished(() => kill(-pid));
+  return pid;
 }
 
 /** Only for the guard test: the qa command line in a test process without --fake-machine must refuse to start. */
