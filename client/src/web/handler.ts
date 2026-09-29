@@ -8,7 +8,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { CatalogError, checkActor, openCatalog, randomIds, toCatalogError, type Catalog, type Words } from '@skills-catalog/core';
-import { API_HEADERS, BODY_LIMIT, NOT_FOUND, SECURITY_HEADERS, envelope, fileResponse, operationResponse, refuse, route, type FileAnswer, type HttpResponse } from '@skills-catalog/core/http';
+import { API_HEADERS, BODY_LIMIT, NOT_FOUND, SECURITY_HEADERS, envelope, fileResponse, operationResponse, refuse, route, type HttpResponse } from '@skills-catalog/core/http';
 import { readConfig } from '../machine/lock.ts';
 import { perform, type Context } from '../operations.ts';
 import type { Settings } from '../settings.ts';
@@ -95,7 +95,7 @@ export function createHandler(o: HandlerOptions): { handle(req: WebRequest): Pro
       return a.data;
     };
     try {
-      return await operationResponse({ op, raw, developer, run, ...sentences });
+      return await operationResponse({ op, raw, developer, run, where: 'local', ...sentences });
     } catch (e) {
       return envelope({ error: toCatalogError(e, o.settings.home, now()) }, sentences);
     } finally {
@@ -124,8 +124,8 @@ export function createHandler(o: HandlerOptions): { handle(req: WebRequest): Pro
     const site = req.headers['sec-fetch-site'];
     if (site !== undefined && site !== 'same-origin') return refuse('refused', sentences);
     if (!same(req.headers['x-skills-catalog-token'], token)) return refuse('no_token', sentences);
-    // Opened only for a well-formed fingerprint (the core checks it first). The cast stays until Catalog.file's type lands.
-    return fileResponse({ file: async (sha) => ((await readCatalog()) as unknown as { file(sha256: string): Promise<FileAnswer> }).file(sha) }, sha256);
+    // Opened only for a well-formed fingerprint (the core checks it first).
+    return fileResponse({ file: async (sha) => (await readCatalog()).file(sha) }, sha256);
   }
 
   async function handle(req: WebRequest): Promise<WebResponse> {

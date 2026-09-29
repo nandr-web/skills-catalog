@@ -315,9 +315,7 @@ describe('a version\'s files by fingerprint (GET /api/v1/files/<sha256>)', () =>
     for (const bad of [sha.toUpperCase(), sha.slice(1), `${sha}0`, 'z'.repeat(64)]) expect((await get({}, `/api/v1/files/${bad}`)).status, bad).toBe(404);
   });
 
-  // A tripwire until the core's Catalog.file lands (the core's next range): then this passes, `it.fails`
-  // fails, and it becomes a plain `it`.
-  it.fails('serves a stored file\'s bytes (same-origin headers or none), and a fingerprint no version names is the fixed 404', async () => {
+  it('serves a stored file\'s bytes (same-origin headers or none), and a fingerprint no version names is the fixed 404', async () => {
     const { get } = await files();
     const ok = await get({});
     expect(ok.status).toBe(200);

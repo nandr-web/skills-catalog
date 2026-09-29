@@ -46,6 +46,9 @@ const MUTATIONS = [
   ['core:http/index.ts', 'a link to a file may be cached', '{ ...api, location: answer.url }', '{ ...SECURITY_HEADERS, location: answer.url }'],
   ['core:http/index.ts', 'a file on its way says to retry at once', "'retry-after': '2'", "'retry-after': '0'"],
   ['core:http/index.ts', 'the act-as header on a hosted catalog sends the caller to sign in again', 'token_only: 400,', 'token_only: 401,'],
+  ['core:http/index.ts', 'a hosted 401 names no sign-in scheme', "  if (kind === 'no_token' && s.challenge) {", '  if (false) {'],
+  // Not listed: parsing as a local catalog whatever `where` the transport says. Equivalent on this client (every catalog
+  // here is local); the hosted handler's shared cases catch it once a case has a hosted-only body.
   ['core:http/index.ts', 'a POST on a file is looked up', "  if (file) return method === 'GET' ? { kind: 'file', sha256: file[1]! } : { kind: 'method' };", "  if (file) return { kind: 'file', sha256: file[1]! };"],
   // the local web face's guards (web-handler.test.ts): each refuses before anything is looked up or read
   ['web/handler.ts', 'any Host is served', "    if (req.headers['host'] !== host) return", '    if (false) return'],
