@@ -125,9 +125,26 @@ describe('hostile file lists are refused (golden/skills.yaml hostile, the raw re
 
   it('more path shapes: empty segments, ".", backslashes, control characters, a file that is also a folder', () => {
     const md = { path: 'SKILL.md', mode: '0644', bytes: Buffer.from('---\nname: x\ndescription: y\n---\nz\n') };
-    for (const path of ['a//b.md', './a.md', 'a/./b.md', 'a\\b.md', 'a\u0000.md', 'C:/x.md', '', 'a/']) {
-      expect(errorOf(() => checkTree([md, { path, mode: '0644', bytes: Buffer.from('') }])).code, JSON.stringify(path)).toBe('invalid_path');
+    const cases: [string, string][] = [
+      ['a//b.md', 'empty_segment'],
+      ['./a.md', 'dot_segment'],
+      ['a/./b.md', 'dot_segment'],
+      ['a\\b.md', 'backslash'],
+      ['a\u0000.md', 'control_character'],
+      ['C:/x.md', 'absolute'],
+      ['', 'empty'],
+      ['a/', 'empty_segment'],
+      ['read\u202eme.md', 'invisible_character'],
+      ['a\u200b.md', 'invisible_character'],
+      ['.git/config', 'git_folder'],
+      ['x/.GIT/hooks/pre-commit', 'git_folder'],
+      [`${'a'.repeat(256)}.md`, 'segment_too_long'],
+    ];
+    for (const [path, why] of cases) {
+      const e = errorOf(() => checkTree([md, { path, mode: '0644', bytes: Buffer.from('') }]));
+      expect([e.code, e.data['why']], JSON.stringify(path)).toEqual(['invalid_path', why]);
     }
+    expect(checkTree([md, { path: `${'a'.repeat(252)}.md`, mode: '0644', bytes: Buffer.from('') }])).toHaveLength(2);
     expect(errorOf(() => checkTree([md, { path: 'a', mode: '0644', bytes: Buffer.from('') }, { path: 'a/b.md', mode: '0644', bytes: Buffer.from('') }])).code).toBe('invalid_path');
   });
 });
@@ -175,6 +192,12 @@ describe('diffs (golden/histories.yaml diffs, golden/diffs/)', () => {
     ]);
     expect(got.frontmatter_changes).toEqual([{ field: 'allowed-tools', from: null, to: 'Bash' }]);
     expect(got.files.find((f) => f.path === 'logo.png')!.unified).toBeUndefined();
+  });
+
+  it('treats hooks in the front matter as a capability, like a tool grant', () => {
+    const md = (extra = '') => ({ path: 'SKILL.md', mode: '0644', bytes: Buffer.from(`---\nname: x\ndescription: y\n${extra}---\nz\n`) });
+    const got = diffTrees({ files: tree([md()]), publisher: 'a' }, { files: tree([md('hooks:\n  PreToolUse: ./check.sh\n')]), publisher: 'a' });
+    expect(got.risk_flags).toMatchObject([{ kind: 'capability_frontmatter', field: 'hooks', from: null, to: { PreToolUse: './check.sh' } }]);
   });
 
   it('writes git-style hunks, including a missing final newline', () => {
