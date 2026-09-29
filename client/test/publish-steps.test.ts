@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, chmodSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { CatalogError, Surface, actAs, renderError } from '@skills-catalog/core';
+import { CatalogError, Surface, actAs, renderError, shellQuote } from '@skills-catalog/core';
 import { loadGolden } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
 import { contextFor } from '../src/operations.ts';
@@ -265,25 +265,18 @@ function shellWords(line: string): string[] {
   return out;
 }
 
+// No sentence names a folder in a command today (the CLI has no publish yet), so the folder cases check the renderer's
+// shell quoting itself: each path is one word to a real shell, which prints it back as it is and runs nothing in it.
 describe('a folder in a command the person is told to run is one shell word (golden command_quoting)', () => {
-  const fixtureFiles = skills.hostile['secret-in-body'].files;
   for (const c of skills.command_quoting.cases.filter((x: any) => x.folder)) {
-    it(c.id, async () => {
+    it(c.id, () => {
       const p = place();
+      mkdirSync(join(p.dir, 'work'), { recursive: true });
       const dir = sub(c.folder, p);
-      plant(dir, fixtureFiles, p);
-      const err = await refusal(() => publish(ctxFor(p), { folder: dir }));
-      expect(err.code).toBe('secret_suspected');
-      const text = renderError(S, err);
-      const command = /by running (.*) in their own terminal/.exec(text)![1]!;
-      const words = shellWords(command);
-      const folderWord = words[words.indexOf('publish') + 1]!;
-      expect(folderWord).toBe(realpathSync(dir));
-      expect(words.slice(words.indexOf('publish') + 2)).toEqual(['--allow-suspected-secrets']);
-      const arg = command.slice(command.indexOf(' publish ') + ' publish '.length, command.lastIndexOf(' --allow-suspected-secrets'));
-      if (c.expect.quoted !== undefined && realpathSync(p.dir) === realpathSync(p.dir).replace(/[^A-Za-z0-9@%+=:,./_-]/g, '')) {
-        expect(arg.startsWith("'"), arg).toBe(c.expect.quoted);
-      }
+      const arg = shellQuote(dir);
+      expect(shellWords(arg)).toEqual([dir]);
+      expect(execFileSync('/bin/sh', ['-c', `printf '%s\\n' ${arg}`], { cwd: join(p.dir, 'work'), encoding: 'utf8' })).toBe(`${dir}\n`);
+      if (c.expect.quoted !== undefined && p.dir === p.dir.replace(/[^A-Za-z0-9@%+=:,./_-]/g, '')) expect(arg.startsWith("'"), arg).toBe(c.expect.quoted);
       if (c.expect.contains) expect(arg).toContain(c.expect.contains);
       if (c.expect.ends_with) expect(arg.endsWith(c.expect.ends_with)).toBe(true);
       if (c.expect.marker_never_created) expect(existsSync(sub(c.expect.marker_never_created, p))).toBe(false);
