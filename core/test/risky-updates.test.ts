@@ -270,7 +270,7 @@ describe('a changed fence line in a file with a ```! block counts as running a c
     let flags: RiskFlag[] = [];
     const ms = cpuMs(() => (flags = loads(before, after)));
     expect(removals(flags)).toBe(0);
-    expect(flags.length).toBeGreaterThan(90_000);
+    expect(flags.length).toBeGreaterThan(10 * 4_001); // every block the new file opens, not the 4,001 removals
     expect(ms).toBeLessThan(CEILING_MS);
   }, 120_000);
   it('fence lines removed in a megabyte of them, each where it was, in linear time', () => {

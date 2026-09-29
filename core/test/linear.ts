@@ -13,8 +13,8 @@ import { expect } from 'vitest';
 const HANG_MS = 10_000;
 const NOISE_MS = 20;
 
-// Milliseconds of CPU time (user and system) this process spends on `run`.
-function cpu(run: () => unknown): number {
+// Milliseconds of CPU time (user and system) this process spends on `run`; also a CPU ceiling's measure.
+export function cpuMs(run: () => unknown): number {
   const t = process.cpuUsage();
   run();
   const d = process.cpuUsage(t);
@@ -26,8 +26,8 @@ function inTurns(quarter: () => unknown, whole: () => unknown): { a: number; b: 
   let a = Infinity;
   let b = Infinity;
   for (let i = 0; i < 5; i++) {
-    a = Math.min(a, cpu(quarter));
-    b = Math.min(b, cpu(whole));
+    a = Math.min(a, cpuMs(quarter));
+    b = Math.min(b, cpuMs(whole));
   }
   return { a, b };
 }

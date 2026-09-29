@@ -523,6 +523,9 @@ function splitLines(text: string): string[] {
 
 type Op = { kind: ' ' | '-' | '+'; line: string; ai: number; bi: number };
 
+// What bounds the alignment's cost: it grows with the file's length times the differences, so past this many it gives
+// up. Two tests hold it (test/risky-updates.test.ts, "3,999 fence lines removed …" and "4,001 …"): a megabyte just under
+// and just over the cap within a CPU ceiling. Raising the cap raises that worst case; rerun them.
 const MAX_EDIT = 4000;
 
 // Shortest edit script (Myers 1986). Past MAX_EDIT differences it gives up on alignment and replaces the whole file.
