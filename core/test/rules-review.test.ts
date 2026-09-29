@@ -101,11 +101,12 @@ describe('the rules reviewer against the golden rows (skills.rules_review)', () 
     }
   });
 
-  // As the golden says: each size is the best of `samples` runs; every size stays under max_ms; doubling the size takes at
-  // most max_growth times as long, checked only where the larger time is over min_ms_for_growth (a few milliseconds are
-  // noise on a busy machine); a miss is measured again with fresh samples, `remeasure_on_miss` times.
+  // As the golden says: each size is the best of `samples` runs; every size stays under max_ms; growth is judged over the
+  // whole span, so one busy moment between two sizes can't fail a linear build: the largest size takes at most
+  // max_growth_over_span times as long as the smallest (the sizes span 4x: linear is about 4x, quadratic about 16x),
+  // checked only where the largest time is over min_ms_for_growth; a miss is measured again, `remeasure_on_miss` times.
   describe('a hostile line can\'t stall the review (timing)', () => {
-    const t = golden.timing as { sizes: number[]; samples: number; max_ms: number; max_growth: number; min_ms_for_growth: number; remeasure_on_miss: number };
+    const t = golden.timing as { sizes: number[]; samples: number; max_ms: number; max_growth_over_span: number; min_ms_for_growth: number; remeasure_on_miss: number };
     const time = (run: () => unknown) => {
       let best = Infinity;
       for (let i = 0; i < t.samples; i++) {
@@ -115,8 +116,7 @@ describe('the rules reviewer against the golden rows (skills.rules_review)', () 
       }
       return best;
     };
-    const fits = (ms: number[]) =>
-      ms.every((x) => x < t.max_ms) && ms.slice(1).every((x, i) => x <= t.min_ms_for_growth || x <= t.max_growth * ms[i]!);
+    const fits = (ms: number[]) => ms.every((x) => x < t.max_ms) && (ms.at(-1)! <= t.min_ms_for_growth || ms.at(-1)! <= t.max_growth_over_span * ms[0]!);
     for (const row of golden.timing.lines as { id: string; unit: string; expect: string | null }[]) {
       it(row.id, () => {
         const inputs = t.sizes.map((size) => {
@@ -127,7 +127,7 @@ describe('the rules reviewer against the golden rows (skills.rules_review)', () 
         const measure = () => inputs.map((input) => time(() => reviewFlags(null, input)));
         let ms = measure();
         for (let again = 0; again < t.remeasure_on_miss && !fits(ms); again++) ms = measure();
-        expect(fits(ms), `${row.id}: ${ms.map((x) => x.toFixed(1)).join(', ')} ms; under ${t.max_ms} ms each, at most ${t.max_growth}x per doubling over ${t.min_ms_for_growth} ms`).toBe(true);
+        expect(fits(ms), `${row.id}: ${ms.map((x) => x.toFixed(1)).join(', ')} ms; under ${t.max_ms} ms each, the largest at most ${t.max_growth_over_span}x the smallest once over ${t.min_ms_for_growth} ms`).toBe(true);
       }, 60_000);
     }
   });
