@@ -23,6 +23,7 @@ import { read } from './commands/read.ts';
 import { search } from './commands/search.ts';
 import { logAccept, update } from './commands/update.ts';
 import { versions } from './commands/versions.ts';
+import { recordUsage } from '../usage/record.ts';
 import { readOnlyContext } from './read-only.ts';
 import { cliSurface } from './words.ts';
 
@@ -96,6 +97,7 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
     // names and versions only, never text someone typed).
     const name = words.length === 1 && NAME_RE.test(words[0]!) ? words[0]! : '-';
     logAccept(settings, s, name, logWords(s).error('person_only'));
+    recordUsage(settings.home, { event: 'use', op: cmd.personOnlyOp ?? cmd.op, result: 'person_only' });
     return 3;
   }
 

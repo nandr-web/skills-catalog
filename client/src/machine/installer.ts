@@ -287,13 +287,13 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
     const w = s.word('install');
     const confirm = encode({ name: req.name, target, version, fingerprint: to.fingerprint, latest: v.latest });
     const text = s.format(ctx.face === 'cli' ? w.held_cli : w.held, { name: req.name, version, reasons: reasons(s, flags), confirm, flags: JSON.stringify(kinds(flags)), command: acceptCommand(s, req.name, target) });
-    return { text, target: `${req.name} v${version}`, result: log.result('install', 'held') };
+    return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held' };
   }
   writeSkill(ctx, dest, to.files);
   const entry = record(ctx, lock, dest, { name: req.name, target }, to, req.policy ?? existing?.policy, existing?.accepted ?? []);
   const w = s.word('install');
   const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + '\n' + s.format(w.live, { name: req.name });
-  return { text, target: `${req.name} v${version}`, result: log.result('install', 'installed') };
+  return { text, target: `${req.name} v${version}`, result: log.result('install', 'installed'), outcome: 'installed' };
 }
 
 function record(ctx: Context, lock: Lock, dest: string, at: { name: string; target: Target }, to: Side, policy: Policy | undefined, accepted: LockEntry['accepted']): LockEntry {
@@ -337,7 +337,7 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const text = existing
     ? s.format(s.word('update.accepted'), { name: req.name, from: existing.version, to: to.version, path: quoted(dest) })
     : s.format(s.word('install.installed_after_yes'), { name: req.name, version: to.version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) });
-  return { text, target: `${req.name} v${to.version}`, result: logWords(s).result('accept') };
+  return { text, target: `${req.name} v${to.version}`, result: logWords(s).result('accept'), outcome: 'accepted' };
 }
 
 /** The lock's entries for this machine's user folder and this project, by name. */
@@ -361,7 +361,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
   const chosen = req.names ? here.filter((e) => req.names!.includes(e.name)) : here;
   if (!chosen.length) {
     const none = s.word('update.none_installed');
-    return { text: typeof none === 'string' ? s.format(none) : asData('update', { checked: 0 }), target: '-', result: log.result('update', 'unchanged') };
+    return { text: typeof none === 'string' ? s.format(none) : asData('update', { checked: 0 }), target: '-', result: log.result('update', 'unchanged'), outcome: 'unchanged' };
   }
   const catalog = await ctx.catalog();
   const lines: string[] = [];
@@ -445,7 +445,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
   }
   if (unchanged) lines.push(s.format(w.unchanged, { n: unchanged }));
   const text = [s.format(w.header, { checked: chosen.length }), ...lines].join('\n');
-  return { text, target: targets.join(', ') || '-', result: log.result('update', outcome) };
+  return { text, target: targets.join(', ') || '-', result: log.result('update', outcome), outcome };
 }
 
 export async function list(ctx: Context): Promise<Done> {

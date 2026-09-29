@@ -32,6 +32,9 @@ export type Command = {
   flags: Record<string, FlagType>;
   /** Flags only the person may give: with no terminal, nothing is done and they get the command to run (exit 3). */
   personOnly?: readonly string[];
+  /** The operation a person-only flag runs, when it isn't `op` (update --accept takes a held update): what its usage
+   *  event counts. */
+  personOnlyOp?: string;
   /** Reads the catalog and never writes it (setup may let an assistant run these without asking, contract §6). */
   readOnly?: boolean;
   /** Outcomes that aren't errors on every face but are a failure here (exit 1, on stderr): a read that found none of its

@@ -19,6 +19,7 @@ export const update: Command = {
   op: 'update_installed_skills',
   flags: { ...own, accept: { type: 'boolean' }, target: { type: 'string' } },
   personOnly: ['accept'],
+  personOnlyOp: 'accept_held_update',
   input(words, values) {
     // --accept takes one skill; --target says where a held first install goes, so it goes only with --accept. Checked
     // before the person-only step, so a person is never given a command that can't work.
@@ -45,8 +46,12 @@ const said = (s: Surface, path: string, fields: Record<string, unknown>) => {
 };
 
 async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promise<number> {
+  // Each way this ends counts once in the usage metrics; a yes counts where the held update is taken (perform).
+  const used = (result: string) => recordUsage(ctx.settings.home, { event: 'use', op: 'accept_held_update', result }, ctx.now());
   const fail = (e: unknown) => {
-    io.stderr(withActing(renderError(s, toCatalogError(e, ctx.settings.home, ctx.now()))) + '\n');
+    const err = toCatalogError(e, ctx.settings.home, ctx.now());
+    io.stderr(withActing(renderError(s, err)) + '\n');
+    used(err.code);
     return 1;
   };
   const name = words[0]!;
@@ -60,6 +65,7 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
   if (hold === null) return fail(new CatalogError('not_installed', { name }));
   if (!('confirm' in hold)) {
     io.stdout(withActing(said(s, 'update.accept_nothing_held', { name, version: hold.installed })) + '\n');
+    used('nothing_held');
     return 0;
   }
   const first = hold.installed === undefined;
@@ -75,6 +81,7 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
     io.stdout(withActing(said(s, first ? 'update.accept_declined_install' : 'update.accept_declined', at)) + '\n');
     logAccept(ctx.settings, s, `${name} v${hold.version}`, logWords(s).result('accept_declined'));
     recordUsage(ctx.settings.home, { event: 'answer', skill: name, version: hold.version, answer: 'no', together: 1 }, ctx.now());
+    used('declined');
     return 0;
   }
   const a = await perform(ctx, 'accept_held_update', 'update --accept', { name, confirm: hold.confirm, flags: hold.flags });

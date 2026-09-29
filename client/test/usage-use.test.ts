@@ -1,10 +1,13 @@
 // Usage metrics, the `use` event (contract §3): every operation on any face records one, with the registry's name and a
 // result code: an error's code, the operation's outcome where it has one (a search's match), or "ok". Never the query,
 // a name or a path. And the outcome a face acts on: the CLI's read exits 1 when none of its names is found (§1).
+import { actAs, Surface } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
+import { contextFor, perform } from '../src/operations.ts';
+import { settingsFrom } from '../src/settings.ts';
 import { readUsage } from '../src/usage/record.ts';
 import { cli } from './cli-io.ts';
-import { seed } from './seed.ts';
+import { open, request, seed, skillMd } from './seed.ts';
 import { place, type Place } from './server.ts';
 
 const uses = (p: Place) => readUsage(p.home).flatMap((e) => (e.event === 'use' ? [[e.op, e.result]] : []));
@@ -33,6 +36,62 @@ describe('the use event', () => {
     const { join } = await import('node:path');
     const text = readdirSync(join(p.home, 'usage')).map((f) => readFileSync(join(p.home, 'usage', f), 'utf8')).join('');
     expect(text).not.toMatch(/release|notes|graphql|schema|zzz|no-such/);
+  });
+
+  it('installs and updates count by what happened: installed or held, updated or up to date, taken after a yes', async () => {
+    const p = place();
+    await seed(p);
+    await cli(p, ['install', 'sql-migration-helper']);
+    await cli(p, ['install', 'release-notes-kit']);
+    await cli(p, ['update']);
+    const c = await open(p);
+    try {
+      await c.publish(request('sql-migration-helper', [{ path: 'SKILL.md', text: skillMd('sql-migration-helper', 'Write and review SQL schema migrations.', 'Second.\n') }]), actAs('ben'));
+    } finally {
+      c.close();
+    }
+    await cli(p, ['update']);
+    await cli(p, ['update', 'release-notes-kit', '--accept'], { tty: true, answers: ['y'] });
+    expect(uses(p)).toEqual([
+      ['install_shared_skill', 'installed'],
+      ['install_shared_skill', 'held'],
+      ['update_installed_skills', 'unchanged'],
+      ['update_installed_skills', 'updated'],
+      ['accept_held_update', 'accepted'],
+    ]);
+  });
+
+  it('update --accept counts once however it ends: no terminal, a no, nothing held', async () => {
+    const p = place();
+    await seed(p);
+    await cli(p, ['install', 'release-notes-kit']);
+    await cli(p, ['install', 'sql-migration-helper']);
+    await cli(p, ['update', 'release-notes-kit', '--accept']);
+    await cli(p, ['update', 'release-notes-kit', '--accept'], { tty: true, answers: ['n'] });
+    await cli(p, ['update', 'sql-migration-helper', '--accept'], { tty: true, answers: ['y'] });
+    expect(uses(p).slice(2)).toEqual([
+      ['accept_held_update', 'person_only'],
+      ['accept_held_update', 'declined'],
+      ['accept_held_update', 'nothing_held'],
+    ]);
+  });
+
+  it('the assistant\'s tools count the same way', async () => {
+    const p = place();
+    await seed(p);
+    const { ctx, close } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, p.dir), Surface.load(), 'mcp');
+    try {
+      await perform(ctx, 'search_shared_skills', 'search', { query: 'zzz-nothing-like-this' });
+      await perform(ctx, 'read_shared_skill', 'read', { name: 'no-such-skill' });
+      await perform(ctx, 'read_shared_skill', 'read', { names: ['no-such-skill', 'nor-this-one'] });
+    } finally {
+      close();
+    }
+    expect(uses(p)).toEqual([
+      ['search_shared_skills', 'none'],
+      ['read_shared_skill', 'not_found'],
+      ['read_shared_skill', 'none_found'],
+    ]);
   });
 
   it('a read that finds none of its names exits 1; one that finds some exits 0', async () => {
