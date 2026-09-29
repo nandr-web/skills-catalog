@@ -2,12 +2,13 @@
 // developer acting on this machine.
 
 import { randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { Catalog, type CatalogConfig } from '../catalog.ts';
-import type { Clock, Identity, Ids, Storage } from '../ports.ts';
+import { CatalogError } from '../errors.ts';
+import type { Clock, Events, Identity, Ids, Storage } from '../ports.ts';
 import { FolderBlobStore } from './blobs.ts';
-import { LocalDb } from './db.ts';
+import { LocalDb, openReadOnly } from './db.ts';
 import { actAs } from './identity.ts';
 import { SqliteMetadataStore } from './metadata.ts';
 import { LocalOutbox } from './outbox.ts';
@@ -26,25 +27,52 @@ export interface LocalOptions {
   wrapMeta?: (m: SqliteMetadataStore) => SqliteMetadataStore;
   wrapBlobs?: (b: FolderBlobStore) => FolderBlobStore;
   wrapStorage?: (s: Storage) => Storage;
+  // The read commands' open (contract §6): the catalog as it is, never created, swept, delivered or re-indexed, and never
+  // written. With no catalog file, `named` (SKILLS_CATALOG or --catalog named the place) refuses with not_a_catalog, so a
+  // mistyped path isn't read as an empty catalog; at the default place it reads as an empty one.
+  readOnly?: boolean;
+  named?: boolean;
+  // Test seam for the read-only open: runs right before its last check for a -wal file (db.ts openReadOnly).
+  beforeImmutable?: () => void;
 }
 
 export const systemClock: Clock = { now: () => new Date() };
 export const randomIds: Ids = { next: () => randomUUID() };
 
+// A read-only catalog delivers nothing: pending events wait for the next writing open.
+const NO_EVENTS: Events = { subscribe: () => {}, deliver: async () => 0 };
+
+// The read-only open's database: the catalog file as it is; with none, an empty catalog in memory at the default place.
+function readOnlyDb(dir: string, opts: LocalOptions): LocalDb {
+  const file = join(dir, DB_FILE);
+  if (!existsSync(file)) {
+    if (opts.named) throw new CatalogError('invalid_request', { field: 'catalog', why: 'not_a_catalog', path: dir });
+    const empty = new LocalDb(':memory:');
+    empty.db.exec('PRAGMA query_only = ON');
+    return empty;
+  }
+  try {
+    return new LocalDb(openReadOnly(file, opts.beforeImmutable));
+  } catch {
+    throw new CatalogError('invalid_request', { field: 'catalog', why: 'catalog_unreadable', path: dir });
+  }
+}
+
 export async function openLocalCatalog(dir: string, opts: LocalOptions = {}): Promise<Catalog> {
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const readOnly = opts.readOnly === true;
+  if (!readOnly) mkdirSync(dir, { recursive: true, mode: 0o700 });
   const clock = opts.clock ?? systemClock;
   const ids = opts.ids ?? randomIds;
-  const db = new LocalDb(join(dir, DB_FILE));
+  const db = readOnly ? readOnlyDb(dir, opts) : new LocalDb(join(dir, DB_FILE));
   const meta = new SqliteMetadataStore(db);
-  const blobs = new FolderBlobStore(dir, ids, clock);
+  const blobs = new FolderBlobStore(dir, ids, clock, readOnly);
   const storage = new LocalStorage(opts.wrapMeta ? opts.wrapMeta(meta) : meta, opts.wrapBlobs ? opts.wrapBlobs(blobs) : blobs, clock);
   try {
-    storage.sweep();
+    if (!readOnly) storage.sweep();
     const catalog = await Catalog.open({
       storage: opts.wrapStorage ? opts.wrapStorage(storage) : storage,
       index: new SqliteSearchIndex(db),
-      events: new LocalOutbox(db, clock),
+      events: readOnly ? NO_EVENTS : new LocalOutbox(db, clock),
       identity: opts.identity ?? actAs(undefined),
       clock,
       ids,

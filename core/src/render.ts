@@ -11,7 +11,7 @@ import type { Surface } from './surface.ts';
 
 // Words the agent-facing surface doesn't have yet (asked for). A test fails when one of them appears in the surface,
 // so each is wired as soon as it lands.
-export const WORD_GAPS: readonly string[] = ['errors.target_changed', 'errors.target_not_private'];
+export const WORD_GAPS: readonly string[] = ['errors.target_changed', 'errors.target_not_private', 'errors.why.not_a_catalog', 'errors.why.catalog_unreadable'];
 
 function asData(code: string, data: Record<string, unknown>): string {
   return `${code}: ` + Object.entries(data).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ');

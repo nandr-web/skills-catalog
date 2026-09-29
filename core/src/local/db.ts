@@ -1,7 +1,9 @@
 // The local catalog's SQLite file, shared by several processes on one folder (the MCP server, the CLI, serve):
 // WAL mode, and every write in BEGIN IMMEDIATE (contract §7), so a writer waits its turn instead of failing.
 
+import { existsSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
+import { pathToFileURL } from 'node:url';
 
 // Stemmed, so "review pull request" matches "reviewing pull requests" (contract §2); match and matched_words
 // ask this same index, word by word, so they stem the same way.
@@ -54,7 +56,14 @@ export class LocalDb {
   // True when the search index was dropped because its tokenizer changed: the catalog rebuilds it from the versions.
   readonly indexReset: boolean;
 
-  constructor(file: string) {
+  // A path opens a catalog to write: the file is made if missing, switched to WAL and given the schema (':memory:' is an
+  // empty one). An open DatabaseSync is read as it is: no WAL switch, schema or index check (the read commands' open).
+  constructor(file: string | DatabaseSync) {
+    if (file instanceof DatabaseSync) {
+      this.db = file;
+      this.indexReset = false;
+      return;
+    }
     this.db = new DatabaseSync(file, { timeout: BUSY_MS });
     this.db.exec(`PRAGMA busy_timeout = ${BUSY_MS}`);
     this.walMode();
@@ -100,6 +109,34 @@ export class LocalDb {
 
   close(): void {
     if (this.db.isOpen) this.db.close();
+  }
+}
+
+// The read commands' open of a catalog file (contract §6): read-only, never written, its schema and index read as they
+// are. A WAL catalog whose folder this user can't write can't have its shared-memory file made, so SQLite refuses to read
+// it (SQLITE_READONLY); closed cleanly, with no -wal beside it (checked again right before, since a writer may open it in
+// between), no writer of this user's can change it, so it's read as unchanging (immutable=1). Anything else that can't
+// be read throws, for the caller to name. `beforeImmutable` is a test seam that runs just before that last check.
+const SQLITE_READONLY = 8;
+export function openReadOnly(file: string, beforeImmutable?: () => void): DatabaseSync {
+  const readable = (db: DatabaseSync) => {
+    try {
+      db.prepare('SELECT count(*) FROM skills').get();
+      return db;
+    } catch (e) {
+      db.close();
+      throw e;
+    }
+  };
+  try {
+    return readable(new DatabaseSync(file, { readOnly: true, timeout: BUSY_MS }));
+  } catch (e) {
+    if ((((e as { errcode?: number }).errcode ?? 0) & 0xff) !== SQLITE_READONLY) throw e;
+    beforeImmutable?.();
+    if (existsSync(`${file}-wal`)) throw e;
+    const url = pathToFileURL(file);
+    url.searchParams.set('immutable', '1');
+    return readable(new DatabaseSync(url, { readOnly: true }));
   }
 }
 
