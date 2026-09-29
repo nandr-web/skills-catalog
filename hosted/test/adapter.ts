@@ -17,10 +17,12 @@ let stores = 0;
 function uploading(storage: Storage, links: HostedBlobLinks): Storage {
   return Object.assign(Object.create(storage), {
     commit: async (...[v, files, cond, event]: Parameters<Storage['commit']>) => {
-      const answers = await links.uploadLinks(files.map((f) => ({ sha256: f.sha256, size: f.bytes?.length ?? 0 })));
+      // Each file once (a skill can hold the same bytes twice), and only those given with their bytes.
+      const toSend = [...new Map(files.filter((f) => f.bytes !== undefined).map((f) => [f.sha256, f.bytes!])).entries()];
+      const answers = await links.uploadLinks(toSend.map(([sha256, bytes]) => ({ sha256, size: bytes.length })));
       for (const [i, a] of answers.entries()) {
         if (a.kind !== 'upload') continue;
-        const r = await fetch(a.url, { method: 'PUT', body: files[i]!.bytes!, headers: a.headers });
+        const r = await fetch(a.url, { method: 'PUT', body: Buffer.from(toSend[i]![1]), headers: a.headers });
         if (!r.ok) throw new Error(`upload of ${a.sha256} answered ${r.status}`);
       }
       return storage.commit(v, files.map((f) => ({ sha256: f.sha256 })), cond, event);
