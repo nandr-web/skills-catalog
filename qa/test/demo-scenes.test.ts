@@ -11,7 +11,7 @@ import { actAs, CatalogError, openLocalCatalog, Surface, type Catalog } from '..
 import { answer, coreBackend, GUTTER, logLine, logWords, RESULT_WIDTH, shown, type Backend, type Stage, wrap } from '../src/demo/assistant.ts';
 import { CLI_OPS, loadScenes, parseScenes, SCENES_FILE, ScenesError, SKILLS_DIR, type Scenes } from '../src/demo/scenes.ts';
 import { keyCommand, renderSteps, type StepsState } from '../src/demo/steps-view.ts';
-import { cleanup, scratch } from './machine.ts';
+import { cleanup, PROCESS_TEST_MS, scratch } from './machine.ts';
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 const ANSI = /\x1b\[[0-9;]*m/g;
@@ -501,17 +501,23 @@ describe('the stand-in as a process (the REPL around the step function)', () => 
   it('refuses to start without its settings or for someone who isn\'t a developer (exit 3, one line)', async () => {
     const scenes = loadScenes(SCENES_FILE);
     const root = sandbox(scenes);
-    const run = (args: string[], env: Record<string, string>) => new Promise<{ code: number | null; err: string }>((ok) => {
-      const c = spawn(process.execPath, [here('../src/demo/assistant.ts'), ...args], { stdio: ['ignore', 'ignore', 'pipe'], env: { PATH: process.env.PATH ?? '', ...env } });
+    // Three stand-ins start one after another, each loading the core: about 0.15 s each on a quiet machine, up to about
+    // 2 s each at load 35, so together they can pass vitest's default 5 s. Each gets a third of the test's budget and is
+    // then killed (SIGKILL: a stand-in stuck in a loop never runs its SIGTERM handler), so a hung one fails as signal
+    // SIGKILL, not as a timeout that leaves it running.
+    const run = (args: string[], env: Record<string, string>) => new Promise<{ code: number | null; signal: NodeJS.Signals | null; err: string }>((ok) => {
+      const c = spawn(process.execPath, [here('../src/demo/assistant.ts'), ...args], {
+        stdio: ['ignore', 'ignore', 'pipe'], env: { PATH: process.env.PATH ?? '', ...env }, timeout: PROCESS_TEST_MS / 3, killSignal: 'SIGKILL',
+      });
       let err = '';
       c.stderr.on('data', (b) => { err += b; });
-      c.on('exit', (code) => ok({ code, err }));
+      c.on('exit', (code, signal) => ok({ code, signal, err }));
     });
     const env = { SKILLS_CATALOG: pathToFileURL(join(root, 'catalog')).href, QA_SANDBOX: root };
     expect(await run(['--as', 'carol'], env)).toMatchObject({ code: 3, err: expect.stringMatching(/carol is not a developer in .*scenes\.yaml/) });
     expect(await run(['--as', 'ana'], { QA_SANDBOX: root })).toMatchObject({ code: 3, err: expect.stringMatching(/SKILLS_CATALOG/) });
     expect(await run([], env)).toMatchObject({ code: 3, err: expect.stringMatching(/--as/) });
-  });
+  }, PROCESS_TEST_MS);   // three processes, one after another (see run)
 });
 
 describe('the steps view', () => {
