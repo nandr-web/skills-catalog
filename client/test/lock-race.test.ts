@@ -1,0 +1,68 @@
+// The lock file around every change to lock.json (contract §4.5, "One writer at a time"): a stale one is taken, a live one
+// waited for, then lock_busy. Two real processes at once: lock-race-processes.test.ts (slow).
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { CatalogError, Surface, actAs } from '@skills-catalog/core';
+import { describe, expect, it } from 'vitest';
+import { MACHINE_RUNS } from '../src/machine/index.ts';
+import { contextFor, type Context } from '../src/operations.ts';
+import { settingsFrom } from '../src/settings.ts';
+import { open, request, skillMd } from './seed.ts';
+import { place, type Place } from './server.ts';
+
+// The lock file names its holder: its process id and when that process started. A holder that's gone, or a process id now
+// used by a process started at another time, leaves a stale lock, which the next run removes and takes. A live holder is
+// waited for up to 5 seconds, then the run refuses with lock_busy {path, pid}, changing nothing (contract §4.5).
+describe('the lock file', () => {
+  const S = Surface.load();
+  const install = MACHINE_RUNS['install_shared_skill']!;
+  const ctxFor = (p: Place, now?: () => Date): Context => {
+    const { ctx } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), S, 'mcp');
+    return now ? { ...ctx, now } : ctx;
+  };
+  const lockPath = (p: Place) => join(p.home, 'lock.json.lock');
+  const hold = (p: Place, pid: number, started: number) => {
+    mkdirSync(p.home, { recursive: true, mode: 0o700 });
+    writeFileSync(lockPath(p), JSON.stringify({ pid, started }), { mode: 0o600 });
+  };
+  async function published(name: string): Promise<Place> {
+    const p = place();
+    const c = await open(p);
+    try {
+      await c.publish(request(name, [{ path: 'SKILL.md', text: skillMd(name, `The ${name} skill.`) }]), actAs('ana'));
+    } finally {
+      c.close();
+    }
+    return p;
+  }
+  // This process's own start, as the installer records it for a holder.
+  const startedHere = Date.now() - Math.round(process.uptime() * 1000);
+
+  it('left by a process that is gone: removed, taken, and the install goes through', async () => {
+    const p = await published('alpha');
+    const gone = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' });
+    hold(p, Number(gone.stdout), startedHere);
+    expect((await install(ctxFor(p), { name: 'alpha' })).outcome).toBe('installed');
+    expect(existsSync(lockPath(p))).toBe(false);
+  });
+
+  it('whose process id now belongs to a process started at another time: stale too', async () => {
+    const p = await published('alpha');
+    hold(p, process.pid, startedHere - 3_600_000);
+    expect((await install(ctxFor(p), { name: 'alpha' })).outcome).toBe('installed');
+    expect(existsSync(lockPath(p))).toBe(false);
+  });
+
+  it('held by a live process: waited for up to 5 seconds, then lock_busy {path, pid}, and nothing changes', async () => {
+    const p = await published('alpha');
+    hold(p, process.pid, startedHere);
+    // A clock that moves a second each time it's read, so the wait ends at once.
+    let t = Date.parse('2026-09-29T12:00:00Z');
+    const e = await install(ctxFor(p, () => new Date((t += 1000))), { name: 'alpha' }).catch((x: unknown) => x);
+    expect([(e as CatalogError).code, (e as CatalogError).data]).toEqual(['lock_busy', { path: lockPath(p), pid: process.pid }]);
+    expect(existsSync(join(p.osHome, '.claude', 'skills', 'alpha'))).toBe(false);
+    expect(existsSync(join(p.home, 'lock.json'))).toBe(false);
+    expect(JSON.parse(readFileSync(lockPath(p), 'utf8'))).toEqual({ pid: process.pid, started: startedHere });
+  });
+});

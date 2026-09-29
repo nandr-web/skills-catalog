@@ -10,6 +10,16 @@
       },
       "load": 12,
       "measured": "2026-09-29"
+    },
+    {
+      "file": "test/lock-race-processes.test.ts",
+      "covers": "two real installer processes at once, 10 rounds: every lock entry kept (one writer at a time)",
+      "seconds": {
+        "alone": 6.1,
+        "full_run": 13.3
+      },
+      "load": 38,
+      "measured": "2026-09-29"
     }
   ]
 }

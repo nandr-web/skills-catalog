@@ -2,7 +2,8 @@
 // folder it was installed to, and the config's default update policy. Nothing is written into a skill itself. Both files
 // sit in SKILLS_HOME (kept 0700), are written whole to a temp file and renamed in, and are readable by the person only.
 
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, writeSync, type Stats } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { CatalogError } from '@skills-catalog/core';
@@ -118,4 +119,110 @@ export const writeConfig = (home: string, config: Config) => writeJson(home, con
 export function policyOf(entry: LockEntry | undefined, config: Config): { policy: Policy; source: 'skill' | 'default' } {
   if (entry?.policy) return { policy: entry.policy, source: 'skill' };
   return { policy: config.update_policy ?? POLICY_DEFAULT, source: 'default' };
+}
+
+// ---------- one writer at a time (§4.5) ----------
+
+/** How long a run waits for another run's lock before it refuses with lock_busy. */
+export const LOCK_WAIT_MS = 5000;
+const LOCK_RETRY_MS = 50;
+// A process's start as `ps` reports it has whole seconds; a holder's start within this of it is the same process.
+const SAME_START_MS = 2000;
+
+type Holder = { pid: number; started: number };
+const startedHere = () => Date.now() - Math.round(process.uptime() * 1000);
+const sleep = (ms: number) => void Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+function lstatOr(path: string): Stats | undefined {
+  try {
+    return lstatSync(path);
+  } catch {
+    return undefined;
+  }
+}
+
+/** When a process started, from `ps` (macOS and Linux), or undefined when it can't tell. */
+function startOf(pid: number): number | undefined {
+  const r = spawnSync('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8', env: { PATH: process.env['PATH'] ?? '/usr/bin:/bin', LC_ALL: 'C' }, timeout: 2000 });
+  const t = Date.parse((r.stdout ?? '').trim());
+  return Number.isFinite(t) ? t : undefined;
+}
+
+/** The lock file as found: its stat (never through a link) and who holds it, when that can be read. */
+function heldBy(path: string): { st: Stats; holder?: Holder } | undefined {
+  const st = lstatOr(path);
+  if (!st) return undefined;
+  if (!st.isFile()) return { st };
+  try {
+    const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+      const h = JSON.parse(readFileSync(fd, 'utf8'));
+      return Number.isSafeInteger(h?.pid) && h.pid > 0 && Number.isFinite(h?.started) ? { st, holder: { pid: h.pid, started: h.started } } : { st };
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return { st };
+  }
+}
+
+/** A lock whose holder is gone, or whose process id now belongs to a process started at another time; one whose holder
+ *  can't be read (a run stopped between making it and writing it) once it's older than the wait. */
+function isStale(found: { st: Stats; holder?: Holder }): boolean {
+  if (!found.st.isFile()) return false;
+  const h = found.holder;
+  if (!h) return Date.now() - found.st.mtimeMs > LOCK_WAIT_MS;
+  try {
+    process.kill(h.pid, 0);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ESRCH') return true;
+  }
+  const started = startOf(h.pid);
+  return started !== undefined && Math.abs(started - h.started) > SAME_START_MS;
+}
+
+/** Removes the lock file only while it's the same file, a regular one owned by this user. */
+function removeIfSame(path: string, was: Stats): boolean {
+  const st = lstatOr(path);
+  if (!st || !st.isFile() || st.dev !== was.dev || st.ino !== was.ino || st.uid !== process.getuid?.()) return false;
+  unlinkSync(path);
+  return true;
+}
+
+/** Every change to lock.json, one run at a time: takes $SKILLS_HOME/lock.json.lock (made only if absent, holding this
+ *  process's id and start), reads lock.json afresh, lets `change` change it, writes it back (a temp file renamed over
+ *  it, so a reader sees the whole old or new file), and removes the lock file, whether the change succeeded or not. A
+ *  lock held by another run is waited for up to 5 seconds, then the call refuses with lock_busy {path, pid}, having
+ *  changed nothing; a stale one is removed and taken. `now` is the clock the wait is measured by. */
+export function withLock<T>(home: string, now: () => number, change: (lock: Lock) => T): T {
+  mkdirSync(home, { recursive: true, mode: 0o700 });
+  const path = join(home, 'lock.json.lock');
+  const deadline = now() + LOCK_WAIT_MS;
+  let mine: Stats | undefined;
+  while (!mine) {
+    try {
+      const fd = openSync(path, 'wx', 0o600);
+      try {
+        writeSync(fd, JSON.stringify({ pid: process.pid, started: startedHere() }));
+        mine = fstatSync(fd);
+      } finally {
+        closeSync(fd);
+      }
+      break;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+    }
+    const found = heldBy(path);
+    if (!found) continue;
+    if (isStale(found) && removeIfSame(path, found.st)) continue;
+    if (now() >= deadline) throw new CatalogError('lock_busy', { path, pid: found.holder?.pid ?? null });
+    sleep(LOCK_RETRY_MS);
+  }
+  try {
+    const lock = readLock(home);
+    const out = change(lock);
+    writeLock(home, lock);
+    return out;
+  } finally {
+    removeIfSame(path, mine);
+  }
 }

@@ -21,7 +21,7 @@ import { reasons } from '@skills-catalog/core';
 import { logWords } from '../activity.ts';
 import { holdWithinADay, recordUsage, type HoldReason, type UsageEvent } from '../usage/record.ts';
 import type { Context, Done } from '../operations.ts';
-import { policyOf, readRecords, writeConfig, writeLock, type FolderId, type Lock, type LockEntry, type Policy, type Target } from './lock.ts';
+import { policyOf, readRecords, withLock, writeConfig, type FolderId, type Lock, type LockEntry, type Policy, type Target } from './lock.ts';
 
 const quoted = (p: string) => JSON.stringify(p);
 const TARGETS: readonly Target[] = ['user', 'project'];
@@ -526,7 +526,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   // The same version over an intact copy (its files are the lock's fingerprint) changes nothing; a copy the person
   // recreated just has its identity recorded again. A changed or incomplete copy is written again, whatever the policy.
   if (existing && existing.version === version && to.fingerprint === existing.fingerprint && folderFingerprint(dest) === existing.fingerprint) {
-    recordAgain(ctx, lock, dest, target, existing);
+    recordAgain(ctx, dest, target, existing);
     return { text: s.format(w.unchanged, { name: req.name, version }), target: `${req.name} v${version}`, result: log.result('install', 'unchanged'), outcome: 'unchanged' };
   }
   const from = existing ? await installedSide(catalog, existing) : null;
@@ -549,8 +549,12 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
     const text = s.format(w[ctx.face === 'cli' ? `${over.word}_cli` : over.word], { ...held, ...over, reasons: reasons(s, flags) });
     return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held' };
   }
-  const written = writeSkill(dest, target, to.files, existing);
-  const entry = record(ctx, lock, dest, { name: req.name, target }, to, req.policy ?? existing?.policy, existing?.accepted ?? [], toLock(written.copy));
+  // Written while this run holds the lock, from the lock's entry as it is now (another run may have changed it).
+  const { written, entry } = withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
+    const now = fresh.skills[dest];
+    const written = writeSkill(dest, target, to.files, now);
+    return { written, entry: record(ctx, fresh, dest, { name: req.name, target }, to, req.policy ?? now?.policy, now?.accepted ?? [], toLock(written.copy)) };
+  });
   const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + keptLine(s, req.name, written.kept) + '\n' + s.format(w.live, { name: req.name });
   return { text, target: `${req.name} v${version}`, result: log.result('install', 'installed'), outcome: 'installed' };
 }
@@ -620,14 +624,19 @@ function folderFingerprint(dir: string): string | undefined {
 
 /** An intact copy the person recreated (a restore, a branch switch): its identity is recorded again, only while the
  *  folders above it are the real, private ones and it's a real folder itself; nothing is moved. */
-function recordAgain(ctx: Context, lock: Lock, dest: string, target: Target, e: LockEntry): void {
+function recordAgain(ctx: Context, dest: string, target: Target, e: LockEntry): void {
   const now = idOf(dest);
   if (now === undefined || same(now, fromLock(e.copy))) return;
   skillsFolderFor(dest, target);
   if (!isCopy(lstatOf(dest), now)) return;
-  lock.skills[dest] = { ...e, copy: toLock(now) };
-  writeLock(ctx.settings.home, lock);
+  withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
+    const entry = fresh.skills[dest];
+    if (entry) fresh.skills[dest] = { ...entry, copy: toLock(now) };
+  });
 }
+
+/** The clock a wait for another run's lock is measured by. */
+const clockOf = (ctx: Context) => () => ctx.now().getTime();
 
 function record(ctx: Context, lock: Lock, dest: string, at: { name: string; target: Target }, to: Side, policy: Policy | undefined, accepted: LockEntry['accepted'], copy: FolderId | undefined): LockEntry {
   const entry: LockEntry = {
@@ -644,7 +653,6 @@ function record(ctx: Context, lock: Lock, dest: string, at: { name: string; targ
     ...(copy ? { copy } : {}),
   };
   lock.skills[dest] = entry;
-  writeLock(ctx.settings.home, lock);
   return entry;
 }
 
@@ -667,8 +675,11 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   if (to.fingerprint !== t.fingerprint) throw conflict();
   const flags = gate(existing ? await installedSide(catalog, existing) : null, to).risk_flags;
   if (!sameSet(req.flags, kinds(flags))) throw conflict();
-  const written = writeSkill(dest, t.target, to.files, existing);
-  const entry = record(ctx, lock, dest, { name: req.name, target: t.target }, to, existing?.policy, [...(existing?.accepted ?? []), { version: to.version, flags: kinds(flags) }], toLock(written.copy));
+  const { written, entry } = withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
+    const now = fresh.skills[dest];
+    const written = writeSkill(dest, t.target, to.files, now);
+    return { written, entry: record(ctx, fresh, dest, { name: req.name, target: t.target }, to, now?.policy, [...(now?.accepted ?? []), { version: to.version, flags: kinds(flags) }], toLock(written.copy)) };
+  });
   // The person's yes, wherever it was given (§3's usage metrics).
   recordUsage(ctx.settings.home, { event: 'answer', skill: req.name, version: to.version, answer: 'yes', together: 1 }, ctx.now(), { createKey: true });
   const text =
@@ -803,16 +814,21 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
       continue;
     }
     // A folder that changed while it was being written is that skill's refused line; the other skills go on.
+    // Another run holding the lock past the wait refuses the whole call (lock_busy).
     let written: ReturnType<typeof writeSkill>;
     try {
-      written = writeSkill(dest, e.target, to.files, e);
+      written = withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
+        const now = fresh.skills[dest] ?? e;
+        const w = writeSkill(dest, e.target, to.files, now);
+        record(ctx, fresh, dest, now, to, now.policy, now.accepted, toLock(w.copy));
+        return w;
+      });
     } catch (err) {
-      if (!(err instanceof CatalogError)) throw err;
+      if (!(err instanceof CatalogError) || err.code === 'lock_busy') throw err;
       lines.push(refusedTarget(s, at, err));
       refused(err.code);
       continue;
     }
-    record(ctx, lock, dest, e, to, e.policy, e.accepted, toLock(written.copy));
     lines.push(s.format(w.updated, { ...at, changes: changesOf(s, d) }) + keptLine(s, e.name, written.kept));
     saw('updated');
   }
@@ -862,8 +878,13 @@ export async function setPolicy(ctx: Context, args: unknown): Promise<Done> {
   if (!entries.length) throw new CatalogError('not_installed', { name: req.name });
   // A pin set while an update waits for the person is their answer to it (§3's usage metrics), taken before it changes.
   const waiting = req.policy === 'pin' ? await pendingHold(ctx, req.name).catch(() => null) : null;
-  for (const e of entries) lock.skills[destOf(ctx, e.target, e.name)] = { ...e, policy: req.policy };
-  writeLock(home, lock);
+  withLock(home, clockOf(ctx), (fresh) => {
+    for (const e of entries) {
+      const key = destOf(ctx, e.target, e.name);
+      const now = fresh.skills[key];
+      if (now) fresh.skills[key] = { ...now, policy: req.policy };
+    }
+  });
   recordUsage(home, { event: 'policy', from: policyOf(entries[0], config).policy, to: req.policy, scope: 'skill', near_hold }, ctx.now());
   if (waiting && 'confirm' in waiting) recordUsage(home, { event: 'answer', skill: req.name, version: waiting.version, answer: 'pin', together: 1 }, ctx.now(), { createKey: true });
   return { text: w ? s.format(w.skill, { name: req.name, policy: name }) : asData('set_skill_update_policy', { name: req.name, policy: req.policy }), target: req.name, result: logWords(s).result('policy') };
