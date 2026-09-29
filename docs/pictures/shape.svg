@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="d d-architecture" viewBox="0 0 747 922" width="747" height="922" role="img" aria-label="How do assistants and people reach one catalog that can live on a laptop or in AWS?">
+<title>One contract, two homes</title>
+<style>.d { --d-page: #ECF0F3; --d-canvas: #F9FBFC; --d-ink: #13202A; --d-ink2: #3A4A56; --d-line: #B7C4CD; --d-grid: #D5DDE3; --d-shade: #E1E7EB; --d-accent: #137052; --d-accent-soft: #D9EDE3; --d-hot: #B23A0A; --d-hot-soft: #F8E2D5; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .d, svg.st:root { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+}
+:root[data-theme="dark"] .d { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+
+.d { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 12px; fill: var(--d-ink); }
+.d text { dominant-baseline: central; }
+.d-bg { fill: var(--d-canvas); }
+
+/* nodes */
+.d-node { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1.2; }
+.d-node--external { fill: var(--d-shade); stroke: var(--d-ink2); stroke-dasharray: 4 3; }
+.d-node--focus { fill: var(--d-accent-soft); stroke: var(--d-accent); stroke-width: 1.6; }
+.d-node--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); stroke-width: 1.6; }
+.d-node-detail { fill: none; stroke: var(--d-ink); stroke-width: 1; }
+.d-node--focus + .d-node-detail { stroke: var(--d-accent); }
+.d-node--alert + .d-node-detail { stroke: var(--d-hot); }
+.d-node--external + .d-node-detail { stroke: var(--d-ink2); }
+.d-node--proposed { stroke-width: 1.4; stroke-dasharray: 2 3; }
+.d-node--removed { fill: var(--d-canvas); stroke: var(--d-hot); stroke-width: 1.4; stroke-dasharray: 5 3; }
+.d-label { fill: var(--d-ink); text-anchor: middle; }
+.d-label--strong { font-weight: 600; }
+.d-label--removed { fill: var(--d-ink2); text-decoration: line-through; }
+.d-tag--proposed { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1; stroke-dasharray: 2 2; }
+.d-tag--removed { fill: var(--d-hot); stroke: var(--d-hot); stroke-width: 1; }
+.d-tag-text { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-anchor: middle; }
+.d-tag-text--proposed { fill: var(--d-ink); }
+.d-tag-text--removed { fill: var(--d-canvas); }
+.d-legend-text { font-size: 10.5px; fill: var(--d-ink2); }
+.d-compare-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; fill: var(--d-ink2); }
+.d-callout { fill: var(--d-ink); }
+.d-callout-text { font-size: 10px; font-weight: 600; fill: var(--d-canvas); text-anchor: middle; }
+.d-note { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle; }
+.d-note--focus { fill: var(--d-accent); }
+.d-note--alert { fill: var(--d-hot); }
+
+/* edges */
+.d-edge { fill: none; stroke: var(--d-ink); stroke-width: 1.3; stroke-linejoin: round; }
+.d-edge--async { stroke-dasharray: 5 4; }
+.d-edge--proposed { stroke-dasharray: 2 3; }
+.d-edge--removed { stroke: var(--d-hot); stroke-dasharray: 5 3; }
+.d-edge--return { stroke: var(--d-ink2); stroke-width: 1.1; stroke-dasharray: 4 3; }
+.d-edge--focus { stroke: var(--d-accent); stroke-width: 2; }
+.d-edge--alert { stroke: var(--d-hot); stroke-width: 2; }
+.d-edge-label { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle;
+  paint-order: stroke; stroke: var(--d-canvas); stroke-width: 4px; stroke-linejoin: round; }
+.d-edge-label--focus { fill: var(--d-accent); font-weight: 600; }
+.d-edge-label--alert { fill: var(--d-hot); font-weight: 600; }
+.d-arrow { fill: var(--d-ink); }
+.d-arrow--focus { fill: var(--d-accent); }
+.d-arrow--alert { fill: var(--d-hot); }
+.d-arrow--muted { fill: var(--d-ink2); }
+.d-arrow--open { fill: none; stroke: var(--d-ink); stroke-width: 1.4; stroke-linejoin: round; }
+.d-arrow--open.d-arrow--focus { stroke: var(--d-accent); }
+.d-arrow--open.d-arrow--alert { stroke: var(--d-hot); }
+.d-arrow--open.d-arrow--muted { stroke: var(--d-ink2); }
+
+/* sequence */
+.d-lifeline { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 3 4; }
+.d-activation { fill: var(--d-shade); stroke: var(--d-ink); stroke-width: 1; }
+.d-msg-label { font-size: 11px; fill: var(--d-ink); text-anchor: middle; }
+.d-msg-label--start { text-anchor: start; }
+.d-msg-label--return { fill: var(--d-ink2); }
+.d-msg-label--focus { fill: var(--d-accent); font-weight: 600; }
+.d-msg-label--alert { fill: var(--d-hot); font-weight: 600; }
+.d-memo { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1; }
+.d-memo--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); }
+.d-memo-text { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
+.d-frame { fill: none; stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-frame-tab { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-frame-kind { font-size: 10.5px; font-weight: 600; fill: var(--d-ink); }
+.d-frame-cond-bg { fill: var(--d-canvas); }
+.d-frame-cond { font-size: 10.5px; fill: var(--d-ink2); }
+.d-frame-sep { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+
+/* state */
+.d-pseudo { fill: var(--d-ink); }
+.d-choice-label { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
+.d-composite { fill: var(--d-grid); fill-opacity: 0.25; stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-composite-label { font-size: 11px; font-weight: 600; fill: var(--d-ink); }
+
+/* groups (boundaries) */
+.d-group { fill: var(--d-grid); fill-opacity: 0.35; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+.d-group-label { font-size: 10.5px; fill: var(--d-ink2); letter-spacing: 0.06em; font-weight: 500; }</style>
+<defs><marker id="one-contract-two-homes-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="one-contract-two-homes-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="one-contract-two-homes-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="one-contract-two-homes-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="one-contract-two-homes-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="one-contract-two-homes-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="one-contract-two-homes-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="one-contract-two-homes-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
+<rect class="d-bg" width="747" height="922"/>
+<rect class="d-group" x="20" y="20" width="511.3" height="546" rx="6"/>
+<text class="d-group-label" x="25" y="32.5">YOUR MACHINE</text>
+<rect class="d-group" x="230" y="616" width="497" height="286" rx="6"/>
+<text class="d-group-label" x="235" y="628.5">YOUR AWS ACCOUNT</text>
+<path class="d-edge" d="M368 112 L368 167" marker-end="url(#one-contract-two-homes-arrow)"/>
+<path class="d-edge" d="M188 112 L188 167" marker-end="url(#one-contract-two-homes-arrow)"/>
+<path class="d-edge" d="M368 205 L368 237 Q368 242 363 242 L243.7 242 Q238.7 242 238.7 247 L238.7 260" marker-end="url(#one-contract-two-homes-arrow)"/>
+<path class="d-edge" d="M188 205 L188 260" marker-end="url(#one-contract-two-homes-arrow)"/>
+<path class="d-edge" d="M188 313 L188 383" marker-end="url(#one-contract-two-homes-arrow)"/>
+<path class="d-edge" d="M238.7 313 L238.7 360 Q238.7 365 243.7 365 L359.5 365 Q364.5 365 364.5 370 L364.5 383" marker-end="url(#one-contract-two-homes-arrow)"/>
+<path class="d-edge" d="M338.7 436 L338.7 491" marker-end="url(#one-contract-two-homes-arrow)"/>
+<path class="d-edge d-edge--proposed" d="M390.3 436 L390.3 468 Q390.3 473 395.3 473 L430.7 473 Q435.7 473 435.7 478 L436 568 Q436 573 436 578 L436 670" marker-end="url(#one-contract-two-homes-arrow)"/>
+<path class="d-edge d-edge--proposed" d="M617 554 L617 586 Q617 591 612 591 L481 591 Q476 591 476.1 596 L476.2 604 Q476.3 609 476.3 614 L476.3 670" marker-end="url(#one-contract-two-homes-arrow)"/>
+<path class="d-edge d-edge--proposed" d="M436 740 L436 810" marker-end="url(#one-contract-two-homes-arrow)"/>
+<path class="d-edge d-edge--proposed" d="M476.3 740 L476.3 787 Q476.3 792 481.3 792 L623.5 792 Q628.5 792 628.5 797 L628.5 810" marker-end="url(#one-contract-two-homes-arrow)"/>
+<rect class="d-node" x="304.5" y="74" width="127" height="38" rx="19"/>
+<text class="d-label" x="368" y="93">AI assistant</text>
+<rect class="d-node" x="135.5" y="74" width="105" height="38" rx="19"/>
+<text class="d-label" x="188" y="93">developer</text>
+<rect class="d-node" x="287" y="167" width="162" height="38" rx="3"/>
+<text class="d-label" x="368" y="186">MCP server + skill</text>
+<rect class="d-node" x="125" y="167" width="126" height="38" rx="3"/>
+<text class="d-label" x="188" y="186">CLI and setup</text>
+<rect class="d-node" x="137.3" y="260" width="152" height="53" rx="3"/>
+<text class="d-label" x="213.3" y="279.5">installer</text>
+<text class="d-note" x="213.3" y="295.5">lock, update policy</text>
+<path class="d-node" d="M125 389 A63 6 0 0 1 251 389 V436 A63 6 0 0 1 125 436 Z"/>
+<path class="d-node-detail" d="M125 389 A63 6 0 0 0 251 389"/>
+<text class="d-label" x="188" y="408.5">skills folder</text>
+<text class="d-note" x="188" y="424.5">+ lock file</text>
+<rect class="d-node d-node--focus" x="287" y="383" width="155" height="53" rx="3"/>
+<text class="d-label d-label--strong" x="364.5" y="402.5">catalog interface</text>
+<text class="d-note d-note--focus" x="364.5" y="418.5">one contract</text>
+<path class="d-node" d="M259.7 497 A79 6 0 0 1 417.7 497 V544 A79 6 0 0 1 259.7 544 Z"/>
+<path class="d-node-detail" d="M259.7 497 A79 6 0 0 0 417.7 497"/>
+<text class="d-label" x="338.7" y="516.5">local catalog</text>
+<text class="d-note" x="338.7" y="532.5">core runs in-process</text>
+<rect class="d-node d-node--proposed" x="568" y="499" width="97" height="55" rx="19"/>
+<rect class="d-tag d-tag--proposed" x="588.4" y="505" width="56.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="616.5" y="512.5">PLANNED</text>
+<text class="d-label" x="616.5" y="535">web UI</text>
+<rect class="d-node d-node--proposed" x="395.7" y="670" width="121" height="70" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="428.1" y="676" width="56.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="456.2" y="683.5">PLANNED</text>
+<text class="d-label" x="456.2" y="706.5">catalog API</text>
+<text class="d-note" x="456.2" y="722.5">same core code</text>
+<path class="d-node d-node--proposed" d="M362 816 A74 6 0 0 1 510 816 V880 A74 6 0 0 1 362 880 Z"/>
+<path class="d-node-detail" d="M362 816 A74 6 0 0 0 510 816"/>
+<rect class="d-tag d-tag--proposed" x="407.9" y="825" width="56.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="436" y="832.5">PLANNED</text>
+<text class="d-label" x="436" y="852.5">versions + files</text>
+<text class="d-note" x="436" y="868.5">DynamoDB + S3</text>
+<path class="d-node d-node--proposed" d="M546 816 A82.5 6 0 0 1 711 816 V880 A82.5 6 0 0 1 546 880 Z"/>
+<path class="d-node-detail" d="M546 816 A82.5 6 0 0 0 711 816"/>
+<rect class="d-tag d-tag--proposed" x="600.4" y="825" width="56.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="628.5" y="832.5">PLANNED</text>
+<text class="d-label" x="628.5" y="852.5">search index</text>
+<text class="d-note" x="628.5" y="868.5">rebuilt from versions</text>
+<text class="d-edge-label" x="406.5" y="139.5">tool calls</text>
+<text class="d-edge-label" x="220.5" y="139.5">commands</text>
+<text class="d-edge-label" x="391" y="223.5">calls</text>
+<text class="d-edge-label" x="211" y="232.5">calls</text>
+<text class="d-edge-label" x="136.5" y="348">writes, checks</text>
+<text class="d-edge-label" x="312.2" y="339">search, read, publish</text>
+<text class="d-edge-label" x="309.2" y="463.5">file://</text>
+<text class="d-edge-label" x="454.3" y="454.5">https:// (planned)</text>
+<text class="d-edge-label" x="671.5" y="572.5">HTTPS (planned)</text>
+<text class="d-edge-label" x="359.5" y="775">read, append (planned)</text>
+<text class="d-edge-label" x="533.8" y="766">search (planned)</text>
+</svg>
