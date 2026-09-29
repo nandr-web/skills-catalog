@@ -63,16 +63,18 @@ export function managedInside(managed: string | undefined, root: string | undefi
   throw new UnsafeError(`SKILLS_MANAGED_SETTINGS ${JSON.stringify(managed ?? null)} is not a folder inside the sandbox ${JSON.stringify(root ?? null)}: refusing to start a process that could read this machine's managed settings`);
 }
 
-/** Whether any part of `path` below `root` is a link. canonical() follows a link whose target exists, but not one whose
- *  target isn't there yet, which could be made later and would then be read through. */
+/** Whether any part of `path` below `root` is a link, or might be. canonical() follows a link whose target exists, but not
+ *  one whose target isn't there yet, which could be made later and would then be read through. A part it can't look at
+ *  (a folder above it not searchable, a loop) counts as one; only a part that isn't there doesn't. */
 function linkBelow(root: string, path: string): boolean {
   let at = root;
   for (const part of relative(root, path).split(sep)) {
     at = join(at, part);
     try {
       if (lstatSync(at).isSymbolicLink()) return true;
-    } catch {
-      return false;   // not there: nothing below it is either
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      return !(code === 'ENOENT' || code === 'ENOTDIR');   // not there: nothing below it is either
     }
   }
   return false;

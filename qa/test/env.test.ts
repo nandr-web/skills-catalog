@@ -1,7 +1,7 @@
 // No secrets reach a run (the QA plan §6 step 3, requirement qa-no-secrets-in-runs): every process a run starts (the
 // command, the assistant, the MCP servers it starts) gets only an allow-listed environment, and the runner plants a
 // marker under the usual secret names to prove it. The assistant keeps the real HOME (its login lives there).
-import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -73,6 +73,20 @@ describe('the environment a run\'s processes get', () => {
     }
     mkdirSync(join(root, 'plain'));
     expect(childEnv(env(join(root, 'plain', 'managed')), {}).SKILLS_MANAGED_SETTINGS).toBe(join(root, 'plain', 'managed'));
+  });
+
+  // A part of the path that can't be looked at (a folder above it not searchable) could be a link: refused, never read as
+  // "no link here". Only a part that isn't there is no link. (root can search any folder, so this can't hold as root.)
+  it.skipIf(process.getuid?.() === 0)('childEnv refuses managed settings below a folder it can\'t look into', () => {
+    const root = scratch();
+    const locked = join(root, 'locked');
+    mkdirSync(locked);
+    chmodSync(locked, 0o000);
+    try {
+      expect(() => childEnv({ env: { QA_SANDBOX: root, PATH: '/usr/bin', SKILLS_MANAGED_SETTINGS: join(locked, 'managed') } }, {})).toThrow(/SKILLS_MANAGED_SETTINGS/);
+    } finally {
+      chmodSync(locked, 0o700);   // so the test's folder can be removed
+    }
   });
 
   it('qa run: the command sees no secret and no name outside the allow-list', async () => {
