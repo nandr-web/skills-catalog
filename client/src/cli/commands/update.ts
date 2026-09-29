@@ -84,7 +84,7 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
     used('declined');
     return 0;
   }
-  const a = await perform(ctx, 'accept_held_update', 'update --accept', { name, confirm: hold.confirm, flags: hold.flags });
+  const a = await perform(ctx, 'accept_held_update', 'update --accept', { name, target: hold.target, version: hold.version, confirm: hold.confirm, flags: hold.flags });
   (a.isError ? io.stderr : io.stdout)(a.text + '\n');
   return a.isError ? 1 : 0;
 }
