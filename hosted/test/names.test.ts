@@ -8,7 +8,7 @@ import { DynamoDBClient, TransactWriteItemsCommand } from '@aws-sdk/client-dynam
 import { S3Client } from '@aws-sdk/client-s3';
 import type { NewVersion, VersionPublished } from '@skills-catalog/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createStores, HostedBlobLinks, HostedFileNames, HostedStorage, type Place } from '../src/index.ts';
+import { createStores, HostedBlobLinks, HostedEvents, HostedFileNames, HostedStorage, namesIndexer, type Place } from '../src/index.ts';
 import { FAKE, startEmulator, type Emulator } from './emulator.ts';
 
 const HOUR = 3_600_000;
@@ -94,5 +94,27 @@ describe('which versions name a file', () => {
     await w.publish('four', [a]);
     expect(counts).toEqual([4]);
     expect(await w.storage.fileState(a)).toBe('on_its_way');
+  });
+});
+
+describe('the indexer names the files of each published version', () => {
+  it('delivering the version_published event records its files, from the version the event names', async () => {
+    const w = await world();
+    const events = new HostedEvents({ ddb: w.ddb, place: w.place });
+    events.subscribe(namesIndexer({ storage: w.storage, names: w.names }));
+    const a = await w.upload('one\n');
+    const b = await w.upload('two\n');
+    await w.publish('indexed', [a]);
+    await w.publish('indexed', [a, b]);
+    expect(await w.storage.fileState(b)).toBe('on_its_way');
+    expect(await events.deliver()).toBe(2);
+    expect(await w.storage.fileState(a)).toBe('named');
+    expect(await w.storage.fileState(b)).toBe('named');
+  });
+
+  it('an event for a version that is not there is a bug, not a silent skip', async () => {
+    const w = await world();
+    const index = namesIndexer({ storage: w.storage, names: w.names });
+    await expect(index({ type: 'version_published', name: 'ghost', version: 1, fingerprint: 'sha256:x', publisher: 'ana', at: w.clock.now().toISOString() })).rejects.toThrow(/ghost/);
   });
 });
