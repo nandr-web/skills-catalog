@@ -118,8 +118,9 @@ describe('the published schema is the definitions\' (contract §1.1)', () => {
     expect(local.security).toEqual([{ localToken: [] }]);
     const hosted = hostedDoc.paths['/api/v1/files/{sha256}'].get;
     expect(Object.keys(hosted.responses).sort()).toEqual(['302', '401', '404', '503']);
-    expect(Object.keys(hosted.responses['302'].headers).sort()).toEqual(['Cache-Control', 'Location']);
-    expect(Object.keys(hosted.responses['503'].headers)).toEqual(['Retry-After']);
+    // A presigned link must never be cached, and the wait is the handler's: pinned by value, not only by name.
+    expect(hosted.responses['302'].headers).toEqual({ Location: { schema: { type: 'string' } }, 'Cache-Control': { schema: { type: 'string', const: 'no-store' } } });
+    expect(hosted.responses['503'].headers).toEqual({ 'Retry-After': { schema: { type: 'integer', const: 2 } } });
     expect(hosted.security).toEqual([{ bearer: [] }]);
   });
 

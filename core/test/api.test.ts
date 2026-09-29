@@ -143,18 +143,23 @@ describe('the error list at run time (contract §9)', () => {
   });
 
   // A code added anywhere else in §9 (a table, a later sentence) must be in the list too: every other backticked word
-  // there, outside a {…} or (…), is a why the words file has a sentence for (or one asked for: WORD_GAPS), or one of these.
+  // there, outside an error's {fields}, is a why the words file has a sentence for (or one asked for: WORD_GAPS), or one
+  // of these. Text in (…) is read too, so a code can't hide in an aside.
   const NOT_CODES: Record<string, string> = {
     problem: 'a field of invalid_manifest',
     why: 'a field of invalid_request and others',
     safe_frontmatter_keys: 'a setup config key',
     non_granting_keys: 'a setup config key',
     person_only: 'a CLI outcome (exit 3), never an error',
+    cursor: 'a search or versions input',
+    expected_fingerprint: 'a publish_version input',
+    limit: 'a search input, and a field of invalid_request',
+    me: 'a setup config key',
   };
   it('names no code outside its list: every other word it marks as code is a why with a sentence, or a named field or outcome', () => {
     const text = readFileSync(join(import.meta.dirname, '..', '..', 'docs', 'contract.md'), 'utf8');
     let s9 = text.slice(text.indexOf('## 9. Error codes'), text.indexOf('## 10.'));
-    for (let prev = ''; prev !== s9; ) [prev, s9] = [s9, s9.replace(/\{[^{}]*\}/g, '').replace(/\([^()]*\)/g, '')];
+    for (let prev = ''; prev !== s9; ) [prev, s9] = [s9, s9.replace(/\{[^{}]*\}/g, '')];
     const marked = new Set([...s9.matchAll(/`([a-z_]+)`/g)].map((m) => m[1]!));
     const gaps = WORD_GAPS.filter((k) => k.startsWith('errors.why.')).map((k) => k.slice('errors.why.'.length));
     const whys = [...Object.keys(Words.load().word('errors.why') as Record<string, string>), ...gaps];

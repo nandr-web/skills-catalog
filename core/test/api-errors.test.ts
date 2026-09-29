@@ -9,7 +9,8 @@ import { COMMON_ERRORS } from '../src/errors.ts';
 import { loadGolden } from './golden.ts';
 
 // Codes an operation's code raises with no golden row yet (operation, code, where it's raised): golden rows to add.
-// Each is exempt until its row lands, and this test says when one has, so the list only shrinks.
+// Each is exempt until its row lands, and this test says when one has, so the list only shrinks. One addition since it
+// was made: accept_held_update's not_installed (the approved API page lists it; its golden row is asked for).
 const MISSING_GOLDENS: [op: string, code: string, where: string][] = [
   ['publish_skill_to_catalog', 'unauthenticated', 'publish-folder.ts → catalog.publish → checkActor'],
   ['publish_skill_to_catalog', 'not_owner', 'publish-folder.ts → catalog.publish (preview_expect preview-not-owner runs once the preview is its own tool)'],
