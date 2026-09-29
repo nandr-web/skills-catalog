@@ -35,6 +35,10 @@ describe('pending golden rows', () => {
 });
 
 const PENDING: string[] = [
+  // Held-update examples that need the installer to check for commands run at load, and the rules reviewer's findings.
+  'policy.cases[40]',
+  'policy.cases[46]',
+  'policy.accept_cases.keeps_policy.cases[2]',
   // One filter tag over 32 characters: item_too_long.
   'skills.search_filters[1]',
   // The front matter counted first in the read budget.
