@@ -182,9 +182,9 @@ describe('operationResponse', () => {
     try {
       const seen: string[] = [];
       const run = async (op: string, input: unknown) => (seen.push(op), dispatch(op, input, { catalog, developer: 'dev1', face: 'web' }));
-      const ok = await operationResponse({ op: 'search_shared_skills', raw: new TextEncoder().encode('{}'), catalog, developer: 'dev1', face: 'web', words: W, run });
+      const ok = await operationResponse({ op: 'search_shared_skills', raw: new TextEncoder().encode('{}'), developer: 'dev1', words: W, run });
       expect([ok.status, seen]).toEqual([200, ['search_shared_skills']]);
-      const bug = () => operationResponse({ op: 'search_shared_skills', raw: new TextEncoder().encode('{}'), catalog, developer: 'dev1', face: 'web', words: W, run: async () => { throw new TypeError('a bug'); } });
+      const bug = () => operationResponse({ op: 'search_shared_skills', raw: new TextEncoder().encode('{}'), developer: 'dev1', words: W, run: async () => { throw new TypeError('a bug'); } });
       await expect(bug()).rejects.toThrow(TypeError);
     } finally {
       catalog.close();

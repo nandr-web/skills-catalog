@@ -126,18 +126,15 @@ export function envelope(answer: { data: unknown; developer?: string } | { error
 /** An operation's whole answer once the transport's guards have passed and it has read the body: parse as the web face,
  *  run (the transport's own `run`, e.g. one that logs, or `dispatch`), and the envelope. A CatalogError is the envelope's
  *  error; anything else is a bug the transport turns into internal_error its own way. */
-export async function operationResponse(o: Sentences & {
-  op: string;
-  raw: Uint8Array | 'cut';
-  catalog: Catalog;
-  developer: string | undefined;
-  face: Face;
-  max?: number;
-  run?: (op: string, input: Record<string, unknown>) => Promise<unknown>;
-}): Promise<HttpResponse> {
+export async function operationResponse(
+  o: Sentences & { op: string; raw: Uint8Array | 'cut'; developer: string | undefined; max?: number } & (
+      | { run: (op: string, input: Record<string, unknown>) => Promise<unknown> }
+      | { catalog: Catalog; face: Face }
+    ),
+): Promise<HttpResponse> {
   try {
     const input = parseBody(o.op, o.raw, o.max);
-    const data = await (o.run ? o.run(o.op, input) : dispatch(o.op, input, { catalog: o.catalog, developer: o.developer, face: o.face }));
+    const data = await ('run' in o ? o.run(o.op, input) : dispatch(o.op, input, { catalog: o.catalog, developer: o.developer, face: o.face }));
     return envelope({ data, developer: o.developer }, o);
   } catch (e) {
     if (isCatalogError(e)) return envelope({ error: e }, o);
