@@ -129,81 +129,132 @@ export interface Injection {
 // a pattern over them would backtrack without end on a line of tabs that isn't a fence.
 const LINE_BREAK = /\r\n|[\n\r\u2028\u2029]/;
 const ONE_INVISIBLE = new RegExp(`^(?:${INVISIBLE.source})$`, 'u');
-const isBlank = (c: string) => c === ' ' || c === '\t' || ONE_INVISIBLE.test(c);
+// Every line inside an open block is read for an opening fence, so a line of invisible characters must stay cheap: the
+// pattern's answer for each character under U+10000 is kept (0 not asked yet, 1 blank, 2 not).
+const BMP_BLANK = new Uint8Array(0x10000);
+function isBlankPoint(code: number): boolean {
+  if (code >= 0x10000) return ONE_INVISIBLE.test(String.fromCodePoint(code));
+  if (!BMP_BLANK[code]) BMP_BLANK[code] = ONE_INVISIBLE.test(String.fromCharCode(code)) ? 1 : 2;
+  return BMP_BLANK[code] === 1;
+}
 function skipBlanks(line: string, i: number): number {
   while (i < line.length) {
-    const code = line.charCodeAt(i);
+    const code = line.codePointAt(i)!;
     if (code === 0x20 || code === 0x09) {
       i++;
       continue;
     }
     if (code < 0x7f && code > 0x20) break;   // a printable ASCII character is never blank
-    const c = String.fromCodePoint(line.codePointAt(i)!);
-    if (!isBlank(c)) break;
-    i += c.length;
+    if (!isBlankPoint(code)) break;
+    i += code >= 0x10000 ? 2 : 1;
   }
   return i;
 }
 type Fence = { char: string; length: number };
 // A line that opens a ```! or ~~~! block: blanks, three or more of one fence character, blanks, then `!`.
 function openingFence(line: string): Fence | null {
-  let i = skipBlanks(line, 0);
+  if (!line.includes('`') && !line.includes('~')) return null;
+  const i = skipBlanks(line, 0);
   const char = line[i];
   if (char !== '`' && char !== '~') return null;
-  const start = i;
-  while (line[i] === char) i++;
-  if (i - start < 3) return null;
-  i = skipBlanks(line, i);
-  return line[i] === '!' ? { char, length: i - start > 0 ? countRun(line, start, char) : 0 } : null;
+  const length = countRun(line, i, char);
+  if (length < 3) return null;
+  return line[skipBlanks(line, i + length)] === '!' ? { char, length } : null;
 }
 const countRun = (line: string, from: number, char: string) => {
   let n = 0;
   while (line[from + n] === char) n++;
   return n;
 };
-// A line that closes it, strictly (so an edit after a doubtful close still counts as inside): up to three spaces, at
-// least as many of the same character, then only spaces or tabs to the line's end.
-function closesFence(line: string, fence: Fence): boolean {
+// A line that closes, strictly (so an edit after a doubtful close still counts as inside): up to three spaces, a run of
+// one fence character, then only spaces or tabs to the line's end. It closes every open block of that character that is
+// no longer than the run.
+function closingFence(line: string): Fence | null {
   let i = 0;
   while (i < 3 && line[i] === ' ') i++;
-  const n = countRun(line, i, fence.char);
-  if (n < fence.length) return false;
-  for (i += n; i < line.length; i++) if (line[i] !== ' ' && line[i] !== '\t') return false;
-  return true;
+  const char = line[i];
+  if (char !== '`' && char !== '~') return null;
+  const length = countRun(line, i, char);
+  if (length < 3) return null;
+  for (i += length; i < line.length; i++) if (line[i] !== ' ' && line[i] !== '\t') return null;
+  return { char, length };
 }
-// A flag's detail shows the whole command, its lines or commands joined by a visible mark (then flagText cuts it).
+// The first `max` code points of a string, and whether it was cut: a cut never splits a surrogate pair.
+function cut(s: string, max: number): { text: string; points: number; cut: boolean } {
+  let i = 0;
+  let points = 0;
+  while (i < s.length && points < max) {
+    i += s.codePointAt(i)! > 0xffff ? 2 : 1;
+    points++;
+  }
+  return { text: s.slice(0, i), points, cut: i < s.length };
+}
+// A flag's detail shows the whole command, its lines or commands joined by a visible mark (then flagText cuts it). The
+// command is collected only up to one code point past the cut, so flagText still sees that it's longer.
 const JOIN = ' ⏎ ';
-const inlineCommands = (line: string) => {
+const JOIN_POINTS = [...JOIN].length;
+function joined(parts: Iterable<string>): string {
   const out: string[] = [];
+  let n = 0;
+  for (const p of parts) {
+    if (n > FLAG_TEXT_MAX) break;
+    const c = cut(p.trim(), FLAG_TEXT_MAX + 1 - n);
+    if (!c.text) continue;
+    out.push(c.text);
+    n += c.points + JOIN_POINTS;
+  }
+  return out.join(JOIN);
+}
+function* inlineCommands(line: string): Generator<string> {
   for (let at = line.indexOf('!`'); at >= 0; at = line.indexOf('!`', at + 2)) {
     const end = line.indexOf('`', at + 2);
-    out.push(line.slice(at + 2, end < 0 ? undefined : end).trim());
-    if (end < 0) break;
+    yield line.slice(at + 2, end < 0 ? undefined : end);
+    if (end < 0) return;
     at = end - 1;
   }
-  return out.filter(Boolean).join(JOIN);
-};
+}
+function* linesOf(lines: readonly string[], from: number, to: number): Generator<string> {
+  for (let k = from; k < to; k++) yield lines[k]!;
+}
+// More blocks open at once than this, and the file is read as one block from the first opening line: any edit to it
+// counts (the detector errs toward asking), and every line is still read a bounded number of times.
+const MAX_OPEN = 8;
 export function injections(text: string): Injection[] {
   const lines = text.split(LINE_BREAK);
   const out: Injection[] = [];
+  // The blocks not closed yet, oldest first; each fills in its injection when it closes (or at the end of the file).
+  let open: { fence: Fence; at: number; injection: Injection }[] = [];
+  const close = (b: (typeof open)[number], end: number) => {
+    b.injection.text = lines.slice(b.at, end + 1).join('\n');
+    b.injection.command = joined(linesOf(lines, b.at + 1, end)) || joined([lines[b.at]!]);
+  };
   for (let i = 0; i < lines.length; i++) {
-    const open = openingFence(lines[i]!);
-    if (open) {
-      let j = i + 1;
-      while (j < lines.length && !closesFence(lines[j]!, open)) j++;
-      // The detail is cut to FLAG_TEXT_MAX anyway: stop collecting the command once it's longer than that.
-      const body: string[] = [];
-      for (let k = i + 1, n = 0; k < j && n <= FLAG_TEXT_MAX; k++) {
-        const l = lines[k]!.trim().slice(0, FLAG_TEXT_MAX + 1);
-        if (l) {
-          body.push(l);
-          n += l.length + JOIN.length;
-        }
+    const line = lines[i]!;
+    const shut = open.length ? closingFence(line) : null;
+    if (shut) {
+      const still: typeof open = [];
+      for (const b of open) {
+        if (b.fence.char === shut.char && b.fence.length <= shut.length) close(b, i);
+        else still.push(b);
       }
-      out.push({ line: i + 1, text: lines.slice(i, j + 1).join('\n'), command: body.length ? body.join(JOIN) : lines[i]!.trim().slice(0, FLAG_TEXT_MAX + 1) });
-      i = j;
-    } else if (lines[i]!.includes('!`')) out.push({ line: i + 1, text: lines[i]!, command: inlineCommands(lines[i]!) });
+      open = still;
+      continue;
+    }
+    // Any line that opens a ```! block starts its own command, inside another open block too (contract §5.3).
+    const fence = openingFence(line);
+    if (fence) {
+      if (open.length === MAX_OPEN) {
+        const first = out.findIndex((x) => x === open[0]!.injection);
+        out.length = first;
+        out.push({ line: open[0]!.at + 1, text: lines.slice(open[0]!.at).join('\n'), command: joined(linesOf(lines, open[0]!.at + 1, lines.length)) });
+        return out;
+      }
+      const injection: Injection = { line: i + 1, text: '', command: '' };
+      out.push(injection);
+      open.push({ fence, at: i, injection });
+    } else if (!open.length && line.includes('!`')) out.push({ line: i + 1, text: line, command: joined(inlineCommands(line)) });
   }
+  for (const b of open) close(b, lines.length);
   return out;
 }
 
