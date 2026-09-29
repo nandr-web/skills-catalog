@@ -8,14 +8,44 @@ import { join } from 'node:path';
 import { Catalog, type CatalogConfig } from '../src/catalog.ts';
 import { actAs, openLocalCatalog } from '../src/local/index.ts';
 import { memorySearchIndex } from '../src/local/search-index.ts';
-import type { BlobLinks, Identity, Storage, UploadAnswer } from '../src/ports.ts';
+import type { BlobLinks, GitHubSignIn, Identity, Storage, TokenHolder, TokenInfo, TokenStore, UploadAnswer } from '../src/ports.ts';
 import { counterIds, fixedClock } from './helpers.ts';
 import { sandbox } from './sandbox.ts';
 
 export const sha256Of = (bytes: Uint8Array | string) => createHash('sha256').update(bytes).digest('hex');
 
+/** Tokens in memory, as the hosted store keeps them (hashed there; here the test reads them back). */
+export class MemoryTokens implements TokenStore {
+  readonly byToken = new Map<string, TokenInfo>();
+  private n = 0;
+  constructor(private readonly clock: { now(): Date }) {}
+  async issue(t: TokenHolder & { expiresAt: Date }) {
+    const id = `id${String(++this.n).padStart(14, '0')}`;
+    const token = `tok-${id}`;
+    this.byToken.set(token, { id, owner: t.owner, scope: t.scope, kind: t.kind, created_at: this.clock.now().toISOString(), expires_at: t.expiresAt.toISOString() });
+    return { id, token };
+  }
+  async verify(token: string) {
+    const t = this.byToken.get(token);
+    if (!t || t.revoked_at || !(Date.parse(t.expires_at) > this.clock.now().getTime())) return undefined;
+    return { owner: t.owner, scope: t.scope, kind: t.kind };
+  }
+  async list(owner: string) {
+    return [...this.byToken.values()].filter((t) => t.owner === owner).map((t) => ({ ...t }));
+  }
+  async revoke(owner: string, id: string) {
+    const t = [...this.byToken.values()].find((x) => x.owner === owner && x.id === id);
+    if (!t) return false;
+    t.revoked_at ??= this.clock.now().toISOString();
+    return true;
+  }
+}
+
 export interface StandIn {
   catalog: Catalog;
+  tokens: MemoryTokens;
+  /** The GitHub tokens the sign-in port was asked about. */
+  githubCalls: string[];
   /** Put a file as a link would (its bytes, held until a commit names them). */
   upload(bytes: Uint8Array | string): string;
   /** Forget an upload, as the sweep would between a publish's read and its commit. */
@@ -40,6 +70,8 @@ export interface StandInOptions {
   altered?: Record<string, string>;
   /** Uploads the sweep takes away after the publish reads them and before its commit looks. */
   sweptBeforeCommit?: string[];
+  /** What GitHub says of a token: our app's for this login, another app's or revoked (undefined), or unreachable. */
+  github?: (githubToken: string) => string | undefined | 'down';
 }
 
 export async function openHostedStandIn(opts: StandInOptions = {}): Promise<StandIn> {
@@ -86,20 +118,35 @@ export async function openHostedStandIn(opts: StandInOptions = {}): Promise<Stan
     downloadLink: async (sha) => `https://files.test/${sha}`,
   };
   const index = memorySearchIndex();
+  const clock = fixedClock();
+  const tokens = new MemoryTokens(clock);
+  const githubCalls: string[] = [];
+  const signIn: GitHubSignIn = {
+    async login(githubToken) {
+      githubCalls.push(githubToken);
+      const said = opts.github?.(githubToken);
+      if (said === 'down') throw new Error('GitHub answered 502');
+      return said;
+    },
+  };
   const catalog = await Catalog.open({
     where: 'hosted',
     links,
+    tokens,
+    signIn,
     storage: hosted,
     index,
     events: { subscribe: () => {}, deliver: async () => 0 },
     identity: opts.identity ?? actAs('dana'),
-    clock: fixedClock(),
+    clock,
     ids: counterIds(),
     ...(opts.config ? { config: opts.config } : {}),
     close: () => index.close(),
   });
   return {
     catalog,
+    tokens,
+    githubCalls,
     local,
     upload(bytes) {
       const b = typeof bytes === 'string' ? Buffer.from(bytes) : bytes;
