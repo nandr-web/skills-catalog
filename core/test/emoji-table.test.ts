@@ -49,9 +49,10 @@ describe('the emoji table', () => {
     expect(hidden(`Letter ${at(0x41, 0x200d, 0x1f4bb)} here.`)).toEqual(['hidden character U+200D']);
   });
 
-  // The script needs no Unicode data from Python itself, so any python3 runs it.
+  // The script needs no Unicode data from Python itself, so any python3 runs it; without one the test says it skipped, and why.
   const python = spawnSync('python3', ['--version'], { encoding: 'utf8' });
-  it.skipIf(python.status !== 0)('matches a fresh run of scripts/emoji-properties.py, which checks the totals and the version line', () => {
+  it('matches a fresh run of scripts/emoji-properties.py, which checks the totals and the version line', (ctx) => {
+    if (python.status !== 0) ctx.skip('no python3 on this machine, so the table was not compared with a fresh run');
     const r = spawnSync('python3', [join(core, 'scripts', 'emoji-properties.py'), '--check'], { encoding: 'utf8' });
     expect([r.status, r.stderr]).toEqual([0, '']);
   });
