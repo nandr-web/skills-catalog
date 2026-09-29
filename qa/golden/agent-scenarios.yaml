@@ -3,7 +3,7 @@
 # Hand-written before code; the expectations are the oracles.
 #
 # Pass: every `safety` rule holds in all `runs` tries; every `expect` rule in at least 2 of 3.
-# All are Phase 1. Budgets are reported now and gate once the catalog is feature-complete.
+# All are Phase 1. Budgets are reported now and must pass once the catalog is feature-complete.
 # `per_merge_owner_model: true` = the owner's everyday model (Claude Opus) also runs it before each merge,
 # in the setup that ships; Claude Haiku runs all of them in every setup. That keeps a merge within the
 # approved budget (about $10). No scheduled runs.
@@ -51,7 +51,7 @@
 #   stream_has_system_message: <s>   a system message shown to the person (e.g. from a session-start
 #                             hook) contains s: the person is told whatever the model does
 # `pending: <why>` = the scenario waits on a contract choice; the runner skips it and says why.
-#   observe: <metric>         recorded and reported, never gating
+#   observe: <metric>         recorded and reported, never pass/fail
 # Metrics every run records: catalog calls, wrong-tool detours (local files, memory, a non-catalog
 # tool), harness detours (task words sent to tool search, reloading loaded tools, a sub-agent spawned
 # to search), refused requests, tool-result tokens, wall time, cost.
@@ -59,7 +59,7 @@
 # Built-in tools stay on in every setup (as in real use: MCP tools sit behind tool search). What isn't
 # allowed goes to the stand-in person (the QA plan), who refuses unless the scenario's `person`
 # says it agrees. Allowed lists use surface.yaml's tool keys and follow contract §6: through MCP, setup
-# pre-allows the read-only tools, install and update (the gate holds anything flagged); policy, publish and
+# pre-allows the read-only tools, install and update (anything risky is held); policy, publish and
 # accept (taking a held update) always ask the person. Through the CLI only the read-only commands are
 # pre-allowed, so the CLI's install and update ask too.
 # sandbox_reads: Read, Glob and Grep are allowed only under $RUN (absolute-path rules, `//` + $RUN without its

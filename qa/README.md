@@ -65,7 +65,7 @@ Exit codes of `qa run`: the command's own code, `2` something was left behind, `
 
 | Folder | What |
 |---|---|
-| `golden/` | Hand-written expected results: skills, histories, queries, the update gate's cases, the assistant scenarios, answer phrasings |
+| `golden/` | Hand-written expected results: skills, histories, queries, held updates' cases, the assistant scenarios, answer phrasings |
 | `traceability.yaml` | Each requirement, its oracle and its checks |
 | `src/` | The tools: `run`, `janitor`, `check` (before/after), `sandbox`, `safe-delete`, `agent/` (the scenario runner and its scorer) |
 | `test/` | Their tests; `test/machine.ts` builds the fake machines |

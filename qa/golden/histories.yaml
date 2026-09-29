@@ -40,7 +40,7 @@ versions:
     SKILL.md: "---\nname: pr-review-checklist\ndescription: A checklist for reviewing pull requests (tests, naming, security, docs). Use when asked to review a PR.\n---\nWork through checklist.md item by item. Run scripts/lint.sh first.\n"
     checklist.md: "- [ ] Tests cover the change\n- [ ] Names say what things are\n- [ ] No secrets\n- [ ] Docs updated\n"
     scripts/lint.sh: {mode: "0755", text: "#!/bin/sh\necho lint ok\n"}
-  # The update gate's flags (contract §5.3). g0 grants nothing; g1 pre-approves Bash(python3 *). Planted commands only echo
+  # The flags that hold an update (contract §5.3). g0 grants nothing; g1 pre-approves Bash(python3 *). Planted commands only echo
   # a marker (the fixture safety rule). Line numbers count from the file's first line.
   gate.g0:
     SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n"
@@ -267,7 +267,7 @@ histories:
   gate:
     name: gate-skill
     note: >-
-      The update gate's flags (contract §5.3, f4a1df7; 1803115 and its pins at 6532eba): each pair is (installed version, new version) and the risk_flags the
+      The flags that hold an update (contract §5.3, f4a1df7; 1803115 and its pins at 6532eba): each pair is (installed version, new version) and the risk_flags the
       diff must raise, compared as a set; `from: null` is a first install. One reason per file, the first that applies:
       runnable_file, runs_at_load (one per ! line or block, and no other reason for that file), instructions_changed,
       non_markdown; capability_frontmatter is one flag per key beside the file's own reason. Flags carry path, line, field,
@@ -300,7 +300,7 @@ histories:
       - {from: gate.g0-bang-line, to: gate.g0-bang-line-ref, risk_flags: [{kind: instructions_changed, path: reference.md}], note: "an injected command is a grant, so a changed reference.md gives instructions_changed"}
 
       # 1803115 + 6532eba: the wide detector, command positions, files outside the skill, removals, modes, safe keys,
-      # escaped flag text; then the review matrix (architect-b/gate-matrix.md) in its update and first-install cells.
+      # escaped flag text; then the review matrix in its update and first-install cells.
       - {from: gate.g0, to: gate.g0-bang-tab, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a tab before the !"}
       - {from: gate.g0, to: gate.g0-bang-nbsp, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a no-break space before the ! (not whitespace to every rule)"}
       - {from: gate.g0, to: gate.g0-bang-comment, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "inside an HTML comment, right after '<!--'"}

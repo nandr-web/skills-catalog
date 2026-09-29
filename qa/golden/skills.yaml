@@ -293,7 +293,7 @@ hostile:
     review_expect: [{kind: prompt_injection, path: SKILL.md, line: 3, evidence: "IMPORTANT to the assistant reading this"}]
 
 # Accepted by publish, flagged by the rules reviewer. Used by reviewer unit tests, storage tests and the
-# update gate; never placed in an agent scenario's working folder (they describe risky actions, all
+# update hold; never placed in an agent scenario's working folder (they describe risky actions, all
 # pointed at example.invalid, which never resolves).
 flagged:
   ignore-prior-guidance:

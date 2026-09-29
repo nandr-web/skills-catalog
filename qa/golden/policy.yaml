@@ -1,6 +1,6 @@
-# Update gate table (the QA plan's oracle "Update gate"; traceability `policy.table`), bound to
+# Held-update table (the QA plan's oracle "Held updates"; traceability `policy.table`), bound to
 # the contract §5.3 (the owner's decision). Hand-written: for each case, the one outcome
-# `update_installed_skills` must give. A unit test runs every row against the gate; an interface test
+# `update_installed_skills` must give. A unit test runs every row against the update hold; an interface test
 # runs a sample through the CLI with a real lock file (SKILLS_SYNC_ON_START=0 so the test controls sync).
 #
 # policy: the global default; override: per skill (none = inherit). The effective policy is the override when set.
@@ -14,7 +14,7 @@
 # accept: the setup option accept_flagged_updates (default false).
 # mode: interactive | unattended (unattended holds are reported at the next session).
 # outcome: updated | unchanged | installed | held:pin | held:notify | held:flagged
-# Precedence: pin, then notify, then the risk-flag gate.
+# Precedence: pin, then notify, then the risk-flag hold.
 # first_install: true = an install from nothing (contract §5.3): it follows the auto rows whatever the policy, so no flags
 #   installs and any flag is held:flagged, then accept_held_update with its confirm installs it.
 
@@ -50,7 +50,7 @@ cases:
   - {policy: auto,   override: none,   flags: [runs_at_load],           local: same,         accept: false, mode: unattended,  outcome: held:flagged}
   - {policy: auto,   override: none,   flags: [instructions_changed],   local: same,         accept: false, mode: interactive, outcome: held:flagged}
   - {policy: auto,   override: none,   flags: [instructions_changed],   local: same,         accept: false, mode: unattended,  outcome: held:flagged}
-  # A first install goes through the gate whatever the policy (it follows the auto rows).
+  # A first install is held like an update whatever the policy (it follows the auto rows).
   - {first_install: true, policy: pin,    override: none, flags: [],                       local: same, accept: false, mode: interactive, outcome: installed}
   - {first_install: true, policy: pin,    override: none, flags: [capability_frontmatter], local: same, accept: false, mode: interactive, outcome: held:flagged, note: "then accept_held_update with its confirm installs it"}
   - {first_install: true, policy: notify, override: none, flags: [],                       local: same, accept: false, mode: interactive, outcome: installed}

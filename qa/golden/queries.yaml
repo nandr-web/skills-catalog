@@ -59,16 +59,16 @@
 #   breaks two no-match queries (q30 'batch', q32 'schema'); the queries' notes say which.
 #
 # METRICS
-#   Interface level (no model), through every door (CLI, MCP, HTTP). The gate sets follow the
+#   Interface level (no model), through every door (CLI, MCP, HTTP). The must-pass sets follow the
 #   adapter's configured mode: all-words uses sets.keyword-gate and sets.semantic-gap; any-word
 #   uses sets.keyword-gate-any and sets.semantic-gap-any. The all-words sets stay as they are.
-#     - Found: for each query in the mode's gate set, call find(q=term) for each term in keywords.
+#     - Found: for each query in the mode's must-pass set, call find(q=term) for each term in keywords.
 #       Pass when every must_find name is in the top 5 of at least one call. recall@5 = must_find
-#       names found / must_find names labelled; the gate is 1.0. Every result has a name and a
+#       names found / must_find names labelled; the pass mark is 1.0. Every result has a name and a
 #       description.
 #     - Findable: for each query in the mode's semantic-gap set, find(q=reformulation) has every
-#       must_find in its top 5 (gated). find(q=keywords) is run and reported as the adapter's
-#       known gap, not gated. A semantic adapter must turn these into hits without breaking no-match.
+#       must_find in its top 5 (must pass). find(q=keywords) is run and reported as the adapter's
+#       known gap, not pass/fail. A semantic adapter must turn these into hits without breaking no-match.
 #     - Nothing matches: in BOTH modes, for each query in sets.no-match, every find(q=term) returns
 #       an empty page. In any-word mode q30 and q32 fail this as labelled
 #       (any_word_no_match_holds: false) which the contract settles: a page says `match: partial` when no card matched every content word.
@@ -79,7 +79,7 @@
 #     - must_find: the final answer names every must_find skill, after a catalog call in the trace.
 #     - no-match: the answer says plainly that nothing matches and names no catalog skill.
 #     - A skill name not in the corpus fails (fabricated). Names outside must_find + may_find are
-#       reported as precision misses, not gated.
+#       reported as precision misses, not pass/fail.
 #     - For the mode's semantic-gap set and typo queries, also recorded: did the assistant search
 #       again with other terms after the first search came back empty or off-target
 #       (reformulation rate)?
