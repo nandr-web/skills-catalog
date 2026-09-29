@@ -106,17 +106,38 @@ describe('read', () => {
 });
 
 describe('the read commands never write (contract §6)', () => {
-  // Not yet true: the core's read-only open lands in its next update. This passes while the open still
-  // creates a catalog, and trips when it stops: then make it a plain `it`.
-  it.fails('pointed at a folder with no catalog, they fail and create nothing', async () => {
+  const READS = [['search', 'notes'], ['read', 'x'], ['versions', 'x'], ['diff', 'x', '--from', '1', '--to', '2']];
+
+  // A mistyped path is never mistaken for an empty catalog.
+  it('pointed at a named folder with no catalog: not a catalog (exit 1), and nothing is created', async () => {
     const p = place();
     const elsewhere = join(p.dir, 'not-a-catalog');
-    for (const argv of [['search', 'notes'], ['read', 'x'], ['versions', 'x'], ['diff', 'x', '--from', '1', '--to', '2']]) {
+    for (const argv of READS) {
       const r = await cli(p, argv, { env: { SKILLS_CATALOG: pathToFileURL(elsewhere).href } });
-      expect(r.code, argv[0]).toBe(1);
-      expect(r.err, argv[0]).toContain('not_found');
+      expect([r.code, r.out], argv[0]).toEqual([1, '']);
+      expect(r.err, argv[0]).toBe(renderError(S, new CatalogError('invalid_request', { field: 'catalog', why: 'not_a_catalog', path: elsewhere })) + '\n');
       expect(existsSync(elsewhere), argv[0]).toBe(false);
     }
+  });
+
+  // Nothing published on this machine yet: the same answers an empty catalog gives, and no catalog is made for them.
+  it('with no catalog at the default place yet, they answer as an empty catalog, and create nothing', async () => {
+    const p = place(), empty = place();
+    const byDefault = { env: { SKILLS_CATALOG: '' } };
+    for (const argv of READS) {
+      const r = await cli(p, argv, byDefault);
+      const same = await cli(empty, argv);   // a catalog that exists and holds nothing
+      expect([r.code, r.out, r.err], argv[0]).toEqual([same.code, same.out, same.err]);
+    }
+    expect(existsSync(join(p.home, 'catalog'))).toBe(false);
+  });
+
+  it('list creates no catalog either, named or not', async () => {
+    const p = place();
+    const elsewhere = join(p.dir, 'not-a-catalog');
+    await cli(p, ['list'], { env: { SKILLS_CATALOG: pathToFileURL(elsewhere).href } });
+    await cli(p, ['list'], { env: { SKILLS_CATALOG: '' } });
+    expect([existsSync(elsewhere), existsSync(join(p.home, 'catalog'))]).toEqual([false, false]);
   });
 });
 
