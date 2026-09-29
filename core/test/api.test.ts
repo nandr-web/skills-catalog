@@ -9,10 +9,32 @@ import { Catalog } from '../src/catalog.ts';
 import { COMMON_ERRORS, CatalogError, ERROR_CODES } from '../src/errors.ts';
 import { Words } from '../src/words-file.ts';
 import { actAs } from '../src/local/index.ts';
-import { historyVersion, loadGolden } from './golden.ts';
-import { openTest, request } from './helpers.ts';
+import { filesOf, historyVersion, loadGolden } from './golden.ts';
+import { errorOf, openTest, request } from './helpers.ts';
 
 const histories = loadGolden('histories.yaml');
+const skills = loadGolden('skills.yaml');
+
+// Contract §1.1: served as the web face, a person-only input (cliOnly, e.g. the secret override) is invalid_request
+// {unknown_field}. The Catalog checks its input as the face its caller gives; one that gives none gets no person-only
+// input either.
+describe('the secret override is a person\'s only, through the Catalog too (contract §1.1)', () => {
+  it('publish_version refuses it as the web face and by default, still refuses the secret, and takes it from the CLI', async () => {
+    const { catalog } = await openTest();
+    const secret = filesOf(skills.hostile['secret-in-body'].files)!;
+    const allow = request('secret-in-body', secret, { allow_suspected_secrets: true });
+    expect('allow_suspected_secrets' in inputSchema('publish_version', 'web').properties).toBe(false);
+    for (const face of ['web', undefined] as const) {
+      expect((await errorOf(() => catalog.publish(allow, actAs('dev1'), face))).toJSON()).toMatchObject({ code: 'invalid_request', field: 'allow_suspected_secrets', why: 'unknown_field' });
+    }
+    expect((await errorOf(() => catalog.publish(request('secret-in-body', secret), actAs('dev1'), 'web'))).toJSON()).toMatchObject({ code: 'secret_suspected', path: 'SKILL.md' });
+    expect(await catalog.publish(allow, actAs('dev1'), 'cli')).toMatchObject({ created: true, version: 1 });
+    // every catalog operation takes its caller's face
+    expect((await catalog.search({ query: 'secret' }, 'web')).total_matches).toBe(1);
+    expect((await catalog.fetch({ name: 'secret-in-body', version: 1 }, 'web')).version).toBe(1);
+    catalog.close();
+  });
+});
 
 const FACES: Record<string, readonly string[]> = {
   search_shared_skills: ['mcp', 'cli', 'web'],
