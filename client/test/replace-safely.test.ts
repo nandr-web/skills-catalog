@@ -45,7 +45,7 @@ type Row = {
   nothing_moved?: true;
   no_lock_entry?: true;
   never_reports_success?: true;
-  after_call?: { link_at?: string; pointing_to?: string; in_staging?: string; in?: string; holds?: string };
+  after_call?: { link_at?: string; pointing_to?: string; in_staging?: string; in?: string; holds?: string; gone?: string };
   lock_unchanged?: true;
   installed_unchanged?: true;
   outside_unchanged?: true;
@@ -59,9 +59,6 @@ const CANT: Record<string, string> = {
   'install-dir-parent-world-writable': 'SKILLS_INSTALL_DIR comes with guided setup (P1)',
   'project-on-another-volume': 'needs a second volume (the QA safety rules: an APFS image or a Docker tmpfs)',
   'recreated-checked-folders-fail': 'its seam fires in the check of an unchanged recreated copy, which makes no rename to hook',
-  // Under 06c0e7a5 (nothing moves through a swapped-in link) the copy moved aside through the link stays in staging, named.
-  'skills-dir-swapped-for-link': 'waits for its golden to follow 06c0e7a5: the moved-aside copy is kept in staging, not put back through the link',
-  'claude-dir-swapped-for-link': 'waits for its golden to follow 06c0e7a5: the moved-aside copy is kept in staging, not put back through the link',
 };
 
 type Paths = { A: string; P: string; S: string; ST: string; RUN: string; dest: string };
@@ -302,6 +299,7 @@ describe('replacing an installed copy safely (golden histories.replace_safely)',
         if (a?.link_at) expect(race.fs.readlinkSync(at(x, a.link_at))).toBe(at(x, a.pointing_to!));
         if (a?.in_staging) expect(race.fs.readlinkSync(got.staging!)).toBe(join(x.RUN, 'outside', 'victim'));
         if (a?.in) expect(filesIn(at(x, a.in))).toEqual(versions['planted.stale-clean']);
+        if (a?.gone) expect(race.fs.existsSync(at(x, a.gone))).toBe(false);
         void call;
 
         // A second call, where the row has one.
