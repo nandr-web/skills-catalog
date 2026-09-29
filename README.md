@@ -59,10 +59,10 @@ npm run check
 
 ```diff
  > @skills-catalog/core@0.1.0 check
- > npm run typecheck && npm test
+ > node scripts/node-check.mjs && npm run typecheck && npm test
  …
-+ Test Files  6 passed (6)
-+      Tests  375 passed (375)
++ Test Files  7 passed (7)
++      Tests  387 passed (387)
 ```
 
 ### 4. Two developers, one catalog (a few seconds)
