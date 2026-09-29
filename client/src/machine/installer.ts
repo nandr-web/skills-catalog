@@ -166,6 +166,36 @@ function refusalReason(s: Surface, e: CatalogError): string {
   return asData(e.code, e.data);
 }
 
+// ---------- what waits for the person ----------
+
+/** The change waiting for the person's yes for `name`, as the installer would hold it now: an update of the copy
+ *  installed here (either target), else a first install into `target`. `installed` is the installed version (none for
+ *  a first install); null when nothing would be held (up to date, or nothing to flag). Its confirm and flags are what
+ *  accept_held_update takes. */
+export type Pending = { name: string; target: Target; installed?: number; version: number; reasons: string; confirm: string; flags: string[] };
+
+export async function pendingHold(ctx: Context, name: string, target: Target = 'user'): Promise<Pending | { installed: number } | null> {
+  const lock = readLock(ctx.settings.home);
+  const e = installedHere(ctx, lock).find((x) => x.name === name);
+  const catalog = await ctx.catalog();
+  const v = await allVersions(catalog, name);
+  if (e && v.latest === e.version) return { installed: e.version };
+  const at = e ? e.target : target;
+  if (!e) checkTarget(ctx, at, name, lock);
+  const to = await fetchChecked(catalog, name, v.latest, publisherOf(v, v.latest));
+  const flags = gate(e ? await installedSide(catalog, e) : null, to).risk_flags;
+  if (!flags.length) return e ? { installed: e.version } : null;
+  return {
+    name,
+    target: at,
+    ...(e ? { installed: e.version } : {}),
+    version: to.version,
+    reasons: reasons(ctx.surface, flags),
+    confirm: encode({ name, target: at, version: to.version, fingerprint: to.fingerprint, latest: v.latest }),
+    flags: kinds(flags),
+  };
+}
+
 // ---------- operations ----------
 
 type InstallInput = { name: string; version?: number; target?: Target; policy?: Policy };
