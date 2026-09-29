@@ -18,7 +18,8 @@ export type ErrorCode =
   | 'name_in_use'
   | 'target_symlink'
   | 'secret_suspected'
-  | 'fingerprint_mismatch';
+  | 'fingerprint_mismatch'
+  | 'not_installed';
 
 export class CatalogError extends Error {
   readonly code: ErrorCode;

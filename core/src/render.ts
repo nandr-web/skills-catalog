@@ -219,7 +219,12 @@ export function renderError(s: Surface, e: CatalogError): string {
       // A link, a hard link or a special file in a folder being published: its own sentence proposes a plain copy.
       return fill(e.data['why'] === 'not_regular_file' ? w.invalid_path_not_regular : w.invalid_path, d);
     case 'conflict':
+      // A held update or install that changed since the person was told (accept_held_update) has its own sentence.
+      if (d['held'] === true) return fill(w.accept_conflict, d);
       return fill(d['folder'] !== undefined ? w.publish_conflict : w.conflict, d);
+    case 'name_in_use':
+      // A command file (.claude/commands/<name>.md) has its own sentence; a skill's folder name never ends in .md.
+      return fill(String(d['path']).endsWith('.md') ? w.name_in_use_command : w.name_in_use, d);
     case 'forbidden':
       // A hosted catalog asked of this local-only version is a setup matter, not a permission.
       return e.data['why'] === 'hosted_not_available' ? fill(w.forbidden_hosted, d) : fill(w.forbidden, d);
