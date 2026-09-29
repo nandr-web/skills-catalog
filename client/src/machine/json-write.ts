@@ -10,7 +10,7 @@
 
 import { createHash, randomBytes } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
-import { closeSync, constants, fchmodSync, fstatSync, fsyncSync, linkSync, lstatSync, openSync, readSync, renameSync, unlinkSync, writeSync, type BigIntStats } from 'node:fs';
+import { closeSync, constants, fchmodSync, fchownSync, fstatSync, fsyncSync, linkSync, lstatSync, openSync, readSync, renameSync, unlinkSync, writeSync, type BigIntStats } from 'node:fs';
 import { CatalogError } from '@skills-catalog/core';
 import type { Snapshot } from './json-file.ts';
 
@@ -55,7 +55,7 @@ function sha256Of(path: string, size: bigint, was: Snapshot): string | undefined
 function unchanged(path: string, was: Snapshot): boolean {
   const st = lstatOr(path);
   if (!st || !st.isFile() || st.nlink !== 1n) return false;
-  if (st.dev !== was.dev || st.ino !== was.ino || st.size !== was.size || st.mtimeNs !== was.mtimeNs || st.uid !== was.uid || st.mode !== was.mode) return false;
+  if (st.dev !== was.dev || st.ino !== was.ino || st.size !== was.size || st.mtimeNs !== was.mtimeNs || st.uid !== was.uid || st.gid !== was.gid || st.mode !== was.mode) return false;
   return sha256Of(path, st.size, was) === was.sha256;
 }
 
@@ -67,6 +67,13 @@ export function writeFileText(path: string, text: string, was: Snapshot | 'absen
   const me = BigInt(process.getuid?.() ?? -1);
   if (was !== 'absent' && was.uid !== me) throw new CatalogError('target_not_private', { path, own: false });
   if (was === 'absent' && lstatOr(dir)?.uid !== me) throw new CatalogError('target_not_private', { path: dir, own: false });
+  // The folder, looked at before anything is made in it (so no copy of the file is left where it shouldn't be) and again
+  // before the place.
+  const sameFolder = () => {
+    const st = lstatOr(dir);
+    if (!st?.isDirectory() || st.dev !== parent.dev || st.ino !== parent.ino) throw new CatalogError('target_changed', { path: dir });
+  };
+  sameFolder();
   const temp = join(dir, `.${basename(path)}.skills-catalog-${randomBytes(6).toString('hex')}.tmp`);
   const fd = openSync(temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
   const made = fstatSync(fd, { bigint: true });
@@ -77,16 +84,24 @@ export function writeFileText(path: string, text: string, was: Snapshot | 'absen
   };
   try {
     try {
-      fchmodSync(fd, was === 'absent' ? 0o600 : Number(was.mode & 0o7777n));
+      // The old file's permission bits (never a setuid, setgid or sticky bit) and its group; where the group can't be
+      // kept, the group loses its access rather than another group gaining it.
+      let mode = was === 'absent' ? 0o600 : Number(was.mode & 0o777n);
+      if (was !== 'absent') {
+        try {
+          fchownSync(fd, Number(was.uid), Number(was.gid));
+        } catch {
+          mode &= ~0o070;
+        }
+      }
+      fchmodSync(fd, mode);
       const bytes = Buffer.from(text, 'utf8');
       for (let at = 0; at < bytes.length; ) at += writeSync(fd, bytes, at);
       fsyncSync(fd);
     } finally {
       closeSync(fd);
     }
-    // The folder, looked at again before the place.
-    const before = lstatOr(dir);
-    if (!before?.isDirectory() || before.dev !== parent.dev || before.ino !== parent.ino) throw new CatalogError('target_changed', { path: dir });
+    sameFolder();
     if (was === 'absent') {
       try {
         linkSync(temp, path);

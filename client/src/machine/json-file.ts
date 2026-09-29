@@ -9,7 +9,7 @@ import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, type Bi
 
 export type FileWhy = 'unreadable' | 'too_big' | 'not_json' | 'link' | 'other_user' | 'hard_linked';
 /** What a later write checks the file against: the same file, unchanged since it was read. */
-export type Snapshot = { dev: bigint; ino: bigint; size: bigint; mtimeNs: bigint; mode: bigint; uid: bigint; sha256: string };
+export type Snapshot = { dev: bigint; ino: bigint; size: bigint; mtimeNs: bigint; mode: bigint; uid: bigint; gid: bigint; sha256: string };
 export type JsonFile = { absent: true } | { why: FileWhy } | { value: Record<string, unknown>; text: string; snapshot: Snapshot };
 
 const utf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
@@ -70,7 +70,7 @@ export function readJsonFile(path: string, cap: number, { forWrite }: { forWrite
         return { why: 'not_json' };
       }
       if (typeof value !== 'object' || value === null || Array.isArray(value)) return { why: 'not_json' };
-      const snapshot: Snapshot = { dev: opened.dev, ino: opened.ino, size: opened.size, mtimeNs: opened.mtimeNs, mode: opened.mode, uid: opened.uid, sha256: createHash('sha256').update(bytes).digest('hex') };
+      const snapshot: Snapshot = { dev: opened.dev, ino: opened.ino, size: opened.size, mtimeNs: opened.mtimeNs, mode: opened.mode, uid: opened.uid, gid: opened.gid, sha256: createHash('sha256').update(bytes).digest('hex') };
       return { value: value as Record<string, unknown>, text, snapshot };
     } catch {
       return { why: 'unreadable' };

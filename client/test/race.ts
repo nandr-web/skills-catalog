@@ -125,6 +125,7 @@ export const clearHooks = () => {
   race.stats = undefined;
   race.onWrite = undefined;
   race.onOpen = undefined;
+  race.onFchown = undefined;
 };
 
 /** The swap sweeps: every interleaving up to the k-th check. The fast suite runs a small bound; the slow one reaches every

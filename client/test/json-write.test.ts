@@ -140,6 +140,75 @@ describe('writing a file of the person\'s', () => {
     for (const [, f] of again) expect(has(f, constants.O_NOFOLLOW | constants.O_NONBLOCK)).toBe(true);
   });
 
+  it('the bytes read again right before the place must be the same file\'s: another file with the same bytes is changed', () => {
+    const d = folder();
+    const path = join(d, 'settings.json');
+    race.fs.writeFileSync(path, '{"a": 1}');
+    const was = snapshotOf(path);
+    // After the last look and before the read: a new file (a new inode) with the very same bytes takes its place.
+    race.onOpen = (p) => {
+      if (p !== path) return;
+      race.onOpen = undefined;
+      race.fs.writeFileSync(`${path}.new`, '{"a": 1}');
+      race.fs.renameSync(`${path}.new`, path);
+    };
+    expect(writeFileText(path, '{"a": 2}', was, folderId(d))).toBe('changed');
+    expect(race.fs.readFileSync(path, 'utf8')).toBe('{"a": 1}');
+    expect(temps(d)).toEqual([]);
+  });
+
+  it('keeps the file\'s permission bits and its group, never a setuid, setgid or sticky bit', () => {
+    const d = folder();
+    const path = join(d, 'settings.json');
+    race.fs.writeFileSync(path, '{"a": 1}');
+    race.fs.chmodSync(path, 0o2640);
+    // Another group of this user's, where there is one, to show the group is kept rather than taken from the folder.
+    const mine = (process.getgroups?.() ?? []).map(Number);
+    const other = mine.find((g) => g !== race.fs.statSync(path).gid);
+    if (other !== undefined) race.fs.chownSync(path, process.getuid?.() ?? 0, other);
+    const was = snapshotOf(path);
+    expect(writeFileText(path, '{"a": 2}', was, folderId(d))).toBe('written');
+    const st = race.fs.statSync(path);
+    expect([st.mode & 0o7777, st.gid]).toEqual([0o640, Number(was.gid)]);
+  });
+
+  it('where the group can\'t be kept, the group loses its access: another group never gains it', () => {
+    const d = folder();
+    const path = join(d, 'settings.json');
+    race.fs.writeFileSync(path, '{"a": 1}');
+    race.fs.chmodSync(path, 0o664);
+    race.onFchown = () => {
+      throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' });
+    };
+    expect(writeFileText(path, '{"a": 2}', snapshotOf(path), folderId(d))).toBe('written');
+    clearHooks();
+    expect(race.fs.statSync(path).mode & 0o777).toBe(0o604);
+  });
+
+  it('the folder is looked at before anything is made in it: a folder swapped since its check gets no temp copy', () => {
+    const d = folder();
+    const path = join(d, 'settings.json');
+    race.fs.writeFileSync(path, '{"a": 1}');
+    const was = snapshotOf(path);
+    const checked = folderId(d);
+    const moved = `${d}-moved`;
+    race.fs.renameSync(d, moved);
+    race.fs.mkdirSync(d, { mode: 0o700 });
+    race.fs.writeFileSync(path, '{"a": 1}');
+    const temps: string[] = [];
+    race.onOpen = (p) => void (p.endsWith('.tmp') && temps.push(p));
+    let e: unknown;
+    try {
+      writeFileText(path, '{"a": 2}', was, checked);
+    } catch (x) {
+      e = x;
+    }
+    expect([(e as CatalogError).code, (e as CatalogError).data]).toEqual(['target_changed', { path: d }]);
+    // Not made and removed: never made, so a crash can't leave a copy of the file anywhere.
+    expect(temps).toEqual([]);
+    expect([race.fs.readdirSync(d), race.fs.readdirSync(moved)]).toEqual([['settings.json'], ['settings.json']]);
+  });
+
   it('a disk that fills mid-write: the error is thrown, the file is as it was, no temp left', () => {
     const d = folder();
     const path = join(d, 'settings.json');

@@ -36,7 +36,7 @@ describe('reading a JSON file of the person\'s', () => {
     const st = race.fs.lstatSync(path, { bigint: true });
     expect(r.value).toEqual({ a: 1 });
     expect(r.text).toBe(text);
-    expect(r.snapshot).toEqual({ dev: st.dev, ino: st.ino, size: st.size, mtimeNs: st.mtimeNs, mode: st.mode, uid: st.uid, sha256: createHash('sha256').update(text).digest('hex') });
+    expect(r.snapshot).toEqual({ dev: st.dev, ino: st.ino, size: st.size, mtimeNs: st.mtimeNs, mode: st.mode, uid: st.uid, gid: st.gid, sha256: createHash('sha256').update(text).digest('hex') });
   });
 
   it('absent is absent (setup may make it)', () => {
@@ -132,9 +132,19 @@ describe('reading a JSON file of the person\'s', () => {
     expect([whyOf(r), performance.now() - started < 1000]).toEqual(['unreadable', true]);
   });
 
+  it('what was opened must be a regular file, even when the look said it was one', () => {
+    const d = dir();
+    const path = join(d, 'settings.json');
+    const env = { PATH: '/usr/bin:/bin', HOME: d, XDG_CONFIG_HOME: d, XDG_DATA_HOME: d, CLAUDE_CONFIG_DIR: d, TMPDIR: d };
+    execFileSync('/usr/bin/mkfifo', [path], { env });
+    race.stats = (p) => (p === path ? ({ mode: 0o100600, nlink: 1 } as never) : undefined);
+    expect(whyOf(readJsonFile(path, 64, { forWrite: true }))).toBe('unreadable');
+  });
+
   it('what a refusal says is only why: nothing of the file is in it', () => {
     const SENTINEL = 'PLANTED-SENTINEL-7f3a';
-    const texts = [`{"a": "${SENTINEL}",}`, `{"a": "${SENTINEL}${'x'.repeat(100)}"}`, `["${SENTINEL}"]`, `﻿{"a": "${SENTINEL}"}`];
+    // The last one is JSON the parser's own message quotes from.
+    const texts = [`{"a": "${SENTINEL}",}`, `{"a": "${SENTINEL}${'x'.repeat(100)}"}`, `["${SENTINEL}"]`, `﻿{"a": "${SENTINEL}"}`, `{"a": ${SENTINEL}}`];
     for (const text of texts) {
       const r = readJsonFile(file(text), 64, { forWrite: true });
       expect('why' in r).toBe(true);
