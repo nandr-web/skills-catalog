@@ -85,7 +85,10 @@ written by hand too, and a lint checks that every tool the instructions or the s
   `/api`) and never any `Access-Control-*`.
 - **Pairing stays outside the versioned API:** `POST /api/pair` belongs to the local page, not to the catalog.
 - **A version's files by fingerprint:** `GET /api/v1/files/<sha256>` (64 lowercase hex characters, else 404). A version's
-  files never change, so a file is named by its fingerprint. Locally it serves the bytes, behind the same guards. Hosted
+  files never change, so a file is named by its fingerprint. Locally it serves the bytes, behind the same guards, with one difference for a `GET`: a browser leaves `Origin` off a
+  same-origin `GET`, so a missing `Origin` passes, a present one must match; `Sec-Fetch-Site`, when sent, must be
+  `same-origin`; the token is always required. The bytes go out as a download (`Content-Disposition: attachment`), never
+  shown inline. Hosted
   (AWS, parked), it answers with a redirect to a presigned link: issued only after the API has checked who's asking, living
   minutes, naming one object. A whole skill (up to 5 MB) is over one serverless request's limit, so a hosted fetch returns
   links rather than file contents; the operations don't change. Size limits stay in the core, never only at the edge.
@@ -114,6 +117,20 @@ written by hand too, and a lint checks that every tool the instructions or the s
   and removes the file only if none has it (else it takes the mark off). A publish that checked a file before its mark
   finishes within seconds, so the second check always sees it: a version never points at a missing file, and the check
   sits inside the one commit (never a separate step before it).
+- **Getting a token, hosted:** three hosted-only operations (the web face, `where: hosted`).
+  `sign_in_with_github` {github_token} is the only call that needs no Bearer token. The function checks the GitHub token
+  with GitHub's own check for tokens issued to our OAuth app (the app's secret is used only here), so a GitHub token
+  made for any other app is refused. It then reads the GitHub login, which must be on the catalog's list of people who may
+  sign in (set at deploy; nobody when it's empty), and answers with a new catalog token: shown once, stored hashed, with a
+  public id, a scope (read, or read and publish) and an expiry. Publishing still needs the skill's ownership (§7). A
+  refusal is `unauthenticated`, and it never says which check failed. `list_tokens` shows the caller's own tokens by
+  public id, scope, expiry and last use, never the token. `revoke_token` {id} revokes one of the caller's own tokens
+  at once. The caller names the scope when signing in (nothing defaults to publishing); a signed-in token lives
+  7 days (a catalog setting). If GitHub can't be reached in 5 seconds the answer is `internal_error`, not
+  `unauthenticated`, so nobody is told their sign-in is wrong when it isn't. Revoking an id that isn't the caller's, or
+  doesn't exist, answers the same `not_found` {id}; revoking one's own revoked token again is fine. Logins on the sign-in list
+  are compared without regard to case, as GitHub does. Last use is recorded at most once an hour, and a failed record never
+  fails the request. The route that needs no token has its own rate limit at the firewall. No token, GitHub's or ours, is ever logged or put in an answer other than the one that issues it.
 - **Who's asking, hosted:** every `/api/v1` call carries `Authorization: Bearer <token>`: a session from signing in with
   GitHub, or a personal token (stored hashed; read or publish scope; an expiry). The local `X-Skills-Catalog-As` header is
   refused when hosted: identity comes only from the token. A hosted request carrying it, on any `/api/v1` route (the files
@@ -124,7 +141,12 @@ written by hand too, and a lint checks that every tool the instructions or the s
   can't switch it off without a domain of our own), so CloudFront adds a secret origin header and the hosted transport
   refuses any request without it: compared in constant time, accepting the current and the previous value while a deploy
   rotates it, never logged, and refused with a fixed `403` that doesn't say why. It belongs to the hosted transport only,
-  never the shared handler. The web page reaches `/api/v1/*` through the same CloudFront
+  never the shared handler. A rotation goes in this order: the new value is stored as current and the old one as previous, the deploy
+  waits longer than the functions keep the values cached, and only then does CloudFront start sending the new value. A failed
+  refresh keeps the last values read for up to an hour, then refuses everything (a function that has never read them
+  refuses everything; a value retired by a rotation stops working within the hour even while reads fail); a request whose
+  value matches nothing while the values in hand are older than the cache reads them again once, shared by concurrent
+  requests, before refusing. Failed reads retry with a back-off and log only the error's name. The web page reaches `/api/v1/*` through the same CloudFront
   distribution, so it's same-origin and the API sends no CORS headers. The envelope and the errors are the same as locally.
 - **The API's version.** `v1` in the path, and `info.version` (semantic, from `1.0.0`) in the schema. Adding an operation,
   an optional input or an output field raises the minor version; removing or changing the meaning of anything raises the
@@ -698,7 +720,10 @@ A **refused** publish (`not_owner`, `conflict`, invalid) leaves storage exactly 
 (a storage write fails part-way) stores no version, and before it returns deletes, under the write lock, the blobs it created
 (not ones it only found already there) that nothing references; best effort. Only a crash, or a failed delete, leaves
 unreferenced blobs: invisible to every operation, and removed when the local catalog is next opened (unreferenced and older
-than an hour, so another process's publish in flight is never touched). If another publish of the same content was relying on
+than an hour, so another process's publish in flight is never touched). That cleanup never walks every stored file: before a publish
+writes a new blob it records the blob's fingerprint as pending (a small table in the same database), and the append or the
+failed publish's own cleanup clears it, so the next writing open looks only at pending entries older than an hour. Its cost
+grows with the leftovers of crashes, not with the catalog's size. If another publish of the same content was relying on
 a deleted blob, its append re-puts it (rule 3 below).
 
 **The invariant: no version ever points at a missing blob.** A time window alone can't guarantee it (a retry reusing an old
@@ -1278,7 +1303,8 @@ with it, 9 of 9 ran ours first.
 
 | Port | Local adapter | Hosted adapter (AWS) |
 |---|---|---|
-| `Storage` (one port with one all-or-nothing commit: versions and the latest pointer, compare-and-append; and files, put-if-absent, get by sha256) | SQLite (`node:sqlite`) for versions, a folder by digest for files | DynamoDB for versions, S3 for files |
+| `Storage` (one port with one all-or-nothing commit: versions and the latest pointer, compare-and-append; and files, put-if-absent, get by sha256; the commit takes each file as {sha256, bytes?}: with bytes it stores them, without it checks the file is stored and usable (§1.1) inside the same commit, else `not_uploaded` and nothing changes; and each file's state for the file route: named by a stored version, on its way (hosted only: uploaded or claimed under a day ago, unmarked, not yet named by the indexer), or unknown) | SQLite (`node:sqlite`) for versions, a folder by digest for files (always with bytes) | DynamoDB for versions, S3 for files (always by sha256: a head of each file, then one transaction) |
+| `BlobLinks` (hosted only: short-lived upload links for files not stored, a download link for a stored one) | none | S3 presigned links; the functions can't delete files, only the sweep (§1.1) can |
 | `SearchIndex` (upsert, query, rebuild) | SQLite FTS5 (`tokenize='porter unicode61'`), any-word bm25 | an index file in S3, ranked in the Lambda (to ~10–30k skills), then OpenSearch Serverless |
 | `Identity` (request → who's asking) | "act as" (phase 1): `--as <developer>`, `SKILLS_AS`, or the MCP server's config; the web face, per request, in an `X-Skills-Catalog-As` header (a body field would break the own-fields rule, §2), only setup's `me` or one of its `demo_developers`, checked as `--as` is; default: your name from setup | sign-in, or a personal token (parked with AWS) |
 | `TokenStore` (hashed personal tokens) | none | DynamoDB |
@@ -1373,8 +1399,9 @@ operation doesn't take, named with its path, e.g. `filters.owner`; an unknown ke
 its first 200 whole characters, never splitting one, and the error then carries `field_cut: true`, so the cut name is never
 taken for the real one; the known path before it stays whole). Elsewhere: `not_a_cursor` (a `cursor` that no earlier page
 gave), `not_base64` (a file's `content_base64`, named by its index), `fingerprint_or_name_and_version` (a fetch given a
-fingerprint and a name or version too: one or the other), `not_uploaded` (a hosted publish naming a file by sha256 that
-hasn't been uploaded, §1.1), `token_only` (the local `X-Skills-Catalog-As` header sent to a hosted catalog, where
+fingerprint and a name or version too: one or the other), `not_uploaded` (a hosted publish naming a file by a well-formed sha256 that
+hasn't been uploaded, §1.1), `not_sha256` (a file named by something that isn't a sha256, 64 lowercase hex characters, in
+a request for upload links or a hosted publish; checked before anything is looked up), `token_only` (the local `X-Skills-Catalog-As` header sent to a hosted catalog, where
 who's asking comes only from the token, §1.1), and `not_a_catalog_url` (a catalog location that is neither a local
 folder nor a catalog address). A hosted catalog address, where only a local one is built, is `forbidden` {catalog, why:
 `hosted_not_available`}.
