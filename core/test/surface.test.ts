@@ -1,13 +1,13 @@
 // Nothing unfilled reaches an agent: every word the surface can show renders with no ${op} or {field} left, in
 // every variant; and the words that don't exist yet are listed, so each is wired the moment it lands.
 
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { readFileSync } from 'node:fs';
 import { DEFAULT_SEARCH_LIMIT, MAX_READ_NAMES, MAX_READ_PATHS, MAX_SEARCH_LIMIT, OPERATIONS } from '../src/registry.ts';
-import { MAX_TAGS, TAG_MAX_LENGTH } from '../src/skill-tree/index.ts';
+import { MAX_TAGS, TAG_MAX_LENGTH, checkTree, diffTrees } from '../src/skill-tree/index.ts';
 import { WORD_GAPS, renderDiff, renderError, renderRead, renderSearch, renderVersions } from '../src/render.ts';
 import { SURFACE_FILE, Surface } from '../src/surface.ts';
 import { toCatalogError } from '../src/internal-error.ts';
@@ -165,6 +165,16 @@ describe('the surface (vendored, recommended variant)', () => {
     for (const text of shown) expect(ours(text), text.slice(0, 200)).not.toMatch(UNFILLED);
   });
 
+  it('shows a publisher change as the old publisher, then the new one', async () => {
+    const s = Surface.load();
+    const md = { path: 'SKILL.md', mode: '0644', bytes: Buffer.from('---\nname: x\ndescription: y\n---\nz\n') };
+    const d = diffTrees({ files: checkTree([md]), publisher: 'alice' }, { files: checkTree([md]), publisher: 'bob' });
+    const text = renderDiff(s, { name: 'x', from: 1, to: 2, ...d });
+    expect(text.split('\n')).toContain(s.format(s.word('diff.publisher'), { from: 'alice', to: 'bob' }));
+    expect(text).not.toContain(s.format(s.word('diff.publisher'), { from: 'bob', to: 'alice' }));
+    expect(text).not.toContain(s.format(s.word('diff.same'), { name: 'x', from: 1, to: 2 }));
+  });
+
   it('a template with a field the renderer lacks throws, instead of showing "{field}"', async () => {
     const s = Surface.load();
     expect(() => s.format('Installed {name} v{version}.', { name: 'x' })).toThrow(/\{version\}/);
@@ -217,6 +227,25 @@ describe('internal errors (contract §9)', () => {
     expect(readFileSync(log, 'utf8')).toContain('TypeError: cannot read x of undefined');
     expect(JSON.stringify(e.toJSON())).not.toMatch(/at .*\.ts:\d+/);
     expect(readdirSync(join(home, 'logs'))).toHaveLength(1);
+  });
+
+  it('write a new log file only: a file or a link already at the log\'s path is left as it is, and the error names no log', async () => {
+    const now = new Date('2026-09-29T02:00:00.000Z');
+    for (const plant of ['file', 'link'] as const) {
+      const home = sandbox();
+      const target = join(home, 'target.txt');
+      writeFileSync(target, 'the person\'s file\n');
+      mkdirSync(join(home, 'logs'));
+      const log = join(home, 'logs', `internal-error-2026-09-29T02-00-00-000Z-${process.pid}.log`);
+      if (plant === 'file') writeFileSync(log, 'already here\n');
+      else symlinkSync(target, log);
+      const e = toCatalogError(new Error('boom'), home, now);
+      expect(e.code, plant).toBe('internal_error');
+      expect(e.data['log'], plant).not.toBe(log);
+      expect(readFileSync(target, 'utf8'), plant).toBe('the person\'s file\n');
+      if (plant === 'file') expect(readFileSync(log, 'utf8')).toBe('already here\n');
+      else expect(lstatSync(log).isSymbolicLink()).toBe(true);
+    }
   });
 
   it('pass a contract error through unchanged', async () => {
