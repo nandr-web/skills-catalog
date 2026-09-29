@@ -32,7 +32,17 @@ export function lambdaAdapter(handler: { handle(req: HostedRequest): Promise<Htt
   return async (e) => {
     const headers: Record<string, string | undefined> = {};
     for (const [k, v] of Object.entries(e.headers ?? {})) headers[k.toLowerCase()] = v;
-    const r = await handler.handle({ method: e.requestContext.http.method, path: e.rawPath, headers, body: bodyOf(e) });
+    // The body is decoded when the handler first reads it, after its guards (contract §1.1), and once.
+    let body: Uint8Array | 'cut' | undefined;
+    const req: HostedRequest = {
+      method: e.requestContext.http.method,
+      path: e.rawPath,
+      headers,
+      get body() {
+        return (body ??= bodyOf(e));
+      },
+    };
+    const r = await handler.handle(req);
     const binary = typeof r.body !== 'string';
     return { statusCode: r.status, headers: r.headers, body: binary ? Buffer.from(r.body).toString('base64') : (r.body as string), isBase64Encoded: binary };
   };
