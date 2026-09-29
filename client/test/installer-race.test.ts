@@ -351,7 +351,7 @@ describe('folders another user could control are refused (target_not_private)', 
         await publish(p, 'alpha', 'Body.\n');
         const path = t.at(p);
         race.fs.mkdirSync(path, { recursive: true });
-        const { ctx, close } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), words, face);
+        const { ctx, close } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project')), words, face);
         race.stats = (at) => (at === path ? t.change : undefined);
         let answer;
         try {
@@ -509,7 +509,7 @@ describe('a target that can\'t be made (target_unavailable)', () => {
     { what: 'a folder on the way to the home', home: (d) => join(d, 'locked', 'a', 'home'), fails: (d) => join(d, 'locked', 'a'), prepare: (d) => race.fs.mkdirSync(join(d, 'locked'), { mode: 0o555 }) },
     { what: '.claude in a home the person can\'t write', home: (d) => join(d, 'home'), fails: (d) => join(d, 'home', '.claude'), prepare: (d) => race.fs.mkdirSync(join(d, 'home'), { mode: 0o555 }) },
   ];
-  const ctxAt = (p: Place, home: string) => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: home }, join(p.dir, 'project')), S, 'mcp').ctx;
+  const ctxAt = (p: Place, home: string) => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: home, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project')), S, 'mcp').ctx;
 
   it.skipIf(process.getuid?.() === 0)('install refuses with the folder that couldn\'t be made, and changes nothing', async () => {
     for (const h of homes) {
