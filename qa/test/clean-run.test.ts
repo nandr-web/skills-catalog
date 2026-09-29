@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { leftoverNames, slug } from '../src/leftovers.ts';
 import { createSandbox, DIRS, FailSafeError, failSafe, newRunId, realHome } from '../src/sandbox.ts';
-import { teardown } from '../src/teardown.ts';
+import { killGroups, teardown } from '../src/teardown.ts';
 import { compare, PRODUCT_DEFAULTS, runProcesses, snapshot, watchOn, type Watch } from '../src/check.ts';
 import { cleanup, PROCESS_TEST_MS, machine as fakeMachine, scratch, spawnDetached, stopGroup, type TestMachine } from './machine.ts';
 
@@ -101,9 +101,43 @@ describe('teardown', () => {
     const child = spawnDetached('sh', ['-c', 'sleep 30 & sleep 30']);
     const pgid = child.pid!;
     try {
-      await teardown(sb, { machine: m, processGroups: [pgid] });
+      await teardown(sb, { machine: m, processGroups: [pgid], leaders: [child] });
       expect(alive(pgid)).toBe(false);
     } finally { try { process.kill(-pgid, 'SIGKILL'); } catch { /* gone, as it should be */ } }
+  });
+
+  // A group's number, once its leader is gone, can be given to a new process only when the group is empty: the system
+  // never hands out a number still in use as a group's id. So a live process with that number means it's someone else's.
+  describe('[3] a group is signalled only while it is still the run\'s', () => {
+    const G = 2 ** 30;   // above any system's highest pid: were a fake left out, no real group could be signalled
+    const sys = (o: { pid: boolean; group?: boolean }) => {
+      const sent: string[] = [];
+      return { sent, sys: { pidAlive: () => o.pid, groupAlive: () => o.group ?? true, signal: (g: number, sig: string) => sent.push(`${sig} ${g}`), sleep: async () => {} } };
+    };
+
+    it('its leader gone and a live process holding its number: someone else\'s by now, never signalled', async () => {
+      const t = sys({ pid: true });
+      await killGroups([G], 100, { sys: t.sys });
+      expect(t.sent).toEqual([]);
+    });
+
+    it('its leader gone and its number free: its members are the run\'s, signalled (SIGTERM, then SIGKILL)', async () => {
+      const t = sys({ pid: false });
+      await killGroups([G], 100, { sys: t.sys });
+      expect(t.sent).toEqual([`SIGTERM ${G}`, `SIGKILL ${G}`]);
+    });
+
+    it('its leader is the run\'s own and still running: signalled', async () => {
+      const t = sys({ pid: true });
+      await killGroups([G], 100, { sys: t.sys, leaderAlive: (g) => g === G });
+      expect(t.sent).toEqual([`SIGTERM ${G}`, `SIGKILL ${G}`]);
+    });
+
+    it('a group that is gone is not signalled', async () => {
+      const t = sys({ pid: false, group: false });
+      await killGroups([G], 100, { sys: t.sys });
+      expect(t.sent).toEqual([]);
+    });
   });
 });
 
