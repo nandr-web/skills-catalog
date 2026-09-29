@@ -108,6 +108,10 @@ describe('an install over an installed skill, and a skill from another catalog (
         }
         const lock = JSON.parse(readFileSync(lockFile(p), 'utf8'));
         lock.skills[dest(p)].fingerprint = fingerprint(Object.entries(files).map(([path, text]) => ({ path, mode: '0644' as const, sha256: sha256Hex(Buffer.from(text)) })));
+        // And the planted folder's identity, as the installer records one.
+        const st = statSync(dest(p), { bigint: true });
+        const part = (n: bigint) => (n <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(n) : n.toString());
+        lock.skills[dest(p)].copy = { dev: part(st.dev), ino: part(st.ino), ...(st.birthtimeMs ? { birth: part(st.birthtimeMs) } : {}) };
         writeFileSync(lockFile(p), JSON.stringify(lock, null, 2) + '\n');
       }
       expect(tree(dest(p))).toEqual(filesOf(row.installed.files));

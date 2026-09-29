@@ -91,6 +91,7 @@ const MUTATIONS = [
   ['machine/installer.ts', 'a staging folder already there is checked only once the skills folder is made', '  if (existsSync(early)) realFolder(early, target);\n', ''],
   ['machine/installer.ts', 'staging isn\'t looked at again before the temp folder is made', '  stagingThere();\n  const tmp', '  const tmp'],
   ['machine/installer.ts', 'a .gitignore already in a new staging folder is a failure of the tool', "      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;\n      failed ??= stagingDir;", '      throw e;\n      failed ??= stagingDir;'],
+  ['machine/installer.ts', 'an update with nothing newer never records a recreated copy again', '        if (folderFingerprint(here) === e.fingerprint) await recordAgain(ctx, here, e.target, e);\n', ''],
   // installing over an installed copy (held-table.test.ts)
   ['machine/installer.ts', 'the same version from another catalog replaces the installed copy', 'const otherCatalog = existing !== undefined && existing.catalog !== ctx.settings.catalog;', 'const otherCatalog = false;'],
   ['machine/installer.ts', 'a held copy from another catalog at the same version isn\'t found by --accept', 'e.catalog === ctx.settings.catalog) return { installed: e.version };', 'true) return { installed: e.version };'],

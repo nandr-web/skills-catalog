@@ -778,6 +778,17 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
       continue;
     }
     if (v.latest === e.version) {
+      // Nothing newer: an intact copy the person recreated just has its identity recorded again; if its folders fail their
+      // check, it's refused at the version installed.
+      const here = destOf(ctx, e.target, e.name);
+      try {
+        if (folderFingerprint(here) === e.fingerprint) await recordAgain(ctx, here, e.target, e);
+      } catch (err) {
+        if (!(err instanceof CatalogError) || err.code === 'lock_busy') throw err;
+        lines.push(refusedTarget(s, { name: e.name, from: e.version, to: e.version }, err));
+        refused(err.code);
+        continue;
+      }
       unchanged++;
       continue;
     }

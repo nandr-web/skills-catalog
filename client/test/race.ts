@@ -32,7 +32,7 @@ export async function publish(p: Place, name: string, body: string): Promise<voi
 export const refused = (e: unknown) => e as { code?: string; data?: Record<string, unknown>; text?: string };
 // A refusal is thrown by install and accept, and is a skill's refused line in update's result: read it from either.
 // A sentence's slots read back from a line it made: the surface's own words, never hand-typed ones.
-function unformat(template: string, line: string): Record<string, string> | undefined {
+export function unformat(template: string, line: string): Record<string, string> | undefined {
   const slots: string[] = [];
   const marked = S.format(template, Object.fromEntries([...template.matchAll(/\{(\w+)\}/g)].map(([, k]) => [k, `\u0001${k}\u0002`])));
   const pattern = marked.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\u0001(\w+)\u0002/g, (_, k: string) => (slots.push(k), '(.+?)'));
