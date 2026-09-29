@@ -72,7 +72,7 @@ const MUTATIONS = [
   ['web/handler.ts', 'a wrong pairing code is taken', ' || !same(code, o.pairingCode)) return', ') return'],
   ['web/handler.ts', 'any well-formed name acts', '    if (!known.includes(name)) throw', '    if (false) throw'],
   ['web/handler.ts', 'a real publish without --publish is served', '      if (real && !o.publish) throw', '      if (false) throw'],
-  ['web/handler.ts', 'a dry run counts as a real publish', "const real = name === 'publish_version' && input['dry_run'] !== true;", "const real = name === 'publish_version';"],
+  ['web/handler.ts', 'a dry run counts as a real publish', "const real = effectOf(name, 'local') === 'writes_catalog' && input['dry_run'] !== true;", "const real = effectOf(name, 'local') === 'writes_catalog';"],
   ['web/handler.ts', 'the body is read before who is acting is checked', "    let developer: string;\n    try {\n      developer = actor(req.headers['x-skills-catalog-as']);", "    let developer: string;\n    await readBody(req.body, BODY_LIMIT);\n    try {\n      developer = actor(req.headers['x-skills-catalog-as']);"],
   // serve (serve.test.ts): what it checks before anything is made, where it listens, and a refused connection
   ['cli/serve.ts', 'serve starts with no terminal', '  if (!io.tty) {', '  if (false) {'],
