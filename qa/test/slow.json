@@ -1,0 +1,21 @@
+{
+  "about": "Test files that take over about 5 seconds. `npm run test:slow` runs them; `npm test`, `npm run check` and the per-part test:* scripts run every other file. Nothing here is skipped for good: each file keeps its measured time so it can move back once it is faster. Seconds on a busy machine at the load given: alone is the file run by itself, full_run its duration inside `npx vitest run`. Files that guard safety stay in the fast group unless they take over about 30 seconds; kept_fast lists those over 5.",
+  "files": [
+    {
+      "file": "test/agent-runner-tries.test.ts",
+      "covers": "the agent runner gives Haiku five tries on the discovery asks and other models three: eight tries, each with its before/after check",
+      "seconds": { "alone": 4.6, "full_run": 10.9 },
+      "load": 8,
+      "measured": "2026-09-28"
+    }
+  ],
+  "kept_fast": [
+    {
+      "file": "test/qa-run.test.ts",
+      "why": "safety: the sandbox, teardown on every ending, the leak canaries and never deleting a folder a command names",
+      "seconds": { "alone": 7.4, "full_run": 18.1 },
+      "load": 8,
+      "measured": "2026-09-28"
+    }
+  ]
+}

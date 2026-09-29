@@ -12,7 +12,9 @@
   },
   "scripts": {
     "qa": "node src/cli.ts",
-    "test": "vitest run",
+    "test": "vitest run --project fast",
+    "test:slow": "vitest run --project slow --passWithNoTests",
+    "test:all": "vitest run",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test",
     "mutate": "node test/mutations.mjs"
