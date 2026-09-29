@@ -85,9 +85,7 @@ function placeCopy(dest: string, files: Record<string, string>): Entry {
 }
 
 // Rows this runner can't run yet, and why (reported as skipped, never as passed).
-const CANT: Record<string, string> = {
-  'older-meanwhile-less-flagged': 'its v2 and v3 are the same files, so the catalog makes no v3 (asked the goldens\' owner)',
-};
+const CANT: Record<string, string> = {};
 
 describe('decisions are taken under the lock (golden histories.under_lock)', () => {
   for (const row of table.cases as Row[]) {
