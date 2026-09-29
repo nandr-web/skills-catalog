@@ -11,7 +11,9 @@
     "node": ">=24.15"
   },
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run --project fast",
+    "test:slow": "vitest run --project slow --passWithNoTests",
+    "test:all": "vitest run",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test",
     "mutate": "node test/mutations.mjs"

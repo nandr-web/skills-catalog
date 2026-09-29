@@ -1,0 +1,4 @@
+{
+  "about": "Test files that take over about 5 seconds. `npm run test:slow` runs them; `npm test`, `npm run check` and the per-part test:* scripts run every other file. Nothing here is skipped for good: each file keeps its measured time so it can move back once it is faster. None for now: the largest, mcp.test.ts, took 3.5 seconds alone and 4 to 10 inside the whole run, at a load of 10 to 16.",
+  "files": []
+}
