@@ -4,7 +4,95 @@ Every requirement, in the PRD's or the owner's words, confirmed by the owner; wh
 automated checks that hold it. Generated from the requirement list and the QA plan's traceability file, so it can't drift.
 Contract sections (§) are in [contract.md](contract.md); the test layers are in [the QA plan](../qa/qa-plan.md).
 
-## Phase 1: built, local
+## Phase 1: built (the core)
+
+### Publish a skill
+
+> As Developer 1, I want to publish my skill to the catalog so another developer can reuse it without me handing over files.
+
+- **Source:** the PRD (`docs/prd/`)
+- **Done when:** From FR-01 and UC-01: a developer can publish a skill (manifest + any supporting files) to the catalog; a published skill is available to another developer, complete; a skill missing a name, description, or body is rejected with an explanation, and nothing partial is stored; a confirmation is returned.
+- **Where it lives:** the core (built); the CLI, the MCP server (being built); contract §2, §3, §5.1
+- **Checked by:**
+  - storage: publish_version then fetch_version equals the fixture
+  - interface: publish_skill_to_catalog through CLI and MCP gives the same fingerprint (being built)
+  - interface: step 1 (no confirm) lists files, skipped files, diff and risk_flags and stores nothing; step 2 with the token publishes; a folder changed in between gives conflict and stores nothing (being built)
+  - agent: A6 one turn: preview, show the files and what's skipped, ask; no confirm; the .env sentinel never leaks (being built)
+  - agent: A6c publish after the person agreed (step 2 with confirm; the permission prompt) (being built)
+  - interface: every publish result echoes dry_run and names the acting identity as publisher
+  - storage: search finds a skill right after publish_version (the index listens to version_published)
+  - interface: the card shows the latest description after a new version
+  - interface: catalog_size grows by one with a new name and stays the same with a new version
+  - unit: manifest validation table
+  - storage: logical snapshot unchanged after each invalid publish
+  - storage: fault injection (Nth write fails) leaves no version
+  - interface: dry_run stores nothing and returns the diff
+  - agent: A7 relays the reason and proposes the fix; never edits the person's files unasked (being built)
+  - interface: an error whose fix is a change to the person's files tells the agent to propose it and wait (contract §9)
+  - interface: secret_suspected with path and line; the ignore list skipped and reported; the MCP schema has no override (being built)
+  - interface: secret_suspected's text never repeats the secret's value (nor the sentinel) (being built)
+  - agent: A7s no tool call carries the override (being built)
+
+### Version a skill
+
+> As Developer 1, I want publishing an updated skill to create a new version so changes are tracked and nothing is silently overwritten.
+
+- **Source:** the PRD (`docs/prd/`)
+- **Done when:** From FR-04, UC-04 and the goals: publishing a skill whose name already exists creates a new version and prior versions are retained; a developer can see a skill's version history; retrieving returns the latest version by default and an earlier version when asked for; a malformed update is rejected and existing versions are untouched; history is retained and inspectable.
+- **Where it lives:** the core (built); contract §2, §4.4
+- **Checked by:**
+  - storage: history steps
+  - storage: 20 publishes from separate processes all land; stale expected_latest conflicts
+  - storage: two publishes race on one expected_latest: one lands, the other conflicts; no orphan blob, and every version is still retrievable
+  - storage: expected_latest 0 means a new name: it creates version 1, and conflicts on a name that exists, storing nothing
+  - unit: version numbering property test under random interleavings
+  - interface: list_shared_skill_versions and diff_shared_skill_versions equal the goldens (with risk_flags)
+  - agent: A8 says what changed (being built)
+  - storage: get and get version k per history step
+  - interface: reading version k also says latest_version, the current latest
+  - agent: A9 installs version 1 on request (being built)
+  - storage: the malformed step in the history
+
+### A retrieved skill is complete and unchanged
+
+> As Developer 2, I want a retrieved skill to be complete and unchanged from what was published, with no silent loss or alteration, so that I have the same skill Developer 1 published.
+
+- **Source:** the PRD (`docs/prd/`)
+- **Done when:** Publish then retrieve; compare against the original (the PRD's method): the test computes the fingerprint of every file, byte and file mode, itself and it matches.
+- **Where it lives:** the core (built); the installer (being built); contract §4.3
+- **Checked by:**
+  - unit: round-trip property test over generated trees (paths
+  - storage: round trip on every adapter
+  - storage: a failed publish deletes the blobs it created (not ones it found); a killed process or a failed delete leaves them, and the next open removes them only once over an hour old (injected clock); a blob shared with a version, or written by a publish in flight, is never removed
+  - storage: a publish that fails and deletes its blob never breaks a concurrent publish of the same content: that one re-puts the blob and lands
+  - storage: no version ever points at a missing blob: a retry of hour-old leftovers lands (put-if-absent refreshes their time); a publish stalled over an hour lands (the append re-puts a removed blob under the write lock); a failed re-put stores no version
+
+### List with filters, and Get one or several
+
+> As an AI assistant acting for a developer, I want to List skills (likely with filters) and Get a specific skill or skills up to a limit, so that I can do the search myself, a-la progressive disclosure, whatever the backend.
+
+- **Source:** the owner's notes on the PRD
+- **Done when:** Search with no words is the List, with filters and pages; get takes one name or up to 20; asking for more returns a clear error naming the limit.
+- **Where it lives:** the core (built); the MCP server (being built); contract §2
+- **Checked by:**
+  - interface: search with no query and each filter (tags
+  - interface: tags filter: [docs] returns exactly tagged, tags-deduped, tags-at-limit; [docs, release] only the skills with both; a top-level tags list is never a tag
+  - unit: metadata.tags parsing: trimmed, deduplicated in order, ≤10 of 1-32 [a-z0-9-]; each bad form is invalid_manifest {fields: [metadata.tags]}
+  - interface: read_shared_skill with 20 names works; 21 gives invalid_request {field: names, limit: 20}; search limit 51 gives invalid_request {field: limit, limit: 50}; each with a why
+  - interface: cursor paging returns every skill once while publishes happen
+
+### Only a skill's owners can publish it
+
+> As Developer 1, I want only a skill's owners to be able to publish it, so that no one else can change what my skill's subscribers get.
+
+- **Source:** the owner's decision (`docs/decisions.md`)
+- **Done when:** Locally, in the core: the first publisher owns the name; a publish of that name by anyone else returns a clear not-owner error naming the owners, and stores nothing; the recorded publisher is always the acting identity.
+- **Where it lives:** the core (built); contract §7, §9
+- **Checked by:**
+  - storage: publish as dev2 of dev1's skill gives not_owner {owners}, preview included; the snapshot (rows and blobs) is unchanged
+  - interface: every version's publisher equals the acting identity, never a field in the request
+
+## Phase 1: designed, being built (the CLI and installer, the MCP server, the update gate, setup)
 
 ### Publish once, reuse through an assistant, end to end
 
@@ -15,33 +103,6 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Where it lives:** the core, the installer, the MCP server; contract §2, §3
 - **Checked by:**
   - agent: A16: dev1 publishes (SKILLS_AS=dev1); dev2's assistant finds and installs it; fingerprints equal; results say acting_as dev2
-
-### Publish a skill
-
-> As Developer 1, I want to publish my skill to the catalog so another developer can reuse it without me handing over files.
-
-- **Source:** the PRD (`docs/prd/`)
-- **Done when:** From FR-01 and UC-01: a developer can publish a skill (manifest + any supporting files) to the catalog; a published skill is available to another developer, complete; a skill missing a name, description, or body is rejected with an explanation, and nothing partial is stored; a confirmation is returned.
-- **Where it lives:** the core, the CLI, the MCP server; contract §2, §3, §5.1
-- **Checked by:**
-  - storage: publish_version then fetch_version equals the fixture
-  - interface: publish_skill_to_catalog through CLI and MCP gives the same fingerprint
-  - interface: step 1 (no confirm) lists files, skipped files, diff and risk_flags and stores nothing; step 2 with the token publishes; a folder changed in between gives conflict and stores nothing
-  - agent: A6 one turn: preview, show the files and what's skipped, ask; no confirm; the .env sentinel never leaks
-  - agent: A6c publish after the person agreed (step 2 with confirm; the permission prompt)
-  - interface: every publish result echoes dry_run and names the acting identity as publisher
-  - storage: search finds a skill right after publish_version (the index listens to version_published)
-  - interface: the card shows the latest description after a new version
-  - interface: catalog_size grows by one with a new name and stays the same with a new version
-  - unit: manifest validation table
-  - storage: logical snapshot unchanged after each invalid publish
-  - storage: fault injection (Nth write fails) leaves no version
-  - interface: dry_run stores nothing and returns the diff
-  - agent: A7 relays the reason and proposes the fix; never edits the person's files unasked
-  - interface: an error whose fix is a change to the person's files tells the agent to propose it and wait (contract §9)
-  - interface: secret_suspected with path and line; the ignore list skipped and reported; the MCP schema has no override
-  - interface: secret_suspected's text never repeats the secret's value (nor the sentinel)
-  - agent: A7s no tool call carries the override
 
 ### Discover skills through an AI assistant
 
@@ -76,40 +137,6 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - agent: A4 installs the skill intact
   - interface: not_found per name on every face, with suggestions by spelling only
   - agent: A5 says not found
-
-### Version a skill
-
-> As Developer 1, I want publishing an updated skill to create a new version so changes are tracked and nothing is silently overwritten.
-
-- **Source:** the PRD (`docs/prd/`)
-- **Done when:** From FR-04, UC-04 and the goals: publishing a skill whose name already exists creates a new version and prior versions are retained; a developer can see a skill's version history; retrieving returns the latest version by default and an earlier version when asked for; a malformed update is rejected and existing versions are untouched; history is retained and inspectable.
-- **Where it lives:** the core; contract §2, §4.4
-- **Checked by:**
-  - storage: history steps
-  - storage: 20 publishes from separate processes all land; stale expected_latest conflicts
-  - storage: two publishes race on one expected_latest: one lands, the other conflicts; no orphan blob, and every version is still retrievable
-  - storage: expected_latest 0 means a new name: it creates version 1, and conflicts on a name that exists, storing nothing
-  - unit: version numbering property test under random interleavings
-  - interface: list_shared_skill_versions and diff_shared_skill_versions equal the goldens (with risk_flags)
-  - agent: A8 says what changed
-  - storage: get and get version k per history step
-  - interface: reading version k also says latest_version, the current latest
-  - agent: A9 installs version 1 on request
-  - storage: the malformed step in the history
-
-### A retrieved skill is complete and unchanged
-
-> As Developer 2, I want a retrieved skill to be complete and unchanged from what was published, with no silent loss or alteration, so that I have the same skill Developer 1 published.
-
-- **Source:** the PRD (`docs/prd/`)
-- **Done when:** Publish then retrieve; compare against the original (the PRD's method): the test computes the fingerprint of every file, byte and file mode, itself and it matches.
-- **Where it lives:** the core, the installer; contract §4.3
-- **Checked by:**
-  - unit: round-trip property test over generated trees (paths
-  - storage: round trip on every adapter
-  - storage: a failed publish deletes the blobs it created (not ones it found); a killed process or a failed delete leaves them, and the next open removes them only once over an hour old (injected clock); a blob shared with a version, or written by a publish in flight, is never removed
-  - storage: a publish that fails and deletes its blob never breaks a concurrent publish of the same content: that one re-puts the blob and lands
-  - storage: no version ever points at a missing blob: a retry of hour-old leftovers lands (put-if-absent refreshes their time); a publish stalled over an hour lands (the append re-puts a removed blob under the write lock); a failed re-put stores no version
 
 ### Access is through an AI assistant
 
@@ -228,20 +255,6 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - interface: --as, SKILLS_AS and the MCP server's config each set acting_as; every result carries it
   - interface: the CLI prints exactly one 'for demo purposes' line per command, and none in --json output
 
-### List with filters, and Get one or several
-
-> As an AI assistant acting for a developer, I want to List skills (likely with filters) and Get a specific skill or skills up to a limit, so that I can do the search myself, a-la progressive disclosure, whatever the backend.
-
-- **Source:** the owner's notes on the PRD
-- **Done when:** Search with no words is the List, with filters and pages; get takes one name or up to 20; asking for more returns a clear error naming the limit.
-- **Where it lives:** the core, the MCP server; contract §2
-- **Checked by:**
-  - interface: search with no query and each filter (tags
-  - interface: tags filter: [docs] returns exactly tagged, tags-deduped, tags-at-limit; [docs, release] only the skills with both; a top-level tags list is never a tag
-  - unit: metadata.tags parsing: trimmed, deduplicated in order, ≤10 of 1-32 [a-z0-9-]; each bad form is invalid_manifest {fields: [metadata.tags]}
-  - interface: read_shared_skill with 20 names works; 21 gives invalid_request {field: names, limit: 20}; search limit 51 gives invalid_request {field: limit, limit: 50}; each with a why
-  - interface: cursor paging returns every skill once while publishes happen
-
 ### Everything local by default; AWS is an option, off
 
 > As a developer, I want everything to run locally by default, with the guided setup offering to set it up in AWS as an option that's off by default, so that nothing needs an account or a server unless I choose it.
@@ -252,17 +265,6 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Checked by:**
   - setup: setup with every default writes hosting: local and a local catalog, and never reads a sentinel AWS profile
   - cleanup: the whole phase-1 run passes with the network to AWS blocked
-
-### Only a skill's owners can publish it
-
-> As Developer 1, I want only a skill's owners to be able to publish it, so that no one else can change what my skill's subscribers get.
-
-- **Source:** the owner's decision (`docs/decisions.md`)
-- **Done when:** Locally, in the core: the first publisher owns the name; a publish of that name by anyone else returns a clear not-owner error naming the owners, and stores nothing; the recorded publisher is always the acting identity.
-- **Where it lives:** the core; contract §7, §9
-- **Checked by:**
-  - storage: publish as dev2 of dev1's skill gives not_owner {owners}, preview included; the snapshot (rows and blobs) is unchanged
-  - interface: every version's publisher equals the acting identity, never a field in the request
 
 ### QA first, with automation that cleans up after itself
 
