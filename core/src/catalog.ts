@@ -5,7 +5,7 @@ import { CatalogError } from './errors.ts';
 import type { Clock, Events, Identity, Ids, SearchCard, SearchIndex, Storage, VersionRecord } from './ports.ts';
 import { DEFAULT_SEARCH_LIMIT, VERSIONS_PAGE, validateInput } from './registry.ts';
 import {
-  DEFAULT_CAPABILITY_KEYS,
+  DEFAULT_SAFE_FRONTMATTER_KEYS,
   DEFAULT_LIMITS,
   MANIFEST,
   checkManifest,
@@ -28,14 +28,14 @@ import { COMMON_WORDS, contentWords, spelledLike } from './words.ts';
 
 export interface CatalogConfig {
   limits: Limits;
-  capabilityKeys: readonly string[];
+  safeFrontmatterKeys: readonly string[]; // keys that can't grant anything; a change to any other key is a risk flag
   commonWords: readonly string[];
   readInlineBudget: number; // bytes of text one read inlines (contract §2: 24 KB keeps a result under 8,000 tokens)
 }
 
 export const DEFAULT_CONFIG: CatalogConfig = {
   limits: DEFAULT_LIMITS,
-  capabilityKeys: DEFAULT_CAPABILITY_KEYS,
+  safeFrontmatterKeys: DEFAULT_SAFE_FRONTMATTER_KEYS,
   commonWords: COMMON_WORDS,
   readInlineBudget: 24 * 1024,
 };
@@ -407,7 +407,7 @@ export class Catalog {
     const req = validateInput<{ name: string; from: number; to: number }>('diff_shared_skill_versions', input);
     const a = (await this.versionOf(req.name, req.from)).record;
     const b = (await this.versionOf(req.name, req.to)).record;
-    const d = diffTrees({ files: await this.tree(a), publisher: a.publisher }, { files: await this.tree(b), publisher: b.publisher }, this.config.capabilityKeys);
+    const d = diffTrees({ files: await this.tree(a), publisher: a.publisher }, { files: await this.tree(b), publisher: b.publisher }, this.config.safeFrontmatterKeys);
     return { name: req.name, from: a.version, to: b.version, ...d };
   }
 
@@ -433,7 +433,7 @@ export class Catalog {
     const entries = tree.map(entryOf);
     const fingerprint = fingerprintOf(entries);
     const latest = skill ? await this.p.storage.version(name, latestNo) : undefined;
-    const diff = diffTrees(latest ? { files: await this.tree(latest), publisher: latest.publisher } : null, { files: tree, publisher }, this.config.capabilityKeys);
+    const diff = diffTrees(latest ? { files: await this.tree(latest), publisher: latest.publisher } : null, { files: tree, publisher }, this.config.safeFrontmatterKeys);
     const result = (version: number, created: boolean): PublishResult => ({
       name,
       version,

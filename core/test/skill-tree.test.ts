@@ -302,6 +302,19 @@ describe('diffs (golden/histories.yaml diffs, golden/diffs/)', () => {
     expect(got.files.find((f) => f.path === 'logo.png')!.unified).toBeUndefined();
   });
 
+  it('flags a change to any front matter key not on the safe list, and none on it (the gate fails closed)', () => {
+    const md = (extra = '') => ({ path: 'SKILL.md', mode: '0644', bytes: Buffer.from(`---\nname: x\ndescription: y\n${extra}---\nz\n`) });
+    const flagged = (before: string, after: string) =>
+      diffTrees({ files: tree([md(before)]), publisher: 'a' }, { files: tree([md(after)]), publisher: 'a' })
+        .risk_flags.filter((f) => f.kind === 'capability_frontmatter')
+        .map((f) => f.field);
+    expect(flagged('', 'context: fork\nagent: Explore\n')).toEqual(['agent', 'context']);
+    expect(flagged('model: haiku\n', 'model: opus\n')).toEqual(['model']);
+    expect(flagged('', 'some-key-claude-code-adds-later: true\n')).toEqual(['some-key-claude-code-adds-later']);
+    expect(flagged('shell: bash\n', '')).toEqual(['shell']);
+    expect(flagged('version: "1"\nlicense: MIT\n', 'version: "2"\nlicense: Apache-2.0\nwhen_to_use: always\nmetadata: {tags: docs}\n')).toEqual([]);
+  });
+
   it('treats hooks in the front matter as a capability, like a tool grant', () => {
     const md = (extra = '') => ({ path: 'SKILL.md', mode: '0644', bytes: Buffer.from(`---\nname: x\ndescription: y\n${extra}---\nz\n`) });
     const got = diffTrees({ files: tree([md()]), publisher: 'a' }, { files: tree([md('hooks:\n  PreToolUse: ./check.sh\n')]), publisher: 'a' });

@@ -45,8 +45,21 @@ export interface DiffSide {
   label?: string;
 }
 
-// Front matter keys that grant capability: tool grants, and hooks (Claude Code skill front matter can run commands).
-export const DEFAULT_CAPABILITY_KEYS: readonly string[] = ['allowed-tools', 'hooks'];
+// Front matter keys that can't make anything run without a prompt (contract §5.3, config: safe_frontmatter_keys). Every
+// other key counts as granting capability (allowed-tools, hooks, context, agent, shell, model, and any key Claude Code
+// adds later), so a change to it is a risk flag: the gate fails closed.
+export const DEFAULT_SAFE_FRONTMATTER_KEYS: readonly string[] = [
+  'name',
+  'description',
+  'when_to_use',
+  'argument-hint',
+  'arguments',
+  'license',
+  'compatibility',
+  'metadata',
+  'version',
+  'tags',
+];
 
 const SCRIPT_EXT = /\.(sh|bash|zsh|fish|ksh|py|js|mjs|cjs|ts|mts|cts|rb|pl|php|ps1|psm1|bat|cmd|exe|com|jar|lua|tcl|applescript|scpt)$/i;
 const MARKDOWN_EXT = /\.(md|markdown)$/i;
@@ -100,7 +113,7 @@ function keyLine(lines: string[], key: string): number | undefined {
   return i >= 0 ? i + 1 : undefined;
 }
 
-export function diffTrees(from: DiffSide | null, to: DiffSide, capabilityKeys: readonly string[] = DEFAULT_CAPABILITY_KEYS): TreeDiff {
+export function diffTrees(from: DiffSide | null, to: DiffSide, safeKeys: readonly string[] = DEFAULT_SAFE_FRONTMATTER_KEYS): TreeDiff {
   const before = new Map((from?.files ?? []).map((f) => [f.path, f]));
   const after = new Map(to.files.map((f) => [f.path, f]));
   const paths = [...new Set([...before.keys(), ...after.keys()])].sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
@@ -134,7 +147,7 @@ export function diffTrees(from: DiffSide | null, to: DiffSide, capabilityKeys: r
   const frontmatter_changes = keys
     .filter((k) => JSON.stringify(fa.fm[k]) !== JSON.stringify(fb.fm[k]))
     .map((k) => ({ field: k, from: fa.fm[k] ?? null, to: fb.fm[k] ?? null }));
-  for (const k of capabilityKeys) {
+  for (const k of keys.filter((key) => !safeKeys.includes(key))) {
     const was = fa.fm[k];
     const now = fb.fm[k];
     if (JSON.stringify(was) === JSON.stringify(now)) continue;
