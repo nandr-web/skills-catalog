@@ -745,9 +745,11 @@ results:
       paths_need_one_name: work only with one name, not names (read the other skills' files in their own calls)
       fingerprint_or_name_and_version: goes alone (give a fingerprint, or a name and a version, not both)
       not_a_catalog_url: isn't a local folder or a catalog address
+      not_absolute: isn't an absolute path
       not_a_catalog: has no catalog in it
       catalog_unreadable: couldn't be opened
       hosted_not_available: is a hosted catalog, which this version doesn't support yet
+      read_only: "publishing isn't turned on here: start skills-catalog serve with --publish to allow it"
     invalid_manifest_problem:
       missing: is missing
       name: has no name in its front matter
@@ -832,6 +834,7 @@ results:
     invalid_request_cli: "invalid_request: {field} {why}, so nothing was done. Correct the command and run it again."
     invalid_request_limit: "invalid_request: {field} {why}; the limit is {limit}. Nothing was done: call again within it (for example in batches)."
     invalid_request_budget: "invalid_request: the context_cost_budget setting must be a positive whole number of estimated tokens (the default is 5000), so setup changed nothing: a budget can't turn the size check off. Tell the person, and use a number only once they agree."
+    invalid_request_install_dir: "invalid_request: SKILLS_INSTALL_DIR, the setting for where installed skills go, isn't an absolute path, so nothing was done. Tell the person: they set it to a full path, or unset it to use the default. Don't change it yourself."
     invalid_request_allowed: "invalid_request: {field} {why}: {allowed}. Nothing was done: call again with one of them."
     invalid_request_allowed_cli: "invalid_request: {field} {why}: {allowed}. Nothing was done: run it again with one of them."
     invalid_request_limit_cli: "invalid_request: {field} {why}; the limit is {limit}. Nothing was done: run it again within it (for example in batches)."
@@ -846,6 +849,7 @@ results:
     unauthenticated_local: "unauthenticated: no developer name is set for this catalog, so nothing was published. Tell the person; they set theirs by running ${cli} setup in their own terminal. Never choose a name for them."
     forbidden: "forbidden: the catalog doesn't allow this for the person signed in, so nothing was done. Tell them; don't look for another way around it."
     forbidden_hosted: "forbidden: {catalog} is a hosted catalog, and this version runs locally only, so nothing was done. Tell the person; ${cli} setup points it at a local folder."
+    forbidden_read_only: "forbidden: publishing isn't turned on here (this page's server was started without --publish), so nothing was published. To allow it, stop the server and start it again with ${cli} serve --publish."
     internal_error: "internal_error: this tool (${cli}) hit a bug (the details are in {log}). The bug is in ${cli}, not in the person's setup: nothing on this machine needs fixing, and don't edit ${cli}'s files. Tell the person, and give them the log's path."
     fingerprint_mismatch: "fingerprint_mismatch: the files the catalog sent for {name} v{version} don't match that version's fingerprint, so the catalog's copy is damaged or has been altered. Nothing was written on this machine, and any copy already installed stays as it was. It isn't something the person did, and it isn't a bug in ${cli}: don't retry or work around it. Tell the person, so whoever runs the catalog can check it."
     internal_error_no_log: "internal_error: this tool (${cli}) hit a bug, and couldn't write its log either. The bug is in ${cli}, not in the person's setup: nothing on this machine needs fixing, and don't edit ${cli}'s files. Tell the person."
@@ -876,6 +880,8 @@ results:
     target_unavailable_project_cli: "target_unavailable: {path} doesn't exist and the installer couldn't make it (it may lack permission, the disk may be read-only, or a file may stand where a folder should be), so nothing was installed. Tell the person; the way on is to install it to their own skills folder instead (the same install command without --project). Propose it, and do it only once they agree; don't make or remove folders yourself."
     lock_busy: "lock_busy: another run of this tool (process {pid}) is changing the installed skills, so nothing was changed. Try once more in a moment. Don't delete or edit the lock file: a stale one is taken over by itself. If it keeps happening, tell the person."
     lock_busy_unusable: "lock_busy: the lock file at {path} isn't one this tool can clear (it belongs to another user, or it isn't an ordinary file), so nothing was changed. Tell the person to look at it; don't delete, move or edit it yourself."
+    invalid_local_file_key: "invalid_local_file: {path} has {key}, which this version can't use (a setting it doesn't know, perhaps misspelled, a key added to safe_frontmatter_keys or non_granting_keys, which the config can only take keys out of, or a value of the wrong type), so nothing was changed. The file is never repaired or rewritten automatically. Tell the person which file and which key (not its value); they decide whether to fix it or remove the file ({effect}). Change it only once they agree."
+    invalid_local_file_policy: "invalid_local_file: {path} has {key} set to something other than auto, notify or pin, so nothing was changed. The file is never repaired or rewritten automatically. Tell the person which file and which setting; they decide whether to fix it or remove the file ({effect}). Change it only once they agree."
     invalid_local_file: "invalid_local_file: {path} {why}, so nothing was changed. The file is never repaired or rewritten automatically. Tell the person which file it is and why; they decide whether to fix it or remove it ({effect}). Change it only once they agree."
     local_file_effect:
       lock.json: "removing it loses the record of which skills came from the catalog: their folders stay, but they're no longer updated"
@@ -927,6 +933,7 @@ setup:
     not_json: it isn't a JSON object of settings
     link: it's a link, which isn't followed
     wrong_type: the setting {key} has the wrong type
+    not_absolute: CLAUDE_CONFIG_DIR, which says where it is, isn't an absolute path
   updates_off: only when you ask (${cli} update)
   handoff_prompt: "Set up our team's Skills Catalog on this machine: run `${cli} setup` and ask me the questions it prints."
   handoff_prompt_fast: "Set up our team's Skills Catalog on this machine with the defaults: run `${cli} setup --yes`."
