@@ -13,6 +13,7 @@ import type { Machine } from '../machine.ts';
 import { childEnv, createSandbox, failSafe, newRunId, PLANTED_NAMES, recordProcessGroup, recordSession, sandboxBase } from '../sandbox.ts';
 import { stopEscaped } from '../run.ts';
 import { teardown } from '../teardown.ts';
+import { defaultAssistant, resolveAssistant } from './assistant.ts';
 import { claudeCommand, mcpConfig, SETUPS_FROM, type Setup } from './command.ts';
 import { loadPhrases } from './phrases.ts';
 import { aggregate, score, type Aggregate, type PersonEntry, type Rule, type TryScore } from './score.ts';
@@ -24,7 +25,7 @@ export type RunnerOptions = {
   surface: string;                         // <path>#<variant>
   catalogCommand: string[];                // the catalog's MCP server (before slice 3: a stand-in catalog)
   cliCommand?: string[];                   // the catalog's CLI put on PATH in skill+cli
-  claude?: string[];                       // the assistant binary (tests: a fake)
+  claude?: string[];                       // the assistant, by its full path (default: the machine's ~/.local/bin/claude; tests: a fake)
   scenarios?: string[]; setups?: string[]; phase?: number;
   models: string[]; tries?: number;        // default: the scenarios file (3; 5 for Haiku on the discovery asks)
   out: string; budgetUsd?: number; timeoutMs?: number; fallback?: boolean;
@@ -65,6 +66,8 @@ export async function runScenarios(o: RunnerOptions): Promise<Report> {
   const corpusNames = ((parse(readFileSync(o.queriesFile, 'utf8')).corpus ?? []) as { name: string }[]).map((c) => c.name);
   const surface = loadSurface(o.surface);
   const names = surface.names();
+  // The assistant only by its full path, checked before any try begins (assistant.ts): never a name looked up on PATH.
+  const claude = resolveAssistant(o.claude ?? defaultAssistant(o.machine));
   failSafe([sandboxBase(o.machine.tmp)], o.machine.home);
   mkdirSync(join(o.out, 'traces'), { recursive: true });
   janitor({ machine: o.machine });
@@ -90,7 +93,7 @@ export async function runScenarios(o: RunnerOptions): Promise<Report> {
           }
           const id: TryId = { scenario: s.id, setup: setupName, model, try: n };
           o.beforeTry?.(id);
-          const r = await oneTry({ o, s, id, setup, surface, names, rules, agreesTo, phrases, corpusNames });
+          const r = await oneTry({ o: { ...o, claude }, s, id, setup, surface, names, rules, agreesTo, phrases, corpusNames });
           o.afterTry?.(id);
           report.runs.push(r);
           done.push(r);
@@ -150,7 +153,7 @@ async function oneTry(a: {
     const cfgPath = join(sb.root, 'mcp.json');
     writeFileSync(cfgPath, JSON.stringify(mcpConfig({ setup, surface, catalog: o.catalogCommand, env: sb.env, person: { agreesTo: a.agreesTo, log: personLog } }), null, 2));
     const cmd = claudeCommand({ ask, model: id.model, setup, surface, mcpConfig: cfgPath, budgetUsd: o.budgetUsd ?? 0.25, fallback: o.fallback ? { agreesTo: a.agreesTo } : undefined, runRoot: sb.root });
-    const argv = [...(o.claude ?? ['claude']), ...cmd.slice(1)];
+    const argv = [...o.claude!, ...cmd.slice(1)];   // resolved and checked once, before the round (runScenarios)
 
     // The assistant runs with the real HOME (its login lives there), every SKILLS_* setting inside the sandbox, and only the
     // allow-listed environment: the marker planted under secret names in its parent environment must never show.

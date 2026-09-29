@@ -1,4 +1,5 @@
-// Pre-flight before any live run (the QA plan §6.7a; brief §2.7): the unit tests pass; every variant renders with nothing
+// Pre-flight before any live run (the QA plan §6.7a; brief §2.7): the assistant is given by its full path and is a copy
+// macOS approved (its path and version are reported); the unit tests pass; every variant renders with nothing
 // unfilled; every MCP server the runs start passes a self-test, started exactly as the runs start it; one login probe works. Returns the problems; a live round starts only
 // when there are none, so a broken harness never spends money or produces runs that count as a pass or a fail.
 import { spawnSync } from 'node:child_process';
@@ -8,6 +9,8 @@ import { parse } from 'yaml';
 import type { Machine } from '../machine.ts';
 import { childEnv, createSandbox, newRunId } from '../sandbox.ts';
 import { teardown } from '../teardown.ts';
+import { UnsafeError } from '../safe-delete.ts';
+import { assistantVersion, defaultAssistant, resolveAssistant } from './assistant.ts';
 import { mcpConfig, SETUPS_FROM } from './command.ts';
 import { connect } from './mcp-client.ts';
 import { loadSurface } from './surface.ts';
@@ -17,13 +20,24 @@ import { loadPhrases } from './phrases.ts';
 
 export type PreflightOptions = {
   qaDir: string; scenariosFile: string; surfaceFile: string; variant: string; catalogCommand: string[];
-  claude?: string[]; skipTests?: boolean; skipLogin?: boolean;
+  claude?: string[];      // the assistant, by its full path (default: the machine's ~/.local/bin/claude)
+  skipTests?: boolean; skipLogin?: boolean;
   scenarios?: string[];   // the round's scenarios (default: all), whose rules must be ones the scorer knows
   machine: Machine;
+  report?: (line: string) => void;   // what the person should see before a live round: which assistant, which version
 };
 
 export async function preflight(o: PreflightOptions): Promise<string[]> {
   const problems: string[] = [];
+
+  // 0. The assistant only by its full path, resolved and checked before anything runs it (assistant.ts).
+  let claude: string[] | undefined;
+  try {
+    claude = resolveAssistant(o.claude ?? defaultAssistant(o.machine));
+  } catch (e) {
+    if (!(e instanceof UnsafeError)) throw e;
+    problems.push(`assistant: ${e.message}`);
+  }
   const doc = parse(readFileSync(o.scenariosFile, 'utf8'));
   const surfaceDoc = parse(readFileSync(o.surfaceFile, 'utf8'));
 
@@ -69,6 +83,10 @@ export async function preflight(o: PreflightOptions): Promise<string[]> {
   const sb = createSandbox({ runId: newRunId(), machine: o.machine });
   let sessions: string[] = [];
   try {
+    // The assistant's resolved path and version, for the person to see before the round (in the sandbox, with the
+    // run's allow-listed environment).
+    if (claude) o.report?.(`assistant: ${claude.join(' ')} (${assistantVersion(claude, childEnv(sb))})`);
+
     const mcpSetup = Object.values(SETUPS_FROM(doc.setups)).find((x) => x.mcp)!;
     const cfgPath = join(sb.root, 'mcp.json');
     writeFileSync(cfgPath, JSON.stringify(mcpConfig({ setup: mcpSetup, surface: run, catalog: o.catalogCommand, env: sb.env, person: { agreesTo: [], log: join(sb.root, 'person.jsonl') } }), null, 2));
@@ -92,10 +110,10 @@ export async function preflight(o: PreflightOptions): Promise<string[]> {
     }
 
     // 4. One login probe: a tiny headless run (Haiku, capped), which must not be a harness error.
-    if (!o.skipLogin) {
+    if (!o.skipLogin && claude) {
       const cfg = join(sb.root, 'mcp-none.json');
       writeFileSync(cfg, JSON.stringify({ mcpServers: {} }));
-      const argv = [...(o.claude ?? ['claude']), '-p', 'Reply with the single word ok.', '--model', 'claude-haiku-4-5-20251001', '--no-session-persistence',
+      const argv = [...claude, '-p', 'Reply with the single word ok.', '--model', 'claude-haiku-4-5-20251001', '--no-session-persistence',
         '--setting-sources', 'project', '--max-budget-usd', '0.05', '--strict-mcp-config', '--mcp-config', cfg, '--output-format', 'stream-json', '--verbose'];
       const r = spawnSync(argv[0], argv.slice(1), { cwd: sb.dirs.work, env: childEnv(sb), encoding: 'utf8', timeout: 120_000 });
       const trace = parseTrace(r.stdout ?? '');

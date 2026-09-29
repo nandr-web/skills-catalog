@@ -13,6 +13,10 @@ import { join } from 'node:path';
 
 const E = process.env;
 const argv = process.argv.slice(2);
+if (argv[0] === '--version') {
+  process.stdout.write('0.0.0 (fake claude)\n');
+  process.exit(0);
+}
 const mcp = argv[argv.indexOf('--mcp-config') + 1];
 const config = JSON.parse(readFileSync(mcp, 'utf8'));
 const skill = join(process.cwd(), '.claude', 'skills', 'shared-skills', 'SKILL.md');

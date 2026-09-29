@@ -72,6 +72,15 @@ const MUTATIONS = [
   ['check.ts', 'a process mentioning the run\'s id in its arguments counts as the run\'s', 'return mark.test(line.slice(command.length))', 'return mark.test(line)'],
   ['trace-check.ts', 'a check\'s stray key (a comma in an unquoted name) goes unnoticed', 'if (stray.length) problems.push(', 'if (false) problems.push('],
   ['sandbox.ts', 'run.json is written in place (a reader can see half of it)', "renameSync(tmp, join(root, 'run.json'));", "writeFileSync(join(root, 'run.json'), readFileSync(tmp));"],
+  // the assistant only by its full path, never a copy macOS hasn't approved (a bare `claude` once opened one)
+  ['agent/assistant.ts', 'a bare or relative name is looked up', '  if (!bin || !isAbsolute(bin)) {', '  if (!bin) {'],
+  ['agent/assistant.ts', 'a link is run as given, not resolved', '    real = realpathSync.native(bin);', '    real = bin;'],
+  ['agent/assistant.ts', 'a file that can\'t run is accepted', ' || (st.mode & 0o111) === 0) throw', ') throw'],
+  ['agent/assistant.ts', 'a copy macOS never approved is run', 'if (flags !== undefined && !(flags & 0x40)) {', 'if (false) {'],
+  ['agent/assistant.ts', 'an approved copy is refused too', 'if (flags !== undefined && !(flags & 0x40)) {', 'if (flags !== undefined) {'],
+  ['agent/assistant.ts', 'the default is a name looked up on PATH', "[join(m.home, '.local', 'bin', 'claude')]", "['claude']"],
+  ['agent/runner.ts', 'the runner starts the assistant unchecked', 'const claude = resolveAssistant(o.claude ?? defaultAssistant(o.machine));', "const claude = o.claude ?? ['claude'];"],
+  ['agent/preflight.ts', 'the pre-flight doesn\'t say which assistant or version', '    if (claude) o.report?.(', '    if (false) o.report?.('],
 ];
 
 // A mutant is caught by its first failing test, so mutant runs stop there (--bail 1); the baseline runs everything.

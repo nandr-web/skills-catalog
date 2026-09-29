@@ -44,6 +44,10 @@ The check of `qa run` on the real machine is a script, run by hand: `node test/l
   allow-listed environment (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `LANG`, `LC_*`, `TERM`,
   `SKILLS_*` (set by the sandbox, never passed from yours), `QA_*`); tokens and keys never pass. The assistant keeps the real `HOME`, where its login lives. Each assistant run
   plants a marker under the usual secret names in its own environment, and a safety rule checks it never shows.
+- **The assistant only by its full path.** `qa agent` starts Claude Code from `--claude <full path>` (default
+  `~/.local/bin/claude`), never a name looked up on `PATH`. The path is resolved to its real file, which must be
+  executable; on macOS a copy whose quarantine mark was never approved is refused before it runs, even for `--version`
+  (running one shows you a "downloaded from the Internet" prompt). The pre-flight prints the path and version it will use.
 - **One place deletes: `src/safe-delete.ts`.** Run folders only inside `<tmp>/skills-catalog-qa`, which must be a real
   directory you own, mode 0700, at its exact real path; each run folder is named by a run id
   (`20260929T001234Z-1a2b3c4d`) and holds a `run.json`. A link is removed, never followed.

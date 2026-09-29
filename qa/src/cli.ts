@@ -26,12 +26,14 @@ const USAGE = `qa: the skills catalog's QA tools
   qa janitor [--ttl <seconds>] [--dry-run]
       Removes finished runs older than the TTL (default 1 hour) and their exact leftovers; reports what it won't delete.
       --dry-run lists what it would remove and removes nothing.
-  qa agent --surface <surface.yaml>#<variant> --mcp "<catalog MCP server command>" [--cli "<catalog CLI command>"] [--claude "<command>"]
+  qa agent --surface <surface.yaml>#<variant> --mcp "<catalog MCP server command>" [--cli "<catalog CLI command>"] [--claude <full path>]
            [--scenario A1,A2] [--setup mcp,mcp+skill,skill+cli] [--models haiku,opus] [--tries <n>] [--out <dir>]
            [--budget <usd>] [--fallback] [--no-preflight]
       The agent scenario runner: a real headless Claude Code per scenario × setup × model × try, each in its own
-      sandbox, scored from its trace (golden/agent-scenarios.yaml). A pre-flight runs first (unit tests, every variant
-      renders, the server's self-test, a login probe) and nothing runs unless it's clean. Spends money on your Claude login: each run is
+      sandbox, scored from its trace (golden/agent-scenarios.yaml). Claude Code is started only by its full path
+      (default ~/.local/bin/claude), never a name looked up on PATH, and never a copy macOS hasn't approved. A pre-flight
+      runs first (the assistant's path and version, unit tests, every variant renders, the server's self-test, a login
+      probe) and nothing runs unless it's clean. Spends money on your Claude login: each run is
       capped with --max-budget-usd. Writes <out>/report.json, <out>/summary.txt and every trace. Exit: 0 all pass, 1 a
       failure or nothing ran, 3 stopped (pre-flight, harness error), 130 on Ctrl-C.
   qa trace-check [--backlog <dir>]
@@ -108,7 +110,7 @@ async function main(argv: string[]): Promise<number> {
       const out = a.out ?? `out/agent/${newRunId()}`;
       if (!a['no-preflight']) {
         const [surfaceFile, variant] = a.surface.split('#');
-        const problems = await preflight({ qaDir: new URL('..', import.meta.url).pathname, scenariosFile: golden('agent-scenarios.yaml'), surfaceFile, variant, catalogCommand: words(a.mcp)!, claude: words(a.claude), machine, scenarios: list(a.scenario) });
+        const problems = await preflight({ qaDir: new URL('..', import.meta.url).pathname, scenariosFile: golden('agent-scenarios.yaml'), surfaceFile, variant, catalogCommand: words(a.mcp)!, claude: words(a.claude), machine, scenarios: list(a.scenario), report: (l) => console.error(`qa agent: ${l}`) });
         if (problems.length) { console.error(`qa agent: pre-flight failed, nothing ran:\n  ${problems.join('\n  ')}`); return 3; }
         console.error('qa agent: pre-flight clean');
         const later = ruleCheck(parse(readFileSync(golden('agent-scenarios.yaml'), 'utf8')), list(a.scenario)).incomplete;
