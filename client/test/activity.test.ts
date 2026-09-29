@@ -4,10 +4,11 @@
 // called which tool, how it ended and on which skills, never what was asked: the target comes from the result (skill
 // names and versions, a match count), never from the arguments; no skill text, no paths, no secrets.
 import { execFileSync } from 'node:child_process';
-import { chmodSync, closeSync, constants, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, constants, existsSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { actAs, Surface } from '@skills-catalog/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { appendActivity } from '../src/activity.ts';
 import { CLIENT_WORD_GAPS } from '../src/operations.ts';
 import { open, request, seed, skillMd } from './seed.ts';
 import { PROCESS_TEST_MS, place, startServer, type Place, type Server } from './server.ts';
@@ -252,5 +253,44 @@ describe('the activity log', () => {
     for (const op of ['search', 'get', 'versions', 'diff']) expect(LOG.result[op], op).toBeDefined();
     const words = [LOG.search_target, ...Object.values(LOG.result).flatMap((w) => (typeof w === 'string' ? [w] : Object.values(w as Record<string, string>))), ...Object.values(LOG.error)];
     for (const w of words) expect(w, w).not.toMatch(/\n| {2}/);   // the columns are split on double spaces
+  });
+});
+
+// Written directly (no server), so a test can stand in for another user: getuid is read on every write.
+describe('the log\'s file and folder are this user\'s own', () => {
+  const line = { at: new Date('2026-09-29T01:02:03Z'), tool: 'search_shared_skills', target: '1 of 3 match', result: 'found' };
+  const append = (p: Place) => appendActivity(join(p.home, 'activity.log'), line, { ownFolder: true, resultWidth: WIDTH });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('a log hard-linked to a file elsewhere is neither written nor tightened: the line would land in that file', () => {
+    const p = place();
+    mkdirSync(p.home, { recursive: true, mode: 0o700 });
+    const outside = join(p.dir, 'outside.txt');
+    writeFileSync(outside, 'outside\n');
+    chmodSync(outside, 0o644);
+    linkSync(outside, join(p.home, 'activity.log'));
+    expect(() => append(p)).not.toThrow();
+    expect(readFileSync(outside, 'utf8')).toBe('outside\n');
+    expect(statSync(outside).mode & 0o777).toBe(0o644);
+  });
+
+  it('a SKILLS_HOME or log another user owns is neither tightened nor written', () => {
+    const p = place();
+    mkdirSync(p.home, { recursive: true });
+    chmodSync(p.home, 0o755);
+    writeFileSync(join(p.home, 'activity.log'), '');
+    chmodSync(join(p.home, 'activity.log'), 0o644);
+    vi.spyOn(process, 'getuid').mockReturnValue(process.getuid!() + 1);   // what's on disk is now someone else's
+    expect(() => append(p)).not.toThrow();
+    expect(statSync(p.home).mode & 0o777).toBe(0o755);
+    expect(statSync(join(p.home, 'activity.log')).mode & 0o777).toBe(0o644);
+    expect(readFileSync(join(p.home, 'activity.log'), 'utf8')).toBe('');
+    // As this user, both are tightened and the line is written.
+    vi.restoreAllMocks();
+    append(p);
+    expect(statSync(p.home).mode & 0o777).toBe(0o700);
+    expect(linesOf(p)).toHaveLength(1);
   });
 });

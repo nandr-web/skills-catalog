@@ -3,7 +3,7 @@
 // of them, so the target, which can be long (skill names run to 64 characters), comes last and never shifts a column.
 // The caller builds the target from the result (skill names and versions, a match count), so nothing an assistant
 // typed, and no skill text, ever reaches it. Writing it never fails or stalls a tool call: the log is for watching.
-import { closeSync, constants, fchmodSync, fstatSync, mkdirSync, openSync, writeSync } from 'node:fs';
+import { closeSync, constants, fchmodSync, fstatSync, mkdirSync, openSync, writeSync, type Stats } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Surface } from '@skills-catalog/core';
 
@@ -42,7 +42,7 @@ export function activityLine(a: Activity, resultWidth: number): string {
 
 /** Appends one line. The folder is made 0700 if it's missing, and tightened to 0700 when it's the client's own
  *  (`ownFolder`, SKILLS_HOME: a folder the person named with SKILLS_ACTIVITY_LOG is theirs, e.g. /tmp, and left alone);
- *  the file is 0600, tightened if it was looser. Only a regular file is written: a link in the log's place is never
+ *  the file is 0600, tightened if it was looser. Only a regular file of this user's with no other name is written: a link in the log's place is never
  *  followed (O_NOFOLLOW), and a FIFO or other special file never blocks the server (O_NONBLOCK, then fstat); the line
  *  is dropped instead. One write per line, with O_APPEND, so two servers appending at once never tear a line. */
 // The client's own folder tightened to 0700 when looser: checked and changed through a handle opened without following
@@ -61,6 +61,9 @@ function tightenOwnFolder(dir: string): void {
   }
 }
 
+// A log file this user owns, with no other name (a hard link would put the line, and the mode change, somewhere else).
+const ours = (st: Stats) => st.isFile() && st.nlink === 1 && st.uid === process.getuid?.();
+
 export function appendActivity(path: string, a: Activity, o: { ownFolder?: boolean; resultWidth: number }): void {
   try {
     const dir = dirname(path);
@@ -69,7 +72,7 @@ export function appendActivity(path: string, a: Activity, o: { ownFolder?: boole
     const fd = openSync(path, constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o600);
     try {
       const st = fstatSync(fd);
-      if (!st.isFile()) return;
+      if (!ours(st)) return;
       if ((st.mode & 0o077) !== 0) fchmodSync(fd, 0o600);
       writeSync(fd, Buffer.from(activityLine(a, o.resultWidth)));
     } finally {
