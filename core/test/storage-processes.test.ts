@@ -1,6 +1,7 @@
 // Storage across processes (golden/histories.yaml `concurrent`): many processes publishing one name, or opening one
 // fresh catalog, at the same moment. Each process is started, says it is ready once its imports are loaded, and only
 // then are all of them given one start time a moment ahead, so their work overlaps however busy the machine is.
+// They start 320 processes, so they run with `npm run test:slow` (listed in test/slow.json), not with `npm test`.
 
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';

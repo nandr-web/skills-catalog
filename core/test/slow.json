@@ -1,0 +1,12 @@
+{
+  "about": "Test files that take over about 5 seconds. `npm run test:slow` runs them; `npm test`, `npm run check` and the per-part test:* scripts run every other file. Nothing here is skipped for good: each file keeps its measured time so it can move back once it is faster. Seconds on a busy machine at the load given: alone is the file run by itself, full_run its duration inside `npx vitest run`.",
+  "files": [
+    {
+      "file": "test/storage-processes.test.ts",
+      "covers": "storage across processes: 20 publishes of one name from 20 processes, and 30 rounds of 10 processes opening one fresh catalog",
+      "seconds": { "alone": 17.0, "full_run": 20.2 },
+      "load": 25,
+      "measured": "2026-09-28"
+    }
+  ]
+}

@@ -14,7 +14,9 @@
     "node": ">=24.15"
   },
   "scripts": {
-    "test": "node scripts/node-check.mjs && vitest run",
+    "test": "node scripts/node-check.mjs && vitest run --project fast",
+    "test:slow": "node scripts/node-check.mjs && vitest run --project slow",
+    "test:all": "node scripts/node-check.mjs && vitest run",
     "typecheck": "tsc --noEmit",
     "check": "node scripts/node-check.mjs && npm run typecheck && npm test",
     "vendor-surface": "node scripts/vendor-surface.ts",
