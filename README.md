@@ -2,7 +2,7 @@
 
 Publish an AI-assistant skill once; another developer's assistant finds it, installs the same skill, and keeps it up to date.
 
-![One contract, two homes: everything runs on your machine; a hosted catalog in your AWS account is designed but not built](docs/pictures/shape.svg)
+![One contract, two homes: on your machine, the core catalog is built and the installer, CLI and assistant tools are planned; a hosted catalog in your AWS account is designed but not built](docs/pictures/shape.svg)
 
 ## Where it stands
 

@@ -1,8 +1,8 @@
 # Architecture
 
-![One contract, two homes: everything runs on your machine; a hosted catalog in your AWS account is designed but not built](pictures/shape.svg)
+![One contract, two homes: on your machine, the core catalog is built and the installer, CLI and assistant tools are planned; a hosted catalog in your AWS account is designed but not built](pictures/shape.svg)
 
-**One contract, two homes.** Assistants and people reach one catalog through one contract ([contract.md](contract.md)). The catalog runs on your machine today; a hosted catalog in your AWS account is designed, not built. Your notes asked for exactly this: "build the experience, interface and contracts without coupling ourselves with a specific choice".
+**One contract, two homes.** Assistants and people reach one catalog through one contract ([contract.md](contract.md)). The core catalog runs on your machine today, and the installer, CLI and assistant tools come next; a hosted catalog in your AWS account is designed, not built. The owner's notes on the PRD asked for exactly this: "build the experience, interface and contracts without coupling ourselves with a specific choice".
 
 ## The parts
 
@@ -30,7 +30,7 @@ A retrieved skill is still a copy, so it remembers where it came from. The insta
 | ~70 to ~10k | Keyword search narrows first; the assistant picks from a page (a generated 10k catalog: search p95 ≈ 6.5 ms) |
 | 100k+ | Ranking by meaning plus keywords, with a cutoff so "nothing matches" still happens |
 
-The index is rebuilt from the stored versions, so a new search engine needs no data migration. Your List (search with no words, plus filters) and Get (read) are kept; optional words were added.
+The index is rebuilt from the stored versions, so a new search engine needs no data migration. The owner's List (search with no words, plus filters) and Get (read) are kept; optional words were added.
 
 ## Alternatives we weighed
 
