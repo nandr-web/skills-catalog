@@ -18,8 +18,6 @@
 
 ## A retrieved skill stays the same skill
 
-![An installed skill over time: the same as the catalog, behind, updated automatically or shown to you first](pictures/install-loop.svg)
-
 A retrieved skill is still a copy, so it remembers where it came from. The installer's list records name, version, fingerprint and catalog. On an update it compares versions. Text-only changes apply on their own; anything that could change what runs on your machine stops and shows you first.
 
 ## How many skills, and what that means for search
