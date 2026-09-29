@@ -635,7 +635,7 @@ command_quoting:
     - {id: dollar-backtick, folder: "$RUN/work/a$(touch QA-MARKER)`b`", expect: {quoted: true, one_word: true, marker_never_created: "$RUN/work/QA-MARKER"}}
     - {id: skill-name-bare, command: "update <name> --accept", name: pr-review-checklist, expect: {contains: "update pr-review-checklist --accept"}, note: "names are lowercase letters, digits and hyphens: always bare"}
 
-# The secret scan's shapes (A4; contract §2 'What the scan looks for', a71b627, 24ba09b and 9fa56a6). Each `lines` row is the only line of
+# The secret scan's shapes (A4; contract §2 'What the scan looks for', a71b627, 24ba09b, 9fa56a6, bad7db3 and d6e6a87). Each `lines` row is the only line of
 # notes.md beside a valid SKILL.md (name: secret-scan-case): `expect` is secret_suspected {path: notes.md, line: 1, kind}
 # at publish (step 1 and the core's publish), or `none` = the publish goes ahead. Each `files` row is one file beside
 # that SKILL.md, its exact bytes in base64 (`decoded` shows the text); `expect` gives the line in the decoded text.
@@ -699,9 +699,42 @@ secret_scan:
     - {id: ref-env-powershell, line: "$password = $env:DB_PASSWORD_VALUE", expect: none, note: "an environment read"}
     - {id: ref-call, line: "password = get_password_from_vault()", expect: none, note: "a call"}
     - {id: ref-dotted, line: "token = self.tokenizer.encode", expect: none, note: "a dotted name"}
+    - {id: pgp-block, line: {join: ["-----BEGIN PGP ", "PRIVATE KEY BLOCK-----", " QAFAKE"]}, expect: private_key, note: "' BLOCK' included (bad7db3); joined at test time, since the pre-push check refuses a private-key header"}
+    - {id: gitlab-token, line: {join: ["GITLAB=", "glpat-", "QAFAKE0000QAFAKE0000"]}, expect: gitlab_token, note: "joined at test time"}
+    - {id: huggingface-token, line: {join: ["HF=", "hf_", "QAFAKE0000QAFAKE0000QAFAKE0000"]}, expect: huggingface_token, note: "joined at test time"}
+    - {id: sendgrid-key, line: {join: ["SENDGRID=", "SG.", "QAFAKE0000QAFAKE", ".", "QAFAKE0000QAFAKE0000"]}, expect: sendgrid_key, note: "joined at test time"}
+    - {id: npm-token, line: {join: ["//registry.npmjs.org/:_authToken=", "npm_", "QAFAKE0000QAFAKE0000QAFAKE0000QAFAKE"]}, expect: npm_token, note: "npm_token is tried before password_or_token"}
+    - {id: google-oauth-token, line: {join: ["token = ", "ya29.", "a0AfH6SMBQAFAKE0000QAFAKE"]}, expect: google_oauth_token, note: "a kind of its own, never a reference (d6e6a87)"}
+    - {id: github-after-underscore, line: {join: ["MY_TOKEN_", "ghp_", "QAFAKE0000QAFAKE0000QAFAKE0000QAFAKE"]}, expect: github_token, note: "a prefix-shaped kind after _ still stands alone (bad7db3)"}
+    - {id: npmrc-auth, line: "_auth=cWEtdXNlcjpRQUZBS0UtcGFzc3dvcmQ=", expect: password_or_token, note: "the value decodes as base64 to user:password"}
+    - {id: docker-auth, line: "\"auth\": \"cWEtdXNlcjpRQUZBS0UtcGFzc3dvcmQ=\"", expect: password_or_token, note: "Docker's config.json"}
+    - {id: db-pass, line: "DB_PASS=QAFAKEvalue12345", expect: password_or_token, note: "pass as a whole part"}
+    - {id: db-pwd, line: "DB_PWD=QAFAKEvalue12345", expect: password_or_token, note: "pwd as a whole part"}
+    - {id: password-digit, line: "PASSWORD2=QAFAKEvalue12345", expect: password_or_token, note: "digits may follow the word"}
+    - {id: quoted-spaces, line: "password: \"correct horse battery staple fake\"", expect: password_or_token, note: "inside quotes that close on the line, spaces count"}
+    - {id: xml-element, line: "<password>QAFAKEvalue12345</password>", expect: password_or_token, note: "<key>value</key>"}
+    - {id: symbols-value, line: "password=Summer.Time2024!xyz", expect: password_or_token, note: "a dot doesn't make it a dotted name"}
+    - {id: dollar-lowercase, line: "password: $uperSecretPassw0rd", expect: password_or_token, note: "$X is a reference only with an upper-case env name (d6e6a87)"}
+    - {id: angle-prefix, line: "password: <x>realsecretvalue123", expect: password_or_token, note: "a reference must be the whole value"}
+    - {id: brace-prefix, line: "token = ${A}realsecretvalue123", expect: password_or_token, note: "a reference must be the whole value"}
+    - {id: jwt-under-key, line: {join: ["token = ", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9", ".", "eyJzdWIiOiJRQUZBS0UifQ", ".", "QAFAKE0000QAFAKE0000QAFAKE0000QAFAKE0000QAF"]}, expect: jwt, note: "the order holds whatever the key (d6e6a87)"}
+    - {id: ref-trailing-comma, line: "API_KEY=${STRIPE_API_KEY},", expect: none, note: "a whole-value reference with a trailing comma"}
+    - {id: auth-not-userpass, line: "\"auth\": \"QAFAKEbearerStyleValue\"", expect: none, note: "auth counts only when the value decodes to user:password"}
+    - {id: passport, line: "PASSPORT_NUMBER=QAFAKE123456789", expect: none, note: "pass isn't a whole part of PASSPORT"}
+    - {id: quoted-too-short, line: "password: \"a b c\"", expect: none, note: "under 12 inside the quotes"}
+    - {id: xml-hint, line: "<password_hint>QAFAKEvalue12345</password_hint>", expect: none, note: "followed by hint"}
+    - {id: curl-u, line: "curl -u admin:QAFAKEvalue12345 https://api.example.invalid", expect: none, note: "-u user:password isn't a kind (bad7db3)"}
+    - {id: docker-run-u, line: "docker run -u 1000:1000 alpine", expect: none, note: "why -u isn't a kind"}
+    - {id: secret-key-file, line: "SECRET_KEY_FILE=/run/secrets/app", expect: none, note: "the longest word, secret key, then file (d6e6a87)"}
+    - {id: secret-key-path, line: "SECRET_KEY_PATH=/etc/app/key", expect: none, note: "secret key, then path"}
+    - {id: pgpass-shape-in-notes, line: "db.example.invalid:5432:app:qa_user:QAFAKEpassword", expect: none, note: "pgpass_line only in a file named .pgpass or pgpass"}
   files:
     - {id: utf16le-bom, path: settings.txt, content: {base64: "//4jACAAbABvAGMAYQBsACAAcwBlAHQAdABpAG4AZwBzAA0ACgBwAGEAcwBzAHcAbwByAGQAPQBjAG8AcgByAGUAYwB0AGgAbwByAHMAZQBiAGEAdAB0AGUAcgB5AHMAdABhAHAAbABlAA0ACgA="}, decoded: "# local settings\r\npassword=correcthorsebatterystaple\r\n", expect: {line: 2, kind: password_or_token}, note: "UTF-16LE with a BOM, CRLF lines: decoded and scanned"}
     - {id: utf16be-bom, path: settings.txt, content: {base64: "/v8AIwAgAGwAbwBjAGEAbAAgAHMAZQB0AHQAaQBuAGcAcwAKAHAAYQBzAHMAdwBvAHIAZAA9AGMAbwByAHIAZQBjAHQAaABvAHIAcwBlAGIAYQB0AHQAZQByAHkAcwB0AGEAcABsAGUACg=="}, decoded: "# local settings\npassword=correcthorsebatterystaple\n", expect: {line: 2, kind: password_or_token}, note: "UTF-16BE with a BOM"}
     - {id: utf16le-no-bom, path: settings.txt, content: {base64: "IwAgAGwAbwBjAGEAbAAgAHMAZQB0AHQAaQBuAGcAcwAKAHAAYQBzAHMAdwBvAHIAZAA9AGMAbwByAHIAZQBjAHQAaABvAHIAcwBlAGIAYQB0AHQAZQByAHkAcwB0AGEAcABsAGUACgA="}, expect: none, note: "no BOM: not decoded (binary, it holds NUL bytes)"}
     - {id: latin1, path: local.env, content: {base64: "IyBjYWbpIHNldHRpbmdzCnBhc3N3b3JkPWNvcnJlY3Rob3JzZWJhdHRlcnlzdGFwbGUK"}, decoded: "# café settings\npassword=correcthorsebatterystaple\n", expect: {line: 2, kind: password_or_token}, note: "not UTF-8 (0xE9), no NUL: Latin-1; 'local.env' isn't on the ignore list (.env* is a prefix)"}
     - {id: latin1-with-nul, path: local.bin, content: {base64: "Y2Fm6QAKcGFzc3dvcmQ9Y29ycmVjdGhvcnNlYmF0dGVyeXN0YXBsZQo="}, expect: none, note: "a NUL byte: binary, not scanned"}
+    - {id: pgpass-file, path: ".pgpass", content: {base64: "ZGIuZXhhbXBsZS5pbnZhbGlkOjU0MzI6YXBwOnFhX3VzZXI6UUFGQUtFcGFzc3dvcmQK"}, decoded: "db.example.invalid:5432:app:qa_user:QAFAKEpassword\n", expect: {line: 1, kind: pgpass_line}, note: "five :-fields, the last non-empty, in .pgpass"}
+    - {id: pgpass-plain-name, path: "pgpass", content: {base64: "IyBsb2NhbApkYi5leGFtcGxlLmludmFsaWQ6NTQzMjphcHA6cWFfdXNlcjpRQUZBS0VwYXNzd29yZAo="}, decoded: "# local\ndb.example.invalid:5432:app:qa_user:QAFAKEpassword\n", expect: {line: 2, kind: pgpass_line}, note: "a file named pgpass"}
+    - {id: pgpass-empty-password, path: ".pgpass", content: {base64: "ZGIuZXhhbXBsZS5pbnZhbGlkOjU0MzI6YXBwOnFhX3VzZXI6Cg=="}, decoded: "db.example.invalid:5432:app:qa_user:\n", expect: none, note: "the last field empty"}
+    - {id: value-next-line, path: "notes.md", content: {base64: "cGFzc3dvcmQ6CiAgUUFGQUtFdmFsdWUxMjM0NQo="}, decoded: "password:\n  QAFAKEvalue12345\n", expect: none, note: "a value on the next line isn't a kind (bad7db3)"}

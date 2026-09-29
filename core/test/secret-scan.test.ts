@@ -15,13 +15,18 @@ const scanLine = (line: string) => scanSecrets([skillMd, { path: 'notes.md', mod
 // The kinds the scan gets with the new shapes (stripe_key, google_api_key, jwt, url_credentials), and the files it
 // decodes from UTF-16 and Latin-1, aren't built yet: these rows fail until they are, and flag the day they pass. What
 // the scan gives for each of them today is pinned too, so a regression can't hide behind an expected failure.
-const NOT_YET = new Set(['stripe_key', 'google_api_key', 'jwt', 'url_credentials']);
-const TODAY: Record<string, string> = { 'order-stripe-first': 'password_or_token' };
+// So are the shapes the design added after them (bad7db3, d6e6a87): the kinds below, and the rows that name a kind the
+// scan has (a PGP key block; _auth, pass, pwd, a digit after the word, quoted spaces, <password>) in a shape it doesn't
+// read yet.
+const NOT_YET = new Set(['stripe_key', 'google_api_key', 'jwt', 'url_credentials', 'gitlab_token', 'huggingface_token', 'sendgrid_key', 'npm_token', 'google_oauth_token']);
+const NOT_YET_ROWS = new Set(['pgp-block', 'npmrc-auth', 'docker-auth', 'db-pass', 'db-pwd', 'password-digit', 'quoted-spaces', 'xml-element']);
+const notYet = (row: { id: string; expect: string }) => NOT_YET.has(row.expect) || NOT_YET_ROWS.has(row.id);
+const TODAY: Record<string, string> = { 'order-stripe-first': 'password_or_token', 'npm-token': 'password_or_token', 'google-oauth-token': 'password_or_token', 'jwt-under-key': 'password_or_token' };
 
 describe('each golden line gives its kind, or nothing (golden secret_scan.lines)', () => {
   for (const row of golden.lines as { id: string; line: Line; expect: string }[]) {
     const run = () => expect(scanLine(text(row.line))).toEqual(row.expect === 'none' ? null : { path: 'notes.md', line: 1, kind: row.expect });
-    if (NOT_YET.has(row.expect)) {
+    if (notYet(row)) {
       it.fails(row.id, run);
       it(`${row.id}, today`, () => expect(scanLine(text(row.line))?.kind ?? null).toBe(TODAY[row.id] ?? null));
     } else it(row.id, run);
@@ -36,7 +41,7 @@ describe('a value kept joined is exactly what the scan flags, so a broken join c
       // Without the join, no part alone is a secret.
       for (const part of parts) expect(scanLine(part)).toBeNull();
     };
-    if (NOT_YET.has(row.expect)) it.fails(row.id, run);
+    if (notYet(row)) it.fails(row.id, run);
     else it(row.id, run);
   }
 });
