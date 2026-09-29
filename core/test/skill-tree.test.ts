@@ -17,6 +17,7 @@ import {
   unifiedDiff,
   type TreeFile,
   nameProblem,
+  foldKey,
   RESERVED_NAMES_FILE,
 } from '../src/skill-tree/index.ts';
 import { GOLDEN, catalogNameOf, filesOf, generated, historyVersion, loadGolden, rawFilesOf, type RawFile } from './golden.ts';
@@ -119,10 +120,33 @@ describe('hostile file lists are refused (golden/skills.yaml hostile, the raw re
 
   it('two paths one case-insensitive file system would store as one file are refused (Unicode case folding)', () => {
     const md = { path: 'SKILL.md', mode: '0644', bytes: Buffer.from('---\nname: x\ndescription: y\n---\nz\n') };
-    for (const [a, b] of [['SKILL.md', 'ſKILL.md'], ['aς.md', 'aσ.md'], ['straße.md', 'strasse.md'], ['ﬁle.md', 'file.md'], ['Notes.md', 'notes.md']]) {
+    const pairs = [
+      ['SKILL.md', 'ſKILL.md'],
+      ['aς.md', 'aσ.md'],
+      ['straße.md', 'strasse.md'],
+      ['ẞ.md', 'ss.md'], // capital sharp s: toUpperCase and toLowerCase alone never reach "ss"
+      ['ẞ.md', 'ß.md'],
+      ['ﬁle.md', 'file.md'],
+      ['Key.md', 'key.md'], // the Kelvin sign
+      ['Notes.md', 'notes.md'],
+    ];
+    for (const [a, b] of pairs) {
       const files = a === 'SKILL.md' ? [md, { path: b!, mode: '0644', bytes: Buffer.from('evil') }] : [md, { path: a!, mode: '0644', bytes: Buffer.from('1') }, { path: b!, mode: '0644', bytes: Buffer.from('2') }];
       expect(errorOf(() => checkTree(files)).code, `${a} / ${b}`).toBe('invalid_path');
     }
+  });
+
+  it('the fold is full Unicode case folding, over every code point', () => {
+    // Idempotent everywhere; a character, its upper case and its lower case fold alike, except the one character
+    // Unicode's full folding treats specially (dotless ı, whose upper case is I).
+    const differs: number[] = [];
+    for (let cp = 0; cp < 0x110000; cp++) {
+      if (cp >= 0xd800 && cp <= 0xdfff) continue;
+      const c = String.fromCodePoint(cp);
+      const f = foldKey(c);
+      if (foldKey(f) !== f || foldKey(c.toUpperCase()) !== f || foldKey(c.toLowerCase()) !== f) differs.push(cp);
+    }
+    expect(differs).toEqual([0x131]);
   });
 
   it('more path shapes: empty segments, ".", backslashes, control characters, a file that is also a folder', () => {
@@ -145,6 +169,37 @@ describe('hostile file lists are refused (golden/skills.yaml hostile, the raw re
       ['.claude-plugin/plugin.json', 'plugin_folder'],
       ['x/.Claude-Plugin/plugin.json', 'plugin_folder'],
       [`${'a'.repeat(256)}.md`, 'segment_too_long'],
+      // the wider invisible set: no-break, ideographic and other spaces, U+2800, variation selectors, fillers, private use
+      ['a b.md', 'invisible_character'],
+      ['a　b.md', 'invisible_character'],
+      ['a⠀b.md', 'invisible_character'],
+      ['a️b.md', 'invisible_character'],
+      ['aᅟb.md', 'invisible_character'],
+      ['ab.md', 'invisible_character'],
+      ['a b.md', 'invisible_character'],
+      // not portable: Windows' reserved characters, a trailing dot or space, device names in any case
+      ['a<b.md', 'not_portable'],
+      ['ab:c.md', 'not_portable'],
+      ['a:b.md', 'absolute'], // a drive letter, checked before any segment rule
+      ['a"b.md', 'not_portable'],
+      ['a|b.md', 'not_portable'],
+      ['a?.md', 'not_portable'],
+      ['a*.md', 'not_portable'],
+      ['notes./x.md', 'not_portable'],
+      ['notes /x.md', 'not_portable'],
+      ['nul.md', 'not_portable'],
+      ['NUL', 'not_portable'],
+      ['docs/Com1.txt', 'not_portable'],
+      ['COM¹.md', 'not_portable'],
+      ['lpt0', 'not_portable'],
+      ['.git.', 'not_portable'],
+      ['.git::$INDEX_ALLOCATION', 'not_portable'],
+      // the order is pinned (contract §4.2): text rules before segment rules; per segment, folders before portability
+      // before length; the whole path's length after the segments
+      ['a​/.git/x.md', 'invisible_character'],
+      ['.git/a:b.md', 'git_folder'],
+      [`ab:c/${'a'.repeat(256)}`, 'not_portable'],
+      [Array.from({ length: 9 }, () => 'a'.repeat(120)).join('/'), 'too_long'],
     ];
     for (const [path, why] of cases) {
       const e = errorOf(() => checkTree([md, { path, mode: '0644', bytes: Buffer.from('') }]));

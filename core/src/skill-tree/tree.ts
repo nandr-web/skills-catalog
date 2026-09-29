@@ -2,6 +2,8 @@
 // the installer, so a tree is checked and fingerprinted the same way on both sides.
 
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { CatalogError } from './errors.ts';
 
 export type Mode = '0644' | '0755';
@@ -55,9 +57,12 @@ export function fingerprint(entries: readonly { path: string; mode: Mode; sha256
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f]/;
-// Invisible format characters (bidi overrides, zero-width joiners and spaces): a path that reads as one thing and is
-// another.
-const INVISIBLE = /\p{Cf}/u;
+// Anything that reads as one thing and is another (contract §4.2): any \p{C} code point (format, private-use, unassigned), a
+// line or paragraph separator, a default-ignorable code point, U+2800 Braille blank, or a space other than the plain one.
+const INVISIBLE = /[\p{C}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u2800]|(?! )\p{Zs}/u;
+// Not portable to Windows (Microsoft's file-naming rules): these characters, a trailing dot or space, a device name.
+const WINDOWS_CHARS = /[<>:"|?*]/;
+const WINDOWS_DEVICE = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(\.|$)/i;
 export const MAX_PATH_BYTES = 1024;
 export const MAX_SEGMENT_BYTES = 255;
 
@@ -74,6 +79,7 @@ export type PathWhy =
   | 'git_folder'
   | 'claude_folder'
   | 'plugin_folder'
+  | 'not_portable'
   | 'segment_too_long'
   | 'too_long'
   | 'bad_mode'
@@ -103,6 +109,7 @@ export function checkPath(raw: unknown): string {
     if (folded === '.git') refuse(raw, 'git_folder');
     if (folded === '.claude') refuse(raw, 'claude_folder');
     if (folded === '.claude-plugin') refuse(raw, 'plugin_folder');
+    if (WINDOWS_CHARS.test(seg) || /[. ]$/.test(seg) || WINDOWS_DEVICE.test(seg)) refuse(raw, 'not_portable');
     if (Buffer.byteLength(seg, 'utf8') > MAX_SEGMENT_BYTES) refuse(raw, 'segment_too_long', { limit: MAX_SEGMENT_BYTES });
   }
   if (Buffer.byteLength(path, 'utf8') > MAX_PATH_BYTES) refuse(raw, 'too_long', { limit: MAX_PATH_BYTES });
@@ -114,11 +121,29 @@ export function checkMode(path: string, mode: unknown): Mode {
   return refuse(path, 'bad_mode', { mode: String(mode) });
 }
 
-// Two paths that a case-insensitive file system (macOS APFS, Windows) would store as one file fold to the same key:
-// "ſKILL.md" and "SKILL.md", "straße" and "STRASSE", "ﬁle" and "file", "aς" and "aσ". toLowerCase alone misses
-// these, which would let a second file overwrite SKILL.md on disk with no risk flag.
+// Unicode full case folding (statuses C and F), from config/case-folding.txt: JavaScript has none built in, and
+// toUpperCase/toLowerCase alone miss some ("ẞ" never becomes "ss").
+export const CASE_FOLDING_FILE = join(import.meta.dirname, '..', '..', 'config', 'case-folding.txt');
+
+function readCaseFolding(file = CASE_FOLDING_FILE): ReadonlyMap<number, string> {
+  const map = new Map<number, string>();
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    if (line === '' || line.startsWith('#')) continue;
+    const [from, ...to] = line.split(' ').map((h) => parseInt(h, 16));
+    map.set(from!, String.fromCodePoint(...to));
+  }
+  return map;
+}
+
+const CASE_FOLDING = readCaseFolding();
+
+// One fold for every "ignoring case" rule (contract §4.2): NFKC, full case folding, NFKC. Two paths a case-insensitive
+// file system (macOS APFS, Windows) would store as one fold to the same key: "ſKILL.md" and "SKILL.md", "ẞ", "ß" and
+// "ss", "ﬁle" and "file", "aς" and "aσ". Otherwise a second file could overwrite SKILL.md on disk with no risk flag.
 export function foldKey(path: string): string {
-  return path.normalize('NFKC').toUpperCase().toLowerCase().normalize('NFKC');
+  let out = '';
+  for (const ch of path.normalize('NFKC')) out += CASE_FOLDING.get(ch.codePointAt(0)!) ?? ch;
+  return out.normalize('NFKC');
 }
 
 // A whole file list: each path, no duplicates (after NFC), no two equal ignoring case, no file that is also a folder
