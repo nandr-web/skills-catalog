@@ -528,8 +528,9 @@ export class Catalog {
       case 'identical':
         return unchanged(r.record.version);
       case 'not_uploaded':
-        // This publish gives every file's bytes, so a file missing at the commit is a bug here (internal_error); the
-        // hosted publish, which names uploaded files by sha256, answers not_uploaded itself.
+        // Every file here came with its bytes, so a file missing at the commit is a bug (internal_error). The hosted
+        // form (files named by sha256, uploaded first) goes through this same publish once it takes that form, and
+        // answers invalid_request {field: files[i].sha256, why: not_uploaded} here.
         throw new Error(`commit found ${r.missing.length} file(s) not stored although their bytes were given`);
       case 'created':
         try {
