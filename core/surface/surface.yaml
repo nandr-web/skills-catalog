@@ -874,6 +874,7 @@ log:
       held_notify: "held: updates only when asked"
       held_cooldown: "held: waiting a few days"
     accept: taken, with an OK
+    accept_declined: "not taken: the person said no"
     status: listed
     policy: set
     publish:
