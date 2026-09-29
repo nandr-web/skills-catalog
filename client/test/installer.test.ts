@@ -322,7 +322,8 @@ describe('the installer decides from bytes it checked (golden/histories.yaml ins
     const r = await update(ctxFor(p, { catalog: planted }), {});
     const bytes = (files: File[]) => checkTree(files.map((f) => ({ path: f.path, mode: f.mode ?? '0644', bytes: Buffer.from(f.text) })));
     const flags = diffTrees({ files: bytes(plain('stale-rules')), publisher: 'ana' }, { files: bytes([{ path: 'SKILL.md', text: hooks }]), publisher: 'ana' }).risk_flags;
-    expect(flags.map((f) => [f.kind, f.field])).toEqual([['capability_frontmatter', 'hooks']]);
+    // hooks grants, and the body changed too, so SKILL.md's instructions changed as well (contract §5.3).
+    expect(flags.map((f) => [f.kind, f.field])).toEqual([['instructions_changed', undefined], ['capability_frontmatter', 'hooks']]);
     expect(r.text.split('\n')[1]).toBe(S.format(S.word('update.held_flagged'), { name: 'stale-rules', from: 1, to: 2, reasons: reasons(S, flags) }));
     expect(r.result).toBe(S.doc.log.result.update.held_flagged);
     expect(readFileSync(join(userSkills(p), 'stale-rules', 'SKILL.md'), 'utf8')).toBe(skillMd('stale-rules', 'The stale-rules skill.'));

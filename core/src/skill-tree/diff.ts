@@ -16,7 +16,16 @@ export function flagText(text: string): string {
 }
 const flagValue = (v: unknown) => (typeof v === 'string' ? flagText(v) : v);
 
-export type RiskKind = 'runnable_file' | 'non_markdown' | 'capability_frontmatter' | 'new_publisher' | 'prompt_injection' | 'context_cost';
+export type RiskKind =
+  | 'runnable_file'
+  | 'runs_at_load'
+  | 'command_instruction'
+  | 'capability_frontmatter'
+  | 'instructions_changed'
+  | 'non_markdown'
+  | 'new_publisher'
+  | 'prompt_injection'
+  | 'context_cost';
 
 // One reason the gate would hold, in one shape everywhere (contract §5.3). A change carries its sides as data
 // (`field`, `from`, `to`), so nothing has to parse `detail`.
@@ -73,6 +82,10 @@ export const DEFAULT_SAFE_FRONTMATTER_KEYS: readonly string[] = [
   'tags',
 ];
 
+// Front matter keys known to grant nothing (contract §5.3, non_granting_keys): with only these, a changed file is no
+// reason to ask. A change to one is still its own capability_frontmatter flag.
+export const DEFAULT_NON_GRANTING_KEYS: readonly string[] = ['model', 'effort', 'disable-model-invocation', 'user-invocable', 'paths', 'disallowed-tools'];
+
 const SCRIPT_EXT = /\.(sh|bash|zsh|fish|ksh|py|js|mjs|cjs|ts|mts|cts|rb|pl|php|ps1|psm1|bat|cmd|exe|com|jar|lua|tcl|applescript|scpt)$/i;
 const MARKDOWN_EXT = /\.(md|markdown)$/i;
 
@@ -99,19 +112,69 @@ export function fileRisk(f: TreeFile): RiskFlag | null {
   return { kind: 'non_markdown', path: f.path, detail: ext ? `.${ext} file` : 'file with no extension' };
 }
 
+// An injected command (contract §5.3): Claude Code runs `!` + a backtick-quoted command, and a ```! block, as the skill
+// loads. The detector is wider than Claude Code's rule, so no spelling slips past: a `!` right before a backtick anywhere
+// in a markdown file (front matter, code blocks and comments included), and a block whose opening line starts, after
+// blanks, with three or more backticks or tildes, then blanks, then `!`. A block is one command, at its opening line, and
+// its text is the whole block, so an edit inside it counts; an inline one's text is its line.
+export interface Injection {
+  line: number;
+  text: string;
+}
+const BANG_FENCE = /^[ \t]*(`{3,}|~{3,})[ \t]*!/;
+export function injections(text: string): Injection[] {
+  const lines = text.split('\n');
+  const out: Injection[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const open = BANG_FENCE.exec(lines[i]!);
+    if (open) {
+      const close = new RegExp(`^[ \\t]*${open[1]![0] === '`' ? '`' : '~'}{${open[1]!.length},}[ \\t]*\\r?$`);
+      let j = i + 1;
+      while (j < lines.length && !close.test(lines[j]!)) j++;
+      out.push({ line: i + 1, text: lines.slice(i, j + 1).join('\n') });
+      i = j;
+    } else if (lines[i]!.includes('!`')) out.push({ line: i + 1, text: lines[i]! });
+  }
+  return out;
+}
+
+// The injected commands a new version of a markdown file adds or changes: those whose text isn't in the old version.
+function newInjections(a: TreeFile | undefined, b: TreeFile): Injection[] {
+  if (!isMarkdown(b.path) || !isText(b.bytes)) return [];
+  const old = new Map<string, number>();
+  for (const x of a && isText(a.bytes) ? injections(decodeText(a.bytes)) : []) old.set(x.text, (old.get(x.text) ?? 0) + 1);
+  return injections(decodeText(b.bytes)).filter((x) => {
+    const n = old.get(x.text) ?? 0;
+    if (n > 0) old.set(x.text, n - 1);
+    return n === 0;
+  });
+}
+
+// What a version grants, so a changed instruction could act without asking (contract §5.3): an injected command, or a
+// front matter key on neither the safe list nor the non-granting list. Each says what it grants, for the flag's detail.
+function grantsOf(files: readonly TreeFile[], fm: Record<string, unknown>, safeKeys: readonly string[], nonGranting: readonly string[]): string[] {
+  const grants = Object.keys(fm)
+    .filter((k) => !safeKeys.includes(k) && !nonGranting.includes(k))
+    .sort()
+    .map((k) => (k === 'allowed-tools' ? `pre-approves ${show(fm[k])}` : `sets ${k} in its front matter`));
+  if (files.some((f) => isMarkdown(f.path) && isText(f.bytes) && injections(decodeText(f.bytes)).length > 0)) grants.unshift('runs a command as it loads');
+  return grants;
+}
+
 function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   return Buffer.compare(a, b) === 0;
 }
 
 // A side's front matter. Only "no version yet" has none: a SKILL.md that is missing, not text or not parseable is
 // refused, never diffed as if it had no front matter, which would hide every key it grants (contract §5.3).
-function frontmatterOf(files: readonly TreeFile[]): { fm: Record<string, unknown>; lines: string[] } {
-  if (files.length === 0) return { fm: {}, lines: [] };
+function frontmatterOf(files: readonly TreeFile[]): { fm: Record<string, unknown>; body: string | null; lines: string[] } {
+  if (files.length === 0) return { fm: {}, body: null, lines: [] };
   const f = files.find((x) => x.path === MANIFEST);
   if (!f) throw new CatalogError('invalid_manifest', { problem: 'missing', fields: [MANIFEST] });
   if (!isText(f.bytes)) throw new CatalogError('invalid_manifest', { problem: 'not_utf8', fields: [MANIFEST] });
   const text = decodeText(f.bytes);
-  return { fm: parseFrontmatter(text).frontmatter, lines: text.split('\n') };
+  const parsed = parseFrontmatter(text);
+  return { fm: parsed.frontmatter, body: parsed.body, lines: text.split('\n') };
 }
 
 function show(v: unknown): string {
@@ -133,6 +196,7 @@ export function diffTrees(from: DiffSide | null, to: DiffSide, configuredSafeKey
   const paths = [...new Set([...before.keys(), ...after.keys()])].sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
   const files: FileChange[] = [];
   const risk: RiskFlag[] = [];
+  const changed: { a?: TreeFile; b?: TreeFile; path: string }[] = [];
   for (const path of paths) {
     const a = before.get(path);
     const b = after.get(path);
@@ -149,14 +213,34 @@ export function diffTrees(from: DiffSide | null, to: DiffSide, configuredSafeKey
       change.unified = unifiedDiff(a ? decodeText(a.bytes) : null, b ? decodeText(b.bytes) : null, path, modeNote(a?.mode, b?.mode));
     }
     files.push(change);
-    if (b) {
-      const r = fileRisk(b);
-      if (r) risk.push(r);
-    }
+    changed.push({ a, b, path });
   }
 
   const fa = frontmatterOf(from?.files ?? []);
   const fb = frontmatterOf(to.files);
+  // One reason per file, the first that applies (contract §5.3): runnable_file, runs_at_load (one per added or changed
+  // injected command, and nothing else for that file), instructions_changed (any file added, changed or removed, and
+  // SKILL.md when its body or a safe key changed, while the new version grants anything), then non_markdown.
+  const grants = grantsOf(to.files, fb.fm, safeKeys, DEFAULT_NON_GRANTING_KEYS);
+  const safeChanged = safeKeys.some((k) => JSON.stringify(fa.fm[k]) !== JSON.stringify(fb.fm[k]));
+  for (const { a, b, path } of changed) {
+    const own = b ? fileRisk(b) : null;
+    if (own?.kind === 'runnable_file') {
+      risk.push(own);
+      continue;
+    }
+    const injected = b ? newInjections(a, b) : [];
+    if (injected.length) {
+      for (const x of injected) risk.push({ kind: 'runs_at_load', path, line: x.line, detail: flagText(x.text.split('\n')[0]!.trim()) });
+      continue;
+    }
+    const instructions = path !== MANIFEST || fa.body !== fb.body || safeChanged;
+    if (grants.length && instructions) {
+      risk.push({ kind: 'instructions_changed', path, detail: flagText(grants.join(' and ')) });
+      continue;
+    }
+    if (own) risk.push(own);
+  }
   const keys = [...new Set([...Object.keys(fa.fm), ...Object.keys(fb.fm)])].sort();
   const frontmatter_changes = keys
     .filter((k) => JSON.stringify(fa.fm[k]) !== JSON.stringify(fb.fm[k]))

@@ -408,14 +408,18 @@ describe('diffs (golden/histories.yaml diffs, golden/diffs/)', () => {
     const a = tree([md()]);
     const b = tree([md('allowed-tools: Bash\n'), { path: 'run.py', mode: '0755', bytes: Buffer.from('print(1)\n') }, { path: 'logo.png', mode: '0644', bytes: Buffer.from([0x89, 0x50, 0]) }]);
     const got = diffTrees({ files: a, publisher: 'alice' }, { files: b, publisher: 'bob' });
+    // The new version grants (allowed-tools), so a new non-markdown file is instructions_changed, before non_markdown (§5.3).
     expect(got.risk_flags).toEqual([
-      { kind: 'non_markdown', path: 'logo.png', detail: '.png file' },
+      { kind: 'instructions_changed', path: 'logo.png', detail: 'pre-approves Bash' },
       { kind: 'runnable_file', path: 'run.py', detail: 'executable script' },
       { kind: 'capability_frontmatter', path: 'SKILL.md', line: 4, field: 'allowed-tools', from: null, to: 'Bash', detail: 'allowed-tools added: Bash' },
       { kind: 'new_publisher', from: 'alice', to: 'bob', detail: 'alice → bob' },
     ]);
     expect(got.frontmatter_changes).toEqual([{ field: 'allowed-tools', from: null, to: 'Bash' }]);
     expect(got.files.find((f) => f.path === 'logo.png')!.unified).toBeUndefined();
+    // With no grant, the same file is non_markdown.
+    const plain = diffTrees({ files: a, publisher: 'alice' }, { files: tree([md(), { path: 'logo.png', mode: '0644', bytes: Buffer.from([0x89, 0x50, 0]) }]), publisher: 'alice' });
+    expect(plain.risk_flags).toEqual([{ kind: 'non_markdown', path: 'logo.png', detail: '.png file' }]);
   });
 
   it('flags a change to any front matter key not on the safe list, and none on it (the gate fails closed)', () => {
