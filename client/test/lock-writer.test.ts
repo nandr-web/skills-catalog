@@ -14,6 +14,7 @@ import { readLock } from '../src/machine/lock.ts';
 import { contextFor, type Context } from '../src/operations.ts';
 import { settingsFrom } from '../src/settings.ts';
 import { race } from './race-fs.ts';
+import { unformat } from './race.ts';
 import { open, request } from './seed.ts';
 import { place, type Place } from './server.ts';
 
@@ -173,6 +174,13 @@ describe('one writer at a time on the installed-skills lock (golden histories.lo
       if (e['error'] === 'lock_busy') {
         const err = r as CatalogError;
         expect([err.code, err.data]).toEqual(['lock_busy', { path: lockPath(p), pid: e['pid'] === 'helper' ? helperPid : null }]);
+      }
+      if (e['refused']) {
+        // A skill the update refuses is a line in its answer: read back through the sentence it was made from.
+        expect(e['refused'].error, 'only a fingerprint refusal is read back here').toBe('fingerprint_mismatch');
+        const done = r as { outcome?: string; text?: string };
+        const lines = (done.text ?? '').split('\n').map((l) => unformat(S.word('update.refused_fingerprint') as string, l)).filter(Boolean);
+        expect([row.id, done.outcome, lines]).toEqual([row.id, 'refused', [{ name: NAME, from: '1', to: '2' }]]);
       }
       if (e['updated']) {
         expect((r as { outcome?: string }).outcome).toBe('updated');
