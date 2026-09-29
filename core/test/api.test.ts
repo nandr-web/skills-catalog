@@ -210,6 +210,7 @@ describe('the error list at run time (contract §9)', () => {
     expected_fingerprint: 'a publish_version input',
     limit: 'a search input, and a field of invalid_request',
     me: 'a setup config key',
+    serve: 'a CLI command, whose server a refusal names',
   };
   it('names no code outside its list: every other word it marks as code is a why with a sentence, or a named field or outcome', () => {
     const text = readFileSync(join(import.meta.dirname, '..', '..', 'docs', 'contract.md'), 'utf8');

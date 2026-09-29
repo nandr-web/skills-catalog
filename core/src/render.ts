@@ -11,7 +11,7 @@ import type { Words } from './words-file.ts';
 
 // Words the words file doesn't have yet (asked for). A test fails when one of them appears in the words file,
 // so each is wired as soon as it lands.
-export const WORD_GAPS: readonly string[] = [];
+export const WORD_GAPS: readonly string[] = ['errors.why.not_uploaded', 'errors.why.token_only', 'errors.why.read_scope'];
 
 function asData(code: string, data: Record<string, unknown>): string {
   return `${code}: ` + Object.entries(data).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ');

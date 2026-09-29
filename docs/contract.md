@@ -13,17 +13,33 @@ where they do, the numbers are given, because they are the reason for the rule.
 
 ---
 
-## 1. Two kinds of operation, one registry
+## 1. The API: two kinds of operation, one definition each
 
-Each operation is defined once, as a typed schema, and the faces are generated from it. An operation's name is the same in
-every face (the MCP tool, the CLI command, the HTTP route's handler).
+**The API** is the list of operations. Each operation is defined once, and every face is generated from that definition
+(the owner's choice, 2026-09-29: "one definition, generating every face"). The words used here:
+- **an operation's definition**: everything about one operation, in one place (below);
+- **the API layer**: the one path every call takes, from any face: it checks the inputs, runs the operation, turns an error
+  into its sentence, and writes the activity line and the usage count;
+- **the catalog**: the shared skills and the service that keeps them;
+- **the words file**: every sentence a face shows, kept apart from the code (wording in the agent-experience notes);
+- **faces**: the assistant's tools (MCP), the CLI, and the web page (HTTP, §1.1).
+
+An operation's name is the same in every face (the MCP tool, the CLI command, the HTTP route).
+
+**An operation's definition** holds: its `name`; `kind` (catalog or machine, below); `phase`; its key in the words file;
+`input`, a typed schema with its limits and the inputs only a person may give (`cliOnly`: never in the MCP or web schema);
+`output`, a typed schema, or `text` for an operation whose result isn't shaped as data yet; `errors`, the codes it can
+raise (a subset of §9's list, proved by a test that drives its golden error rows); `effect`: `reads`, `writes_catalog` or
+`writes_machine`; `faces`: `mcp`, `cli`, `web`; and the code that runs it. Generated from the definitions: the assistant's
+tool list (the input schema without person-only inputs, descriptions from the words file), the CLI's commands and flags,
+the HTTP routes, setup's pre-allow list (which operations it lists: §6), and the published schema (§1.1).
 
 | Kind | Runs in | Faces | Operations |
 |---|---|---|---|
 | **Catalog** | the core, local or hosted | CLI, HTTP, typed web client; MCP where marked | search, read, versions, diff, publish a version, fetch a version; later bundles, votes, yank, tokens, reviews |
 | **Machine** | the client, on your machine | MCP, CLI | publish a folder, install, update, list installed, set policy, setup, teardown; CLI only: serve, login, logout |
 
-For phase 1: MCP and CLI bindings; the HTTP binding plugs in with the web UI (phase 2) from the same registry. Each
+For phase 1: MCP and CLI bindings; the HTTP binding (§1.1) plugs in with the web UI (phase 2) from the same definitions. Each
 operation lists the faces it has (`faces`: `mcp`, `cli`, `web`); the web face serves catalog operations only (search, read,
 versions, diff, `fetch_version`, `publish_version`), never a machine operation.
 
@@ -48,7 +64,74 @@ flags only.
 puts server instructions in the system prompt while deferred tools show only their names. In the agent-experience trials, without
 instructions a small model answered "no such skill" without ever searching (0 of 3 found it); with them, 3 of 3 found it in one
 search. The companion skill is
-written by hand too, and a lint checks that every tool the instructions or the skill name exists in the registry.
+written by hand too, and a lint checks that every tool the instructions or the skill name exists in the API.
+
+### 1.1 The HTTP binding and the published schema (phase 2; hosted: AWS)
+
+- **Routes.** `POST /api/v1/<operation>` for each operation whose `faces` include `web`, looked up as an own key of the
+  list (`constructor`, `__proto__` and any other name are 404). The body is the operation's input as JSON, checked by the
+  same schema as every face. Locally `serve` (§3) calls every operation as the `web` face, so a person-only input
+  (`cliOnly`, e.g. the secret override) is `invalid_request` {field, why: `unknown_field`}; the acting developer comes in
+  the `X-Skills-Catalog-As` header (§7).
+- **The envelope.** Status codes mean the guards only. An operation's result, error or not, is `200` with
+  `{ok: true, data, words?}` or `{ok: false, error: {code, ...its data}, words?}`. `words` holds the words file's sentences
+  as named strings beside the result, never inside `data`: `error` (the error's sentence), `acting_as`, `demo` and
+  `verdict` (a diff's reasons), so the page shows the same sentence the CLI and the assistant see.
+- **The guards** (local `serve`, before anything is looked up): Host exactly `127.0.0.1:<port>` (else 403); `POST` only;
+  `Content-Type: application/json` only (else 415); `Origin` exactly `http://127.0.0.1:<port>` (missing or other: 403);
+  the session token in `X-Skills-Catalog-Token` on every call (missing or wrong: 401, compared in constant time); all
+  headers checked before any of the body is read. Every response carries the fixed security headers of the web build notes
+  (a strict content security policy, `nosniff`, `no-referrer`, same-origin opener and resource policies, `no-store` on
+  `/api`) and never any `Access-Control-*`.
+- **Pairing stays outside the versioned API:** `POST /api/pair` belongs to the local page, not to the catalog.
+- **A version's files by fingerprint:** `GET /api/v1/files/<sha256>` (64 lowercase hex characters, else 404). A version's
+  files never change, so a file is named by its fingerprint. Locally it serves the bytes, behind the same guards. Hosted
+  (AWS, parked), it answers with a redirect to a presigned link: issued only after the API has checked who's asking, living
+  minutes, naming one object. A whole skill (up to 5 MB) is over one serverless request's limit, so a hosted fetch returns
+  links rather than file contents; the operations don't change. Size limits stay in the core, never only at the edge.
+  It serves only a file some stored version names. Hosted, that lookup is written by the indexer seconds after a publish,
+  so a file that isn't named yet but was uploaded under a day ago (and isn't marked for removal) answers `503` with
+  `Retry-After: 2`; any other unnamed file is `404`. Locally the lookup is immediate and there is no `503`. One shared handler answers the route everywhere, from the file's state and not from where it runs: a stored file's bytes (`200`, local) or a link to it (`302`, `Cache-Control: no-store`, hosted, where a `BlobLinks` port exists), on its way (`503`), unknown or malformed (`404`). Installing
+  never waits on it: a hosted `fetch_version` issues its links straight from the version it reads.
+- **Publishing to a hosted catalog: files go up by short-lived links too** (the owner's choice for compute: "files by
+  short-lived S3 links"). Two steps, both catalog operations, both hosted only:
+  1. `request_upload_links` {name, files: [{sha256, size}]} (up to 100 files, each within the file limit, the total within
+     the skill limit) → one link per file not already stored (a stored file gets no link: the answer says it is already stored, and claims it, see below): a presigned upload for exactly that sha256 and size, living
+     minutes, issued only after the checks a publish makes before its files (the caller is signed in with publish scope and
+     owns the name, or the name is new; the size limits). A file already stored gets no link. The upload is put-if-absent:
+     the bytes must hash to their sha256, or they're discarded.
+  2. `publish_version` with each file given as {path, mode, sha256} instead of `content_base64`; every sha256 must be
+     stored by then, else `invalid_request` {field: `files[i].sha256`, why: `not_uploaded`}. Everything else about the
+     publish is unchanged (the order of checks, all or nothing, the fingerprint).
+  Locally, files stay inline (`content_base64`), and the hosted form is refused (`invalid_request` {why: `unknown_field`});
+  hosted takes only the sha256 form. The shared tests run both forms against the same rules.
+  Uploaded but never published: a publish accepts a file only if it was uploaded or claimed under a day ago (else
+  `not_uploaded`); `request_upload_links` claims every stored file it's asked about, published or not, by marking it with
+  the time (an object tag: its bytes never change, since every upload is put-if-absent), so the client names all of a
+  version's files there, unchanged ones too. A sweep removes files in two steps: it marks a file no version has once its
+  upload or last claim is over 7 days old; a marked file is refused by a publish (`not_uploaded`) and gets a retryable
+  "being removed, try again after <time>" instead of a link; at least an hour later the sweep checks the versions again
+  and removes the file only if none has it (else it takes the mark off). A publish that checked a file before its mark
+  finishes within seconds, so the second check always sees it: a version never points at a missing file, and the check
+  sits inside the one commit (never a separate step before it).
+- **Who's asking, hosted:** every `/api/v1` call carries `Authorization: Bearer <token>`: a session from signing in with
+  GitHub, or a personal token (stored hashed; read or publish scope; an expiry). The local `X-Skills-Catalog-As` header is
+  refused when hosted: identity comes only from the token. A hosted request carrying it, on any `/api/v1` route (the files
+  route too), is answered `400` `invalid_request` {field: `X-Skills-Catalog-As`, why: `token_only`} by a guard, before any
+  lookup and before the body is read; not `401`, since the token may be fine and a `401` would send the caller to sign in again.
+  The hosted guards run in this order, before any lookup and before the body is read: the origin header (`403`), the
+  acting-as header (`400`), the token (`401`). The API's own AWS address stays reachable (an HTTP API takes no firewall and
+  can't switch it off without a domain of our own), so CloudFront adds a secret origin header and the hosted transport
+  refuses any request without it: compared in constant time, accepting the current and the previous value while a deploy
+  rotates it, never logged, and refused with a fixed `403` that doesn't say why. It belongs to the hosted transport only,
+  never the shared handler. The web page reaches `/api/v1/*` through the same CloudFront
+  distribution, so it's same-origin and the API sends no CORS headers. The envelope and the errors are the same as locally.
+- **The API's version.** `v1` in the path, and `info.version` (semantic, from `1.0.0`) in the schema. Adding an operation,
+  an optional input or an output field raises the minor version; removing or changing the meaning of anything raises the
+  major version and a new path (`/api/v2/`), and the old path keeps working until its callers have moved.
+- **The published schema:** OpenAPI 3.1, generated from the definitions and checked in with the code, one file per place a catalog runs (`docs/api/openapi.local.json`, `docs/api/openapi.hosted.json`);
+  a test fails when it's out of date. Each operation carries its input, output (or `text`), the error codes it can raise, and
+  its effect and faces (as `x-effect`, `x-faces`). The error list (§9) is in it as data.
 
 ## 2. Catalog operations
 
@@ -1260,10 +1343,10 @@ a log file in `$SKILLS_HOME`, named in the message.
 `invalid_name` {name, why} (§4.1), `invalid_path` {path, why} (the whys: §4.2), `too_large` {limit, max, value},
 `not_found` {suggestions} or {path}, `not_owner` {name, owners}, `conflict` {name, latest} (also when a held update's version
 was overtaken, with its own sentence) or {name, fingerprint} (a publish whose files don't match its `expected_fingerprint`, §2) or {name, folder} (a publish whose confirm doesn't verify for the folder as it is
-now and its inputs, §3), `forbidden` (or {catalog, why: `hosted_not_available`}, below), `unauthenticated` (locally: no acting identity set, so its sentence points to setup's `me` or `--as`; hosted: sign in), `exists_untracked` {path}, `name_in_use` {path},
+now and its inputs, §3), `forbidden` (or {catalog, why: `hosted_not_available`}, below; or {why: `read_only`}: a real publish through a `serve` started without `--publish`, whose sentence says to restart it with `--publish`; a dry run still works; or {why: `read_scope`}: a hosted call that changes the catalog made with a read-scope token, whose sentence says the token can only read and names a publish-scope one; like `read_only` it is an operation's answer, `200` in the envelope, not a refusal status), `unauthenticated` (locally: no acting identity set, so its sentence points to setup's `me` or `--as`; hosted: sign in), `exists_untracked` {path}, `name_in_use` {path},
 `target_symlink` {path}, `secret_suspected` {path, line, kind}, `invalid_developer_setting` {setting} (§4.1),
 `fingerprint_mismatch` {name, version, expected, got} (§5.3), `lock_busy` {path, pid} (another run is changing the installed
-skills, §4.5), `not_installed` {name} (§3), `invalid_local_file` {file, why, path, key?: a config key that is unknown or added to a key list} (§4.5), `target_changed` {path, staging?, elsewhere?, temp?: true when `path` is a staging folder}, `target_not_private` {path, target: `user` \| `project`, home?: true when
+skills, §4.5), `not_installed` {name} (§3), `invalid_local_file` {file, why, path, key?: in `config.json`, the key the refusal is about: unknown, added to a key list, or holding a value of the wrong shape; absent for `lock.json` and for a file that isn't JSON} (§4.5), `target_changed` {path, staging?, elsewhere?, temp?: true when `path` is a staging folder}, `target_not_private` {path, target: `user` \| `project`, home?: true when
 `path` is the assistant's home above `.claude`, own: whether this user owns the folder} (§4.5), `target_unavailable`
 {path, target, home?: true when `path` is the assistant's home} (the target's root doesn't exist and can't be made, §4.5);
 setup's own (§6 "What setup writes"): `assistant_file_unusable` {path, why: `unreadable` \| `too_big` \| `not_json` \|
@@ -1271,6 +1354,9 @@ setup's own (§6 "What setup writes"): `assistant_file_unusable` {path, why: `un
 `name_taken` {path, name}, `install_unsafe` {path, why: `path_characters` \| `temporary` \| `writable_by_others` \| `too_many_files`},
 `assistant_config_elsewhere` {setting}. Each error carries the code and one plain sentence, and `why`
 and `problem` are codes with a sentence each (wording in the agent-experience notes).
+
+**The list is data, not only a type:** the API exports it at run time (the web page and the published schema read it), and a
+test fails when this section and the code's list differ. Each operation's definition names the codes it can raise (§1).
 
 **An error's sentence is an instruction to the agent** (the agent-experience trials): one that asks for a change to the person's files
 tells the agent to propose the change to the person and make it only once they agree ("propose a one-line description …";
@@ -1283,14 +1369,18 @@ A read's own input whys are in its row (§2): `name_and_names`, `required`, `pat
 The request checks every operation shares (its schema, §2) give `invalid_request` {field, why} with these whys:
 `not_one_of` {allowed} (a value outside the listed ones), `not_integer`, `too_low` {limit, value}, `too_high` {limit, value},
 `not_boolean`, `not_list`, `not_object` (the request itself, or a field that must be one), and `unknown_field` (a field the
-operation doesn't take, named with its path, e.g. `filters.owner`). Elsewhere: `not_a_cursor` (a `cursor` that no earlier page
+operation doesn't take, named with its path, e.g. `filters.owner`; an unknown key longer than 200 characters is named by
+its first 200 whole characters, never splitting one, and the error then carries `field_cut: true`, so the cut name is never
+taken for the real one; the known path before it stays whole). Elsewhere: `not_a_cursor` (a `cursor` that no earlier page
 gave), `not_base64` (a file's `content_base64`, named by its index), `fingerprint_or_name_and_version` (a fetch given a
-fingerprint and a name or version too: one or the other), and `not_a_catalog_url` (a catalog location that is neither a local
+fingerprint and a name or version too: one or the other), `not_uploaded` (a hosted publish naming a file by sha256 that
+hasn't been uploaded, §1.1), `token_only` (the local `X-Skills-Catalog-As` header sent to a hosted catalog, where
+who's asking comes only from the token, §1.1), and `not_a_catalog_url` (a catalog location that is neither a local
 folder nor a catalog address). A hosted catalog address, where only a local one is built, is `forbidden` {catalog, why:
 `hosted_not_available`}.
 
 **`person_only`** (CLI, exit 3): a step only the person may take, asked for with no terminal: `update <name> --accept`,
-`--allow-suspected-secrets`, `clear-kept`, and a publish without the preview's confirm. Nothing is done; the output gives the exact command
+`--allow-suspected-secrets`, `clear-kept`, and `publish <folder>` given none of the preview's values (at a terminal it shows the preview and asks "Publish? (y/N)", taking y or yes in any case). A publish given some of the preview's values but not all is an incomplete request: `invalid_request` {field, why: `required`}, exit 1. Nothing is done; the output gives the exact command
 back for the person to run in their own terminal (§3), and the step is recorded as `person_only`, never as a failure of the tool.
 
 Limits on a request (more than 20 names or 20 paths in a read, a `limit` over 50, more than 10 tags in a search filter or a
