@@ -37,6 +37,16 @@ describe('discovery (golden/queries.yaml, any-word mode)', () => {
     expect([...COMMON_WORDS]).toEqual(q.common_words);
   });
 
+  it('match and matched_words follow the stems and report the query\'s words as typed (golden match_cases)', async () => {
+    const catalog = await seeded();
+    for (const c of q.match_cases as any[]) {
+      const page = await catalog.search({ query: c.term });
+      expect(page.results[0]!.name, c.term).toBe(c.top);
+      expect(page.results[0]!.matched_words, c.term).toEqual(c.matched_words);
+      expect(page.match, c.term).toBe(c.match);
+    }
+  });
+
   it('Found: every must_find is in the top 5 of at least one term, for the whole any-word gate set (recall@5 = 1.0)', async () => {
     const catalog = await seeded();
     let labelled = 0;
