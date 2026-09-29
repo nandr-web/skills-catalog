@@ -1,0 +1,102 @@
+// MetadataStore, local adapter: versions and the latest pointer in SQLite. `append` is the publish's commit point.
+
+import type { AppendResult, MetadataStore, SkillRecord, VersionPublished, VersionRecord } from '../ports.ts';
+import type { LocalDb } from './db.ts';
+
+interface VersionRow {
+  name: string;
+  version: number;
+  fingerprint: string;
+  publisher: string;
+  message: string;
+  published_at: string;
+  files: string;
+  description: string;
+  tags: string;
+  frontmatter: string;
+}
+
+function toRecord(r: VersionRow): VersionRecord {
+  return {
+    name: r.name,
+    version: r.version,
+    fingerprint: r.fingerprint,
+    publisher: r.publisher,
+    message: r.message,
+    published_at: r.published_at,
+    files: JSON.parse(r.files),
+    description: r.description,
+    tags: JSON.parse(r.tags),
+    frontmatter: JSON.parse(r.frontmatter),
+  };
+}
+
+export class SqliteMetadataStore implements MetadataStore {
+  private readonly local: LocalDb;
+
+  constructor(local: LocalDb) {
+    this.local = local;
+  }
+
+  private get db() {
+    return this.local.db;
+  }
+
+  skill(name: string): SkillRecord | undefined {
+    const r = this.db.prepare('SELECT name, owners, latest FROM skills WHERE name = ?').get(name) as
+      | { name: string; owners: string; latest: number }
+      | undefined;
+    return r && { name: r.name, owners: JSON.parse(r.owners), latest: r.latest };
+  }
+
+  version(name: string, version: number): VersionRecord | undefined {
+    const r = this.db.prepare('SELECT * FROM versions WHERE name = ? AND version = ?').get(name, version) as VersionRow | undefined;
+    return r && toRecord(r);
+  }
+
+  byFingerprint(fingerprint: string): VersionRecord | undefined {
+    const r = this.db.prepare('SELECT * FROM versions WHERE fingerprint = ? ORDER BY name, version LIMIT 1').get(fingerprint) as VersionRow | undefined;
+    return r && toRecord(r);
+  }
+
+  versions(name: string, offset: number, limit: number): VersionRecord[] {
+    const rows = this.db.prepare('SELECT * FROM versions WHERE name = ? ORDER BY version DESC LIMIT ? OFFSET ?').all(name, limit, offset) as unknown as VersionRow[];
+    return rows.map(toRecord);
+  }
+
+  *latestVersions(): Iterable<VersionRecord> {
+    const rows = this.db.prepare('SELECT v.* FROM versions v JOIN skills s ON s.name = v.name AND s.latest = v.version ORDER BY v.name').all() as unknown as VersionRow[];
+    for (const r of rows) yield toRecord(r);
+  }
+
+  names(): string[] {
+    return (this.db.prepare('SELECT name FROM skills ORDER BY name').all() as { name: string }[]).map((r) => r.name);
+  }
+
+  count(): number {
+    return (this.db.prepare('SELECT count(*) AS n FROM skills').get() as { n: number }).n;
+  }
+
+  append(v: Omit<VersionRecord, 'version'>, cond: { expectedLatest?: number | undefined }, event: (version: number) => VersionPublished): AppendResult {
+    return this.local.immediate((): AppendResult => {
+      const s = this.skill(v.name);
+      if (s && !s.owners.includes(v.publisher)) return { kind: 'not_owner', owners: s.owners };
+      const latest = s?.latest ?? 0;
+      if (cond.expectedLatest !== undefined && cond.expectedLatest !== latest) return { kind: 'conflict', latest };
+      if (s) {
+        const current = this.version(v.name, latest);
+        if (current && current.fingerprint === v.fingerprint) return { kind: 'identical', record: current };
+      }
+      const version = latest + 1;
+      this.db
+        .prepare(
+          'INSERT INTO versions (name, version, fingerprint, publisher, message, published_at, files, description, tags, frontmatter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(v.name, version, v.fingerprint, v.publisher, v.message, v.published_at, JSON.stringify(v.files), v.description, JSON.stringify(v.tags), JSON.stringify(v.frontmatter));
+      if (s) this.db.prepare('UPDATE skills SET latest = ? WHERE name = ?').run(version, v.name);
+      else this.db.prepare('INSERT INTO skills (name, owners, latest) VALUES (?, ?, ?)').run(v.name, JSON.stringify([v.publisher]), version);
+      this.db.prepare('INSERT INTO outbox (event) VALUES (?)').run(JSON.stringify(event(version)));
+      return { kind: 'created', record: { ...v, version } };
+    });
+  }
+}

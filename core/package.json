@@ -1,0 +1,25 @@
+{
+  "name": "@skills-catalog/core",
+  "version": "0.1.0",
+  "description": "The skills catalog's core: the skill-tree module (SKILL.md rules, fingerprint, path safety, diff), the catalog operations, and the local adapters (SQLite and a folder of files)",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.15"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test",
+    "vendor-surface": "node scripts/vendor-surface.ts",
+    "perf": "node scripts/perf-search.ts"
+  },
+  "dependencies": {
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.3",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  }
+}
