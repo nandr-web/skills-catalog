@@ -495,6 +495,72 @@ describe('folders another user could control are refused (target_not_private)', 
   });
 });
 
+// §4.5: a target whose root (the assistant home, or a folder on the way to .claude) doesn't exist and can't be made (no
+// permission, a read-only file system, a missing or non-folder parent) is refused with target_unavailable {path, target,
+// home?}, the folder that couldn't be made, and nothing changes; never a failure of the tool (HOME=/nonexistent in CI).
+describe('a target that can\'t be made (target_unavailable)', () => {
+  // Where the home should be, and which folder can't be made: under a folder the person can't write (0555), or under a file.
+  const homes: { what: string; home: (dir: string) => string; fails: (dir: string) => string; prepare: (dir: string) => void }[] = [
+    { what: 'a home under a folder the person can\'t write', home: (d) => join(d, 'locked', 'home'), fails: (d) => join(d, 'locked', 'home'), prepare: (d) => race.fs.mkdirSync(join(d, 'locked'), { mode: 0o555 }) },
+    { what: 'a home under a file', home: (d) => join(d, 'file', 'home'), fails: (d) => join(d, 'file', 'home'), prepare: (d) => race.fs.writeFileSync(join(d, 'file'), 'x\n') },
+    { what: 'a folder on the way to the home', home: (d) => join(d, 'locked', 'a', 'home'), fails: (d) => join(d, 'locked', 'a'), prepare: (d) => race.fs.mkdirSync(join(d, 'locked'), { mode: 0o555 }) },
+    { what: '.claude in a home the person can\'t write', home: (d) => join(d, 'home'), fails: (d) => join(d, 'home', '.claude'), prepare: (d) => race.fs.mkdirSync(join(d, 'home'), { mode: 0o555 }) },
+  ];
+  const ctxAt = (p: Place, home: string) => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: home }, join(p.dir, 'project')), S, 'mcp').ctx;
+
+  it.skipIf(process.getuid?.() === 0)('install refuses with the folder that couldn\'t be made, and changes nothing', async () => {
+    for (const h of homes) {
+      const p = place();
+      await publish(p, 'alpha', 'Body.\n');
+      const where = join(p.dir, 'where');
+      race.fs.mkdirSync(where);
+      h.prepare(where);
+      const home = h.home(where);
+      const r = await install(ctxAt(p, home), { name: 'alpha' }).catch((e: unknown) => e);
+      const fails = h.fails(where);
+      expect([h.what, refusalOf(r)]).toEqual([h.what, { code: 'target_unavailable', data: { path: fails, target: 'user', ...(fails === home ? { home: true } : {}) } }]);
+      expect([h.what, race.fs.existsSync(join(p.home, 'lock.json'))]).toEqual([h.what, false]);
+    }
+  });
+
+  it.skipIf(process.getuid?.() === 0)('update refuses that skill only, and accept refuses the same way', async () => {
+    const p = place();
+    const where = join(p.dir, 'where');
+    race.fs.mkdirSync(where);
+    const home = join(where, 'home');
+    const ctx = ctxAt(p, home);
+    await publish(p, 'alpha', 'First.\n');
+    await install(ctx, { name: 'alpha' });
+    await publish(p, 'beta', 'First.\n');
+    await install(ctx, { name: 'beta', target: 'project' });
+    const c = await open(p);
+    try {
+      await c.publish(request('gamma', [{ path: 'SKILL.md', text: skillMd('gamma', 'The gamma skill.') }, { path: 'run.sh', text: '#!/bin/sh\n', mode: '0755' }]), actAs('ana'));
+    } finally {
+      c.close();
+    }
+    const held = await install(ctx, { name: 'gamma' });
+    const [, target, version, confirm] = /target "([^"]+)", version (\d+), confirm "([^"]+)"/.exec(held.text)!;
+    await publish(p, 'alpha', 'Second.\n');
+    await publish(p, 'beta', 'Second.\n');
+    // The home is gone and can't be made again.
+    race.fs.renameSync(home, join(p.dir, 'old-home'));
+    race.fs.chmodSync(where, 0o555);
+    let updated: { text: string } | undefined;
+    let accepted: unknown;
+    try {
+      updated = await update(ctx, {});
+      accepted = await accept(ctx, { name: 'gamma', target, version: Number(version), confirm, flags: ['runnable_file'] }).catch((e: unknown) => e);
+    } finally {
+      race.fs.chmodSync(where, 0o755);
+    }
+    expect(updated!.text).toContain('target_unavailable');
+    expect(race.fs.readFileSync(join(p.dir, 'project', '.claude', 'skills', 'beta', 'SKILL.md'), 'utf8')).toContain('Second.');
+    expect(refusalOf(accepted)).toEqual({ code: 'target_unavailable', data: { path: home, target: 'user', home: true } });
+    expect(race.fs.existsSync(home)).toBe(false);
+  });
+});
+
 // The staging folder swapped right after its check, before its .gitignore and the temp folder are made in it: it's checked
 // again before each, so nothing is made where a link points, and a folder of someone else's making that already has a
 // .gitignore is a changed temp folder (target_changed), never a failure of the tool.

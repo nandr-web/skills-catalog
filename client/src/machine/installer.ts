@@ -68,9 +68,19 @@ function skillsFolderFor(dest: string, target: Target): Anchor[] {
   const skills = dirname(dest);
   const claude = dirname(skills);
   const root = dirname(claude);
+  // A folder on the way that can't be made (no permission, a read-only file system, a missing or non-folder parent) is a
+  // target that isn't there, with a way on (HOME=/nonexistent in CI); anything else making it is a fault.
+  const make = (at: string) => {
+    try {
+      makeFolder(at, 0o755);
+    } catch (e) {
+      if (!UNMAKEABLE.has((e as NodeJS.ErrnoException).code ?? '')) throw e;
+      throw new CatalogError('target_unavailable', { path: at, target, ...(at === root && target === 'user' ? { home: true } : {}) });
+    }
+  };
   const missing: string[] = [];
   for (let at = root; !existsSync(at) && dirname(at) !== at; at = dirname(at)) missing.unshift(at);
-  for (const at of missing) makeFolder(at, 0o755);
+  for (const at of missing) make(at);
   // The folder above .claude (§4.5), which may be reached through a link: whoever can write it can put their own .claude
   // in its place. The assistant home is held to the same rule as .claude. A project folder is the person's or root's
   // (its owner can always rename what's in it, sticky bit or not), and writable by others only as that rule allows (a
@@ -81,10 +91,11 @@ function skillsFolderFor(dest: string, target: Target): Anchor[] {
   const open = target === 'user' ? !isPrivate(r) : uid !== undefined && (!ownedWell || ((r.mode & 0o1000n) === 0n && !writableOnlyAsPrivate(r)));
   if (open) throw notPrivate(root, target, r, target === 'user');
   return [claude, skills].map((path) => {
-    makeFolder(path, 0o755);
+    make(path);
     return realFolder(path, target);
   });
 }
+const UNMAKEABLE = new Set(['EACCES', 'EPERM', 'EROFS', 'ENOENT', 'ENOTDIR']);
 
 // Modes set exactly, whatever the umask: a umask of 002 would leave a skill's folders group-writable (on macOS the group
 // is staff, every local user), and a strict one could leave an executable unrunnable. Set through a handle that doesn't

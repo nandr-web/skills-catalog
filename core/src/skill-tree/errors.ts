@@ -23,6 +23,7 @@ export type ErrorCode =
   | 'invalid_local_file'
   | 'target_changed'
   | 'target_not_private'
+  | 'target_unavailable'
   | 'lock_busy';
 
 export class CatalogError extends Error {
