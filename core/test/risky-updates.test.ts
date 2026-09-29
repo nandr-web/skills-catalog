@@ -23,6 +23,10 @@ const sorted = <T extends Partial<RiskFlag>>(fs: readonly T[]) => [...fs].sort((
 // A file SKILL.md puts in a command position, and a command naming a file outside the skill (runnable_file's other
 // rules in §5.3) aren't built yet: these pairs fail until they are, and flag the day they pass.
 const COMMAND_POSITIONS = new Set(['gate.g0-cmdpos', 'gate.g0-bang-target', 'gate.g0-cmdwords', 'gate.g0-outside-dir', 'gate.g0-outside-rel', 'gate.g0-outside-skills']);
+// Neither is command_instruction (an instruction to run something, flagged when the assistant runs commands without
+// asking: `permissive` auto or bypass): its pairs fail the same way until it's built.
+const notBuilt = (p: (typeof pairs)[number]) =>
+  p.risk_flags.filter((f) => (COMMAND_POSITIONS.has(p.to) && f.kind === 'runnable_file') || f.kind === 'command_instruction');
 
 describe('the flags an update raises, pair by pair (golden histories.gate)', () => {
   for (const p of pairs) {
@@ -31,13 +35,13 @@ describe('the flags an update raises, pair by pair (golden histories.gate)', () 
       const d = diffTrees(p.from === null ? null : side(p.from), side(p.to));
       expect(sorted(d.risk_flags), p.note).toMatchObject(sorted(p.risk_flags));
     };
-    if (COMMAND_POSITIONS.has(p.to)) {
+    if (notBuilt(p).length) {
       it.fails(name, run);
-      // The half that's built holds today: every flag but those on a command position's file, which today has its
-      // other reason (non_markdown) or none.
-      it(`${name}, without the command positions`, () => {
+      // The half that's built holds today: every flag but those on a file that has a flag not built yet, which today
+      // has its other reason (non_markdown, instructions_changed) or none.
+      it(`${name}, without what isn't built`, () => {
         const d = diffTrees(p.from === null ? null : side(p.from), side(p.to));
-        const positions = new Set(p.risk_flags.filter((f) => f.kind === 'runnable_file').map((f) => f.path));
+        const positions = new Set(notBuilt(p).map((f) => f.path));
         expect(sorted(d.risk_flags.filter((f) => !positions.has(f.path)))).toMatchObject(sorted(p.risk_flags.filter((f) => !positions.has(f.path))));
       });
     } else it(name, run);
