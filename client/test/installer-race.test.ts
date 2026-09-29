@@ -24,20 +24,23 @@ const race = vi.hoisted(() => ({
 vi.mock('node:fs', async (original) => {
   const fs = await original<Fs>();
   race.fs = fs;
-  const lstatSync = ((path: string, ...rest: unknown[]) => {
-    race.onLstat?.(String(path));
-    const s = (fs.lstatSync as (...a: unknown[]) => unknown)(path, ...rest) as import('node:fs').Stats | undefined;
-    const change = s && race.stats?.(String(path), s);
-    // The installer reads bigint stats: numbers in a change become bigints to match.
+  // What a stat reports, after the test's rewrite; the installer reads bigint stats, so numbers become bigints to match.
+  const rewrite = (path: string, s: import('node:fs').Stats | undefined) => {
+    const change = s && race.stats?.(path, s);
     const fit = change && typeof (s as { mode: unknown }).mode === 'bigint' ? Object.fromEntries(Object.entries(change).map(([k, v]) => [k, typeof v === 'number' ? BigInt(v) : v])) : change;
     return fit ? Object.assign(Object.create(Object.getPrototypeOf(s)), s, fit) : s;
+  };
+  const lstatSync = ((path: string, ...rest: unknown[]) => {
+    race.onLstat?.(String(path));
+    return rewrite(String(path), (fs.lstatSync as (...a: unknown[]) => unknown)(path, ...rest) as import('node:fs').Stats | undefined);
   }) as Fs['lstatSync'];
+  const statSync = ((path: string, ...rest: unknown[]) => rewrite(String(path), (fs.statSync as (...a: unknown[]) => unknown)(path, ...rest) as import('node:fs').Stats | undefined)) as Fs['statSync'];
   const renameSync = (from: string, to: string) => {
     race.onRename?.(String(from), String(to));
     fs.renameSync(from, to);
     race.afterRename?.(String(from), String(to));
   };
-  return { ...fs, lstatSync, renameSync, default: { ...fs, lstatSync, renameSync } };
+  return { ...fs, lstatSync, statSync, renameSync, default: { ...fs, lstatSync, statSync, renameSync } };
 });
 
 const S = Surface.load();
@@ -427,7 +430,34 @@ describe('folders another user could control are refused (target_not_private)', 
     { what: '.claude/skills world-writable', at: (c) => join(c, 'skills'), change: { mode: 0o040777 } },
     { what: 'the staging folder group-writable with another group', at: (c) => join(c, '.skills-catalog-staging'), change: { mode: 0o040770, gid: uid + 1 } },
     { what: '.claude group-writable with a shared group (macOS staff, 20)', at: (c) => c, change: { mode: 0o040775, gid: 20 } },
+    { what: 'the project folder world-writable without the sticky bit', at: (c) => join(c, '..'), change: { mode: 0o040777 } },
   ];
+
+  // The folder above .claude (§4.5, aeedabd): the person's assistant home is held to the same rule; a project folder may
+  // be group-writable (a team checkout), but not world-writable unless sticky (as /tmp is).
+  it('the folder above .claude: the assistant home must be private; a project may be group-writable, or world-writable only if sticky', async () => {
+    const tries: { what: string; target: 'user' | 'project'; change: Partial<import('node:fs').Stats>; refused: boolean }[] = [
+      { what: 'assistant home owned by another user', target: 'user', change: { uid: uid + 1 }, refused: true },
+      { what: 'assistant home group-writable with a shared group', target: 'user', change: { mode: 0o040775, gid: 20 }, refused: true },
+      { what: 'project group-writable', target: 'project', change: { mode: 0o040775, gid: 20 }, refused: false },
+      { what: 'project world-writable and sticky', target: 'project', change: { mode: 0o041777 }, refused: false },
+    ];
+    for (const t of tries) {
+      const p = place();
+      await publish(p, 'alpha', 'Body.\n');
+      const root = t.target === 'user' ? p.osHome : join(p.dir, 'project');
+      race.fs.mkdirSync(root, { recursive: true });
+      race.stats = (at) => (at === root ? t.change : undefined);
+      let r: unknown;
+      try {
+        r = await install(ctxFor(p), { name: 'alpha', target: t.target }).catch((e: unknown) => e);
+      } finally {
+        clearHooks();
+      }
+      if (t.refused) expect([t.what, codeOf(r), refused(r).data]).toEqual([t.what, 'target_not_private', { path: root }]);
+      else expect([t.what, race.fs.existsSync(join(root, '.claude', 'skills', 'alpha', 'SKILL.md'))]).toEqual([t.what, true]);
+    }
+  });
 
   it('each is refused before anything is written, and nothing changes', async () => {
     for (const c of cases) {

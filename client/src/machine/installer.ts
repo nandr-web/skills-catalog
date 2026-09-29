@@ -63,10 +63,16 @@ function checkTarget(ctx: Context, target: Target, name: string, lock: Lock): st
 // checkTarget is refused, not followed. writeSkill checks these identities again after every move. The folders it makes
 // are 0755 whatever the umask, so they pass the privacy check (a umask of 002 would make them group-writable).
 type Anchor = { path: string; id: Id };
-function skillsFolderFor(dest: string): Anchor[] {
+function skillsFolderFor(dest: string, target: Target): Anchor[] {
   const skills = dirname(dest);
   const claude = dirname(skills);
-  mkdirSync(dirname(claude), { recursive: true, mode: 0o755 });
+  const root = dirname(claude);
+  mkdirSync(root, { recursive: true, mode: 0o755 });
+  // The folder above .claude (§4.5): the assistant home is held to the same rule as .claude; a project folder may be
+  // group-writable (a team's checkout) but not world-writable unless sticky, as /tmp is. It may be reached through a link.
+  const r = statSync(root, { bigint: true });
+  const open = target === 'user' ? !isPrivate(r) : (r.mode & 0o002n) !== 0n && (r.mode & 0o1000n) === 0n;
+  if (open) throw new CatalogError('target_not_private', { path: root });
   return [claude, skills].map((path) => {
     try {
       mkdirSync(path, { mode: 0o755 });
@@ -161,8 +167,8 @@ function moved(from: string, to: string): boolean {
 //   may have gone where a swapped-in link pointed. It never reports success after a failed check.
 // - Nothing is removed by path unless its identity is one recorded here.
 // Returns the new copy's identity, for the lock, and where a replaced copy was kept, if it was.
-function writeSkill(dest: string, files: readonly TreeFile[], entry: LockEntry | undefined): { copy: Id; kept?: string } {
-  const anchors = skillsFolderFor(dest);
+function writeSkill(dest: string, target: Target, files: readonly TreeFile[], entry: LockEntry | undefined): { copy: Id; kept?: string } {
+  const anchors = skillsFolderFor(dest, target);
   const stagingDir = join(anchors[0]!.path, STAGING);
   let made = false;
   try {
@@ -435,7 +441,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
     const text = s.format(ctx.face === 'cli' ? w.held_cli : w.held, { name: req.name, version, reasons: reasons(s, flags), confirm, flags: JSON.stringify(kinds(flags)), command: acceptCommand(s, req.name, target) });
     return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held' };
   }
-  const written = writeSkill(dest, to.files, existing);
+  const written = writeSkill(dest, target, to.files, existing);
   const entry = record(ctx, lock, dest, { name: req.name, target }, to, req.policy ?? existing?.policy, existing?.accepted ?? [], toLock(written.copy));
   const w = s.word('install');
   const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + keptLine(s, req.name, written.kept) + '\n' + s.format(w.live, { name: req.name });
@@ -498,7 +504,7 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   if (to.fingerprint !== t.fingerprint) throw conflict();
   const flags = gate(existing ? await installedSide(catalog, existing) : null, to).risk_flags;
   if (!sameSet(req.flags, kinds(flags))) throw conflict();
-  const written = writeSkill(dest, to.files, existing);
+  const written = writeSkill(dest, t.target, to.files, existing);
   const entry = record(ctx, lock, dest, { name: req.name, target: t.target }, to, existing?.policy, [...(existing?.accepted ?? []), { version: to.version, flags: kinds(flags) }], toLock(written.copy));
   const text =
     (existing
@@ -616,7 +622,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     // A folder that changed while it was being written is that skill's refused line; the other skills go on.
     let written: ReturnType<typeof writeSkill>;
     try {
-      written = writeSkill(dest, to.files, e);
+      written = writeSkill(dest, e.target, to.files, e);
     } catch (err) {
       if (!(err instanceof CatalogError)) throw err;
       lines.push(refusedTarget(s, at, err));
