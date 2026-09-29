@@ -67,6 +67,7 @@ export function settingsFrom(env: Record<string, string | undefined>, cwd: strin
     projectDir: resolve(cwd),
     ...(env['SKILLS_TOKEN'] ? { token: env['SKILLS_TOKEN'] } : {}),
     managedSettings: resolve(env['SKILLS_MANAGED_SETTINGS'] || MANAGED_SETTINGS),
-    ...(env['SKILLS_INSTALL_DIR'] ? { installDir: resolve(env['SKILLS_INSTALL_DIR']) } : {}),
+    // As given: a relative one is refused where it's used (the user target), never resolved against wherever this runs.
+    ...(env['SKILLS_INSTALL_DIR'] ? { installDir: env['SKILLS_INSTALL_DIR'] } : {}),
   };
 }

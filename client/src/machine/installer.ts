@@ -14,7 +14,7 @@
 // checks; the installer narrows the window.
 
 import { closeSync, constants, existsSync, fchmodSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync, writeSync, type BigIntStats } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { CatalogError, inlineFiles, shellQuote, validateInput, type Catalog, type Words, type VersionsResult } from '@skills-catalog/core';
 import { DEFAULT_LIMITS, checkFetched, checkName, diffTrees, fingerprint, flagText, sha256Hex, type RiskFlag, type TreeDiff, type TreeFile } from '@skills-catalog/core/skill-tree';
 import { reasons } from '@skills-catalog/core';
@@ -30,10 +30,16 @@ const TARGETS: readonly Target[] = ['user', 'project'];
 // ---------- where skills go ----------
 
 const rootOf = (ctx: Context, t: Target) => (t === 'user' ? ctx.settings.assistantHome : ctx.settings.projectDir);
-/** SKILLS_INSTALL_DIR stands in for the user target's .claude/skills (§8): its parent takes .claude's checks, and the
- *  assistant home above isn't the folder above it. */
+/** SKILLS_INSTALL_DIR stands in for the user target's .claude/skills (§8): an absolute path, whose parent takes .claude's
+ *  checks and the folder above that the private-folder test (it isn't the assistant home). A limit, stated: pointed at
+ *  the current project's .claude/skills, both targets are one folder. */
 const standsIn = (ctx: Context, t: Target) => t === 'user' && ctx.settings.installDir !== undefined;
-export const skillsDir = (ctx: Context, t: Target) => (standsIn(ctx, t) ? ctx.settings.installDir! : join(rootOf(ctx, t), '.claude', 'skills'));
+export function skillsDir(ctx: Context, t: Target): string {
+  if (!standsIn(ctx, t)) return join(rootOf(ctx, t), '.claude', 'skills');
+  const dir = ctx.settings.installDir!;
+  if (!isAbsolute(dir)) throw new CatalogError('invalid_request', { field: 'SKILLS_INSTALL_DIR', why: 'not_absolute' });
+  return dir;
+}
 const destOf = (ctx: Context, t: Target, name: string) => join(skillsDir(ctx, t), name);
 
 function isLink(path: string): boolean {
@@ -79,7 +85,7 @@ function skillsFolderFor(dest: string, target: Target, standIn = false): Anchor[
       makeFolder(at, 0o755);
     } catch (e) {
       if (!UNMAKEABLE.has((e as NodeJS.ErrnoException).code ?? '')) throw e;
-      throw new CatalogError('target_unavailable', { path: at, target, ...(at === root && target === 'user' ? { home: true } : {}) });
+      throw new CatalogError('target_unavailable', { path: at, target, ...(at === root && target === 'user' && !standIn ? { home: true } : {}) });
     }
   };
   const missing: string[] = [];
@@ -93,7 +99,7 @@ function skillsFolderFor(dest: string, target: Target, standIn = false): Anchor[
   const uid = process.getuid?.();
   const ownedWell = uid !== undefined && (r.uid === BigInt(uid) || r.uid === 0n);
   const open = target === 'user' ? !isPrivate(r) : uid !== undefined && (!ownedWell || ((r.mode & 0o1000n) === 0n && !writableOnlyAsPrivate(r)));
-  if (open && !standIn) throw notPrivate(root, target, r, target === 'user');
+  if (open) throw notPrivate(root, target, r, target === 'user' && !standIn);
   return [claude, skills].map((path) => {
     make(path);
     return realFolder(path, target);
