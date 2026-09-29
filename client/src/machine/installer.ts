@@ -226,6 +226,9 @@ function moved(from: string, to: string): boolean {
 // - Nothing is removed by path unless its identity is one recorded here.
 // Returns the new copy's identity, for the lock, and where a replaced copy was kept, if it was.
 function writeSkill(dest: string, target: Target, files: readonly TreeFile[], entry: LockEntry | undefined): { copy: Id; kept?: string } {
+  // A staging folder already there is checked before anything is made, so a refusal for it leaves nothing behind.
+  const early = join(dirname(dirname(dest)), STAGING);
+  if (existsSync(early)) realFolder(early, target);
   const anchors = skillsFolderFor(dest, target);
   const stagingDir = join(anchors[0]!.path, STAGING);
   const made = makeFolder(stagingDir, 0o700);

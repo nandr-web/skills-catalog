@@ -616,8 +616,9 @@ describe('the staging folder swapped right after its check', () => {
     race.fs.mkdirSync(theirs);
     let looks = 0;
     let madeInTheirs = false;
+    // Its second look: the first is the early check of a staging folder already there, before anything is made.
     race.stats = (at) => {
-      if (at !== staging || ++looks !== 1) return undefined;
+      if (at !== staging || ++looks !== 2) return undefined;
       race.fs.renameSync(staging, join(p.dir, 'aside'));
       race.fs.symlinkSync(theirs, staging);
       return undefined;

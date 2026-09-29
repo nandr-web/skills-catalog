@@ -88,6 +88,7 @@ const MUTATIONS = [
   ['machine/installer.ts', 'a folder on the way that can\'t be made is a failure of the tool', "      if (!UNMAKEABLE.has((e as NodeJS.ErrnoException).code ?? '')) throw e;", '      throw e;'],
   ['machine/installer.ts', 'a moved-aside folder is removed by its path alone', '  if (!isCopy(lstatOf(path), id)) return false;\n', ''],
   ['machine/installer.ts', 'staging isn\'t looked at again before its .gitignore', '    stagingThere();\n    try {', '    try {'],
+  ['machine/installer.ts', 'a staging folder already there is checked only once the skills folder is made', '  if (existsSync(early)) realFolder(early, target);\n', ''],
   ['machine/installer.ts', 'staging isn\'t looked at again before the temp folder is made', '  stagingThere();\n  const tmp', '  const tmp'],
   ['machine/installer.ts', 'a .gitignore already in a new staging folder is a failure of the tool', "      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;\n      failed ??= stagingDir;", '      throw e;\n      failed ??= stagingDir;'],
   // installing over an installed copy (held-table.test.ts)
