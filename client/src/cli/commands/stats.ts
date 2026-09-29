@@ -24,9 +24,8 @@ export const stats: Command = {
 
 const percent = (x: number) => `${Math.round(x * 100)}%`;
 
-/** The summary in the surface's words (results.stats); until they're vendored, as its data. */
+/** The summary in the surface's words (results.stats). */
 export function renderStats(s: Surface, u: UsageStats): string {
-  if (s.word('stats') === undefined) return `stats: ${JSON.stringify(u)}`;
   const w = (path: string, fields: Record<string, unknown> = {}) => s.format(s.word(`stats.${path}`), fields);
   if (u.empty) return w('empty');
   const date = (iso: string) => {

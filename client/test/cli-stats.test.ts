@@ -17,25 +17,7 @@ const DAY = 86_400_000;
 const w = (path: string, fields: Record<string, unknown> = {}) => S.format(S.word(`stats.${path}`), fields);
 const date = (d: Date) => d.toISOString().slice(0, 10);
 
-// The words (results.stats) are vendored with the installer's words they came with; until then stats prints its data.
-// This trips when they land: then drop the gap and the data test.
-const WORDS_GAP = true;
-
-describe('stats, until its words are vendored', () => {
-  it('the gap is still open', () => expect(S.word('stats') === undefined).toBe(WORDS_GAP));
-
-  it.runIf(WORDS_GAP)('prints the summary as its data', async () => {
-    const p = place();
-    recordUsage(p.home, { event: 'hold', skill: 'release-notes-kit', version: 2, reason: 'flagged', flags: [], behind: 1 }, new Date(Date.now() - DAY), { createKey: true });
-    const r = await runStats(p);
-    expect(r.code).toBe(0);
-    expect(r.out).toMatch(/^stats: \{"empty":false,/);
-    expect(r.out).toContain('"holds":{"total":1,');
-    expect(r.out).not.toMatch(/release/);
-  });
-});
-
-describe.runIf(!WORDS_GAP)('stats', () => {
+describe('stats', () => {
   it('with nothing counted yet, says so', async () => {
     const p = place();
     const r = await runStats(p);
