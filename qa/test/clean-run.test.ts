@@ -31,12 +31,13 @@ describe('sandbox', () => {
     const sb = sandbox(m);
     expect(sb.root).toBe(join(m.tmp, 'skills-catalog-qa', sb.runId));
     for (const d of DIRS) expect(existsSync(join(sb.root, d)), d).toBe(true);
-    expect(DIRS).toEqual(['catalog', 'home', 'install', 'assistant', 'work', 'outside', 'bin']);
+    expect(DIRS).toEqual(['catalog', 'home', 'install', 'assistant', 'work', 'outside', 'bin', 'managed']);
     expect(sb.env).toMatchObject({
       SKILLS_CATALOG: `file://${join(sb.root, 'catalog')}`,
       SKILLS_HOME: join(sb.root, 'home'),
       SKILLS_INSTALL_DIR: join(sb.root, 'install'),
       SKILLS_ASSISTANT_HOME: join(sb.root, 'assistant'),
+      SKILLS_MANAGED_SETTINGS: join(sb.root, 'managed'),   // Claude Code's managed settings, never the machine's (contract §8)
       SKILLS_SYNC_ON_START: '0',
       SKILLS_AS: 'me',   // the acting developer (the contract §7, Identity)
     });

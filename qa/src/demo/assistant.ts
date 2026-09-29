@@ -207,6 +207,9 @@ export function serverEnv(o: { root: string; who: string; catalog: string; activ
     SKILLS_AS: o.who,
     SKILLS_ACTIVITY_LOG: o.activityLog,
     SKILLS_ASSISTANT_HOME: home,
+    // Claude Code's managed settings (the machine's policy): this developer's machine's own, in the sandbox, never the
+    // real machine's (contract §8)
+    SKILLS_MANAGED_SETTINGS: join(o.root, 'managed-settings', o.who),
     // the run's id, so qa run's check after the run finds a server that outlived it
     ...(o.runId && /^\d{8}T\d{6}Z-[0-9a-f]{8}$/.test(o.runId) ? { QA_RUN_ID: o.runId } : {}),
   };

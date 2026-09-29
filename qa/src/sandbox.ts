@@ -4,14 +4,14 @@
 // run id and holds run.json {run_id, pid, started_at, pgids, preexisting}, which the janitor reads.
 import { randomBytes } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { leftoverPaths } from './leftovers.ts';
 import type { Machine } from './machine.ts';
 import { BASE_NAME, canonical, ensureBase, realHome, RUN_ID, tripwire, UnsafeError, within } from './safe-delete.ts';
 
 export { realHome };
-export const DIRS = ['catalog', 'home', 'install', 'assistant', 'work', 'outside', 'bin'] as const;
+export const DIRS = ['catalog', 'home', 'install', 'assistant', 'work', 'outside', 'bin', 'managed'] as const;
 export type Dir = (typeof DIRS)[number];
 export type Sandbox = { runId: string; root: string; dirs: Record<Dir, string>; env: Record<string, string>; preexisting: ReadonlySet<string> };
 export type RunRecord = { run_id: string; pid: number; started_at: string; pgids: number[]; preexisting: string[] };
@@ -46,8 +46,18 @@ export const ENV_ALLOW = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 
 export const PLANTED_NAMES = ['AWS_SECRET_ACCESS_KEY', 'AWS_ACCESS_KEY_ID', 'GITHUB_TOKEN', 'GH_TOKEN', 'ANTHROPIC_API_KEY', 'NPM_TOKEN', 'SSH_AUTH_SOCK', 'MY_NOTES'];
 const allowedName = (k: string) => ENV_ALLOW.some((a) => (a.endsWith('*') ? k.startsWith(a.slice(0, -1)) : k === a));
 export function childEnv(sb: { env: Record<string, string> }, parent: NodeJS.ProcessEnv = process.env): Record<string, string> {
+  managedInside(sb.env);
   const kept = Object.entries(parent).filter((e): e is [string, string] => typeof e[1] === 'string' && allowedName(e[0]));
   return { ...Object.fromEntries(kept), ...sb.env };
+}
+
+/** The product reads Claude Code's managed settings (the machine's policy) unless SKILLS_MANAGED_SETTINGS points elsewhere
+ *  (the contract §8), so no process of a run starts unless it points to a folder inside the run's sandbox (QA_SANDBOX). */
+function managedInside(env: Record<string, string>): void {
+  const managed = env.SKILLS_MANAGED_SETTINGS, root = env.QA_SANDBOX;
+  const inside = (m: string, r: string) => !within(r, m) && within(m, r);
+  if (managed && root && isAbsolute(managed) && isAbsolute(root) && inside(canonical(resolve(managed)), canonical(resolve(root)))) return;
+  throw new UnsafeError(`SKILLS_MANAGED_SETTINGS ${JSON.stringify(managed ?? null)} is not a folder inside the run's sandbox ${JSON.stringify(root ?? null)}: refusing to start a process that could read this machine's managed settings`);
 }
 
 /** run.json is written whole: a temp file, then a rename. */
@@ -81,6 +91,7 @@ export function createSandbox({ runId, machine, now = Date.now }: { runId: strin
     SKILLS_HOME: dirs.home,
     SKILLS_INSTALL_DIR: dirs.install,
     SKILLS_ASSISTANT_HOME: dirs.assistant,
+    SKILLS_MANAGED_SETTINGS: dirs.managed,
     SKILLS_SYNC_ON_START: '0',
     SKILLS_AS: 'me',
     QA_RUN_ID: runId,

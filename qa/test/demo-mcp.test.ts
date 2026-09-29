@@ -73,7 +73,10 @@ describe("each developer's server settings", () => {
 
   it("are exactly these: a PATH of the system's folders, the developer's own machine in the sandbox, the shared catalog, the demo's log", () => {
     const env = serverEnv(settings(root, 'ana'));
-    expect(Object.keys(env).sort()).toEqual(['HOME', 'PATH', 'SKILLS_ACTIVITY_LOG', 'SKILLS_AS', 'SKILLS_ASSISTANT_HOME', 'SKILLS_CATALOG', 'SKILLS_HOME']);
+    expect(Object.keys(env).sort()).toEqual(['HOME', 'PATH', 'SKILLS_ACTIVITY_LOG', 'SKILLS_AS', 'SKILLS_ASSISTANT_HOME', 'SKILLS_CATALOG', 'SKILLS_HOME', 'SKILLS_MANAGED_SETTINGS']);
+    // Claude Code's managed settings (machine-wide policy) are the developer's machine's own, in the sandbox: never the
+    // real machine's (contract §8)
+    expect(env.SKILLS_MANAGED_SETTINGS).toBe(join(root, 'managed-settings', 'ana'));
     // inside a run, the run's id too (qa run finds a leftover server by it); anything that isn't a run id is left out
     expect(serverEnv({ ...settings(root, 'ana'), runId: '20260929T001234Z-1a2b3c4d' }).QA_RUN_ID).toBe('20260929T001234Z-1a2b3c4d');
     expect(serverEnv({ ...settings(root, 'ana'), runId: 'x; rm -rf' })).not.toHaveProperty('QA_RUN_ID');
@@ -93,7 +96,7 @@ describe("each developer's server settings", () => {
 
   it("ana's and bob's are two machines: every folder of theirs differs; only the catalog (and the demo's log) is shared", () => {
     const ana = serverEnv(settings(root, 'ana')), bob = serverEnv(settings(root, 'bob'));
-    for (const k of ['HOME', 'SKILLS_HOME', 'SKILLS_ASSISTANT_HOME', 'SKILLS_AS']) {
+    for (const k of ['HOME', 'SKILLS_HOME', 'SKILLS_ASSISTANT_HOME', 'SKILLS_MANAGED_SETTINGS', 'SKILLS_AS']) {
       expect(ana[k], k).not.toBe(bob[k]);
       if (k !== 'SKILLS_AS') expect(within(ana[k]!, bob.HOME!) || within(bob[k]!, ana.HOME!), k).toBe(false);
     }

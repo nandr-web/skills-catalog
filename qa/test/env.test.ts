@@ -40,11 +40,23 @@ describe('the environment a run\'s processes get', () => {
       MY_NOTES: 'x', SKILLS_AS: 'parent', SKILLS_TOKEN: 'QA-PLANT-SKILLS_TOKEN', SKILLS_ACCEPT_FLAGGED_UPDATES: '1', QA_OTHER: 'kept',
       ...Object.fromEntries(SECRETS.map((k) => [k, `QA-PLANT-${k}`])),
     };
-    const env = childEnv({ env: { SKILLS_AS: 'me', SKILLS_HOME: '/run/home', QA_RUN_ID: 'r', PATH: '/run/bin:/usr/bin' } }, parent);
-    expect(Object.keys(env).sort()).toEqual(['HOME', 'LANG', 'LC_CTYPE', 'LOGNAME', 'PATH', 'QA_OTHER', 'QA_RUN_ID', 'SHELL', 'SKILLS_AS', 'SKILLS_HOME', 'TERM', 'TMPDIR', 'USER']);
+    const env = childEnv({ env: { SKILLS_AS: 'me', SKILLS_HOME: '/run/home', SKILLS_MANAGED_SETTINGS: '/run/managed', QA_SANDBOX: '/run', QA_RUN_ID: 'r', PATH: '/run/bin:/usr/bin' } }, parent);
+    expect(Object.keys(env).sort()).toEqual(['HOME', 'LANG', 'LC_CTYPE', 'LOGNAME', 'PATH', 'QA_OTHER', 'QA_RUN_ID', 'QA_SANDBOX', 'SHELL', 'SKILLS_AS', 'SKILLS_HOME', 'SKILLS_MANAGED_SETTINGS', 'TERM', 'TMPDIR', 'USER']);
     expect(env).toMatchObject({ HOME: '/Users/me', SKILLS_AS: 'me', PATH: '/run/bin:/usr/bin' });
     expect(ENV_ALLOW).toEqual(['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG', 'LC_*', 'TERM', 'QA_*']);   // SKILLS_*: the sandbox's only
     expect(PLANTED_NAMES).toEqual([...SECRETS, 'MY_NOTES']);   // the credential names, and an ordinary one
+  });
+
+  // Contract §8: the product reads Claude Code's managed settings (machine-wide policy) unless SKILLS_MANAGED_SETTINGS points
+  // elsewhere, so no process of a run starts without it pointing into the run's sandbox.
+  it('childEnv refuses a sandbox whose managed settings aren\'t pointed inside it', () => {
+    const base = { SKILLS_HOME: '/run/home', QA_SANDBOX: '/run', PATH: '/usr/bin' };
+    for (const managed of [undefined, '', '/Library/Application Support/ClaudeCode', '/etc/claude-code', '/run/../etc/claude-code', '/run', 'managed', '/runner/managed']) {
+      const env = managed === undefined ? base : { ...base, SKILLS_MANAGED_SETTINGS: managed };
+      expect(() => childEnv({ env }, {}), String(managed)).toThrow(/SKILLS_MANAGED_SETTINGS/);
+    }
+    expect(() => childEnv({ env: { SKILLS_MANAGED_SETTINGS: '/run/managed', PATH: '/usr/bin' } }, {}), 'no sandbox named').toThrow(/SKILLS_MANAGED_SETTINGS/);
+    expect(childEnv({ env: { ...base, SKILLS_MANAGED_SETTINGS: '/run/managed' } }, {}).SKILLS_MANAGED_SETTINGS).toBe('/run/managed');
   });
 
   it('qa run: the command sees no secret and no name outside the allow-list', async () => {
