@@ -219,6 +219,20 @@ describe('fault injection (histories.fault)', () => {
     expect([storedBlobs(dir).size, pendingRows(dir).length]).toEqual([2, 2]);
   });
 
+  it('a stale row for a file a version references clears the row and keeps the file', async () => {
+    const dir = sandbox();
+    const root = join(dir, 'catalog');
+    const first = await openLocalCatalog(root);
+    const v1 = historyVersion(histories.versions['prc.v1']);
+    await first.publish(request('pr-review-checklist', v1), ana);
+    first.close();
+    const db = new DatabaseSync(join(root, 'catalog.sqlite'));
+    db.prepare('INSERT INTO pending_blobs (sha256, at) VALUES (?, ?)').run(sha(v1[0]!.bytes), new Date(Date.now() - 2 * 3600_000).toISOString());
+    db.close();
+    (await openLocalCatalog(root)).close();
+    expect([pendingRows(dir), storedBlobs(dir).has(sha(v1[0]!.bytes))]).toEqual([[], true]);
+  });
+
   it('a leftover from before publishes were marked stays: the cleanup never walks the blob folder', async () => {
     const dir = sandbox();
     const root = join(dir, 'catalog');
