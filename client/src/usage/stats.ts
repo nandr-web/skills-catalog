@@ -105,10 +105,10 @@ export function usageStats(all: readonly StoredEvent[], now: Date = new Date()):
         break;
       }
       case 'mode':
-        if (e.surface === 'hook') sessions++;
+        if (e.face === 'hook') sessions++;
         break;
       case 'notice':
-        if (e.surface === 'hook') withNotice++;
+        if (e.face === 'hook') withNotice++;
         break;
       case 'policy':
         policies.push({ at, to: e.to, scope: e.scope, near: e.near_hold });

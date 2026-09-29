@@ -29,13 +29,13 @@ export type HoldReason = (typeof HOLD_REASONS)[number];
 /** The events as callers give them: a skill by its name, which is hashed before it's written. */
 export type UsageEvent =
   | { event: 'hold'; skill: string; version: number; reason: HoldReason; flags: readonly FlagKind[]; behind: number }
-  | { event: 'notice'; surface: 'hook' | 'mcp'; waiting: number }
-  | { event: 'look'; skill: string; version: number; surface: 'cli' | 'assistant' | 'web' }
+  | { event: 'notice'; face: 'hook' | 'mcp'; waiting: number }
+  | { event: 'look'; skill: string; version: number; face: 'cli' | 'assistant' | 'web' }
   | { event: 'answer'; skill: string; version: number; answer: 'yes' | 'no' | 'pin' | 'superseded'; together: number }
   | { event: 'policy'; from: Policy; to: Policy; scope: 'catalog' | 'skill'; near_hold: boolean }
   // At each sync, so it doubles as the count of syncs (a hook's sync is a session). The mode comes once the installer
-  // detects permissive modes (contract §5.3); until then the event has only its surface.
-  | { event: 'mode'; mode?: 'default' | 'auto' | 'bypass' | 'sandbox_auto_allow' | 'broad_bash_rule'; surface: 'hook' | 'mcp' | 'update' }
+  // detects permissive modes (contract §5.3); until then the event has only its face.
+  | { event: 'mode'; mode?: 'default' | 'auto' | 'bypass' | 'sandbox_auto_allow' | 'broad_bash_rule'; face: 'hook' | 'mcp' | 'update' }
   // One per operation: the registry's name and a result code ("ok", an outcome such as a search's "none", or an error
   // code). Never the query, a name or a path.
   | { event: 'use'; op: string; result: string };
@@ -55,11 +55,11 @@ const kinds: Check = (v) => Array.isArray(v) && v.length <= FLAG_KINDS.length &&
 const code: Check = (v) => typeof v === 'string' && /^[a-z][a-z0-9_]{0,39}$/.test(v);
 const FIELDS: Record<UsageEvent['event'], Record<string, Check>> = {
   hold: { skill, version, reason: oneOf(...HOLD_REASONS), flags: kinds, behind: count },
-  notice: { surface: oneOf('hook', 'mcp'), waiting: count },
-  look: { skill, version, surface: oneOf('cli', 'assistant', 'web') },
+  notice: { face: oneOf('hook', 'mcp'), waiting: count },
+  look: { skill, version, face: oneOf('cli', 'assistant', 'web') },
   answer: { skill, version, answer: oneOf('yes', 'no', 'pin', 'superseded'), together: (v) => count(v) && (v as number) >= 1 },
   policy: { from: oneOf(...POLICIES), to: oneOf(...POLICIES), scope: oneOf('catalog', 'skill'), near_hold: (v) => typeof v === 'boolean' },
-  mode: { surface: oneOf('hook', 'mcp', 'update'), mode: optional(oneOf('default', 'auto', 'bypass', 'sandbox_auto_allow', 'broad_bash_rule')) },
+  mode: { face: oneOf('hook', 'mcp', 'update'), mode: optional(oneOf('default', 'auto', 'bypass', 'sandbox_auto_allow', 'broad_bash_rule')) },
   use: { op: oneOf(...Object.keys(OPERATIONS)), result: code },
 };
 
@@ -262,6 +262,8 @@ function parsed(line: string): StoredEvent | null {
   if (!o || typeof o !== 'object') return null;
   const r = o as Record<string, unknown>;
   if (r['v'] !== 1 || typeof r['at'] !== 'string' || Number.isNaN(Date.parse(r['at']))) return null;
+  // A line kept from before the field was renamed says surface where a new one says face.
+  if (!Object.hasOwn(r, 'face') && Object.hasOwn(r, 'surface')) r['face'] = r['surface'];
   const fields = checked(r as UsageEvent);
   return fields ? ({ v: 1, at: r['at'], ...fields } as StoredEvent) : null;
 }

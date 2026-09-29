@@ -1,6 +1,6 @@
 // The installer's usage events (contract §3, usage metrics): a hold at every held install and every held line of an
 // update, the person's yes where a held update is taken, a pin set on a skill whose update is waiting (an answer too),
-// every policy change, and the mode at each sync (only its surface until permissive modes are detected). Skill names are
+// every policy change, and the mode at each sync (only its face until permissive modes are detected). Skill names are
 // stored hashed.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -70,7 +70,7 @@ describe('the installer records its holds, the person\'s yes and pins, policy ch
       { event: 'hold', skill: h('flagged'), version: 3, reason: 'flagged', flags: ['runnable_file'], behind: 2 },
       { event: 'hold', skill: h('pinned'), version: 2, reason: 'pin', flags: [], behind: 1 },
     ]);
-    expect(events(p, 'mode')).toEqual([{ event: 'mode', surface: 'update' }]);
+    expect(events(p, 'mode')).toEqual([{ event: 'mode', face: 'update' }]);
   });
 
   it('an install over a pinned copy is a hold; a pin set while an update waits is the person\'s answer, and a policy change', async () => {

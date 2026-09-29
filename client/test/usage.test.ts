@@ -16,9 +16,9 @@ const lines = (h: string, date: string) => readFileSync(join(h, 'usage', `${date
 describe('recording usage', () => {
   it('writes one line per event to that UTC day\'s file, only the client can read it', () => {
     const h = home();
-    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 2 }, new Date('2026-09-29T23:59:59Z'));
+    recordUsage(h, { event: 'notice', face: 'hook', waiting: 2 }, new Date('2026-09-29T23:59:59Z'));
     recordUsage(h, { event: 'policy', from: 'auto', to: 'notify', scope: 'catalog', near_hold: false }, new Date('2026-09-30T00:00:01Z'));
-    expect(lines(h, '2026-09-29')).toEqual([{ v: 1, at: '2026-09-29T23:59:59.000Z', event: 'notice', surface: 'hook', waiting: 2 }]);
+    expect(lines(h, '2026-09-29')).toEqual([{ v: 1, at: '2026-09-29T23:59:59.000Z', event: 'notice', face: 'hook', waiting: 2 }]);
     expect(lines(h, '2026-09-30')).toEqual([{ v: 1, at: '2026-09-30T00:00:01.000Z', event: 'policy', from: 'auto', to: 'notify', scope: 'catalog', near_hold: false }]);
     expect(statSync(join(h, 'usage')).mode & 0o777).toBe(0o700);
     expect(statSync(join(h, 'usage', '2026-09-29.jsonl')).mode & 0o777).toBe(0o600);
@@ -52,52 +52,52 @@ describe('recording usage', () => {
     const h = home();
     const at = day('2026-09-29');
     recordUsage(h, { event: 'hold', skill: 'release-notes-kit', version: 2, reason: 'flagged', flags: ['runnable_file'], behind: 1 }, at, { createKey: true });
-    recordUsage(h, { event: 'look', skill: 'release-notes-kit', version: 2, surface: 'cli' }, at);
-    recordUsage(h, { event: 'look', skill: 'sql-migration-helper', version: 3, surface: 'assistant' }, at);
+    recordUsage(h, { event: 'look', skill: 'release-notes-kit', version: 2, face: 'cli' }, at);
+    recordUsage(h, { event: 'look', skill: 'sql-migration-helper', version: 3, face: 'assistant' }, at);
     const [hold, look, other] = lines(h, '2026-09-29');
     expect(hold.skill).toMatch(/^[A-Za-z0-9_-]{16}$/);
     expect(look.skill).toBe(hold.skill);
     expect(other.skill).not.toBe(hold.skill);
     expect(readFileSync(join(h, 'usage', '2026-09-29.jsonl'), 'utf8')).not.toMatch(/release|notes|sql|migration/);
     const elsewhere = home();
-    recordUsage(elsewhere, { event: 'look', skill: 'release-notes-kit', version: 2, surface: 'cli' }, at, { createKey: true });
+    recordUsage(elsewhere, { event: 'look', skill: 'release-notes-kit', version: 2, face: 'cli' }, at, { createKey: true });
     expect(lines(elsewhere, '2026-09-29')[0].skill).not.toBe(hold.skill);
   });
 
   it('keeps only each event\'s own fields, so no text can ride along', () => {
     const h = home();
-    const sneaky = { event: 'notice', surface: 'mcp', waiting: 1, query: 'my secret project', text: 'x' } as unknown as Parameters<typeof recordUsage>[1];
+    const sneaky = { event: 'notice', face: 'mcp', waiting: 1, query: 'my secret project', text: 'x' } as unknown as Parameters<typeof recordUsage>[1];
     recordUsage(h, sneaky, day('2026-09-29'));
     recordUsage(h, { event: 'answer', skill: 'a', version: 1, answer: 'maybe' as 'yes', together: 1 }, day('2026-09-29'));
     recordUsage(h, { event: 'frobnicate' } as unknown as Parameters<typeof recordUsage>[1], day('2026-09-29'));
-    expect(lines(h, '2026-09-29')).toEqual([{ v: 1, at: '2026-09-29T12:00:00.000Z', event: 'notice', surface: 'mcp', waiting: 1 }]);
+    expect(lines(h, '2026-09-29')).toEqual([{ v: 1, at: '2026-09-29T12:00:00.000Z', event: 'notice', face: 'mcp', waiting: 1 }]);
   });
 
-  it('use: one per operation, its code only; mode: the sync\'s surface, its mode once detection is built', () => {
+  it('use: one per operation, its code only; mode: the sync\'s face, its mode once detection is built', () => {
     const h = home();
     const at = day('2026-09-29');
     recordUsage(h, { event: 'use', op: 'search_shared_skills', result: 'none' }, at);
     recordUsage(h, { event: 'use', op: 'install_shared_skill', result: 'exists_untracked' }, at);
     recordUsage(h, { event: 'use', op: 'no_such_operation', result: 'ok' }, at);
     recordUsage(h, { event: 'use', op: 'read_shared_skill', result: 'release notes for acme' }, at);
-    recordUsage(h, { event: 'mode', surface: 'hook' }, at);
-    recordUsage(h, { event: 'mode', surface: 'update', mode: 'bypass' }, at);
-    recordUsage(h, { event: 'mode', surface: 'hook', mode: 'sometimes' as 'auto' }, at);
+    recordUsage(h, { event: 'mode', face: 'hook' }, at);
+    recordUsage(h, { event: 'mode', face: 'update', mode: 'bypass' }, at);
+    recordUsage(h, { event: 'mode', face: 'hook', mode: 'sometimes' as 'auto' }, at);
     expect(lines(h, '2026-09-29').map(({ v, at: _, ...e }) => e)).toEqual([
       { event: 'use', op: 'search_shared_skills', result: 'none' },
       { event: 'use', op: 'install_shared_skill', result: 'exists_untracked' },
-      { event: 'mode', surface: 'hook' },
-      { event: 'mode', surface: 'update', mode: 'bypass' },
+      { event: 'mode', face: 'hook' },
+      { event: 'mode', face: 'update', mode: 'bypass' },
     ]);
   });
 
   it(`keeps ${USAGE_DAYS} days: the day ${USAGE_DAYS} days back is kept and read, the day before it goes; nothing else in the folder is touched`, () => {
     const h = home();
     // 2026-09-29 less 90 days is 2026-07-01.
-    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-06-30'));
-    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 2 }, new Date('2026-07-01T00:00:00Z'));
+    recordUsage(h, { event: 'notice', face: 'hook', waiting: 1 }, day('2026-06-30'));
+    recordUsage(h, { event: 'notice', face: 'hook', waiting: 2 }, new Date('2026-07-01T00:00:00Z'));
     writeFileSync(join(h, 'usage', 'notes.txt'), 'the person\'s own file\n');
-    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 3 }, day('2026-09-29'));
+    recordUsage(h, { event: 'notice', face: 'hook', waiting: 3 }, day('2026-09-29'));
     expect(readdirSync(join(h, 'usage')).sort()).toEqual(['2026-07-01.jsonl', '2026-09-29.jsonl', 'notes.txt']);
     expect(readUsage(h, day('2026-09-29')).map((e) => (e.event === 'notice' ? e.waiting : 0))).toEqual([2, 3]);
     expect(readUsage(h, day('2026-09-30')).map((e) => (e.event === 'notice' ? e.waiting : 0))).toEqual([3]);
@@ -105,10 +105,10 @@ describe('recording usage', () => {
 
   it('the old days still go when today\'s line can\'t be written (a pipe in its place): only the day files, never the pipe', () => {
     const h = home();
-    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-06-30'));
+    recordUsage(h, { event: 'notice', face: 'hook', waiting: 1 }, day('2026-06-30'));
     const today = join(h, 'usage', '2026-09-29.jsonl');
     execFileSync('mkfifo', [today]);
-    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 2 }, day('2026-09-29'));
+    recordUsage(h, { event: 'notice', face: 'hook', waiting: 2 }, day('2026-09-29'));
     expect(readdirSync(join(h, 'usage'))).toEqual(['2026-09-29.jsonl']);
     expect(lstatSync(today).isFIFO()).toBe(true);
   });
@@ -119,7 +119,7 @@ describe('recording usage', () => {
     chmodSync(join(h, 'usage'), 0o755);
     writeFileSync(join(h, 'usage', '2026-09-29.jsonl'), '', { mode: 0o644 });
     chmodSync(join(h, 'usage', '2026-09-29.jsonl'), 0o644);
-    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'));
+    recordUsage(h, { event: 'notice', face: 'hook', waiting: 1 }, day('2026-09-29'));
     expect(statSync(join(h, 'usage')).mode & 0o777).toBe(0o700);
     expect(statSync(join(h, 'usage', '2026-09-29.jsonl')).mode & 0o777).toBe(0o600);
     expect(lines(h, '2026-09-29')).toHaveLength(1);
@@ -137,15 +137,15 @@ describe('recording usage', () => {
     mkdirSync(outside);
     mkdirSync(h, { recursive: true });
     symlinkSync(outside, join(h, 'usage'));
-    expect(() => recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'))).not.toThrow();
+    expect(() => recordUsage(h, { event: 'notice', face: 'hook', waiting: 1 }, day('2026-09-29'))).not.toThrow();
     expect(readdirSync(outside)).toEqual([]);
     const file = join(sandbox(), 'a-file');
     writeFileSync(file, '');
-    expect(() => recordUsage(file, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'))).not.toThrow();
+    expect(() => recordUsage(file, { event: 'notice', face: 'hook', waiting: 1 }, day('2026-09-29'))).not.toThrow();
     const locked = home();
     mkdirSync(join(locked, 'usage'), { recursive: true });
     chmodSync(join(locked, 'usage'), 0o500);
-    expect(() => recordUsage(locked, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'))).not.toThrow();
+    expect(() => recordUsage(locked, { event: 'notice', face: 'hook', waiting: 1 }, day('2026-09-29'))).not.toThrow();
     chmodSync(join(locked, 'usage'), 0o700);
   });
 });
@@ -155,7 +155,7 @@ describe('the machine secret a skill\'s hash is keyed with', () => {
 
   it('a read (a look from a diff) never creates it: without it, an event naming a skill is dropped; one naming none is kept', () => {
     const h = home();
-    recordUsage(h, { event: 'look', skill: 'a', version: 2, surface: 'cli' }, day('2026-09-29'));
+    recordUsage(h, { event: 'look', skill: 'a', version: 2, face: 'cli' }, day('2026-09-29'));
     recordUsage(h, { event: 'use', op: 'search_shared_skills', result: 'none' }, day('2026-09-29'));
     expect(existsSync(key(h))).toBe(false);
     expect(lines(h, '2026-09-29').map((e) => e.event)).toEqual(['use']);
@@ -165,7 +165,7 @@ describe('the machine secret a skill\'s hash is keyed with', () => {
     const h = home();
     recordUsage(h, { event: 'hold', skill: 'a', version: 2, reason: 'flagged', flags: [], behind: 1 }, day('2026-09-29'), { createKey: true });
     expect(statSync(key(h)).mode & 0o777).toBe(0o600);
-    recordUsage(h, { event: 'look', skill: 'a', version: 2, surface: 'cli' }, day('2026-09-29'));
+    recordUsage(h, { event: 'look', skill: 'a', version: 2, face: 'cli' }, day('2026-09-29'));
     expect(lines(h, '2026-09-29').map((e) => e.event)).toEqual(['hold', 'look']);
   });
 
@@ -174,7 +174,7 @@ describe('the machine secret a skill\'s hash is keyed with', () => {
     recordUsage(h, { event: 'hold', skill: 'a', version: 2, reason: 'flagged', flags: [], behind: 1 }, day('2026-09-29'), { createKey: true });
     chmodSync(key(h), 0o644);
     const before = readFileSync(key(h));
-    recordUsage(h, { event: 'look', skill: 'a', version: 2, surface: 'cli' }, day('2026-09-29'));
+    recordUsage(h, { event: 'look', skill: 'a', version: 2, face: 'cli' }, day('2026-09-29'));
     expect(readFileSync(key(h))).toEqual(before);
     expect(statSync(key(h)).mode & 0o777).toBe(0o644);
     expect(lines(h, '2026-09-29').map((e) => e.event)).toEqual(['hold']);
@@ -186,10 +186,10 @@ describe('a day file hard-linked to a file elsewhere', () => {
     const h = home();
     mkdirSync(join(h, 'usage'), { recursive: true });
     const outside = join(sandbox(), 'outside.jsonl');
-    writeFileSync(outside, JSON.stringify({ v: 1, at: '2026-09-29T01:00:00.000Z', event: 'notice', surface: 'mcp', waiting: 9 }) + '\n', { mode: 0o644 });
+    writeFileSync(outside, JSON.stringify({ v: 1, at: '2026-09-29T01:00:00.000Z', event: 'notice', face: 'mcp', waiting: 9 }) + '\n', { mode: 0o644 });
     chmodSync(outside, 0o644);
     linkSync(outside, join(h, 'usage', '2026-09-29.jsonl'));
-    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'));
+    recordUsage(h, { event: 'notice', face: 'hook', waiting: 1 }, day('2026-09-29'));
     expect(readFileSync(outside, 'utf8').trimEnd().split('\n')).toHaveLength(1);
     expect(statSync(outside).mode & 0o777).toBe(0o644);
     expect(readUsage(h, day('2026-09-29'))).toEqual([]);
@@ -211,10 +211,10 @@ describe('files another user owns', () => {
 
   it('a usage folder or day file another user owns is neither written, tightened nor read', async () => {
     const h = home();
-    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'));
+    recordUsage(h, { event: 'notice', face: 'hook', waiting: 1 }, day('2026-09-29'));
     chmodSync(join(h, 'usage'), 0o755);
     const other = await asAnotherUser();
-    other.recordUsage(h, { event: 'notice', surface: 'hook', waiting: 2 }, day('2026-09-29'));
+    other.recordUsage(h, { event: 'notice', face: 'hook', waiting: 2 }, day('2026-09-29'));
     expect(lines(h, '2026-09-29').map((e) => e.waiting)).toEqual([1]);
     expect(statSync(join(h, 'usage')).mode & 0o777).toBe(0o755);
     expect(other.readUsage(h, day('2026-09-29'))).toEqual([]);
@@ -228,7 +228,7 @@ describe('a hold in the last day (a policy change\'s near_hold)', () => {
     const now = new Date('2026-09-29T12:00:00Z');
     expect(holdWithinADay(h, now)).toBe(false);
     recordUsage(h, { event: 'hold', skill: 'a', version: 2, reason: 'flagged', flags: [], behind: 1 }, new Date('2026-09-28T11:59:00Z'), { createKey: true });
-    recordUsage(h, { event: 'look', skill: 'a', version: 2, surface: 'cli' }, new Date('2026-09-29T11:00:00Z'));
+    recordUsage(h, { event: 'look', skill: 'a', version: 2, face: 'cli' }, new Date('2026-09-29T11:00:00Z'));
     expect(holdWithinADay(h, now)).toBe(false);
     recordUsage(h, { event: 'hold', skill: 'a', version: 2, reason: 'notify', flags: [], behind: 1 }, new Date('2026-09-28T12:01:00Z'), { createKey: true });
     expect(holdWithinADay(h, now)).toBe(true);
@@ -238,8 +238,8 @@ describe('a hold in the last day (a policy change\'s near_hold)', () => {
 describe('reading usage back', () => {
   it('reads the kept days in time order, skipping lines it can\'t read', () => {
     const h = home();
-    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'));
-    recordUsage(h, { event: 'notice', surface: 'mcp', waiting: 3 }, day('2026-09-28'));
+    recordUsage(h, { event: 'notice', face: 'hook', waiting: 1 }, day('2026-09-29'));
+    recordUsage(h, { event: 'notice', face: 'mcp', waiting: 3 }, day('2026-09-28'));
     writeFileSync(join(h, 'usage', '2026-09-28.jsonl'), 'not json\n{"v":9,"event":"notice"}\n', { flag: 'a' });
     const events = readUsage(h, day('2026-09-29'));
     expect(events.map((e) => [e.at, e.event, e.event === 'notice' ? e.waiting : null])).toEqual([
@@ -250,9 +250,9 @@ describe('reading usage back', () => {
 
   it('reads only plain day files of a sane size: a link, a pipe or an oversized file is skipped, never waited on', () => {
     const h = home();
-    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'));
+    recordUsage(h, { event: 'notice', face: 'hook', waiting: 1 }, day('2026-09-29'));
     const elsewhere = join(sandbox(), 'elsewhere.jsonl');
-    writeFileSync(elsewhere, JSON.stringify({ v: 1, at: '2026-09-28T12:00:00.000Z', event: 'notice', surface: 'mcp', waiting: 9 }) + '\n');
+    writeFileSync(elsewhere, JSON.stringify({ v: 1, at: '2026-09-28T12:00:00.000Z', event: 'notice', face: 'mcp', waiting: 9 }) + '\n');
     symlinkSync(elsewhere, join(h, 'usage', '2026-09-28.jsonl'));
     execFileSync('mkfifo', [join(h, 'usage', '2026-09-27.jsonl')]);
     writeFileSync(join(h, 'usage', '2026-09-26.jsonl'), Buffer.alloc(USAGE_READ_MAX_BYTES + 1, 0x20));
@@ -262,7 +262,7 @@ describe('reading usage back', () => {
   it('reads nothing past the kept days, and nothing when there is no folder', () => {
     const h = home();
     expect(readUsage(h, day('2026-09-29'))).toEqual([]);
-    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-06-01'));
+    recordUsage(h, { event: 'notice', face: 'hook', waiting: 1 }, day('2026-06-01'));
     expect(existsSync(join(h, 'usage', '2026-06-01.jsonl'))).toBe(true);
     expect(readUsage(h, day('2026-09-29'))).toEqual([]);
   });

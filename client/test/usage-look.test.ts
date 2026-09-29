@@ -36,8 +36,8 @@ describe('looks and answers', () => {
     }
     const skill = skillHash(p.home, 'release-notes-kit');
     expect(events(p, 'look')).toEqual([
-      { event: 'look', skill, version: 2, surface: 'cli' },
-      { event: 'look', skill, version: 2, surface: 'assistant' },
+      { event: 'look', skill, version: 2, face: 'cli' },
+      { event: 'look', skill, version: 2, face: 'assistant' },
     ]);
   });
 
@@ -47,7 +47,7 @@ describe('looks and answers', () => {
     await cli(p, ['install', 'release-notes-kit']);
     await cli(p, ['update', 'release-notes-kit', '--accept'], { tty: true, answers: ['n'] });
     const skill = skillHash(p.home, 'release-notes-kit');
-    expect(events(p, 'look')).toEqual([{ event: 'look', skill, version: 2, surface: 'cli' }]);
+    expect(events(p, 'look')).toEqual([{ event: 'look', skill, version: 2, face: 'cli' }]);
     expect(events(p, 'answer')).toEqual([{ event: 'answer', skill, version: 2, answer: 'no', together: 1 }]);
   });
 

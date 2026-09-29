@@ -26,11 +26,11 @@ describe('stats', () => {
     const at = (days: number, seconds = 0) => new Date(now - days * DAY + seconds * 1000);
     recordUsage(p.home, { event: 'hold', skill: 'release-notes-kit', version: 2, reason: 'flagged', flags: ['runnable_file'], behind: 1 }, at(20), { createKey: true });
     recordUsage(p.home, { event: 'hold', skill: 'sql-migration-helper', version: 3, reason: 'notify', flags: [], behind: 1 }, at(5), { createKey: true });
-    recordUsage(p.home, { event: 'look', skill: 'sql-migration-helper', version: 3, surface: 'cli' }, at(5, 60), { createKey: true });
+    recordUsage(p.home, { event: 'look', skill: 'sql-migration-helper', version: 3, face: 'cli' }, at(5, 60), { createKey: true });
     recordUsage(p.home, { event: 'answer', skill: 'sql-migration-helper', version: 3, answer: 'yes', together: 1 }, at(5, 90), { createKey: true });
     recordUsage(p.home, { event: 'hold', skill: 'demo-skill-01', version: 4, reason: 'pin', flags: [], behind: 2 }, at(2), { createKey: true });
-    for (const d of [3, 2, 1]) recordUsage(p.home, { event: 'mode', surface: 'hook' }, at(d));
-    recordUsage(p.home, { event: 'notice', surface: 'hook', waiting: 1 }, at(1));
+    for (const d of [3, 2, 1]) recordUsage(p.home, { event: 'mode', face: 'hook' }, at(d));
+    recordUsage(p.home, { event: 'notice', face: 'hook', waiting: 1 }, at(1));
     recordUsage(p.home, { event: 'policy', from: 'auto', to: 'pin', scope: 'skill', near_hold: false }, at(1));
     const r = await runStats(p);
     expect([r.code, r.err]).toEqual([0, '']);

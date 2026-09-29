@@ -26,7 +26,7 @@ export const CLIENT_WORD_GAPS: readonly string[] = [];
 const NONE = '-';
 
 // Where a look happened, by face (usage metrics); a new face (the web UI's) must name its own.
-const LOOK_SURFACE: Record<Face, 'cli' | 'assistant' | 'web'> = { mcp: 'assistant', cli: 'cli' };
+const LOOK_FACE: Record<Face, 'cli' | 'assistant' | 'web'> = { mcp: 'assistant', cli: 'cli' };
 
 /** The catalog's operations, keyed by the registry's operation name; each face names it its own way (the MCP tool's name
  *  is the surface's). The target comes from the result (the skills it returned, a match count), never from the
@@ -54,7 +54,7 @@ export const CATALOG_RUNS: Record<string, Run> = {
     const r = await (await ctx.catalog()).diff(args);
     const outcome = r.risk_flags.length ? 'runnable' : 'text_only';
     // A look at the version it goes to; the usage summary counts it only when that version was held.
-    recordUsage(ctx.settings.home, { event: 'look', skill: r.name, version: r.to, surface: LOOK_SURFACE[ctx.face] }, ctx.now());
+    recordUsage(ctx.settings.home, { event: 'look', skill: r.name, version: r.to, face: LOOK_FACE[ctx.face] }, ctx.now());
     return { text: renderDiff(ctx.surface, r, ctx.ids), target: `${r.name} v${r.from} → v${r.to}`, result: logWords(ctx.surface).result('diff', outcome), outcome };
   },
 };

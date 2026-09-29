@@ -765,7 +765,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
   const here = installedHere(ctx, lock);
   for (const name of req.names ?? []) if (!here.some((e) => e.name === name)) throw new CatalogError('not_installed', { name });
   // Each sync counts (the mode itself once permissive modes are detected, §5.3).
-  recordUsage(ctx.settings.home, { event: 'mode', surface: 'update' }, ctx.now());
+  recordUsage(ctx.settings.home, { event: 'mode', face: 'update' }, ctx.now());
   const chosen = req.names ? here.filter((e) => req.names!.includes(e.name)) : here;
   if (!chosen.length) {
     const none = s.word('update.none_installed');

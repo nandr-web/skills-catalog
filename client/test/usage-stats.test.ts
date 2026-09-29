@@ -12,9 +12,9 @@ const ev = (at: string, e: UsageEvent) => ({ v: 1, at, ...e }) as StoredEvent;
 const hold = (at: string, skill: string, version: number, reason: HoldReason = 'flagged') =>
   ev(at, { event: 'hold', skill, version, reason, flags: reason === 'flagged' ? ['runnable_file'] : [], behind: 1 });
 const answer = (at: string, skill: string, version: number, a: 'yes' | 'no' | 'pin' | 'superseded') => ev(at, { event: 'answer', skill, version, answer: a, together: 1 });
-const look = (at: string, skill: string, version: number) => ev(at, { event: 'look', skill, version, surface: 'cli' });
-const session = (at: string) => ev(at, { event: 'mode', surface: 'hook' });
-const notice = (at: string) => ev(at, { event: 'notice', surface: 'hook', waiting: 1 });
+const look = (at: string, skill: string, version: number) => ev(at, { event: 'look', skill, version, face: 'cli' });
+const session = (at: string) => ev(at, { event: 'mode', face: 'hook' });
+const notice = (at: string) => ev(at, { event: 'notice', face: 'hook', waiting: 1 });
 
 describe('the measures', () => {
   it('nothing counted yet: empty measures and no review; counting starts with the first hold or notice, as its words say', () => {
@@ -36,7 +36,7 @@ describe('the measures', () => {
   });
 
   it('sessions that open with a notice: the hook\'s syncs are sessions, its notices those that opened with one', () => {
-    const s = usageStats([session(ago(3)), notice(ago(3)), session(ago(2)), session(ago(1)), ev(ago(1), { event: 'mode', surface: 'mcp' }), ev(ago(1), { event: 'notice', surface: 'mcp', waiting: 2 })], NOW);
+    const s = usageStats([session(ago(3)), notice(ago(3)), session(ago(2)), session(ago(1)), ev(ago(1), { event: 'mode', face: 'mcp' }), ev(ago(1), { event: 'notice', face: 'mcp', waiting: 2 })], NOW);
     expect(s.sessions).toEqual({ count: 3, with_notice: 1, share: 1 / 3 });
   });
 
