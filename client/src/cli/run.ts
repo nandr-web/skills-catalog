@@ -103,8 +103,9 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
     const own = cmd.run?.({ ctx, s, io, words, values, input, withActing });
     if (own) return await own;
     const a = await perform(ctx, cmd.op, word!, input);
-    (a.isError ? io.stderr : io.stdout)(a.text + '\n');
-    return a.isError ? 1 : 0;
+    const failed = a.isError || (cmd.failsOn?.includes(a.outcome) ?? false);
+    (failed ? io.stderr : io.stdout)(a.text + '\n');
+    return failed ? 1 : 0;
   } catch (e) {
     if (!(e instanceof Usage)) throw e;
     io.stderr(usage(s));
