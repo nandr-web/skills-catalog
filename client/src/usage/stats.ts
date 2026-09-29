@@ -26,7 +26,8 @@ export type ReviewRule =
   | { rule: 'avoidance'; days_after_hold: number; to: string; scope: string }
   | { rule: 'habit_of_yes'; answered: number; yes_rate: number; quick_or_unlooked_share: number }
   | { rule: 'no_value_yet'; answered: number }
-  | { rule: 'load'; session_share: number | null; oldest_wait_days: number | null };
+  // Only the part that fired: the share of sessions that opened with a notice, the days the oldest hold has waited, or both.
+  | { rule: 'load'; session_share?: number; oldest_wait_days?: number };
 
 export type UsageStats = {
   empty: boolean;
@@ -154,12 +155,12 @@ export function usageStats(all: readonly StoredEvent[], now: Date = new Date()):
   // Load: too many sessions open with a notice, or a hold waits too long.
   const shareHigh = sessions >= REVIEW.load_min_sessions && sessionShare !== null && sessionShare > REVIEW.load_session_share_over;
   const waitLong = oldest !== null && oldest > REVIEW.load_wait_days;
-  if (shareHigh || waitLong) review.push({ rule: 'load', session_share: sessionShare, oldest_wait_days: oldest });
+  if (shareHigh || waitLong) review.push({ rule: 'load', ...(shareHigh ? { session_share: sessionShare! } : {}), ...(waitLong ? { oldest_wait_days: oldest! } : {}) });
 
   const from = events[0]?.at ?? null;
   return {
     empty: events.length === 0,
-    window: { days: from === null ? 0 : Math.max(1, Math.ceil((end - ms(from)) / DAY_MS)), from, to: now.toISOString() },
+    window: { days: from === null ? 0 : Math.max(1, Math.round((end - ms(from)) / DAY_MS)), from, to: now.toISOString() },
     holds: { total: holdsTotal, last_7_days: holdsWeek, by_reason: byReason },
     sessions: { count: sessions, with_notice: withNotice, share: sessionShare },
     looks: { holds_looked: answered.filter((h) => h.looks.length).length, holds_answered: answered.length, median_seconds_look_to_answer: median(lookToAnswer) },

@@ -125,6 +125,7 @@ describe('the review of the flag-only approvals', () => {
     expect(rules([hold(ago(15), 'a', 1)])).toEqual(['load']);
     expect(rules([hold(ago(13), 'a', 1)])).toEqual([]);
     const r = usageStats([hold(ago(15), 'a', 1)], NOW).review[0]!;
-    expect(r).toMatchObject({ rule: 'load', oldest_wait_days: 15 });
+    expect(r).toEqual({ rule: 'load', oldest_wait_days: 15 });
+    expect(usageStats([session(ago(3)), notice(ago(3)), session(ago(2)), notice(ago(2)), session(ago(1))], NOW).review).toEqual([{ rule: 'load', session_share: 2 / 3 }]);
   });
 });

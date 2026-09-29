@@ -21,6 +21,7 @@ import { list } from './commands/list.ts';
 import { policy } from './commands/policy.ts';
 import { read } from './commands/read.ts';
 import { search } from './commands/search.ts';
+import { stats } from './commands/stats.ts';
 import { logAccept, update } from './commands/update.ts';
 import { versions } from './commands/versions.ts';
 import { recordUsage } from '../usage/record.ts';
@@ -30,7 +31,7 @@ import { cliSurface } from './words.ts';
 export type { Io } from './command.ts';
 
 /** The commands, keyed by the word after the command's name (as the surface's CLI names write it). */
-export const COMMANDS: Record<string, Command> = { search, read, versions, diff, install, list, update, policy };
+export const COMMANDS: Record<string, Command> = { search, read, versions, diff, install, list, update, policy, stats };
 
 /** Every flag a command takes (no leading --), --as included. */
 export const flagsFor = (word: string): string[] => [...Object.keys(COMMANDS[word]?.flags ?? {}), 'as'];
