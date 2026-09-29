@@ -1,0 +1,26 @@
+{
+  "name": "@skills-catalog/hosted",
+  "version": "0.1.0",
+  "description": "The hosted catalog's adapters (DynamoDB and S3); installed only for hosting, never by a local install",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.15"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "3.1142.0",
+    "@aws-sdk/client-s3": "3.1142.0",
+    "@aws-sdk/s3-request-presigner": "3.1142.0",
+    "@skills-catalog/core": "file:../core"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.3",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  }
+}
