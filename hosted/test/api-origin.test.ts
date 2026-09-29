@@ -111,6 +111,27 @@ describe('the origin guard', () => {
     expect(ORIGIN_KEEP_MS).toBe(60 * 60_000);
   });
 
+  it('with good values in hand, a slow refresh never delays a request: it reads in the background and the answer uses what it has', async () => {
+    let t = 0;
+    let slow = false;
+    const release: (() => void)[] = [];
+    const g = originGuard({
+      names: NAMES,
+      read: async (n) => {
+        if (slow) await new Promise<void>((r) => release.push(r));
+        return n === NAMES.current ? CURRENT : PREVIOUS;
+      },
+      clock: { now: () => new Date(t) },
+    });
+    expect(await g.allows(CURRENT)).toBe(true);
+    slow = true;
+    t = ORIGIN_VALUES_MS;
+    const answer = await Promise.race([g.allows(CURRENT), new Promise((r) => setTimeout(() => r('waited'), 50))]);
+    expect(answer).toBe(true);
+    expect(release.length).toBe(2); // the refresh is under way
+    for (const r of release) r();
+  });
+
   it('requests that arrive while the values are being read share that one read (no read ever undoes another)', async () => {
     let t = 0;
     const p = parameters({ [NAMES.current]: CURRENT, [NAMES.previous]: PREVIOUS });
