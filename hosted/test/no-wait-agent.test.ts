@@ -35,10 +35,10 @@ describe('the no-wait agent', () => {
     }
   }, 30_000);
 
-  it('nothing under src imports it', () => {
+  it('nothing under src imports it, nor anything else of the tests', () => {
     const src = fileURLToPath(new URL('../src/', import.meta.url));
     const files = (readdirSync(src, { recursive: true }) as string[]).filter((f) => f.endsWith('.ts'));
     expect(files.length).toBeGreaterThan(0);
-    expect(files.filter((f) => /no-wait-agent/.test(readFileSync(join(src, f), 'utf8')))).toEqual([]);
+    expect(files.filter((f) => /no-wait-agent|from\s+['"][^'"]*\/test\//.test(readFileSync(join(src, f), 'utf8')))).toEqual([]);
   });
 });

@@ -63,4 +63,18 @@ describe('upload links', () => {
     expect(a!.kind).toBe('stored');
     expect(f.sent).toContain(PutObjectTaggingCommand.name);
   });
+
+  it('an upload link signs the size, put-if-absent and the SHA-256, and lives 300 s; a download link lives 300 s', async () => {
+    const f = fakeS3();
+    const links = new HostedBlobLinks({ s3: f.s3, place, clock });
+    const [a] = await links.uploadLinks([{ sha256: shaOf(1), size: 10 }]);
+    expect(a!.kind).toBe('upload');
+    const up = new URL((a as { url: string }).url);
+    expect(up.searchParams.get('X-Amz-Expires')).toBe('300');
+    expect(up.searchParams.get('X-Amz-SignedHeaders')!.split(';').sort()).toEqual(['content-length', 'host', 'if-none-match', 'x-amz-checksum-sha256']);
+    expect((a as { headers: Record<string, string> }).headers).toEqual({ 'if-none-match': '*', 'x-amz-checksum-sha256': base64Of(shaOf(1)) });
+    const down = new URL(await links.downloadLink(shaOf(2)));
+    expect(down.searchParams.get('X-Amz-Expires')).toBe('300');
+    expect(down.pathname).toBe(`/b/blobs/${shaOf(2)}`);
+  });
 });

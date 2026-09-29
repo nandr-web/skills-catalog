@@ -209,6 +209,14 @@ describe('request_upload_links, hosted only', () => {
     expect(s.linkCalls).toEqual([]);
   });
 
+  it('one answer per distinct file: a sha256 named twice is asked about once, and its size counted once', async () => {
+    const s = await standIn({ config: { limits: { files: 10, file_bytes: 100, skill_bytes: 150 } } });
+    const a = sha256Of('twice');
+    const r = await s.catalog.uploadLinks(ask([{ sha256: a, size: 100 }, { sha256: sha256Of('once'), size: 40 }, { sha256: a, size: 100 }]));
+    expect(r.files.map((f) => f.sha256)).toEqual([a, sha256Of('once')]);
+    expect(s.linkCalls).toEqual([[{ sha256: a, size: 100 }, { sha256: sha256Of('once'), size: 40 }]]);
+  });
+
   it('a new name, or one the asker owns, gets its links', async () => {
     const s = await standIn();
     await s.catalog.publish(uploaded(s, 'owned', [{ path: 'SKILL.md', text: skillMd('owned') }]));
