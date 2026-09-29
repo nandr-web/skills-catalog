@@ -1,9 +1,11 @@
-// The local budgets (the QA plan §7) on a generated 10,000-skill catalog: open, publish, search and read, p95 over
-// 200 calls each, in-process (the MCP server adds its own transport on top). Builds the catalog in a fresh folder
-// under the OS temp folder and removes it after.
+// The local budgets (the QA plan §7) on a generated 10,000-skill catalog: open, publish, search, read and a file by
+// its sha256 (the files route: a stored one, and one no version names, which looks through every version), p95 over
+// 200 calls each, in-process (the MCP server adds its own transport on top). `--files n` gives each skill n files
+// (SKILL.md and n-1 notes). Builds the catalog in a fresh folder under the OS temp folder and removes it after.
 //
-//   node scripts/perf-search.ts [--skills 10000] [--calls 200] [--keep]
+//   node scripts/perf-search.ts [--skills 10000] [--files 1] [--calls 200] [--keep]
 
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,7 +20,8 @@ const arg = (name: string, fallback: number) => {
 };
 const SKILLS = arg('skills', 10_000);
 const CALLS = arg('calls', 200);
-const BUDGET = { search: 100, read: 100, publish: 300 };
+const FILES = arg('files', 1);
+const BUDGET = { search: 100, read: 100, publish: 300, file: 50 };
 
 function p95(ms: number[]): number {
   const s = [...ms].sort((a, b) => a - b);
@@ -35,7 +38,11 @@ const dir = mkdtempSync(join(tmpdir(), 'skills-catalog-perf-'));
 const ana = actAs('ana');
 let catalog = await openLocalCatalog(join(dir, 'catalog'));
 try {
-  const corpus = scaleCorpus(SKILLS);
+  const corpus = scaleCorpus(SKILLS).map((s) => ({
+    ...s,
+    files: [...s.files, ...Array.from({ length: FILES - 1 }, (_, j) => ({ path: `notes/${j}.md`, mode: '0644', content_base64: Buffer.from(`Note ${j} of ${s.name}.\n`).toString('base64') }))],
+  }));
+  const sha = (b64: string) => createHash('sha256').update(Buffer.from(b64, 'base64')).digest('hex');
   const publishMs: number[] = [];
   const t0 = performance.now();
   for (const s of corpus) await timed(publishMs, () => catalog.publish({ name: s.name, files: s.files }, ana));
@@ -54,14 +61,23 @@ try {
   for (let i = 0; i < 20; i++) await timed(listMs, () => catalog.search({}));
   const readMs: number[] = [];
   for (let i = 0; i < CALLS; i++) await timed(readMs, () => catalog.read({ name: corpus[(i * 37) % corpus.length]!.name, include: 'contents' }));
+  const namedMs: number[] = [];
+  for (let i = 0; i < CALLS; i++) {
+    const s = corpus[(i * 53) % corpus.length]!;
+    await timed(namedMs, () => catalog.file(sha(s.files[i % s.files.length]!.content_base64)));
+  }
+  const unknownMs: number[] = [];
+  for (let i = 0; i < CALLS; i++) await timed(unknownMs, () => catalog.file(createHash('sha256').update(`not stored ${i}`).digest('hex')));
   const rows = [
     ['open (a CLI call pays this once)', p95(openMs), BUDGET.search],
     ['publish', p95(publishMs), BUDGET.publish],
     ['search (words)', p95(searchMs), BUDGET.search],
     ['search (no words, whole catalog)', p95(listMs), BUDGET.search],
     ['read (contents)', p95(readMs), BUDGET.read],
+    ['a file by its sha256 (stored)', p95(namedMs), BUDGET.file],
+    ['a file by its sha256 (no version names it: every version looked through)', p95(unknownMs), BUDGET.file],
   ] as const;
-  console.log(`catalog: ${SKILLS} skills, built in ${buildS.toFixed(1)} s; ${CALLS} calls each`);
+  console.log(`catalog: ${SKILLS} skills of ${FILES} files, built in ${buildS.toFixed(1)} s; ${CALLS} calls each`);
   for (const [what, ms, budget] of rows) console.log(`${ms <= budget ? 'ok  ' : 'OVER'} ${what}: p95 ${ms.toFixed(1)} ms (budget ${budget} ms)`);
   process.exitCode = rows.every(([, ms, budget]) => ms <= budget) ? 0 : 1;
 } finally {
