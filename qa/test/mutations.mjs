@@ -81,6 +81,11 @@ const MUTATIONS = [
   ['agent/assistant.ts', 'the default is a name looked up on PATH', "[join(m.home, '.local', 'bin', 'claude')]", "['claude']"],
   ['agent/runner.ts', 'the runner starts the assistant unchecked', 'const claude = resolveAssistant(o.claude ?? defaultAssistant(o.machine));', "const claude = o.claude ?? ['claude'];"],
   ['agent/preflight.ts', 'the pre-flight doesn\'t say which assistant or version', '    if (claude) o.report?.(', '    if (false) o.report?.('],
+  // the check fails closed: a tool it can't run, or one that sees nothing, refuses the run
+  ['check.ts', 'a ps or lsof that can\'t run reads as nothing left behind', 'if (r.error || r.status === null || !ok(r.status)) {', 'if (false) {'],
+  ['check.ts', 'ps is looked up on PATH', "ps: '/bin/ps'", "ps: 'ps'"],
+  ['check.ts', 'a check that can\'t see its own marker process lets the run start', 'if (!runProcesses(runId, tools).some((p) => p.pid === marker.pid)) {', 'if (false) {'],
+  ['run.ts', 'a run starts without proving the check can see', 'await checkSees(runId, o.tools);', ''],
 ];
 
 // A mutant is caught by its first failing test, so mutant runs stop there (--bail 1); the baseline runs everything.

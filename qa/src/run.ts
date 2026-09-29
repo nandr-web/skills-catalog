@@ -3,7 +3,7 @@
 // a process of the run still alive after teardown is reported, then stopped.
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { compare, runProcesses, snapshot, watchOn, type Difference } from './check.ts';
+import { checkSees, compare, runProcesses, snapshot, watchOn, type Difference, type Tools } from './check.ts';
 import { janitor, DEFAULT_TTL_MS } from './janitor.ts';
 import type { Cleanup } from './leftovers.ts';
 import type { Machine } from './machine.ts';
@@ -27,13 +27,14 @@ export type RunOptions = {
   stdio?: 'inherit' | 'ignore';
   onStart?: (sb: Sandbox, pgid: number) => void;
   productRepo?: string | null; toolFiles?: string[];
+  tools?: Tools;
 };
 /** The product repo checkout, hashed before and after every run (assistants tried to patch a crashed tool). */
 export const PRODUCT_REPO = fileURLToPath(new URL('../..', import.meta.url));
 
 /** Stop processes that carry the run's id after teardown (they left its process groups); returns their pids once they're gone. */
-export async function stopEscaped(runId: string): Promise<number[]> {
-  const pids = runProcesses(runId).map((p) => p.pid);
+export async function stopEscaped(runId: string, tools?: Tools): Promise<number[]> {
+  const pids = runProcesses(runId, tools).map((p) => p.pid);
   const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
   for (const pid of pids) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
   for (let waited = 0; waited < 2000 && pids.some(alive); waited += 20) await new Promise((r) => setTimeout(r, 20));
@@ -44,10 +45,11 @@ export async function qaRun(o: RunOptions): Promise<RunResult> {
   const m = o.machine;
   const runId = o.runId ?? newRunId();
   failSafe([sandboxBase(m.tmp)], m.home);
+  await checkSees(runId, o.tools);   // a check that can't see refuses the run before anything starts
   const swept = janitor({ machine: m, ttlMs: o.ttlMs ?? DEFAULT_TTL_MS });
   const root = `${sandboxBase(m.tmp)}/${runId}`;
   const watch = (processGroups: number[]) => watchOn(m, {
-    sandboxRoot: root, runId, processGroups,
+    sandboxRoot: root, runId, processGroups, tools: o.tools,
     productRepo: o.productRepo === null ? undefined : o.productRepo ?? PRODUCT_REPO, toolFiles: o.toolFiles,
   });
   const before = snapshot(watch([]));
@@ -86,7 +88,7 @@ export async function qaRun(o: RunOptions): Promise<RunResult> {
     cleanup = await teardown(sb, { machine: m, processGroups: pgid ? [pgid] : [] });
   }
   const differences = compare(before, snapshot(watch(pgid ? [pgid] : [])));
-  const stopped = await stopEscaped(runId);
+  const stopped = await stopEscaped(runId, o.tools);
   const status: RunStatus = ending ?? (differences.length ? 'leak' : exitCode === 0 ? 'pass' : 'fail');
   return { status, exitCode, differences, sandbox: sb.root, runId, stopped, janitor: swept, teardown: cleanup };
 }

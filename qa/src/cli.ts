@@ -16,6 +16,7 @@ import { janitor } from './janitor.ts';
 import type { Cleanup } from './leftovers.ts';
 import { fakeMachine, realMachine, type Machine } from './machine.ts';
 import { UnsafeError } from './safe-delete.ts';
+import { CheckBlind } from './check.ts';
 import { traceCheck } from './trace-check.ts';
 import { newRunId, qaRun, type RunResult } from './run.ts';
 import { childEnv, FailSafeError } from './sandbox.ts';
@@ -261,7 +262,7 @@ async function main(argv: string[]): Promise<number> {
 }
 
 main(process.argv.slice(2)).then((code) => process.exit(code), (e) => {
-  const refused = e instanceof FailSafeError || e instanceof UnsafeError;
+  const refused = e instanceof FailSafeError || e instanceof UnsafeError || e instanceof CheckBlind;
   console.error(refused ? `qa: ${e.message}` : e);
   process.exit(refused ? 3 : 1);
 });

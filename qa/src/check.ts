@@ -3,7 +3,7 @@
 // skills folder, project and tmp folders named after this sandbox, this run's session envs, the product's default places,
 // in ~/.claude.json and settings.json only the keys a run could add, and the run's processes and listening ports (every
 // process a run starts carries its QA_RUN_ID). Any difference fails the run. It only reads.
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -21,7 +21,32 @@ export type Watch = Roots & {
   processGroups: number[];       // this run's process groups
   productRepo?: string;          // the product repo checkout (assistants tried to patch a crashed tool: agent-experience.md, 'Internal errors: no traceback')
   toolFiles?: string[];          // the installed tool's files
+  tools?: Tools;                 // ps and lsof (DEFAULT_TOOLS unless a test swaps one)
 };
+
+/** ps and lsof by their full paths, never whichever copy PATH finds first, and found when a run's PATH has none (macOS
+ *  and Linux keep them in different places). A path that isn't there makes the check blind, and a run is refused. */
+export type Tools = { ps: string; lsof: string };
+const system = (...paths: string[]) => paths.find((p) => existsSync(p)) ?? paths[0]!;
+export const PS = system('/bin/ps', '/usr/bin/ps');
+export const DEFAULT_TOOLS: Tools = { ps: PS, lsof: system('/usr/sbin/lsof', '/usr/bin/lsof', '/sbin/lsof') };
+
+/** The check can't see this machine's processes or ports: a run is refused, never passed blind. */
+export class CheckBlind extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CheckBlind';
+  }
+}
+
+function run(path: string, args: string[], ok: (status: number) => boolean): SpawnSyncReturns<string> {
+  const r = spawnSync(path, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  if (r.error || r.status === null || !ok(r.status)) {
+    const why = r.error ? ((r.error as NodeJS.ErrnoException).code ?? r.error.message) : `exit ${r.status ?? r.signal}`;
+    throw new CheckBlind(`the before/after check can't run ${path} (${why}), so it can't see what a run leaves behind; nothing was run`);
+  }
+  return r;
+}
 
 // The product's default place (the contract §4.5): $SKILLS_HOME and the local catalog live in ~/.skills-catalog/; no XDG
 // folders. Installs go to ~/.claude/skills/<name>/, which the check watches anyway.
@@ -73,15 +98,12 @@ function readJson(path: string): Record<string, unknown> {
   try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return {}; }
 }
 
-/** The system's ps, by path: never one a PATH puts first, and found when a run's PATH has none. */
-export const PS = ['/bin/ps', '/usr/bin/ps'].find((p) => existsSync(p)) ?? '/bin/ps';
-
 /** This user's processes whose environment carries QA_RUN_ID=<runId>. `ps -E` appends a process's environment to its
  *  command line (shown to its owner); the command line without -E is taken off the front, so a mention in the
  *  arguments doesn't count. */
-export function runProcesses(runId: string): { pid: number; command: string }[] {
+export function runProcesses(runId: string, tools: Tools = DEFAULT_TOOLS): { pid: number; command: string }[] {
   const lines = (withEnv: boolean) => {
-    const r = spawnSync(PS, [...(withEnv ? ['-E'] : []), '-x', '-o', 'pid=,command='], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    const r = run(tools.ps, [...(withEnv ? ['-E'] : []), '-x', '-o', 'pid=,command='], (status) => status === 0);
     return new Map((r.stdout ?? '').split('\n').flatMap((line) => { const m = line.match(/^\s*(\d+) (.*)$/); const pid = m ? pidFrom(m[1]) : undefined; return pid ? [[pid, m![2]] as [number, string]] : []; }));
   };
   const plain = lines(false), full = lines(true);
@@ -93,10 +115,10 @@ export function runProcesses(runId: string): { pid: number; command: string }[] 
   });
 }
 
-/** The TCP ports these processes listen on, and their UDP sockets. */
-function listening(pids: number[]): { pid: number; addr: string }[] {
+/** The TCP ports these processes listen on, and their UDP sockets. lsof exits 1 when it finds none. */
+function listening(pids: number[], tools: Tools = DEFAULT_TOOLS): { pid: number; addr: string }[] {
   if (!pids.length) return [];
-  const r = spawnSync('lsof', ['-nP', '-a', '-p', pids.join(','), '-i', '-F', 'pn'], { encoding: 'utf8' });
+  const r = run(tools.lsof, ['-nP', '-a', '-p', pids.join(','), '-i', '-F', 'pn'], (status) => status === 0 || status === 1);
   const out: { pid: number; addr: string }[] = [];
   let pid = 0;
   for (const line of (r.stdout ?? '').split('\n')) {
@@ -104,6 +126,31 @@ function listening(pids: number[]): { pid: number; addr: string }[] {
     else if (line.startsWith('n') && !line.includes('->')) out.push({ pid, addr: line.slice(1) });
   }
   return out;
+}
+
+/** Before a run starts, the check proves it can see: a marker process carrying the run's id, listening on a port, must
+ *  show up in both. If it doesn't (a sandbox that hides other processes' environments, a missing lsof), the run is
+ *  refused, since a process or a port it leaves behind would go unseen. The marker is stopped before anything else. */
+export async function checkSees(runId: string, tools: Tools = DEFAULT_TOOLS): Promise<void> {
+  const marker = spawn(process.execPath, ['-e', "const s = require('net').createServer().listen(0, '127.0.0.1', () => console.log(s.address().port)); setTimeout(() => process.exit(0), 60000)"], {
+    stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, QA_RUN_ID: runId },
+  });
+  const gone = new Promise((ok) => marker.once('exit', ok));
+  try {
+    const port = await new Promise<string>((ok, no) => {
+      const t = setTimeout(() => no(new CheckBlind("the before/after check's marker process never said its port (10 s); nothing was run")), 10_000);
+      marker.stdout!.once('data', (b) => (clearTimeout(t), ok(String(b).trim())));
+    });
+    if (!runProcesses(runId, tools).some((p) => p.pid === marker.pid)) {
+      throw new CheckBlind(`the before/after check can't see this run's own marker process with ${tools.ps}, so it would miss a process a run leaves behind; nothing was run`);
+    }
+    if (!listening([marker.pid!], tools).some((l) => l.addr === `127.0.0.1:${port}`)) {
+      throw new CheckBlind(`the before/after check can't see the port this run's own marker process listens on with ${tools.lsof}, so it would miss a port a run leaves open; nothing was run`);
+    }
+  } finally {
+    marker.kill('SIGKILL');
+    await gone;
+  }
 }
 
 export function snapshot(w: Watch): Snapshot {
@@ -131,9 +178,9 @@ export function snapshot(w: Watch): Snapshot {
     try { process.kill(-g, 0); out.set(`\u0001pgid ${g}`, { kind: 'process', label: `process group ${g}`, sig: 'running' }); } catch { /* gone */ }
   }
   if (w.runId) {
-    const procs = runProcesses(w.runId);
+    const procs = runProcesses(w.runId, w.tools);
     for (const p of procs) out.set(`\u0001proc ${p.pid}`, { kind: 'process', label: `process ${p.pid} from this run`, sig: `running (${p.command})` });
-    for (const l of listening(procs.map((p) => p.pid))) out.set(`\u0001port ${l.addr}`, { kind: 'port', label: `port ${l.addr}`, sig: `listening (process ${l.pid})` });
+    for (const l of listening(procs.map((p) => p.pid), w.tools)) out.set(`\u0001port ${l.addr}`, { kind: 'port', label: `port ${l.addr}`, sig: `listening (process ${l.pid})` });
   }
   return out;
 }
