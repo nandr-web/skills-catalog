@@ -80,7 +80,7 @@ describe('a qa command and the test that started it', () => {
     const qa = qaOrphaned(m, LONG);
     expect(stopQaGroup(qa, m.dir, { signal: () => {} })).toBe(true);   // its real command line names this test's machine
     expect(await until(() => !alive(qa), 15_000)).toBe(true);
-    expect(stopQaGroup(qa, m.dir, { commandOf: () => '-zsh', signal: () => {} })).toBe(false);   // its number reused
+    expect(stopQaGroup(qa, m.dir, { exists: () => true, commandOf: () => '-zsh', signal: () => {} })).toBe(false);   // its number reused
   });
 
   it('while its test lives, it runs on (the watch fires only on a change); stopped, it stops its run', { timeout: 30_000 }, async () => {
@@ -102,19 +102,26 @@ describe('a qa command and the test that started it', () => {
 
 describe('stopping an orphaned qa\'s group when its test finishes', () => {
   const dir = '/tmp/qa-test-AbC123';
-  const stop = (command: string | undefined) => {
+  const G = 2 ** 30;   // above any system's highest pid: were a stand-in left out, no real group could be signalled
+  // held: whether a process holds the number (signal 0); command: what ps says it runs (undefined: ps failed, or gone)
+  const stop = (held: boolean, command: string | undefined) => {
     const sent: number[] = [];
-    const done = stopQaGroup(4242, dir, { commandOf: () => command, signal: (pid) => sent.push(pid) });
+    const done = stopQaGroup(G, dir, { exists: () => held, commandOf: () => command, signal: (pid) => sent.push(pid) });
     return { done, sent };
   };
+  const ours = `/usr/local/bin/node /x/qa/cli run --fake-machine ${dir} -- node -e 1`;
 
-  it('signals the group only while its leader is still the qa command this test started on its own machine', () => {
-    expect(stop(`/usr/local/bin/node /x/qa/cli run --fake-machine ${dir} -- node -e 1`)).toEqual({ done: true, sent: [-4242] });
+  it('signals the group while its leader is still the qa command this test started on its own machine', () => {
+    expect(stop(true, ours)).toEqual({ done: true, sent: [-G] });
   });
 
-  it('a number that is someone else\'s by now gets no signal; a leader gone with its number free, its group does', () => {
-    expect(stop(undefined)).toEqual({ done: true, sent: [-4242] });   // gone, no process holds 4242: only its members can
-    expect(stop('-zsh')).toEqual({ done: false, sent: [] });   // the number reused by one of the person's own shells
-    expect(stop(`/usr/local/bin/node /x/qa/cli run --fake-machine ${dir}-other -- node -e 1`)).toEqual({ done: false, sent: [] });   // another test's
+  it('a leader gone with its number free: its group is signalled (only its members can hold that number)', () => {
+    expect(stop(false, undefined)).toEqual({ done: true, sent: [-G] });
+  });
+
+  it('a number held by anything else, or by something ps can\'t name, gets no signal', () => {
+    expect(stop(true, '-zsh')).toEqual({ done: false, sent: [] });   // reused by one of the person's own shells
+    expect(stop(true, `/usr/local/bin/node /x/qa/cli run --fake-machine ${dir}-other -- node -e 1`)).toEqual({ done: false, sent: [] });   // another test's
+    expect(stop(true, undefined)).toEqual({ done: false, sent: [] });   // held, but ps failed: fail closed
   });
 });

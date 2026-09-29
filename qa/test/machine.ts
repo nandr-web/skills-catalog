@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { onTestFinished } from 'vitest';
 import { PS, runProcesses } from '../src/check.ts';
-import { groupIsOurs, signalGroup } from '../src/groups.ts';
+import { exists, groupIsOurs, signalGroup } from '../src/groups.ts';
 import { fakeMachine, type Machine } from '../src/machine.ts';
 import { RUN_ID } from '../src/safe-delete.ts';
 import { sandboxBase } from '../src/sandbox.ts';
@@ -123,14 +123,16 @@ const commandOf = (pid: number): string | undefined => {
 };
 
 /** Kills the group of a qa command line a test started on its own machine `dir` (it isn't this process's child, so its
- *  leader is known by its command line, which names that machine), by the one rule (src/groups.ts): the leader still
- *  that command, or no process holding its number; a number held by any other program (a leader that exited long ago
- *  may have left it to one of the person's own shells) is left alone. Looked at right before the signal. Returns
- *  whether it signalled. */
-export function stopQaGroup(pid: number, dir: string, o: { commandOf?: (pid: number) => string | undefined; signal?: (pid: number) => void } = {}): boolean {
-  const command = (o.commandOf ?? commandOf)(pid);
+ *  leader is known by its command line, which names that machine), by the one rule (src/groups.ts): no process holding
+ *  its number (only its members can then), or the leader still that command. A number held by any other program (a
+ *  leader that exited long ago may have left it to one of the person's own shells), or by one ps can't name, is left
+ *  alone. Looked at right before the signal. Returns whether it signalled. */
+export function stopQaGroup(pid: number, dir: string, o: { exists?: (pid: number) => boolean; commandOf?: (pid: number) => string | undefined; signal?: (pid: number) => void } = {}): boolean {
+  const held = (o.exists ?? exists)(pid);
+  const command = held ? (o.commandOf ?? commandOf)(pid) : undefined;
+  if (held && command === undefined) return false;   // there, but ps can't say what it is: fail closed
   const leaderRunning = command !== undefined && command.split(/\s+/).some((w, i, all) => w === dir && all[i - 1] === '--fake-machine');
-  if (!groupIsOurs(pid, leaderRunning, () => command !== undefined)) return false;
+  if (!groupIsOurs(pid, leaderRunning, () => held)) return false;
   (o.signal ?? kill)(-pid);
   return true;
 }
