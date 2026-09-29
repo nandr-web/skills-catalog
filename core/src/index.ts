@@ -5,7 +5,7 @@ export * from './errors.ts';
 export * from './ports.ts';
 export * from './registry.ts';
 export { openCatalog } from './open.ts';
-export { actAs, openLocalCatalog, type LocalOptions } from './local/index.ts';
+export { actAs, openLocalCatalog, randomIds, type LocalOptions } from './local/index.ts';
 export { Surface } from './surface.ts';
 export * from './render.ts';
 export { toCatalogError } from './internal-error.ts';
