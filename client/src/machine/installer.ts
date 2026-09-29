@@ -20,6 +20,7 @@ import { DEFAULT_LIMITS, checkFetched, checkName, diffTrees, fingerprint, flagTe
 import { reasons } from '@skills-catalog/core';
 import { logWords } from '../activity.ts';
 import { permissiveMode } from './permissive.ts';
+import { isPrivate, writableOnlyAsPrivate } from './private.ts';
 import { holdWithinADay, recordUsage, type HoldReason, type UsageEvent } from '../usage/record.ts';
 import type { Context, Done } from '../operations.ts';
 import { holdLock, policyOf, readRecords, withLock, writeConfig, type FolderId, type Lock, type LockEntry, type Policy, type Target } from './lock.ts';
@@ -158,20 +159,6 @@ function notPrivate(path: string, target: Target, s: Stats, home = false): Catal
   return new CatalogError('target_not_private', { path, target, ...(home ? { home: true } : {}), own: s.uid === BigInt(process.getuid?.() ?? -1) });
 }
 
-// Private to the person (§4.5): owned by them, never world-writable, and group-writable only with their own private group
-// (a umask of 002 with per-user groups). Otherwise another user could swap what the installer writes there.
-function isPrivate(s: Stats): boolean {
-  const uid = process.getuid?.();
-  if (uid === undefined) return true;
-  return s.uid === BigInt(uid) && writableOnlyAsPrivate(s);
-}
-// Never world-writable, and group-writable only with the user's private group (its gid is the uid); never a shared group
-// such as macOS's staff (20).
-function writableOnlyAsPrivate(s: Stats): boolean {
-  const uid = BigInt(process.getuid?.() ?? -1);
-  if ((s.mode & 0o002n) !== 0n) return false;
-  return (s.mode & 0o020n) === 0n || (s.gid === uid && s.gid !== 20n);
-}
 
 // A folder's identity on disk, to tell whether a path still names the folder that was checked or installed: device,
 // inode and birth time (left out where the file system reads it as 0). Entries recorded without a birth time compare on
