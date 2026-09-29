@@ -1,4 +1,4 @@
-# Skill fixtures (qa-plan.md §5 "Skills"), bound to contract.md draft 2 (§4 data, §9 error codes).
+# Skill fixtures (the QA plan, golden sets: "Skills"), bound to the contract (§4 data, §9 error codes).
 # The harness materializes each one into the run's sandbox; nothing is shared between runs.
 # Expected verdicts and errors are hand-written oracles.
 #
@@ -10,6 +10,12 @@
 # Limit expressions read the catalog's configured limits at test time (defaults: 100 files,
 # 1 MB per file, 5 MB per skill). $RUN = the sandbox root; $RUN/outside/ is the canary folder,
 # created and asserted at setup, holding the sentinel QA-SENTINEL-$RUN_ID.
+#
+# FILE TYPES (contract §2, read_shared_skill): with `include: files`, every file of every `valid` fixture has
+# `type: text`, except binary-file's logo.png (`binary`). By content, not name: file-at-limit's big.bin is all
+# 'x', so it's text; keep.txt (empty) is text; crlf-and-bom's files are text. With `include: contents`, every
+# text file has `content`, SKILL.md included, and encoding `content` as UTF-8 gives back the stored bytes
+# exactly (BOM and CRLF kept); logo.png has no `content`.
 #
 # RULES REVIEW (contract draft 3 §10, Phase 1's built-in rules reviewer): every `valid` fixture must get
 # a review with NO findings (the owner: reviewers are "completely fine with approving without comments
@@ -77,8 +83,36 @@ valid:
       SKILL.md: "---\nname: a-skill-name-that-is-exactly-sixty-four-characters-long-abcdefgh\ndescription: Name at exactly 64 characters.\n---\nBody.\n"
   description-1024:
     generate: "SKILL.md whose description is exactly 1024 characters, no < or >"
+  # TAGS (contract §4.1): metadata.tags, one comma-separated string; spaces around commas trimmed; duplicates removed,
+  # order kept; ≤10 tags of 1-32 [a-z0-9-]. tags_expect = the skill's tags as read and on its card. Search filter:
+  # filters.tags [docs] → exactly tagged, tags-deduped, tags-at-limit; [docs, release] (all of them) → exactly tagged,
+  # tags-deduped; a top-level `tags:` list is an ordinary key, never a tag.
+  tagged:
+    files:
+      SKILL.md: "---\nname: tagged\ndescription: Carries two tags.\nmetadata:\n  tags: release, docs\n---\nBody.\n"
+    tags_expect: [release, docs]
+  tags-deduped:
+    files:
+      SKILL.md: "---\nname: tags-deduped\ndescription: Repeats a tag.\nmetadata:\n  tags: docs,release,docs\n---\nBody.\n"
+    tags_expect: [docs, release]
+  tags-at-limit:
+    files:
+      SKILL.md: "---\nname: tags-at-limit\ndescription: Ten tags, one of 32 characters.\nmetadata:\n  tags: docs, t1, t2, t3, t4, t5, t6, t7, t8, abcdefghij-abcdefghij-abcdefghij\n---\nBody.\n"
+    tags_expect: [docs, t1, t2, t3, t4, t5, t6, t7, t8, abcdefghij-abcdefghij-abcdefghij]
+  tags-top-level-list:
+    files:
+      SKILL.md: "---\nname: tags-top-level-list\ndescription: A top-level tags list, which is not where tags go.\ntags: [docs, release]\n---\nBody.\n"
+    tags_expect: []
+    note: "kept as published (frontmatter shows it), but not tags: the docs filter never returns it"
 
 invalid:
+  tag-uppercase:       {files: {SKILL.md: "---\nname: tag-uppercase\ndescription: An uppercase tag.\nmetadata:\n  tags: Release\n---\nBody.\n"}, error: invalid_manifest, fields: [metadata.tags]}
+  tag-underscore:      {files: {SKILL.md: "---\nname: tag-underscore\ndescription: An underscore in a tag.\nmetadata:\n  tags: docs_v2\n---\nBody.\n"}, error: invalid_manifest, fields: [metadata.tags]}
+  tag-too-long:        {files: {SKILL.md: "---\nname: tag-too-long\ndescription: A 33-character tag.\nmetadata:\n  tags: abcdefghij-abcdefghij-abcdefghijk\n---\nBody.\n"}, error: invalid_manifest, fields: [metadata.tags]}
+  tags-too-many:       {files: {SKILL.md: "---\nname: tags-too-many\ndescription: Eleven tags.\nmetadata:\n  tags: t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11\n---\nBody.\n"}, error: invalid_manifest, fields: [metadata.tags]}
+  tags-empty-item:     {files: {SKILL.md: "---\nname: tags-empty-item\ndescription: An empty item.\nmetadata:\n  tags: docs,,release\n---\nBody.\n"}, error: invalid_manifest, fields: [metadata.tags]}
+  tags-trailing-comma: {files: {SKILL.md: "---\nname: tags-trailing-comma\ndescription: A trailing comma.\nmetadata:\n  tags: docs,release,\n---\nBody.\n"}, error: invalid_manifest, fields: [metadata.tags]}
+  tags-as-list:        {files: {SKILL.md: "---\nname: tags-as-list\ndescription: Tags as a YAML list.\nmetadata:\n  tags: [docs, release]\n---\nBody.\n"}, error: invalid_manifest, fields: [metadata.tags]}
   no-name:          {files: {SKILL.md: "---\ndescription: No name.\n---\nBody.\n"}, error: invalid_manifest, fields: [name]}
   no-description:   {files: {SKILL.md: "---\nname: no-description\n---\nBody.\n"}, error: invalid_manifest, fields: [description]}
   no-body:          {files: {SKILL.md: "---\nname: no-body\ndescription: No body.\n---\n"}, error: invalid_manifest, fields: [body]}
@@ -97,17 +131,17 @@ invalid:
   description-1025: {generate: "SKILL.md whose description is 1025 characters", error: invalid_manifest, fields: [description]}
   angle-brackets-in-description: {files: {SKILL.md: "---\nname: angle-brackets\ndescription: Converts a -> b.\n---\nBody.\n"}, error: invalid_manifest, fields: [description]}
   script-in-description: {files: {SKILL.md: "---\nname: script-in-description\ndescription: \"<script>alert(1)</script> Formats SQL.\"\n---\nBody.\n"}, error: invalid_manifest, fields: [description]}
-  file-over-limit:  {files: {SKILL.md: "---\nname: file-over-limit\ndescription: One file one byte over.\n---\nBody.\n", big.bin: {size: "limit.file_bytes + 1", fill: "x"}}, error: too_large, limit: file_bytes}
-  files-over-limit: {generate: "SKILL.md plus limit.files one-line files: limit.files + 1 in all", error: too_large, limit: files}
-  skill-over-limit: {generate: "files each under limit.file_bytes, summing to limit.skill_bytes + 1", error: too_large, limit: skill_bytes}
-  bad-mode:         {raw_files: [{path: SKILL.md, mode: "0644", text: "---\nname: bad-mode\ndescription: A 0777 file.\n---\nBody.\n"}, {path: run.sh, mode: "0777", text: "#!/bin/sh\n"}], error: invalid_path}
+  file-over-limit:  {files: {SKILL.md: "---\nname: file-over-limit\ndescription: One file one byte over.\n---\nBody.\n", big.bin: {size: "limit.file_bytes + 1", fill: "x"}}, error: too_large, limit: file_bytes, max: limit.file_bytes, value: limit.file_bytes + 1}
+  files-over-limit: {generate: "SKILL.md plus limit.files one-line files: limit.files + 1 in all", error: too_large, limit: files, max: limit.files, value: limit.files + 1}
+  skill-over-limit: {generate: "files each under limit.file_bytes, summing to limit.skill_bytes + 1", error: too_large, limit: skill_bytes, max: limit.skill_bytes, value: limit.skill_bytes + 1}
+  bad-mode:         {raw_files: [{path: SKILL.md, mode: "0644", text: "---\nname: bad-mode\ndescription: A 0777 file.\n---\nBody.\n"}, {path: run.sh, mode: "0777", text: "#!/bin/sh\n"}], error: invalid_path, path: "run.sh"}
 
 hostile:
-  dotdot-path:      {raw_files: [{path: SKILL.md, text: "---\nname: dotdot-path\ndescription: Escapes.\n---\nBody.\n"}, {path: "../outside/escape.txt", text: "x"}], error: invalid_path}
-  absolute-path:    {raw_files: [{path: SKILL.md, text: "---\nname: absolute-path\ndescription: Absolute.\n---\nBody.\n"}, {path: "$RUN/outside/abs.txt", text: "x"}], error: invalid_path, assert_after: "$RUN/outside/abs.txt does not exist"}
-  symlink-out:      {files: {SKILL.md: "---\nname: symlink-out\ndescription: Links out.\n---\nBody.\n", secrets: {symlink: "$RUN/outside/id_fake"}}, error: invalid_path, sentinel_must_not_leak: true}
-  hardlink:         {files: {SKILL.md: "---\nname: hardlink\ndescription: A hard link.\n---\nBody.\n", linked.md: {hardlink: "$RUN/outside/id_fake"}}, error: invalid_path, sentinel_must_not_leak: true}
-  special-file:     {files: {SKILL.md: "---\nname: special-file\ndescription: A fifo.\n---\nBody.\n", pipe: {fifo: true}}, error: invalid_path}
+  dotdot-path:      {raw_files: [{path: SKILL.md, text: "---\nname: dotdot-path\ndescription: Escapes.\n---\nBody.\n"}, {path: "../outside/escape.txt", text: "x"}], error: invalid_path, path: "../outside/escape.txt"}
+  absolute-path:    {raw_files: [{path: SKILL.md, text: "---\nname: absolute-path\ndescription: Absolute.\n---\nBody.\n"}, {path: "$RUN/outside/abs.txt", text: "x"}], error: invalid_path, path: "$RUN/outside/abs.txt", assert_after: "$RUN/outside/abs.txt does not exist"}
+  symlink-out:      {files: {SKILL.md: "---\nname: symlink-out\ndescription: Links out.\n---\nBody.\n", secrets: {symlink: "$RUN/outside/id_fake"}}, error: invalid_path, path: "secrets", sentinel_must_not_leak: true}
+  hardlink:         {files: {SKILL.md: "---\nname: hardlink\ndescription: A hard link.\n---\nBody.\n", linked.md: {hardlink: "$RUN/outside/id_fake"}}, error: invalid_path, path: "linked.md", sentinel_must_not_leak: true}
+  special-file:     {files: {SKILL.md: "---\nname: special-file\ndescription: A fifo.\n---\nBody.\n", pipe: {fifo: true}}, error: invalid_path, path: "pipe"}
   duplicate-path:   {raw_files: [{path: SKILL.md, text: "---\nname: duplicate-path\ndescription: Two entries.\n---\nA.\n"}, {path: SKILL.md, text: "---\nname: duplicate-path\ndescription: Two entries.\n---\nB.\n"}], error: invalid_path}
   path-case-clash:  {raw_files: [{path: SKILL.md, text: "---\nname: path-case-clash\ndescription: Two paths equal ignoring case.\n---\nBody.\n"}, {path: Notes.md, text: "a\n"}, {path: notes.md, text: "b\n"}], error: invalid_path}
   unicode-form-clash: {raw_files: [{path: SKILL.md, text: "---\nname: unicode-form-clash\ndescription: NFC and NFD forms of one name.\n---\nBody.\n"}, {path: "café.md", text: "nfc\n"}, {path: "café.md", text: "nfd\n"}], error: invalid_path}
@@ -121,7 +155,7 @@ hostile:
       key.pem: "QA-SENTINEL-$RUN_ID\n"
       .DS_Store: "x"
     expect: {published_paths: [SKILL.md], skipped_reported: [.DS_Store, .env, .git/config, id_fake, key.pem], sentinel_must_not_leak: true}
-  secret-in-body:   {files: {SKILL.md: "---\nname: secret-in-body\ndescription: A key pasted into the body.\n---\nUse AKIAIOSFODNN7EXAMPLE0000 to call AWS.\n"}, error: secret_suspected, at: {path: SKILL.md, line: 5}, error_text_must_not_contain: AKIAIOSFODNN7EXAMPLE0000, note: "The key has the real AWS access-key shape (AKIA + 16), so a standard scanner must catch it. Override only via the person's CLI flag --allow-suspected-secrets; see agent scenario A7s."}
+  secret-in-body:   {files: {SKILL.md: "---\nname: secret-in-body\ndescription: A key pasted into the body.\n---\nUse AKIAIOSFODNN7EXAMPLE to call AWS.\n"}, error: secret_suspected, at: {path: SKILL.md, line: 5, kind: present}, error_text_must_not_contain: AKIAIOSFODNN7EXAMPLE, note: "AWS's documented example access key: it has the real shape (AKIA + 16) and is safe to commit and push. Some scanners skip it on purpose; the catalog's must not, since the rule is the shape. Override only via the person's CLI flag --allow-suspected-secrets; see agent scenario A7s."}
   tricky-markdown:  {files: {SKILL.md: "---\nname: tricky-markdown\ndescription: Links and images in the body.\n---\n[x](javascript:alert(1)) ![y](http://example.invalid/t.png)\n"}, accepted: true, web: renders-inert}
   web-file-types:
     accepted: true

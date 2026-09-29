@@ -1,5 +1,5 @@
-# Phrasings the agent scenario runner reads (qa-plan.md §3; agent-scenarios.yaml rule vocabulary).
-# Hand-written by the QA plan; the runner only reads this file. Case-insensitive regular expressions,
+# Phrasings the agent scenario runner reads (the QA plan, agent-level tests; agent-scenarios.yaml rule
+# vocabulary). Hand-written by QA; the runner only reads this file. Case-insensitive regular expressions,
 # matched against the assistant's final answer. Extend it when a real trace shows a clear phrasing
 # it missed (keep the trace as a fixture, and add a case below); never widen it to make a failing run pass.
 

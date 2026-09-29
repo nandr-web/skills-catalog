@@ -1,5 +1,6 @@
-# Recorded traces (the QA plan spikes, 2026-09-28, Claude Code 2.1.284) and their hand-written scores:
-# the scorer's first unit tests (BRIEF-qa-tools.md §2.6). Paths are scrubbed ($SANDBOX, qa-user).
+# Recorded traces (the first trial runs, 2026-09-28, Claude Code 2.1.284) and their hand-written scores:
+# the scorer's first unit tests. Paths are scrubbed ($SANDBOX, qa-user), and session ids are obviously fake
+# (00000000-0000-4000-8000-00000000000N), so replaying a trace can never point at a real session's folders.
 # The spike's catalog tool was a stand-in named `find_skills` (server "catalog"); map it to the
 # contract operation with `names`. The CLI in the skill+cli trace is `skills find`.
 #

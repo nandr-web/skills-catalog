@@ -1,8 +1,17 @@
-# Version histories (qa-plan.md §4 "Append-only history", "Idempotent republish", "Nothing lost",
-# "Change is visible", "Dry run stores nothing"), bound to contract.md draft 3 (§2, §4.4, §5.3).
+# Version histories (the QA plan's oracles "Append-only history", "Idempotent republish", "Nothing lost",
+# "Change is visible", "Dry run stores nothing"), bound to the contract (§2, §4.4, §5.3).
 # Every version's files are written out in full (exact bytes). Expected values are hand-written;
 # fingerprints are the test's own (contract §4.3), never read from the system.
 # Diff goldens in diffs/ are compared by hunks (@@ lines and +/- lines), ignoring the ---/+++ headers.
+#
+# Every step, whatever it expects:
+# - `storage_unchanged` = the logical snapshot (rows AND blobs) equals the one taken before the step, so a
+#   refused publish (not_owner, conflict) leaves no orphan blob (contract §2).
+# - A publish result echoes `dry_run` (false when the request didn't set it) and carries `publisher`: the
+#   identity the step acts as (`as:`, else the run's one demo identity), never a field of the request.
+# - After any step, no version points at a missing blob.
+# - Errors carry the contract's fields (§9): `conflict` {name, latest}, `not_owner` {name, owners},
+#   `invalid_manifest` {fields}; `name` is the history's skill name.
 
 versions:
   h1.v1:   # = skills.valid.release-note-draft
@@ -36,15 +45,16 @@ histories:
   h1:
     name: release-note-draft
     steps:
-      - {publish: h1.v1, expect: {created: true, version: 1, versions: [1], latest: 1}}
-      - {publish: h1.v2, expect: {created: true, version: 2, versions: [1, 2], latest: 2, get_version: {1: h1.v1}}}
-      - {publish: h1.v3, expect: {created: true, version: 3, versions: [1, 2, 3], latest: 3}}
-      - {publish: h1.v4, expect: {created: true, version: 4, versions: [1, 2, 3, 4], latest: 4}}
+      - {publish: h1.v1, message: "First version", expect: {created: true, version: 1, versions: [1], latest: 1}}
+      - {publish: h1.v2, message: "Add a Breaking changes step", expect: {created: true, version: 2, versions: [1, 2], latest: 2, get_version: {1: h1.v1}}}
+      - {publish: h1.v3, message: "Add an example of the output", expect: {created: true, version: 3, versions: [1, 2, 3], latest: 3}}
+      - {publish: h1.v4, message: "Remove the example: it had gone stale. The template gets a Breaking changes section", expect: {created: true, version: 4, versions: [1, 2, 3, 4], latest: 4, read_version: {1: {version: 1, latest_version: 4}}}}
       - {publish: h1.malformed, expect: {error: invalid_manifest, fields: [description], versions: [1, 2, 3, 4], storage_unchanged: true}}
       - {publish: h1.v4, expect: {created: false, version: 4, versions: [1, 2, 3, 4]}}
       - {publish: h1.v1, expect: {created: true, version: 5, versions: [1, 2, 3, 4, 5], latest: 5, fingerprint_equals: h1.v1}, note: "a revert: identical to an older version, so a new version (contract §4.4)"}
-      - {publish: h1.v2, dry_run: true, expect: {created: false, storage_unchanged: true, diff_from_latest: {changed: [SKILL.md]}}}
+      - {publish: h1.v2, dry_run: true, expect: {created: false, dry_run: true, storage_unchanged: true, diff_from_latest: {changed: [SKILL.md]}}}
     at: {h1@v4: "steps 1-4 applied", h1@v5: "steps 1-7 applied"}
+    messages_expected: "list_shared_skill_versions returns each version's message exactly as published"
     diffs:
       - {from: 1, to: 2, files: [{path: SKILL.md, status: changed}], risk_flags: [], unified: diffs/h1-1-2.diff}
       - {from: 2, to: 3, files: [{path: examples/sample-output.md, status: added}], risk_flags: []}
@@ -59,7 +69,7 @@ histories:
     at: {prc@v2: "steps 1-2 applied", prc@v3: "steps 1-3 applied"}
     diffs:
       - {from: 1, to: 2, files: [{path: checklist.md, status: changed}], risk_flags: []}
-      - {from: 2, to: 3, files: [{path: SKILL.md, status: changed}, {path: scripts/lint.sh, status: added, flags: {executable: true, script: true}}], risk_flags: [{kind: runnable_file, path: scripts/lint.sh}], note: "one reason per file: runnable_file, not also non_markdown (contract d9d15cc); SKILL.md is markdown, so no flag"}
+      - {from: 2, to: 3, files: [{path: SKILL.md, status: changed}, {path: scripts/lint.sh, status: added, flags: {executable: true, script: true}}], risk_flags: [{kind: runnable_file, path: scripts/lint.sh}], note: "one reason per file: runnable_file, not also non_markdown (the contract); SKILL.md is markdown, so no flag"}
 
   concurrent:
     name: concurrent-skill
@@ -71,10 +81,61 @@ histories:
         expect: {versions: "1..20, no gaps, no repeats", every_variant_retrievable: true}
       - {publish: "variant 21", expected_latest: 19, expect: {error: conflict, latest: 20, versions_count: 20, storage_unchanged: true}}
       - {publish: "variant 21", expected_latest: 20, expect: {created: true, version: 21}}
+      - race_publish:
+          fixtures: ["variant 22a", "variant 22b"]
+          expected_latest: 21
+          seam: "storage tests only: the adapter is wrapped so both publishes pause after storing their blobs and before the version append, then continue together"
+        expect: {one: {created: true, version: 22}, other: {error: conflict, latest: 22}, versions_count: 22, orphan_blobs: 0, every_version_retrievable: true}
+        note: "The loser deletes only the blobs it created that nothing references: checklist.md's blob, shared with versions 1-21, must survive (contract §2)."
+
+  owner:
+    name: owned-skill
+    note: "Identities are demo identities (dev1, dev2). Fixtures are prc.v1 / prc.v2 renamed owned-skill (front matter too); prc.v2-invalid is prc.v2 renamed, without its description line. A publish, dry run included, fails in this order: not_owner, then conflict, then validation (contract §2)."
+    steps:
+      - {as: dev1, publish: prc.v1, expected_latest: 0, expect: {created: true, version: 1, publisher: dev1}, note: "0 means 'a new name'"}
+      - {as: dev1, publish: prc.v2, expected_latest: 0, expect: {error: conflict, latest: 1, storage_unchanged: true}, note: "0 on a name that exists"}
+      - {as: dev2, publish: prc.v2, expect: {error: not_owner, owners: [dev1], storage_unchanged: true}}
+      - {as: dev2, publish: prc.v2, dry_run: true, expect: {error: not_owner, owners: [dev1], storage_unchanged: true}, note: "a non-owner's dry run is not_owner, not a preview"}
+      - {as: dev2, publish: prc.v2-invalid, expect: {error: not_owner, owners: [dev1], storage_unchanged: true}, note: "not_owner before validation"}
+      - {as: dev1, publish: prc.v2-invalid, expected_latest: 0, expect: {error: conflict, latest: 1, storage_unchanged: true}, note: "conflict before validation"}
+      - {as: dev1, publish: prc.v2-invalid, expect: {error: invalid_manifest, fields: [description], storage_unchanged: true}}
+      - {as: dev1, publish: prc.v2, dry_run: true, expect: {created: false, dry_run: true, publisher: dev1, storage_unchanged: true}}
+      - {as: dev1, publish: prc.v2, expected_latest: 1, expect: {created: true, version: 2, dry_run: false, publisher: dev1, versions_publishers: [dev1, dev1]}}
 
   fault:
     name: fault-skill
-    note: "Storage tests only: the adapter under test is wrapped to fail its Nth write."
+    note: >-
+      Storage tests only. The adapter under test is wrapped to fail its Nth write, or to pause a publish after its blobs are
+      stored and before the version append (`pause`), and the clock is injected (`at` = minutes from the start). `open` = another
+      process opens the local catalog. `crash` = the publish runs in its own process, killed (SIGKILL) after its blob puts and
+      before the append. A failed publish is not a refusal (contract §5.1): it stores no version, and before it returns it
+      deletes, under the write lock, the blobs it created (put-if-absent wrote them, not ones it found and refreshed) that
+      nothing references. Only a crash, or a failed delete, leaves unreferenced blobs: invisible to every operation, removed when
+      the catalog is next opened once they are older than an hour. Blobs are addressed by content (put-if-absent by sha256).
+      Fixtures: F1, F2, F3 = prc.v1, prc.v2, prc.v3 renamed fault-skill (front matter too), so F1 and F2 share their SKILL.md
+      blob; F3n, F4, F5, F6, F7 = F3 plus notes.md "Late note.\n", "Later note.\n", "Latest note.\n", "Final note.\n",
+      "Race note.\n". The open's cleanup and the version append both run under the write lock, never interleaved; a publish's
+      blob puts happen before it takes the lock.
     steps:
-      - {publish: prc.v1, fail_write: "the version append (after the blobs were stored)", expect: {error: any, versions: [], search_finds: false}}
-      - {publish: prc.v1, expect: {created: true, version: 1}, note: "the retry succeeds; leftover blobs are allowed (cleaned later) but no version points at a missing blob"}
+      - {at: 0, publish: F1, fail_write: "the version append (after the blobs were stored)", expect: {error: any, versions: [], unreferenced_blobs: [], search_finds: false, fetch_by_fingerprint: not_found}, note: "the failed publish deletes the blobs it created"}
+      - {at: 1, publish: F1, expect: {created: true, version: 1}, note: "the retry lands"}
+      - {at: 2, publish: F2, crash: true, expect: {versions: [1], unreferenced_blobs: ["F2 checklist.md"], latest: 1}, note: "a crash leaves the blob it created; the SKILL.md it found (shared with version 1) is untouched"}
+      - {at: 61, open: true, expect: {unreferenced_blobs: ["F2 checklist.md"], every_version_retrievable: true}, note: "59 minutes old: kept"}
+      - {at: 63, open: true, expect: {unreferenced_blobs: [], every_version_retrievable: true}, note: "61 minutes old: removed; the SKILL.md blob F2 shared with version 1 is never removed"}
+      - {at: 64, publish: F2, expect: {created: true, version: 2}}
+      - {at: 70, publish: F3, pause: {open_at: 75}, expect: {created: true, version: 3, every_version_retrievable: true}, note: "a publish in flight is never touched"}
+      - {at: 80, publish: F3n, crash: true, expect: {versions: [1, 2, 3], unreferenced_blobs: ["F3n notes.md"]}}
+      - {at: 180, publish: F3n, pause: {open_at: 180}, expect: {after_open: {blob_present: "F3n notes.md"}, created: true, version: 4, no_version_with_missing_blob: true, every_version_retrievable: true}, note: "The retry's put-if-absent finds notes.md already stored (100 minutes old) and refreshes its time, so the open during the pause keeps it (contract §5.1)."}
+      - {at: 200, publish: F4, pause: {open_at: 262}, expect: {after_open: {blob_absent: "F4 notes.md"}, created: true, version: 5, no_version_with_missing_blob: true, every_version_retrievable: true}, note: "A publish stalled over an hour (a laptop asleep mid-publish): the open removes its old, unreferenced notes.md; the append, under the write lock, finds it missing, puts it again and lands."}
+      - {at: 300, publish: F5, pause: {open_at: 362}, fail_write: "the re-put at append", expect: {after_open: {blob_absent: "F5 notes.md"}, error: any, versions: [1, 2, 3, 4, 5], no_version_with_missing_blob: true, every_version_retrievable: true}, note: "If the re-put fails too, it's a failed publish: no version, retryable."}
+      - {at: 301, publish: F5, expect: {created: true, version: 6}, note: "the retry lands"}
+      - {at: 310, publish: F6, fail_write: ["the version append", "the delete of the blobs it created"], expect: {error: any, versions: [1, 2, 3, 4, 5, 6], unreferenced_blobs: ["F6 notes.md"]}, note: "the delete is best effort: when it fails too, the sweep takes over"}
+      - {at: 371, open: true, expect: {unreferenced_blobs: [], every_version_retrievable: true}}
+      - race_fail_and_land:
+          at: 400
+          fixture: F7
+          a: {pause: "after its blob puts (it creates F7 notes.md)", fail_write: "the version append"}
+          b: {pause: "after its blob puts (it finds F7 notes.md and refreshes it)"}
+          order: "A's puts, B's puts, A's append fails and A deletes the blob it created, then B's append"
+        expect: {a: {error: any}, b: {created: true, version: 7}, no_version_with_missing_blob: true, every_version_retrievable: true, unreferenced_blobs: []}
+        note: "A's failure must not break B: B's append, under the write lock, finds notes.md missing, puts it again and lands (contract §5.1, b273673)."

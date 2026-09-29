@@ -1,4 +1,4 @@
-# Discovery golden set for the Skills Catalog (PRD FR-02; qa-plan.md §2 oracles "Found" and
+# Discovery golden set for the Skills Catalog (PRD FR-02; the QA plan's oracles "Found" and
 # "Nothing matches", §3 "Discovery"). Hand-written 2026-09-28, before any code exists.
 #
 # WHAT IS HERE
@@ -29,7 +29,7 @@
 #               queries only: with an empty must_find, hit or miss means nothing.)
 #   any_word_no_match_holds: true | false. No-match queries only: does every term stay empty with
 #               any-word matching? `false` names the leaking word in the note; that query then
-#               fails "Nothing matches" in any-word mode (a finding for the architects, not a
+#               fails "Nothing matches" in any-word mode (a finding for the design, not a
 #               label to relax).
 #   reformulation: for `miss` queries, one term that does find it (proves the skill is findable).
 #               It finds it in both modes.
@@ -38,11 +38,13 @@
 # TWO MATCHING MODES (the lexical adapter is configured with one; the goldens support both)
 #   Shared: tokens from the name (split on hyphens) and the description; case-insensitive; a token
 #   is a run of letters and digits (so 'syntax' is one token and never matches 'tax', and
-#   'CHANGELOG.md' is 'changelog' + 'md'); no stemming, prefix or fuzzy matching; the body is not
+#   'CHANGELOG.md' is 'changelog' + 'md'); no prefix or fuzzy matching. The contract's index stems (FTS5
+#   'porter unicode61'), and matched_words and match follow the stems; every label below holds with and
+#   without stemming (checked), and match_cases pins a case only stemming gets right. The body is not
 #   searched; ranked by bm25; "hit" = every must_find name is in the top 5 of at least one term.
-#   all-words (keyword_route_expected; both architects' local plan: SQLite FTS5's implicit AND):
+#   all-words (keyword_route_expected; SQLite FTS5's implicit AND):
 #     a term matches a skill when ALL its words are tokens of that skill.
-#   any-word (any_word_route_expected; the agent-experience trials findings.md F4, because agents send
+#   any-word (any_word_route_expected; the contract's mode, from the agent-experience trials, because agents send
 #     "any of these words" queries such as `release notes changelog sprint changes customer`):
 #     the words in common_words are dropped from the term; a term matches a skill when ANY
 #     remaining word is one of its tokens (FTS5: the remaining words joined with OR); "nothing
@@ -69,8 +71,11 @@
 #       known gap, not gated. A semantic adapter must turn these into hits without breaking no-match.
 #     - Nothing matches: in BOTH modes, for each query in sets.no-match, every find(q=term) returns
 #       an empty page. In any-word mode q30 and q32 fail this as labelled
-#       (any_word_no_match_holds: false) until the architects settle F4 against FR-02.
-#   Agent level (qa-plan.md §1, 3 runs per access setup):
+#       (any_word_no_match_holds: false) which the contract settles: a page says `match: partial` when no card matched every content word.
+#     - Counts ("3 of 52 skills match", contract §2): on this corpus every page says catalog_size 64
+#       (skill names, not versions). For every call above, total_matches equals the number of distinct
+#       cards across all its pages (following next_cursor), and is 0 exactly when match is none.
+#   Agent level (the QA plan, agent-level tests; several tries per setup):
 #     - must_find: the final answer names every must_find skill, after a catalog call in the trace.
 #     - no-match: the answer says plainly that nothing matches and names no catalog skill.
 #     - A skill name not in the corpus fails (fabricated). Names outside must_find + may_find are
@@ -316,7 +321,7 @@ queries:
     keyword_route_expected: hit
     any_word_route_expected: hit
     scenario: A1
-    note: "The PRD's own example (FR-02, as quoted in the QA brief). changelog-from-commits also contains 'release notes' (to rule them out), so it will rank close: fine as an extra, wrong as the only answer."
+    note: "The PRD's own example (FR-02). changelog-from-commits also contains 'release notes' (to rule them out), so it will rank close: fine as an extra, wrong as the only answer."
   - id: q02
     ask: "I need to write a changelog for our open-source library."
     keywords: ["changelog"]
@@ -448,7 +453,7 @@ queries:
     any_word_route_expected: miss
     reformulation: "release notes"
     scenario: A2
-    note: "A2 accepts either release-note-draft or changelog-from-commits; this label requires release-note-draft because changelog-from-commits says it is not for customer-facing notes. 'what changed' hits merge-conflict-resolver: a wrong result the assistant must not offer as the answer. Any-word also misses: 'customer update' returns only changelog-from-commits (via 'customer-facing'), the wrong answer agent-ux F4 saw one run settle on."
+    note: "A2 requires release-note-draft too, because changelog-from-commits says it is not for customer-facing notes. 'what changed' hits merge-conflict-resolver: a wrong result the assistant must not offer as the answer. Any-word also misses: 'customer update' returns only changelog-from-commits (via 'customer-facing'), the wrong answer agent-ux F4 saw one run settle on."
   - id: q16
     ask: "Our on-call keeps getting woken up at night by pages nobody acts on. Anything for that?"
     keywords: ["pager fatigue", "alert fatigue"]
@@ -589,7 +594,7 @@ queries:
     must_find: []
     may_find: []
     any_word_no_match_holds: false
-    note: "'batch' alone hits data-pipeline-debug (an Airflow batch job). COBOL is the need; an OR search on 'cobol batch' would return a false match. Any-word leak (so any_word_no_match_holds is false): 'batch' makes 'cobol batch' return data-pipeline-debug, so this query fails 'Nothing matches' in any-word mode. A finding for the architects (agent-ux F4 against FR-02), not a label to relax."
+    note: "'batch' alone hits data-pipeline-debug (an Airflow batch job). COBOL is the need; an OR search on 'cobol batch' would return a false match. Any-word leak (so any_word_no_match_holds is false): 'batch' makes 'cobol batch' return data-pipeline-debug, so this query fails 'Nothing matches' in any-word mode. Raised with the architects against FR-02 (agent-experience.md, 'Search counts any word'), not a label to relax; the contract settles it with `match: partial`."
   - id: q31
     ask: "Is there a skill for building Flutter widgets?"
     keywords: ["flutter", "flutter widgets"]
@@ -604,7 +609,7 @@ queries:
     must_find: []
     may_find: []
     any_word_no_match_holds: false
-    note: "Adjacent on purpose: api-design-review covers REST only, and 'schema' alone (or an OR search) hits sql-migration-writer. The find oracle is clear (empty). Open at agent level: the strict oracle says the answer names no skill, but 'no GraphQL skill; api-design-review covers REST' may serve the developer better. Settled (the QA plan, 2026-09-28): a near fit may be named only after the answer first says plainly that nothing matches, and only as 'not a match'. The PRD's 'clearly says so' holds either way. Any-word leak (so any_word_no_match_holds is false): 'schema' makes 'graphql schema' return sql-migration-writer, so this query fails 'Nothing matches' in any-word mode. A finding for the architects (agent-ux F4 against FR-02)."
+    note: "Adjacent on purpose: api-design-review covers REST only, and 'schema' alone (or an OR search) hits sql-migration-writer. The find oracle is clear (empty). Open at agent level: the strict oracle says the answer names no skill, but 'no GraphQL skill; api-design-review covers REST' may serve the developer better. Settled by QA (2026-09-28): a near fit may be named only after the answer first says plainly that nothing matches, and only as 'not a match'. The PRD's 'clearly says so' holds either way. Any-word leak (so any_word_no_match_holds is false): 'schema' makes 'graphql schema' return sql-migration-writer, so this query fails 'Nothing matches' in any-word mode. Raised with the architects against FR-02 (agent-experience.md, 'Search counts any word'); the contract settles it with `match: partial`."
   - id: q33
     ask: "Any skill for writing Unity game shaders?"
     keywords: ["unity shader", "shaders"]
@@ -614,6 +619,13 @@ queries:
     any_word_no_match_holds: true
 
 # Named subsets (derived from the queries above; a lint recomputes them and fails on drift).
+match_cases:   # one search term, the page's `match` and the named card's matched_words (the query's words as typed)
+  - term: "review pull request"
+    top: pr-review-checklist
+    matched_words: [review, pull, request]
+    match: all
+    note: "Only stemming gets this right: 'request' matches 'requests'. On exact tokens the page says partial and the assistant would report nothing matched (the agent-experience trials, contract §2). Checked on real SQLite FTS5: porter unicode61 gives top 1 with all three words and match all; unicode61 alone gives partial."
+
 sets:
   must-find: [q01, q02, q03, q04, q05, q06, q07, q08, q09, q10, q11, q12, q13, q14, q15, q16, q17, q18, q19, q20, q21, q22, q23, q24, q25, q26, q27]
   no-match: [q28, q29, q30, q31, q32, q33]

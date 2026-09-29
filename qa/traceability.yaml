@@ -1,14 +1,13 @@
-# Requirement → oracle → checks, for the Skills Catalog (qa-plan.md §9), bound to contract.md draft 3
-# (main 9972437). Every requirement needs at least one automated check (`auto: true`); a manual entry
-# says what would automate it. `qa trace-check` enforces that, that every `golden:` and `backlog:`
-# reference resolves, that every docs/backlog/skill-* item maps to a requirement, that a requirement's
-# phase matches its backlog items' phase, and that the query sets haven't drifted.
-# Sources: prd = the PRD page; notes = the owner's notes and review page answers (docs/word for word/); design =
-# the architects' contract, where it adds rules the tests must hold.
-# phase: 1 (all local, the owner's focus), 2 (local, parked), aws (parked), later. The owner, 23:13Z:
-# "Focus on phase 1 / local work. Bring back up AWS topics only after the rest is finished and approved per manager".
-# Layers: unit, storage, interface, agent, setup, web, perf, cleanup. Web checks are listed once in
-# design-notes/web/build-notes.md (the web plan, parked).
+# Requirement → oracle → checks for the Skills Catalog (the QA plan, "Requirement → check"), bound to
+# the contract. Every requirement needs at least one automated check (`auto: true`); a manual check says
+# what would automate it. `qa trace-check` enforces that; that every `golden:` and `backlog:` reference
+# resolves; that every item in the requirement list maps to a requirement here, with the same phase; and
+# that the discovery question sets haven't drifted.
+# Sources: prd = the PRD; notes = the owner's notes on the PRD and later answers; design = the contract,
+# where it adds rules the tests must hold.
+# phase: 1 (all local: the focus), 2 (local, later), aws (later), later. The owner: "Focus on phase 1 /
+# local work."
+# Layers: unit, storage, interface, agent, setup, web, perf, cleanup. The web checks are listed in the web plan.
 
 requirements:
   # ---------------- Phase 1: the PRD's core loop ----------------
@@ -24,6 +23,7 @@ requirements:
       - {layer: interface, name: "step 1 (no confirm) lists files, skipped files, diff and risk_flags and stores nothing; step 2 with the token publishes; a folder changed in between gives conflict and stores nothing", golden: skills.hostile, auto: true}
       - {layer: agent, name: "A6 one turn: preview, show the files and what's skipped, ask; no confirm; the .env sentinel never leaks", golden: agent.A6, auto: true}
       - {layer: agent, name: A6c publish after the person agreed (step 2 with confirm; the permission prompt), golden: agent.A6c, auto: true}
+      - {layer: interface, name: "every publish result echoes dry_run and names the acting identity as publisher", golden: histories.owner, auto: true}
 
   - id: publish-discoverable
     source: {doc: prd, ref: "UC-01 postcondition: discoverable and retrievable"}
@@ -34,6 +34,7 @@ requirements:
     checks:
       - {layer: storage, name: search finds a skill right after publish_version (the index listens to version_published), auto: true}
       - {layer: interface, name: the card shows the latest description after a new version, golden: histories.prc, auto: true}
+      - {layer: interface, name: "catalog_size grows by one with a new name and stays the same with a new version", golden: histories.h1, auto: true}
 
   - id: publish-rejects-invalid
     source: {doc: prd, ref: "FR-01 AC3, UC-01 exception"}
@@ -70,6 +71,7 @@ requirements:
       - {layer: interface, name: "search recall@5 = 1.0 on the gate set for the adapter's mode (keyword-gate-any for any-word, the contract's) and on each semantic-gap reformulation", golden: queries.keyword-gate-any, auto: true}
       - {layer: interface, name: semantic-gap misses reported (not gated) so a later semantic search shows its gain, golden: queries.semantic-gap-any, auto: true}
       - {layer: interface, name: every card lists matched_words; the common-words list equals the adapter's, golden: queries.corpus, auto: true}
+      - {layer: interface, name: "every page says catalog_size 64 on the corpus; total_matches equals the distinct cards across all pages, and is 0 exactly when match is none", golden: queries.corpus, auto: true}
       - {layer: agent, name: "A1, A2 discover by keyword and by paraphrase", golden: "agent.A1, agent.A2", auto: true}
       - {layer: agent, name: every run records recall, tokens per discovery and first-query time, golden: agent.all, auto: true}
 
@@ -83,6 +85,7 @@ requirements:
       - {layer: interface, name: "for each no-match query: match is partial or none, and no card's matched_words covers every content word", golden: queries.no-match, auto: true}
       - {layer: agent, name: "A3 sourdough: says none plainly, invents nothing", golden: agent.A3, auto: true}
       - {layer: agent, name: "A3g GraphQL: says nothing fits and never offers sql-migration-writer as a fit", golden: agent.A3g, auto: true}
+      - {layer: interface, name: "match follows the index's stemming: 'review pull request' puts pr-review-checklist first with matched_words [review, pull, request] and match all", golden: queries.corpus, auto: true}
 
   - id: list-and-get-limits
     source: {doc: notes, ref: "uc-01: List with filters; Get a specific skill or skills up to a limit"}
@@ -92,7 +95,9 @@ requirements:
     oracles: [limits-on-reads, found]
     checks:
       - {layer: interface, name: search with no query and each filter (tags, publisher, updated_since) returns exactly the matching fixtures, golden: queries.corpus, auto: true}
-      - {layer: interface, name: read_shared_skill with 20 names works; 21 gives invalid_request; search limit 51 gives invalid_request, auto: true}
+      - {layer: interface, name: "tags filter: [docs] returns exactly tagged, tags-deduped, tags-at-limit; [docs, release] only the skills with both; a top-level tags list is never a tag", golden: skills.valid, auto: true}
+      - {layer: unit, name: "metadata.tags parsing: trimmed, deduplicated in order, ≤10 of 1-32 [a-z0-9-]; each bad form is invalid_manifest {fields: [metadata.tags]}", golden: "skills.valid, skills.invalid", auto: true}
+      - {layer: interface, name: "read_shared_skill with 20 names works; 21 gives invalid_request {field: names, limit: 20}; search limit 51 gives invalid_request {field: limit, limit: 50}; each with a why", auto: true}
       - {layer: interface, name: cursor paging returns every skill once while publishes happen, golden: scale.10k, auto: true}
 
   - id: retrieve
@@ -103,6 +108,7 @@ requirements:
     oracles: [round-trip, through-the-assistant]
     checks:
       - {layer: interface, name: "read_shared_skill include: contents equals the fixture's text files", golden: skills.valid, auto: true}
+      - {layer: interface, name: "include: files types each file by its bytes (only logo.png is binary); include: contents gives content for every text file, SKILL.md included, encoding back to the exact bytes; never for a binary", golden: skills.valid, auto: true}
       - {layer: interface, name: install_shared_skill writes the same tree and a lock entry, golden: skills.valid, auto: true}
       - {layer: agent, name: A4 installs the skill intact, golden: agent.A4, auto: true}
 
@@ -134,6 +140,8 @@ requirements:
     checks:
       - {layer: storage, name: history steps, golden: histories.h1, auto: true}
       - {layer: storage, name: 20 publishes from separate processes all land; stale expected_latest conflicts, golden: histories.concurrent, auto: true}
+      - {layer: storage, name: "two publishes race on one expected_latest: one lands, the other conflicts; no orphan blob, and every version is still retrievable", golden: histories.concurrent, auto: true}
+      - {layer: storage, name: "expected_latest 0 means a new name: it creates version 1, and conflicts on a name that exists, storing nothing", golden: histories.owner, auto: true}
       - {layer: unit, name: version numbering property test under random interleavings, auto: true}
 
   - id: version-history-visible
@@ -154,6 +162,7 @@ requirements:
     oracles: [append-only-history, round-trip]
     checks:
       - {layer: storage, name: get and get version k per history step, golden: histories.h1, auto: true}
+      - {layer: interface, name: "reading version k also says latest_version, the current latest", golden: histories.h1, auto: true}
       - {layer: agent, name: A9 installs version 1 on request, golden: agent.A9, auto: true}
 
   - id: version-malformed-untouched
@@ -174,6 +183,9 @@ requirements:
     checks:
       - {layer: unit, name: round-trip property test over generated trees (paths, bytes, modes), auto: true}
       - {layer: storage, name: round trip on every adapter, golden: skills.valid, auto: true}
+      - {layer: storage, name: "a failed publish deletes the blobs it created (not ones it found); a killed process or a failed delete leaves them, and the next open removes them only once over an hour old (injected clock); a blob shared with a version, or written by a publish in flight, is never removed", golden: histories.fault, auto: true}
+      - {layer: storage, name: "a publish that fails and deletes its blob never breaks a concurrent publish of the same content: that one re-puts the blob and lands", golden: histories.fault, auto: true}
+      - {layer: storage, name: "no version ever points at a missing blob: a retry of hour-old leftovers lands (put-if-absent refreshes their time); a publish stalled over an hour lands (the append re-puts a removed blob under the write lock); a failed re-put stores no version", golden: histories.fault, auto: true}
 
   - id: assistant-mediated
     source: {doc: prd, ref: "NFR assistant-mediated access, D1"}
@@ -205,7 +217,7 @@ requirements:
       - {layer: cleanup, name: "qa run phase1 passes on the submission commit, from a fresh copy of the repo", auto: true}
       - {layer: unit, name: "every phase-1 requirement's checks exist and run; later items are listed as design in the README", auto: true}
 
-  # ---------------- Phase 1: the owner's notes and answers ----------------
+  # ---------------- Phase 1: from the owner's notes and answers ----------------
   - id: qa-clean-runs
     source: {doc: notes, ref: goals}
     backlog: [skill-qa-first]
@@ -215,8 +227,14 @@ requirements:
     checks:
       - {layer: cleanup, name: before/after check (folders and files) equal after every run, auto: true}
       - {layer: cleanup, name: leaky canary makes the check fail, auto: true}
-      - {layer: cleanup, name: assistant-run leftovers (projects, session-env, tmp) removed by session id and sandbox path, auto: true}
+      - {layer: cleanup, name: "assistant-run leftovers (projects, session-env, tmp, and the MCP-log cache ~/Library/Caches/claude-cli-nodejs/<working-folder slug>/) removed by session id and sandbox path; each server's log is first kept with the run's transcripts", auto: true}
+      - {layer: cleanup, name: "pre-flight starts the catalog's MCP server with exactly the runs' settings (environment, paths, MCP config), and a server that dies at start stops the round", auto: true}
+      - {layer: agent, name: "no_read_outside_sandbox holds in every run: reads are allowed only under the sandbox, and the MCP setups have no Bash", golden: agent.all, auto: true}
       - {layer: unit, name: "fail-safe guard is on in every run, and trips when HOME points elsewhere (real home from the OS)", auto: true}
+      - {layer: unit, name: "safe deletion: a symlinked base deletes nothing; a symlinked run folder is skipped; a run id with '..' is rejected; a live run is kept; an entry without run.json is skipped, never judged by mtime", auto: true}
+      - {layer: unit, name: "safe deletion outside the base: only the run's own leftovers; a non-UUID session id, a slug outside the base's prefix or colliding with another run, and a path differing only in case are refused", auto: true}
+      - {layer: unit, name: "tests of teardown and the janitor use a fake home and tmp root; a test resolving a deletion path under the real ones fails", auto: true}
+      - {layer: cleanup, name: "qa janitor --dry-run lists what it would delete and deletes nothing", auto: true}
 
   - id: agent-first
     source: {doc: notes, ref: goals}
@@ -229,7 +247,7 @@ requirements:
       - {layer: interface, name: every phase-1 operation marked MCP is in tools/list; the server sends its instructions; the companion skill names only real tools, auto: true}
       - {layer: interface, name: "an internal error gives internal_error {log}: no traceback in CLI or MCP output; the traceback is in a log under $SKILLS_HOME", auto: true}
       - {layer: interface, name: "the name is skills-catalog everywhere: CLI, package, MCP server", auto: true}
-      - {layer: agent, name: "the assistant asks run before every merge: Haiku all, the owner's model the core asks", golden: agent.all, auto: true}
+      - {layer: agent, name: "the assistant asks run before every merge: Claude Haiku on all of them, Claude Opus on the core asks", golden: agent.all, auto: true}
 
   - id: backend-neutral-api
     source: {doc: notes, ref: uc-01}
@@ -242,23 +260,29 @@ requirements:
       - {layer: agent, name: A11 finds a skill in a 10,000-skill catalog within the tool-result budget, golden: agent.A11, auto: true}
 
   - id: auto-updates
-    source: {doc: notes, ref: "personas; auto-updates answer (a recorded decision)"}
+    source: {doc: notes, ref: "personas; the owner's answer on auto-updates"}
     backlog: [skill-auto-updates]
     phase: 1
     text: "Auto-updates are on by default, global and overridable per skill; an update that raises a risk flag stops and shows it."
     oracles: [update-gate, local-edits-replaced]
     checks:
       - {layer: unit, name: update gate table, golden: policy.table, auto: true}
-      - {layer: interface, name: "update_installed_skills replaces a hand-edited copy and records version and fingerprint in the lock (phase one, the owner's call)", golden: histories.prc, auto: true}
+      - {layer: interface, name: "update_installed_skills replaces a hand-edited copy and records version and fingerprint in the lock (phase 1: the owner's decision)", golden: histories.prc, auto: true}
       - {layer: agent, name: A10 update my skills, golden: agent.A10, auto: true}
       - {layer: agent, name: A10u an unattended update holds a flagged change, golden: agent.A10u, auto: true}
+      - {layer: agent, name: "A10n the hold is reported when the next session starts: a system message names it, and the assistant relays it", golden: agent.A10n, auto: true}
+      - {layer: setup, name: "the session-start hook: while an update is held it prints JSON with systemMessage and additionalContext; with nothing held it prints nothing", auto: true}
+      - {layer: setup, name: "the session-start hook always exits 0, even with the catalog missing or broken, and stops syncing after 2 seconds", auto: true}
+      - {layer: setup, name: "the 'synced recently' stamp stops a second sync at MCP start", auto: true}
+      - {layer: setup, name: "teardown removes the hook and restores settings.json byte for byte", auto: true}
+      - {layer: manual, name: "how the interactive terminal shows the session-start message, looked at once", auto: false, automate_by: "a pseudo-terminal screen snapshot approved once"}
       - {layer: agent, name: A10g a held update is relayed to the person and never accepted by the assistant, golden: agent.A10g, auto: true}
       - {layer: interface, name: "accept_held_update with the held result's confirm installs that version, and the lock records the flags it let through", golden: histories.prc, auto: true}
       - {layer: interface, name: "a newer version published between hold and accept gives conflict and changes nothing; a confirm for another name or version is refused", golden: histories.prc, auto: true}
       - {layer: setup, name: "setup's allowed tools never include accept_held_update or publish_skill_to_catalog", auto: true}
 
   - id: review-flags
-    source: {doc: notes, ref: "dependencies note (22:53Z) and auto-updates answer (a recorded decision): rules reviewer, phase 1"}
+    source: {doc: notes, ref: "the owner's notes on dependencies and on auto-updates: a rules reviewer in phase 1"}
     backlog: [skill-review-flags, skill-reviewer-tenet, skill-quality-reviews]
     phase: 1
     text: "A built-in rules reviewer flags scripts, tool grants, a publisher change, prompt-injection patterns and context cost; findings are grounded; a clean skill gets none."
@@ -272,17 +296,17 @@ requirements:
       - {layer: agent, name: A13 the assistant is warned about a skill with a planted instruction, golden: agent.A13, auto: true}
 
   - id: owner-only-publish
-    source: {doc: notes, ref: "hosted-access answer 23:16Z: only owners can publish"}
+    source: {doc: notes, ref: "the owner's answer on hosted access: only owners can publish"}
     backlog: [skill-owner-only-publish]
     phase: 1
     text: "Locally, in the core: the first publisher owns a name; anyone else's publish gets not_owner and stores nothing; the recorded publisher is the acting identity."
     oracles: [only-owners-publish]
     checks:
-      - {layer: storage, name: "publish as dev2 of dev1's skill gives not_owner {owners}; the snapshot is unchanged", auto: true}
-      - {layer: interface, name: "every version's publisher equals the acting identity, never a field in the request", auto: true}
+      - {layer: storage, name: "publish as dev2 of dev1's skill gives not_owner {owners}, preview included; the snapshot (rows and blobs) is unchanged", golden: histories.owner, auto: true}
+      - {layer: interface, name: "every version's publisher equals the acting identity, never a field in the request", golden: histories.owner, auto: true}
 
   - id: demo-identity
-    source: {doc: notes, ref: "hosted-access answer 23:16Z: impersonate other devs locally, with a discreet 'for demo purposes' label"}
+    source: {doc: notes, ref: "the owner's answer on hosted access: impersonate other developers locally, with a discreet 'for demo purposes' label"}
     backlog: [skill-demo-identity]
     phase: 1
     text: "Without sign-in, a person picks who they act as (flag, setting or MCP config); every result says who; the CLI shows one discreet demo line."
@@ -292,17 +316,17 @@ requirements:
       - {layer: interface, name: "the CLI prints exactly one 'for demo purposes' line per command, and none in --json output", auto: true}
 
   - id: runs-from-readme
-    source: {doc: prd, ref: "Constraints: self-contained, short README; the owner's scope answer (a recorded decision)"}
+    source: {doc: prd, ref: "Constraints: self-contained, short README; the owner's answer on scope and delivery"}
     backlog: [skill-readme-run, skill-readme-visual]
     phase: 1
     text: "It runs on a reviewer's machine from a very simple, visual README: an architecture diagram, one command with a guided setup, links to other documents."
     oracles: [readme-walk]
     checks:
       - {layer: setup, name: README quickstart run word for word in a fresh home (npm prefix and caches in the sandbox), auto: true}
-      - {layer: setup, name: "README lint: exactly one quickstart command; an architecture diagram that passes an automated visual check; every link resolves", auto: true}
+      - {layer: setup, name: "README lint: exactly one quickstart command; an architecture diagram that renders (light and dark); every link resolves", auto: true}
 
   - id: local-by-default
-    source: {doc: notes, ref: "scope answer 23:09Z (a recorded decision): AWS optional, default off; everything local by default"}
+    source: {doc: notes, ref: "the owner's answer on scope and delivery: AWS optional, off by default; everything local by default"}
     backlog: [skill-local-default]
     phase: 1
     text: "The guided setup runs everything locally by default (hosting: local) and offers AWS, off by default; phase 1 needs nothing outside the machine."
@@ -342,7 +366,7 @@ requirements:
       - {layer: setup, name: "exit codes: 0 done, 1 error, 3 needs answers", auto: true}
       - {layer: setup, name: set_skill_update_policy and a hand edit of config.json both change the effective policy, golden: policy.table, auto: true}
 
-  # ---------------- Phase 2 (local, parked until the coordinator says go) ----------------
+  # ---------------- Phase 2 (local, later) ----------------
   - id: web-view-update
     source: {doc: notes, ref: goals}
     backlog: [skill-web-ui, skill-web-mockups]
@@ -350,7 +374,7 @@ requirements:
     text: "View and update skills from a web UI (served locally)."
     oracles: [same-result-every-face]
     checks:
-      - {layer: web, name: Playwright view and publish on the local server (web/build-notes.md), auto: true}
+      - {layer: web, name: Playwright view and publish on the local server (the web plan), auto: true}
       - {layer: manual, name: the owner reviews the mock-ups, auto: false, automate_by: "Playwright screenshot goldens once approved"}
 
   - id: web-delta
@@ -372,7 +396,7 @@ requirements:
       - {layer: interface, name: a bundle installs exactly its pinned versions, auto: true}
 
   - id: quality-agent-reviews
-    source: {doc: notes, ref: "dependencies (final notes, 22:53Z): pluggable agent reviewers"}
+    source: {doc: notes, ref: "the owner's notes on dependencies: pluggable agent reviewers"}
     backlog: [skill-quality-reviews]
     phase: 2
     text: "Pluggable independent agent reviewers; grounded findings; approve without comments when good; measurements reach every entry point."
@@ -381,7 +405,7 @@ requirements:
       - {layer: agent, name: "known-good skills approved with no comments (≥ 95%); known-bad flagged", auto: true}
       - {layer: unit, name: every finding cites an existing file and line that supports it, auto: true}
 
-  # ---------------- AWS and later (parked) ----------------
+  # ---------------- AWS and later ----------------
   - id: aws-deploy
     source: {doc: notes, ref: goals}
     backlog: [skill-web-aws]
@@ -394,16 +418,16 @@ requirements:
       - {layer: cleanup, name: janitor finds leftovers by run tag and by name prefix (untagged log groups), auto: true}
 
   - id: signed-in-read
-    source: {doc: notes, ref: "hosted-access answer 23:16Z: everyone (signed in) can read"}
+    source: {doc: notes, ref: "the owner's answer on hosted access: everyone (signed in) can read"}
     backlog: [skill-signed-in-read]
     phase: aws
     text: "On the hosted catalog, a read without a valid sign-in or token is refused; every signed-in person can read."
     oracles: [only-owners-publish]
     checks:
-      - {layer: web, name: no or revoked token gives 401; a signed-in read works (web/build-notes.md), auto: true}
+      - {layer: web, name: no or revoked token gives 401; a signed-in read works (the web plan), auto: true}
 
   - id: owner-permissions
-    source: {doc: notes, ref: "hosted-access answer 23:16Z: later, owners can assign permissions to others"}
+    source: {doc: notes, ref: "the owner's answer on hosted access: later, owners can assign permissions to others"}
     backlog: [skill-owner-permissions]
     phase: later
     text: "An owner adds and removes maintainers; a maintainer's publish succeeds; anyone else still gets not_owner."
