@@ -8,8 +8,8 @@ Publish an AI-assistant skill once; another developer's assistant finds it, inst
 
 | | |
 |---|---|
-| **Built** | The core catalog: publish (all-or-nothing, owner-only), versions with fingerprints, keyword search that says when nothing matches exactly, reading a skill, history, diffs with risk flags, a local SQLite + file store behind replaceable parts. |
-| **Next** | The installer and CLI, the assistant's tools (MCP), the update gate, and one guided `setup` command. Designed in [docs/contract.md](docs/contract.md), in progress. |
+| **Built** | The core catalog: publish (all-or-nothing, owner-only), versions with fingerprints, keyword search that says when nothing matches exactly, reading a skill, history, diffs with risk flags, a local SQLite + file store behind replaceable parts. The assistant's tools (MCP): find, read, compare and publish skills (a preview first, then the person's yes), and install, update and list them. The installer, with the update gate: an update that adds a script, a file that isn't Markdown, new tool permissions or a new publisher waits for the person's yes. A CLI for the person: `install`, `list` and `update` (with `--accept` for a held update). |
+| **Next** | One guided `setup` command, more kinds of risky change for the update gate, and the rest of the CLI. Designed in [docs/contract.md](docs/contract.md). |
 | **Later** | A web UI with a delta view, a hosted catalog in AWS, bundles, agent reviewers. |
 
 This repository is published while work continues; each new piece lands after its tests and an independent review. Current and planned architecture: [docs/architecture.md](docs/architecture.md).
