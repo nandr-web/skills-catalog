@@ -2,7 +2,7 @@
 // and a tmp folder named after the folder it ran in, a session-env folder per session, and, when it starts MCP servers,
 // a folder of their logs in Claude Code's cache, named the same way. Removed only at exact paths built from the run's
 // own sandbox (the QA plan §6.5a): nothing is ever globbed.
-import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Machine } from './machine.ts';
 import { removeLeftover, slug, UnsafeError, UUID } from './safe-delete.ts';
@@ -58,6 +58,9 @@ const realDir = (p: string) => { try { const st = lstatSync(p); return st.isDire
  *  removes them: dest/mcp-logs-<server>/<file>. Only the exact cache folders named after this run and not there before
  *  it; only regular files, each opened without following a link (a link, or a folder that is one, is reported and
  *  never read). Reading only: deleting is removeRunLeftovers'. */
+/** The most of one server's log kept with a run (the assistant under test can write there, so its size isn't trusted). */
+export const MCP_LOG_MAX_BYTES = 1024 * 1024;
+
 export function keepMcpLogs(root: string, m: Machine, dest: string, preexisting: ReadonlySet<string>): Pick<Cleanup, 'skipped'> & { kept: string[] } {
   const out = { kept: [] as string[], skipped: [] as Cleanup['skipped'] };
   for (const name of leftoverNames(root)) {
@@ -70,9 +73,18 @@ export function keepMcpLogs(root: string, m: Machine, dest: string, preexisting:
         const from = join(logs, file);
         let fd: number | undefined;
         try {
-          fd = openSync(from, constants.O_RDONLY | constants.O_NOFOLLOW);
-          if (!fstatSync(fd).isFile()) throw new Error('not a regular file');
-          const bytes = readFileSync(fd);
+          // Never waits (a pipe named like a log would block the open), and reads at most MCP_LOG_MAX_BYTES.
+          fd = openSync(from, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+          const st = fstatSync(fd);
+          if (!st.isFile()) throw new Error('not a regular file');
+          const head = Buffer.alloc(Math.min(st.size, MCP_LOG_MAX_BYTES));
+          let got = 0;
+          while (got < head.length) {
+            const n = readSync(fd, head, got, head.length - got, got);
+            if (n === 0) break;
+            got += n;
+          }
+          const bytes = st.size > MCP_LOG_MAX_BYTES ? Buffer.concat([head.subarray(0, got), Buffer.from(`\n[qa: cut here; the log was ${st.size} bytes]\n`)]) : head.subarray(0, got);
           const to = join(dest, entry, file);
           mkdirSync(join(dest, entry), { recursive: true });
           writeFileSync(to, bytes, { flag: 'wx' });

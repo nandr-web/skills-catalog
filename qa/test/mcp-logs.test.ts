@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { runScenarios } from '../src/agent/runner.ts';
 import { compare, snapshot, watchOn } from '../src/check.ts';
 import { janitor } from '../src/janitor.ts';
-import { leftoverNames, leftoverPaths, slug } from '../src/leftovers.ts';
+import { leftoverNames, leftoverPaths, MCP_LOG_MAX_BYTES, slug } from '../src/leftovers.ts';
 import { fakeMachine } from '../src/machine.ts';
 import { realClaudeCache, realPlaces, removeLeftover } from '../src/safe-delete.ts';
 import { createSandbox, newRunId, realHome, sandboxBase } from '../src/sandbox.ts';
@@ -86,6 +86,30 @@ describe('teardown and the servers\' logs', () => {
     expect(readFileSync(join(canary, 'secret.txt'), 'utf8')).toBe('canary\n');
     expect(existsSync(cacheOf(m, sb.root))).toBe(false);
     expect(r.skipped.map((s) => s.path).sort()).toEqual([join(cacheOf(m, sb.root), 'mcp-logs-evil'), join(logs, 'linked.jsonl')].sort());
+  });
+
+  // The assistant under test can write in that cache folder: whatever it puts there is read without waiting and only
+  // up to a size.
+  it('a pipe named like a log never stalls teardown: it isn\'t copied, and the folder still goes', { timeout: 15_000 }, async () => {
+    const m = machine();
+    const sb = run(m);
+    const logs = serverLog(m, sb.root, 'skills-catalog');
+    spawnSync('mkfifo', [join(logs, 'stuck.jsonl')]);
+    const keep = join(m.dir, 'kept');
+    const r = await teardown(sb, { machine: m, keepLogsIn: keep });
+    expect(readdirSync(join(keep, 'mcp-logs-skills-catalog'))).toEqual(['2026-09-29T01-00-00-000Z.jsonl']);
+    expect(r.skipped.map((s) => s.path)).toContain(join(logs, 'stuck.jsonl'));
+    expect(existsSync(cacheOf(m, sb.root))).toBe(false);
+  });
+
+  it(`a log over ${MCP_LOG_MAX_BYTES} bytes is kept up to that size, with a line saying it was cut`, async () => {
+    const m = machine();
+    const sb = run(m);
+    serverLog(m, sb.root, 'skills-catalog', 'x'.repeat(MCP_LOG_MAX_BYTES + 10));
+    const keep = join(m.dir, 'kept');
+    await teardown(sb, { machine: m, keepLogsIn: keep });
+    const kept = readFileSync(join(keep, 'mcp-logs-skills-catalog', '2026-09-29T01-00-00-000Z.jsonl'), 'utf8');
+    expect(kept).toBe('x'.repeat(MCP_LOG_MAX_BYTES) + `\n[qa: cut here; the log was ${MCP_LOG_MAX_BYTES + 10} bytes]\n`);
   });
 
   it('with nowhere to keep the logs (a plain qa run), the folder is still removed', async () => {
