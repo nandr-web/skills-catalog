@@ -91,6 +91,36 @@ guard(fs, 'open', [], 'callback');
 guard(fs.promises, 'open', [], 'promise');
 guard(fs, 'createWriteStream', [0], 'sync');
 
+// Claude Code's real managed settings (contract §8, SKILLS_MANAGED_SETTINGS): a test never reads them either, so one that
+// forgets to point the setting into its sandbox fails instead of reading this machine's policy.
+const MANAGED = ['/Library/Application Support/ClaudeCode', '/etc/claude-code'];
+function checkRead(arg: unknown, call: string): void {
+  const path = typeof arg === 'string' ? arg : Buffer.isBuffer(arg) ? arg.toString() : arg instanceof URL ? fileURLToPath(arg) : undefined;
+  if (path === undefined) return;
+  const p = resolve(path);
+  const place = MANAGED.find((m) => p === m || p.startsWith(m + sep));
+  if (place) throw new Error(`fail-safe: ${call}(${path}) is under ${place}; tests never read the machine's managed settings`);
+}
+function guardRead(target: Record<string, any>, name: string, kind: 'sync' | 'callback' | 'promise'): void {
+  const fn = target[name];
+  if (typeof fn !== 'function') return;
+  target[name] = function (this: unknown, ...args: unknown[]) {
+    try {
+      checkRead(args[0], name);
+    } catch (e) {
+      if (kind === 'promise') return Promise.reject(e);
+      throw e;
+    }
+    return fn.apply(this, args);
+  };
+}
+for (const name of ['readFile', 'readdir', 'lstat', 'stat', 'open', 'access', 'opendir']) {
+  guardRead(fs, `${name}Sync`, 'sync');
+  guardRead(fs, name, 'callback');
+  guardRead(fs.promises, name, 'promise');
+}
+guardRead(fs, 'existsSync', 'sync');
+
 syncBuiltinESMExports(); // `import { writeFileSync } from 'node:fs'` sees the guarded call too
 
 // SQLite opens its files itself, past node:fs, and Node doesn't re-sync node:sqlite's named exports: every module

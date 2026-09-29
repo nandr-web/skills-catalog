@@ -19,6 +19,22 @@ const guardedFromTheStart = (globalThis as Record<symbol, unknown>)[Symbol.for('
 
 
 describe('the fail-safe (contract §8)', () => {
+  it('refuses reads of Claude Code\'s real managed settings, so a test that forgets SKILLS_MANAGED_SETTINGS fails', async () => {
+    const fs = await import('node:fs');
+    const { join } = await import('node:path');
+    for (const dir of ['/Library/Application Support/ClaudeCode', '/etc/claude-code']) {
+      const file = join(dir, 'managed-settings.json');
+      expect(() => fs.readFileSync(file), file).toThrow(/fail-safe/);
+      expect(() => fs.openSync(file, 'r'), file).toThrow(/fail-safe/);
+      expect(() => fs.lstatSync(file), file).toThrow(/fail-safe/);
+      expect(() => fs.statSync(file), file).toThrow(/fail-safe/);
+      expect(() => fs.readdirSync(join(dir, 'managed-settings.d')), dir).toThrow(/fail-safe/);
+      expect(() => fs.existsSync(file), file).toThrow(/fail-safe/);
+    }
+    const standIn = join(sandbox(), 'managed-settings');
+    expect(fs.existsSync(join(standIn, 'managed-settings.json'))).toBe(false);
+  });
+
   it('refuses the real home and /tmp, and allows the sandbox', async () => {
     expect(() => refuseRealPlaces(userInfo().homedir)).toThrow(/fail-safe/);
     expect(() => refuseRealPlaces('/tmp')).toThrow(/fail-safe/);
