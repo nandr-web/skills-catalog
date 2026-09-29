@@ -168,6 +168,13 @@ describe('hostile file lists are refused (golden/skills.yaml hostile, the raw re
       ['docs/.CLAUDE/agents/x.md', 'claude_folder'],
       ['.claude-plugin/plugin.json', 'plugin_folder'],
       ['x/.Claude-Plugin/plugin.json', 'plugin_folder'],
+      // a file an assistant reads as a project's own instructions, at any depth, as a folder too, with the same fold
+      ['CLAUDE.md', 'memory_file'],
+      ['docs/agents.md', 'memory_file'],
+      ['a/b/Claude.Local.MD', 'memory_file'],
+      ['CLAUDE.md/x.md', 'memory_file'],
+      ['ＣＬＡＵＤＥ.md', 'memory_file'],
+      ['ſkills/AGENTS.md', 'memory_file'],
       [`${'a'.repeat(256)}.md`, 'segment_too_long'],
       // the wider invisible set: no-break, ideographic and other spaces, U+2800, variation selectors, fillers, private use
       ['a b.md', 'invisible_character'],
@@ -198,6 +205,7 @@ describe('hostile file lists are refused (golden/skills.yaml hostile, the raw re
       // before length; the whole path's length after the segments
       ['a​/.git/x.md', 'invisible_character'],
       ['.git/a:b.md', 'git_folder'],
+      ['AGENTS.md/a:b.md', 'memory_file'],
       [`ab:c/${'a'.repeat(256)}`, 'not_portable'],
       [Array.from({ length: 9 }, () => 'a'.repeat(120)).join('/'), 'too_long'],
     ];
@@ -206,6 +214,7 @@ describe('hostile file lists are refused (golden/skills.yaml hostile, the raw re
       expect([e.code, e.data['why']], JSON.stringify(path)).toEqual(['invalid_path', why]);
     }
     expect(checkTree([md, { path: `${'a'.repeat(252)}.md`, mode: '0644', bytes: Buffer.from('') }])).toHaveLength(2);
+    for (const path of ['CLAUDE.md.bak', 'my-agents.md', 'docs/claude.mdx', 'agents/notes.md']) expect(checkTree([md, { path, mode: '0644', bytes: Buffer.from('') }]), path).toHaveLength(2);
     expect(errorOf(() => checkTree([md, { path: 'a', mode: '0644', bytes: Buffer.from('') }, { path: 'a/b.md', mode: '0644', bytes: Buffer.from('') }])).code).toBe('invalid_path');
   });
 });
@@ -256,8 +265,8 @@ describe('names (golden/skills.yaml missing-names, the name rules)', () => {
 
   it('refuses the reserved names (the config list: bundled skills, built-in commands, aliases, the companion skill)', () => {
     const names = readFileSync(RESERVED_NAMES_FILE, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
-    expect(names).toHaveLength(132);
-    for (const name of ['code-review', 'debug', 'doctor', 'skills-catalog', names.at(-1)!]) {
+    expect(names).toHaveLength(136);
+    for (const name of ['code-review', 'debug', 'doctor', 'skills-catalog', 'shared-skills', 'allowed-tools', 'synced', 'anthropic-skills', 'release-notes', names.at(-1)!]) {
       const e = errorOf(() => checkName(name));
       expect([e.code, e.data['why']], name).toEqual(['invalid_name', 'reserved']);
     }

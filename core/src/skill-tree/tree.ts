@@ -79,6 +79,7 @@ export type PathWhy =
   | 'git_folder'
   | 'claude_folder'
   | 'plugin_folder'
+  | 'memory_file'
   | 'not_portable'
   | 'segment_too_long'
   | 'too_long'
@@ -110,6 +111,8 @@ export function checkPath(raw: unknown): string {
     if (folded === '.git') refuse(raw, 'git_folder');
     if (folded === '.claude') refuse(raw, 'claude_folder');
     if (folded === '.claude-plugin') refuse(raw, 'plugin_folder');
+    // A file an assistant reads as a project's own instructions, wherever the skill is installed (§4.2).
+    if (MEMORY_FILES.has(folded)) refuse(raw, 'memory_file');
     if (WINDOWS_CHARS.test(seg) || /[. ]$/.test(seg) || WINDOWS_DEVICE.test(seg)) refuse(raw, 'not_portable');
     if (Buffer.byteLength(seg, 'utf8') > MAX_SEGMENT_BYTES) refuse(raw, 'segment_too_long', { limit: MAX_SEGMENT_BYTES });
   }
@@ -146,6 +149,9 @@ export function foldKey(path: string): string {
   for (const ch of path.normalize('NFKC')) out += CASE_FOLDING.get(ch.codePointAt(0)!) ?? ch;
   return out.normalize('NFKC');
 }
+
+// Memory files: Claude Code takes one in a project's folders as that project's instructions (contract §4.2).
+const MEMORY_FILES: ReadonlySet<string> = new Set(['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md'].map(foldKey));
 
 // A whole file list: each path, no duplicates (after NFC), no two equal ignoring case, no file that is also a folder
 // of another, then the size limits. Returns the files sorted, with NFC paths.

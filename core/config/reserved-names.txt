@@ -122,7 +122,8 @@ voice
 web-setup
 workflows
 
-# Aliases (16).
+# Aliases (17).
+allowed-tools
 android
 app
 bg
@@ -140,5 +141,10 @@ settings
 share
 undo
 
-# This product's own companion skill.
+# Reserved by Claude Code's skills page (2): its synced-skills folder and namespace.
+synced
+anthropic-skills
+
+# This product's own names: its companion skill and its command.
+shared-skills
 skills-catalog
