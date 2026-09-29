@@ -38,6 +38,36 @@ describe('the fail-safe (contract §8)', () => {
     }
     const standIn = join(sandbox(), 'managed-settings');
     expect(fs.existsSync(join(standIn, 'managed-settings.json'))).toBe(false);
+    (await import('./fail-safe.ts')).takeRefusals();
+  });
+
+  it('refuses reads of the person\'s own Claude Code files in the real home (~/.claude.json and ~/.claude), by every read call', async () => {
+    const fs = await import('node:fs');
+    const { join } = await import('node:path');
+    const home = userInfo().homedir;
+    for (const file of [join(home, '.claude.json'), join(home, '.claude', 'settings.json'), join(home, '.claude')]) {
+      expect(() => fs.readFileSync(file), file).toThrow(/fail-safe/);
+      expect(() => fs.lstatSync(file), file).toThrow(/fail-safe/);
+      expect(() => fs.existsSync(file), file).toThrow(/fail-safe/);
+      expect(() => fs.realpathSync(file), file).toThrow(/fail-safe/);
+      expect(() => fs.realpathSync.native(file), file).toThrow(/fail-safe/);
+      expect(() => fs.statfsSync(file), file).toThrow(/fail-safe/);
+      expect(() => fs.watch(file), file).toThrow(/fail-safe/);
+      expect(() => fs.copyFileSync(file, join(sandbox(), 'copy')), file).toThrow(/fail-safe/);
+      await expect(fs.openAsBlob(file), file).rejects.toThrow(/fail-safe/);
+    }
+    (await import('./fail-safe.ts')).takeRefusals();
+  });
+
+  it('notes every refusal, so one the code under test catches still fails that test', async () => {
+    const fs = await import('node:fs');
+    const { takeRefusals } = await import('./fail-safe.ts');
+    try {
+      fs.readFileSync('/Library/Application Support/ClaudeCode/managed-settings.json');
+    } catch {
+      // caught, as a reader that turns every failure into "unreadable" would
+    }
+    expect(takeRefusals()).toEqual([expect.stringMatching(/^fail-safe: readFileSync/)]);
   });
 
   it('refuses the real home and /tmp, and allows the sandbox', async () => {
@@ -79,6 +109,7 @@ describe('the fail-safe (contract §8)', () => {
       allow();
     }
     expect(readdirSync(standIn)).toEqual([]);
+    (await import('./fail-safe.ts')).takeRefusals();
   });
 
   it('is there for other packages\' tests: the sandbox helpers and the setup file, by name', async () => {

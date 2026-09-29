@@ -9,7 +9,22 @@ import { syncBuiltinESMExports } from 'node:module';
 import { userInfo } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { vi } from 'vitest';
+import { afterEach, vi } from 'vitest';
+
+// Every refusal is noted, so one the code under test catches (and turns into, say, "unreadable") still fails its test.
+// A test that means to be refused takes its refusals with takeRefusals().
+const refusals: string[] = [];
+function refuse(message: string): never {
+  refusals.push(message);
+  throw new Error(message);
+}
+export function takeRefusals(): string[] {
+  return refusals.splice(0);
+}
+afterEach(() => {
+  const left = takeRefusals();
+  if (left.length) throw new Error(`fail-safe: this test was refused ${left.length} time(s), even where it caught it; the first: ${left[0]}`);
+});
 
 const HOME = userInfo().homedir;
 const roots: string[] = [HOME, join(HOME, '.claude')];
@@ -55,7 +70,7 @@ function check(arg: unknown, call: string): void {
   const path = typeof arg === 'string' ? arg : Buffer.isBuffer(arg) ? arg.toString() : arg instanceof URL ? fileURLToPath(arg) : undefined;
   if (path === undefined) return; // a file descriptor: its path was checked when it was opened
   const place = refusedPlace(path);
-  if (place) throw new Error(`fail-safe: ${call}(${path}) is under ${place}; tests never write there`);
+  if (place) refuse(`fail-safe: ${call}(${path}) is under ${place}; tests never write there`);
 }
 
 const writes = (flags: unknown) => flags !== undefined && !(typeof flags === 'string' && ['r', 'rs', 'sr'].includes(flags)) && flags !== fs.constants.O_RDONLY;
@@ -91,37 +106,43 @@ guard(fs, 'open', [], 'callback');
 guard(fs.promises, 'open', [], 'promise');
 guard(fs, 'createWriteStream', [0], 'sync');
 
-// Claude Code's real managed settings (contract §8, SKILLS_MANAGED_SETTINGS): a test never reads them either, so one that
-// forgets to point the setting into its sandbox fails instead of reading this machine's policy.
+// Claude Code's real managed settings (contract §8, SKILLS_MANAGED_SETTINGS) and the person's own Claude Code files in the
+// real home (~/.claude.json, with the sign-in session and other servers' keys, and ~/.claude): a test never reads them
+// either, so one that forgets to point its settings into its sandbox fails instead of reading this machine's.
 // /etc is a link to /private/etc on macOS: a path is compared as given and with its links resolved, as refusedPlace does.
-const MANAGED = ['/Library/Application Support/ClaudeCode', '/etc/claude-code', '/private/etc/claude-code'];
+const NEVER_READ = ['/Library/Application Support/ClaudeCode', '/etc/claude-code', '/private/etc/claude-code', join(HOME, '.claude.json'), join(HOME, '.claude')];
+export const READ_REFUSED: readonly string[] = NEVER_READ;
 function checkRead(arg: unknown, call: string): void {
   const path = typeof arg === 'string' ? arg : Buffer.isBuffer(arg) ? arg.toString() : arg instanceof URL ? fileURLToPath(arg) : undefined;
   if (path === undefined) return;
-  const under = (p: string) => MANAGED.find((m) => p === m || p.startsWith(m + sep));
+  const under = (p: string) => NEVER_READ.find((m) => p === m || p.startsWith(m + sep));
   const place = under(resolve(path)) ?? under(real(path));
-  if (place) throw new Error(`fail-safe: ${call}(${path}) is under ${place}; tests never read the machine's managed settings`);
+  if (place) refuse(`fail-safe: ${call}(${path}) is under ${place}; tests never read the machine's own Claude Code settings`);
 }
 function guardRead(target: Record<string, any>, name: string, kind: 'sync' | 'callback' | 'promise'): void {
   const fn = target[name];
   if (typeof fn !== 'function') return;
-  target[name] = function (this: unknown, ...args: unknown[]) {
-    try {
-      checkRead(args[0], name);
-    } catch (e) {
-      if (kind === 'promise') return Promise.reject(e);
-      throw e;
-    }
-    return fn.apply(this, args);
-  };
+  const wrap = (inner: (...a: unknown[]) => unknown) =>
+    function (this: unknown, ...args: unknown[]) {
+      try {
+        checkRead(args[0], name);
+      } catch (e) {
+        if (kind === 'promise') return Promise.reject(e);
+        throw e;
+      }
+      return inner.apply(this, args);
+    };
+  const wrapped: any = wrap(fn);
+  // realpath's native form reads the same places.
+  if (typeof fn.native === 'function') wrapped.native = wrap(fn.native);
+  target[name] = wrapped;
 }
-for (const name of ['readFile', 'readdir', 'lstat', 'stat', 'open', 'access', 'opendir', 'readlink', 'realpath']) {
+for (const name of ['readFile', 'readdir', 'lstat', 'stat', 'open', 'access', 'opendir', 'readlink', 'realpath', 'statfs', 'copyFile', 'cp', 'glob']) {
   guardRead(fs, `${name}Sync`, 'sync');
   guardRead(fs, name, 'callback');
   guardRead(fs.promises, name, 'promise');
 }
-guardRead(fs, 'existsSync', 'sync');
-guardRead(fs, 'createReadStream', 'sync');
+for (const name of ['existsSync', 'createReadStream', 'watch', 'watchFile', 'openAsBlob']) guardRead(fs, name, name === 'openAsBlob' ? 'promise' : 'sync');
 
 syncBuiltinESMExports(); // `import { writeFileSync } from 'node:fs'` sees the guarded call too
 
