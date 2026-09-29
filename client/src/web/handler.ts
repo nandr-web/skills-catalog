@@ -130,10 +130,10 @@ export function createHandler(o: HandlerOptions): { handle(req: WebRequest): Pro
 
   async function handle(req: WebRequest): Promise<WebResponse> {
     if (req.headers['host'] !== host) return refuse('refused', sentences);
-    const r = route(req.method, req.path);
+    const r = route(req.method, req.path, 'local');
     if (r.kind === 'not_found' && !r.operationPath) return refuse('not_found', sentences);
     if (r.kind === 'file') return file(req, r.sha256);
-    if (r.kind === 'method') return refuse('method', sentences);
+    if (r.kind === 'method') return refuse('method', { ...sentences, allow: r.allow });
     if (!JSON_TYPE.test(req.headers['content-type'] ?? '')) return refuse('not_json', sentences);
     if (req.headers['origin'] !== origin) return refuse('refused', sentences);
     if (r.kind === 'pair') return pair(req);

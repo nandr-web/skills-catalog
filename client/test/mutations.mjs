@@ -37,10 +37,15 @@ const MUTATIONS = [
   // Not listed: dropping the face from either call. Equivalent today: the catalog's default is the strictest face, and
   // only publish_version (web only) has a person-only input; it counts once a read gains one.
   // the web API's shared half (core/src/http): the routes, the body, the envelope, a file's answer, the refusals' numbers
-  ['core:http/index.ts', 'an operation not served on the web is routed', "  return row && row.faces.includes('web') ? row : undefined;", '  return row;'],
-  ['core:http/index.ts', 'an inherited key is an operation', 'const row = Object.hasOwn(OPERATIONS, op) ? OPERATIONS[op] : undefined;', 'const row = (OPERATIONS as Record<string, OperationDef>)[op];'],
+  ['core:http/index.ts', 'an operation not served on the web is routed', "  return webRow(op, where) ? { kind: 'operation', op }", "  return Object.hasOwn(OPERATIONS, op) ? { kind: 'operation', op }"],
+  // Not listed: an inherited key taken as an operation. That rule is webRow's own now (api.ts, the core's tests).
+  // Not listed: route asking webRow about a local catalog whatever `where` says. Equivalent until an operation is served
+  // on one kind of catalog only; the route test's property (route agrees with webRow for both kinds) catches it then.
+  ['core:http/index.ts', 'an uncut body over the limit is parsed', "raw === 'cut' || raw.byteLength > max", "raw === 'cut'"],
+  ['core:http/index.ts', 'a 404 on /api may be stored by a cache', "headers: { ...SECURITY_HEADERS, ...API_HEADERS, 'content-type': 'text/plain; charset=utf-8' }, body: NOT_FOUND", "headers: { ...SECURITY_HEADERS, 'content-type': 'text/plain; charset=utf-8' }, body: NOT_FOUND"],
+  ['core:http/index.ts', 'a 405 names no method the path takes', '...(s.allow ? { allow: s.allow } : {})', ''],
   ['core:http/index.ts', 'a person-only input is taken on the web', "validateInput<Record<string, unknown>>(op, parsed, 'web', where)", "validateInput<Record<string, unknown>>(op, parsed, 'cli', where)"],
-  ['core:http/index.ts', 'a cut body is parsed as if whole', "  if (raw === 'cut') throw new CatalogError('too_large', { limit: 'request_bytes', max });\n", ''],
+  ['core:http/index.ts', 'a cut body is parsed as if whole', "  if (raw === 'cut' || raw.byteLength > max) throw new CatalogError('too_large', { limit: 'request_bytes', max });\n", ''],
   ['core:http/index.ts', 'a transport\'s own sentence replaces every error\'s', "err.code === 'unauthenticated' && s.unauthenticated !== undefined ? s.unauthenticated", 's.unauthenticated !== undefined ? s.unauthenticated'],
   ['core:http/index.ts', 'a malformed fingerprint is looked up', "SHA256.test(sha256) ? await catalog.file(sha256) : { kind: 'unknown' }", 'await catalog.file(sha256)'],
   ['core:http/index.ts', 'a link to a file may be cached', '{ ...api, location: answer.url }', '{ ...SECURITY_HEADERS, location: answer.url }'],
@@ -49,7 +54,7 @@ const MUTATIONS = [
   ['core:http/index.ts', 'a hosted 401 names no sign-in scheme', "  if (kind === 'no_token' && s.challenge) {", '  if (false) {'],
   // Not listed: parsing as a local catalog whatever `where` the transport says. Equivalent on this client (every catalog
   // here is local); the hosted handler's shared cases catch it once a case has a hosted-only body.
-  ['core:http/index.ts', 'a POST on a file is looked up', "  if (file) return method === 'GET' ? { kind: 'file', sha256: file[1]! } : { kind: 'method' };", "  if (file) return { kind: 'file', sha256: file[1]! };"],
+  ['core:http/index.ts', 'a POST on a file is looked up', "  if (file) return method === 'GET' ? { kind: 'file', sha256: file[1]! } : { kind: 'method', allow: 'GET' };", "  if (file) return { kind: 'file', sha256: file[1]! };"],
   // the local web face's guards (web-handler.test.ts): each refuses before anything is looked up or read
   ['web/handler.ts', 'any Host is served', "    if (req.headers['host'] !== host) return", '    if (false) return'],
   ['web/handler.ts', 'any Content-Type is read', "    if (!JSON_TYPE.test(req.headers['content-type'] ?? '')) return", '    if (false) return'],
