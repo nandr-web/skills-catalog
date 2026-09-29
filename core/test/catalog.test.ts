@@ -53,10 +53,46 @@ describe('the fail-safe (contract §8)', () => {
       expect(() => fs.realpathSync.native(file), file).toThrow(/fail-safe/);
       expect(() => fs.statfsSync(file), file).toThrow(/fail-safe/);
       expect(() => fs.watch(file), file).toThrow(/fail-safe/);
+      expect(() => fs.promises.watch(file), file).toThrow(/fail-safe/);
+      expect(() => fs.globSync('*', { cwd: file }), file).toThrow(/fail-safe/);
       expect(() => fs.copyFileSync(file, join(sandbox(), 'copy')), file).toThrow(/fail-safe/);
       await expect(fs.openAsBlob(file), file).rejects.toThrow(/fail-safe/);
     }
     (await import('./fail-safe.ts')).takeRefusals();
+  });
+
+  it('checks the reads a path alone doesn\'t show: the promises watch, and glob\'s folder, pattern lists and wildcards (shown on a sandbox never read for this test)', async () => {
+    const fs = await import('node:fs');
+    const { join } = await import('node:path');
+    const { alsoNeverRead, takeRefusals } = await import('./fail-safe.ts');
+    const parent = sandbox();
+    const standIn = join(parent, '.claude');
+    fs.mkdirSync(standIn);
+    fs.writeFileSync(join(standIn, 'settings.json'), '{}');
+    const allow = alsoNeverRead(standIn);
+    try {
+      expect(() => fs.promises.watch(join(standIn, 'settings.json'))).toThrow(/fail-safe/);
+      const globs: [string | string[], { cwd?: string }?][] = [
+        ['.claude/settings.json', { cwd: parent }],
+        ['settings.json', { cwd: standIn }],
+        [['elsewhere.json', join(standIn, 'settings.json')]],
+        [join(parent, '.cl*', 'settings.json')],
+        ['*/settings.json', { cwd: parent }],
+      ];
+      for (const [pattern, options] of globs) {
+        const what = JSON.stringify([pattern, options]);
+        expect(() => fs.globSync(pattern, options ?? {}), what).toThrow(/fail-safe/);
+        expect(() => fs.promises.glob(pattern, options ?? {}), what).toThrow(/fail-safe/);
+        expect(() => fs.glob(pattern, options ?? {}, () => {}), what).toThrow(/fail-safe/);
+      }
+    } finally {
+      allow();
+    }
+    takeRefusals();
+    // A glob beside the refused folder, not above it, still runs.
+    fs.mkdirSync(join(parent, 'kept'));
+    fs.writeFileSync(join(parent, 'kept', 'settings.json'), '{}');
+    expect(fs.globSync('kept/*.json', { cwd: parent })).toEqual([join('kept', 'settings.json')]);
   });
 
   it('notes every refusal, so one the code under test catches still fails that test', async () => {
