@@ -29,6 +29,10 @@ CREATE TABLE IF NOT EXISTS versions (
   PRIMARY KEY (name, version)
 );
 CREATE INDEX IF NOT EXISTS versions_by_fingerprint ON versions (fingerprint);
+CREATE TABLE IF NOT EXISTS pending_blobs (
+  sha256 TEXT PRIMARY KEY,
+  at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS outbox (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   event TEXT NOT NULL,

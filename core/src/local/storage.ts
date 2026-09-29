@@ -53,7 +53,7 @@ export class LocalStorage implements Storage {
   }
 
   async fileState(sha256: string): Promise<FileState> {
-    return this.meta.namesFile(sha256) ? 'named' : 'unknown';
+    return this.meta.referencesBlob(sha256) ? 'named' : 'unknown';
   }
 
   async commit(
@@ -62,17 +62,22 @@ export class LocalStorage implements Storage {
     cond: { expectedLatest?: number | undefined },
     event: (version: number) => VersionPublished,
   ): Promise<CommitResult> {
+    // The files not stored yet are marked pending first, in their own short transaction, so a crash from here on
+    // leaves rows the open-time cleanup reads, never an unmarked file.
+    const fresh = [...new Set(files.filter((f) => !this.blobs.has(f.sha256)).map((f) => f.sha256))];
+    if (fresh.length) this.meta.markPending(fresh, this.clock.now().toISOString());
     const added = new Set<string>();
     for (const f of files) if (this.blobs.put(f.sha256, f.bytes)) added.add(f.sha256);
-    // A refused or failed commit takes back the blobs it added that no version references, under the lock, so
-    // storage is exactly as it was even when another publish won the race.
+    // A refused or failed commit takes back the blobs it added that no version references, and its pending rows,
+    // under the lock, so storage is exactly as it was even when another publish won the race.
     const takeBack = () => {
       try {
         this.meta.withWriteLock(() => {
           for (const sha of added) if (!this.meta.referencesBlob(sha)) this.blobs.delete(sha);
+          this.meta.clearPending([...fresh, ...added]);
         });
       } catch {
-        // Left for the open-time cleanup; no version points at them.
+        // Left for the open-time cleanup: their pending rows stay, and no version points at them.
       }
     };
     for (let attempt = 1; ; attempt++) {
@@ -83,7 +88,9 @@ export class LocalStorage implements Storage {
         // publish fails, retryable, with no version stored.
         r = this.meta.withWriteLock(() => {
           for (const f of files) if (!this.blobs.has(f.sha256) && this.blobs.put(f.sha256, f.bytes)) added.add(f.sha256);
-          return this.meta.append(v, cond, event);
+          const out = this.meta.append(v, cond, event);
+          if (out.kind === 'created') this.meta.clearPending(files.map((f) => f.sha256));
+          return out;
         });
       } catch (e) {
         if (attempt < COMMIT_TRIES && /busy|locked/i.test(String((e as Error).message))) continue;
@@ -95,22 +102,22 @@ export class LocalStorage implements Storage {
     }
   }
 
-  // After a publish that failed part-way (a crash, a full disk), blobs no version references may remain. Removes
-  // those older than an hour by the clock, so another process's publish in flight is never touched; a blob any
-  // version references is never removed. Runs when the catalog is opened.
+  // After a publish that failed part-way (a crash, a full disk), its pending rows remain. Reads only those marked over
+  // an hour ago by the clock, so another process's publish in flight is never touched: removes each one's file unless
+  // a version references it, and clears the row. Never walks the blob folder (contract §5.1); a leftover from before
+  // publishes were marked stays, unreferenced and unseen. Runs when the catalog is opened for writing.
   sweep(maxAgeMs = ORPHAN_AGE_MS): number {
     const before = new Date(this.clock.now().getTime() - maxAgeMs);
     let removed = 0;
     this.meta.withWriteLock(() => {
-      const referenced = this.meta.referencedBlobs();
-      for (const sha of this.blobs.list()) {
-        if (referenced.has(sha)) continue;
-        const at = this.blobs.storedAt(sha);
-        if (at && at < before) {
+      const stale = this.meta.pendingBefore(before.toISOString());
+      for (const sha of stale) {
+        if (!this.meta.referencesBlob(sha) && this.blobs.has(sha)) {
           this.blobs.delete(sha);
           removed++;
         }
       }
+      this.meta.clearPending(stale);
     });
     this.blobs.sweepTemp(before);
     return removed;

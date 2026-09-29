@@ -70,16 +70,6 @@ export class SqliteMetadataStore {
     return rows.map(toRecord);
   }
 
-  // Whether some version names this file: a scan of every version's file list (no index to migrate), with a text
-  // match first so only the rows that hold the sha256 are parsed.
-  namesFile(sha256: string): boolean {
-    return (
-      this.db
-        .prepare("SELECT 1 FROM versions v, json_each(v.files) f WHERE instr(v.files, ?1) > 0 AND json_extract(f.value, '$.sha256') = ?1 LIMIT 1")
-        .get(sha256) !== undefined
-    );
-  }
-
   names(): string[] {
     return (this.db.prepare('SELECT name FROM skills ORDER BY name').all() as { name: string }[]).map((r) => r.name);
   }
@@ -88,16 +78,32 @@ export class SqliteMetadataStore {
     return (this.db.prepare('SELECT count(*) AS n FROM skills').get() as { n: number }).n;
   }
 
+  // Whether some version names this file: a scan of every version's file list (no index to migrate), with a text
+  // match first so only the rows that hold the sha256 are parsed.
   referencesBlob(sha256: string): boolean {
     return (
-      this.db.prepare("SELECT 1 FROM versions, json_each(versions.files) AS f WHERE json_extract(f.value, '$.sha256') = ? LIMIT 1").get(sha256) !==
-      undefined
+      this.db
+        .prepare("SELECT 1 FROM versions v, json_each(v.files) f WHERE instr(v.files, ?1) > 0 AND json_extract(f.value, '$.sha256') = ?1 LIMIT 1")
+        .get(sha256) !== undefined
     );
   }
 
-  referencedBlobs(): Set<string> {
-    const rows = this.db.prepare("SELECT DISTINCT json_extract(f.value, '$.sha256') AS sha FROM versions, json_each(versions.files) AS f").all() as { sha: string }[];
-    return new Set(rows.map((r) => r.sha));
+  // The files a publish is about to store, marked before it writes them (contract §5.1): what the open-time cleanup
+  // reads instead of the blob folder. Cleared by the append that references them, or by the publish's take-back.
+  markPending(sha256s: readonly string[], at: string): void {
+    const put = this.db.prepare('INSERT OR REPLACE INTO pending_blobs (sha256, at) VALUES (?, ?)');
+    this.local.immediate(() => {
+      for (const s of sha256s) put.run(s, at);
+    });
+  }
+
+  clearPending(sha256s: Iterable<string>): void {
+    const del = this.db.prepare('DELETE FROM pending_blobs WHERE sha256 = ?');
+    for (const s of sha256s) del.run(s);
+  }
+
+  pendingBefore(at: string): string[] {
+    return (this.db.prepare('SELECT sha256 FROM pending_blobs WHERE at < ? ORDER BY sha256').all(at) as { sha256: string }[]).map((r) => r.sha256);
   }
 
   withWriteLock<T>(fn: () => T): T {
