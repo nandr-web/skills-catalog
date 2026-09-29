@@ -1,8 +1,7 @@
 // The AWS stand-in for the hosted adapters' tests: moto in server mode from emulator/.venv (or the full path in
-// SKILLS_CATALOG_MOTO), on 127.0.0.1 only, in its own
-// process group, stopped after each test file (SIGTERM to the group, SIGKILL after 5 s). It prints its pid so a run's
-// after-check can find a leftover. SDK clients get fake static credentials and this endpoint, never the person's, and a
-// no-wait agent (no-wait-agent.ts).
+// CATALOG_TEST_MOTO), on 127.0.0.1 only, in its own process group, stopped after each test file (SIGTERM to the group,
+// SIGKILL after 5 s). It prints its pid so a run's after-check can find a leftover. SDK clients get fake static
+// credentials and this endpoint, never the person's, and a no-wait agent (no-wait-agent.ts).
 
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
@@ -12,13 +11,17 @@ import { noWaitAgent } from './no-wait-agent.ts';
 
 const MOTO = fileURLToPath(new URL('../emulator/.venv/bin/moto_server', import.meta.url));
 
-/** How moto is started: from this project's environment, or from the full path in SKILLS_CATALOG_MOTO (an existing
+/** The variable naming another moto_server by its full path. Not SKILLS_*: the core's fail-safe clears those before a
+ *  test file loads. */
+export const MOTO_VARIABLE = 'CATALOG_TEST_MOTO';
+
+/** How moto is started: from this project's environment, or from the full path in CATALOG_TEST_MOTO (an existing
  *  environment, used read-only). Its own environment holds nothing of the person's: no AWS settings, no profile, no
  *  metadata service, a plain PATH; PYTHONDONTWRITEBYTECODE is passed through when set, so a read-only environment gets
  *  no bytecode written into it. */
 export function motoCommand(from: Record<string, string | undefined> = process.env): { path: string; env: Record<string, string> } {
-  const given = from['SKILLS_CATALOG_MOTO'];
-  if (given !== undefined && !isAbsolute(given)) throw new Error('SKILLS_CATALOG_MOTO must be the full path to moto_server');
+  const given = from[MOTO_VARIABLE];
+  if (given !== undefined && !isAbsolute(given)) throw new Error(`${MOTO_VARIABLE} must be the full path to moto_server`);
   const env: Record<string, string> = { PATH: '/usr/bin:/bin', AWS_EC2_METADATA_DISABLED: 'true', AWS_CONFIG_FILE: '/dev/null', AWS_SHARED_CREDENTIALS_FILE: '/dev/null' };
   const bytecode = from['PYTHONDONTWRITEBYTECODE'];
   if (bytecode !== undefined) env['PYTHONDONTWRITEBYTECODE'] = bytecode;
