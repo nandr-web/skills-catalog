@@ -9,7 +9,7 @@ import type { Surface } from './surface.ts';
 
 // Words the agent-facing surface doesn't have yet (asked for). A test fails when one of them appears in the surface,
 // so each is wired as soon as it lands.
-export const WORD_GAPS = ['get.latest_mark', 'errors.too_large_limit', 'search.no_tags', 'diff.absent'] as const;
+export const WORD_GAPS: readonly string[] = [];
 
 function asData(code: string, data: Record<string, unknown>): string {
   return `${code}: ` + Object.entries(data).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ');
@@ -25,7 +25,7 @@ export function renderSearch(s: Surface, r: SearchResult, query: string, offset 
     const hint = w.empty_hint[r.ranking === 'lexical' ? 'lexical' : 'other'];
     return s.format(w.empty, { query, ranking, total: r.catalog_size, hint });
   }
-  const tags = (t: string[]) => list(t) || 'none';
+  const tags = (t: string[]) => list(t) || w.no_tags;
   let lines: string[];
   if (r.match === 'partial') {
     // Nothing matched every word: the closest cards, each with the words it shares, never presented as a fit.
@@ -49,7 +49,7 @@ export function renderSearch(s: Surface, r: SearchResult, query: string, offset 
 function renderItem(s: Surface, item: ReadItem, body: string): string {
   const w = s.word('get');
   const lines = [
-    s.format(w.header, { name: item.name, version: item.version, latest_mark: '', publisher: item.publisher, published_at: item.published_at }),
+    s.format(w.header, { name: item.name, version: item.version, latest_mark: item.version === item.latest_version ? w.latest_mark.latest : s.format(w.latest_mark.older, { latest: item.latest_version }), publisher: item.publisher, published_at: item.published_at }),
     s.format(w.data_note, { publisher: item.publisher }),
     w.fence[0],
     body.trimEnd(),
@@ -104,7 +104,7 @@ export function renderDiff(s: Surface, r: DiffResult): string {
     const kind = f.flags.executable ? w.kind.executable : f.flags.script ? w.kind.script : f.flags.binary ? w.kind.binary : '';
     lines.push(s.format(w.file, { status: f.status, path: f.path, kind }));
   }
-  const show = (v: unknown) => (v === null ? '-' : Array.isArray(v) ? list(v.map(String)) : typeof v === 'object' ? JSON.stringify(v) : String(v));
+  const show = (v: unknown) => (v === null ? w.absent : Array.isArray(v) ? list(v.map(String)) : typeof v === 'object' ? JSON.stringify(v) : String(v));
   for (const c of r.frontmatter_changes) lines.push(s.format(w.frontmatter, { field: c.field, from: show(c.from), to: show(c.to) }));
   const publisher = r.risk_flags.find((f) => f.kind === 'new_publisher');
   if (publisher) {
@@ -153,6 +153,8 @@ export function renderError(s: Surface, e: CatalogError): string {
     }
     case 'not_owner':
       return fill(w.not_owner, { name: d['name'], owners: list((d['owners'] as string[]) ?? []) });
+    case 'too_large':
+      return fill(w.too_large, { ...d, limit: w.too_large_limit?.[String(d['limit'])] ?? d['limit'] });
     case 'invalid_request':
       return fill(d['limit'] !== undefined ? w.invalid_request_limit : w.invalid_request, d);
     case 'conflict':

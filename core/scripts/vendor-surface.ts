@@ -18,4 +18,5 @@ const header =
   '# Every word an assistant sees from skills-catalog: tool names and descriptions, server instructions, result and\n' +
   '# error sentences, setup text and the companion skill. Vendored from the agent-experience notes by\n' +
   '# scripts/vendor-surface.ts; never edit by hand.\n';
-writeFileSync(join(import.meta.dirname, '..', 'surface', 'surface.yaml'), header + stringify(data, { lineWidth: 0 }));
+// Written as YAML 1.1 so words like yes and no are quoted: any YAML reader, old or new, reads them as text.
+writeFileSync(join(import.meta.dirname, '..', 'surface', 'surface.yaml'), header + stringify(data, { lineWidth: 0, version: '1.1' }));
