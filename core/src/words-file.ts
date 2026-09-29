@@ -98,7 +98,7 @@ export class Words {
   // the names and the words.
   toolDefs(operations: Record<string, OperationDef> = OPERATIONS): ToolDef[] {
     return Object.values(operations)
-      .filter((op) => op.mcp && op.words && this.doc.tools[op.words])
+      .filter((op) => op.faces.includes('mcp') && op.words && this.doc.tools[op.words])
       .map((op) => {
         const spec = this.doc.tools[op.words!];
         const input = inputSchema(op, 'mcp');

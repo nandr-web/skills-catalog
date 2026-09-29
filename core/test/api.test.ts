@@ -4,9 +4,9 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { COMMON_ERRORS, ERROR_CODES, OPERATIONS, inputSchema, validateInput, type OutputSchema } from '../src/api.ts';
+import { OPERATIONS, inputSchema, validateInput, type OutputSchema } from '../src/api.ts';
 import { Catalog } from '../src/catalog.ts';
-import { CatalogError } from '../src/errors.ts';
+import { COMMON_ERRORS, CatalogError, ERROR_CODES } from '../src/errors.ts';
 import { Words } from '../src/words-file.ts';
 import { actAs } from '../src/local/index.ts';
 import { historyVersion, loadGolden } from './golden.ts';

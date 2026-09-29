@@ -1,8 +1,8 @@
 // The API (contract §1): each operation is defined once, with a typed input schema, and the faces (CLI, MCP,
 // later HTTP) are generated from it. Slice 1 holds the catalog operations; the machine operations join in slice 2.
 
-import { CatalogError } from './errors.ts';
-import { MAX_TAGS, TAG_MAX_LENGTH } from './skill-tree/index.ts';
+import { CatalogError, ERROR_CODES } from './errors.ts';
+import { MAX_TAGS, MODES, TAG_MAX_LENGTH } from './skill-tree/index.ts';
 
 export type Schema =
   | { type: 'string'; enum?: readonly string[]; maxLength?: number; minLength?: number }
@@ -11,18 +11,38 @@ export type Schema =
   | { type: 'array'; items: Schema; maxItems?: number }
   | { type: 'object'; properties: Record<string, Schema>; required?: readonly string[] };
 
+// An operation's result as JSON Schema (OpenAPI 3.1 takes it as it is): an object lists every field it has, the
+// optional ones left out of `required`; `{}` is any value (a front matter value, a flag's old and new values).
+export type OutputSchema =
+  | { type: 'string'; enum?: readonly string[] }
+  | { type: 'integer' }
+  | { type: 'boolean' }
+  | { type: 'null' }
+  | { type: 'array'; items: OutputSchema }
+  | { type: 'object'; properties: Record<string, OutputSchema>; required: readonly string[]; additionalProperties?: boolean | OutputSchema }
+  | { anyOf: readonly OutputSchema[] }
+  | Record<string, never>;
+
+// The faces an operation can be served on (contract §1): the assistant's tools, the CLI, the web page (HTTP, §1.1).
+export type Face = 'mcp' | 'cli' | 'web';
+
 export interface OperationDef {
   name: string;
   kind: 'catalog' | 'machine';
   phase: 1 | 2 | 'aws' | 'later';
-  mcp: boolean;
+  // Where it's served; the web face serves catalog operations only.
+  faces: readonly Face[];
+  // What it changes: nothing, the catalog, or this machine's installed skills.
+  effect: 'reads' | 'writes_catalog' | 'writes_machine';
+  // The code that runs it, by name: a Catalog method for a catalog operation, the client's machine operation otherwise.
+  run: string;
   words?: string; // its key in the words file (the tool's words), for operations with an MCP tool
   input: Extract<Schema, { type: 'object' }>;
-  // Inputs only a person at the CLI gives (contract §3): never in the MCP schema, and refused from the MCP face.
+  // Its result: a schema for a catalog operation; a machine operation answers in text for now.
+  output: OutputSchema | 'text';
+  // Inputs only a person at the CLI gives (contract §3): never in the MCP or web schema, and refused from those faces.
   cliOnly?: readonly string[];
 }
-
-export type Face = 'mcp' | 'cli';
 
 // Request limits are errors that name the field and the limit, never silent clamps (contract §9).
 export const MAX_SEARCH_LIMIT = 50;
@@ -42,13 +62,82 @@ export const FLAG_KINDS = ['runnable_file', 'runs_at_load', 'command_instruction
 const name = { type: 'string', maxLength: 200 } as const;
 const version = { type: 'integer', minimum: 1 } as const;
 
+// The catalog operations' results (catalog.ts's result types), field for field; a test checks what each one really
+// returns against these, so a field added or dropped in the code shows here.
+const str: OutputSchema = { type: 'string' };
+const int: OutputSchema = { type: 'integer' };
+const bool: OutputSchema = { type: 'boolean' };
+const anyValue: OutputSchema = {};
+const oneOf = (...values: readonly string[]): OutputSchema => ({ type: 'string', enum: values });
+const list = (items: OutputSchema): OutputSchema => ({ type: 'array', items });
+const obj = (properties: Record<string, OutputSchema>, optional: readonly string[] = []): OutputSchema => ({
+  type: 'object',
+  properties,
+  required: Object.keys(properties).filter((k) => !optional.includes(k)),
+});
+const riskFlag = obj({ kind: oneOf(...FLAG_KINDS), path: str, line: int, field: str, from: anyValue, to: anyValue, detail: str }, ['path', 'line', 'field', 'from', 'to']);
+const treeDiff = {
+  files: list(obj({ path: str, status: oneOf('added', 'changed', 'removed'), flags: obj({ binary: bool, executable: bool, script: bool }), unified: str }, ['unified'])),
+  frontmatter_changes: list(obj({ field: str, from: anyValue, to: anyValue })),
+  publisher_changed: bool,
+  risk_flags: list(riskFlag),
+};
+const mode = oneOf(...MODES);
+const SEARCH_OUTPUT = obj(
+  {
+    results: list(obj({ name: str, description: str, latest_version: int, tags: list(str), publisher: str, matched_words: list(str) })),
+    match: oneOf('all', 'partial', 'none'),
+    ranking: oneOf('none', 'lexical'),
+    next_cursor: str,
+    total_matches: int,
+    catalog_size: int,
+  },
+  ['next_cursor'],
+);
+const readItem = obj(
+  {
+    name: str,
+    version: int,
+    latest_version: int,
+    fingerprint: str,
+    published_at: str,
+    publisher: str,
+    manifest: obj({ frontmatter: { type: 'object', properties: {}, required: [], additionalProperties: true }, body: str, body_omitted: bool }, ['body', 'body_omitted']),
+    reviews: list(anyValue),
+    files: list(obj({ path: str, mode, size: int, sha256: str, type: oneOf('text', 'binary'), content: str, content_omitted: bool }, ['content', 'content_omitted'])),
+  },
+  ['files'],
+);
+// A name a read of several couldn't give: its own error, with the fields that error has.
+const readMissing = obj({ name: str, error: { type: 'object', properties: { code: oneOf(...ERROR_CODES) }, required: ['code'], additionalProperties: true } });
+const READ_OUTPUT = obj({ skills: list({ anyOf: [readItem, readMissing] }), inline_budget: obj({ limit: int, used: int, omitted: int }) });
+const VERSIONS_OUTPUT = obj(
+  { name: str, latest: int, versions: list(obj({ version: int, fingerprint: str, published_at: str, publisher: str, message: str, flags: list(riskFlag) })), next_cursor: str },
+  ['next_cursor'],
+);
+const DIFF_OUTPUT = obj({ name: str, from: int, to: int, ...treeDiff });
+const PUBLISH_OUTPUT = obj({
+  name: str,
+  version: int,
+  fingerprint: str,
+  created: bool,
+  dry_run: bool,
+  publisher: str,
+  diff_from_latest: { anyOf: [obj(treeDiff), { type: 'null' }] },
+  risk_flags: list(riskFlag),
+});
+const FETCH_OUTPUT = obj({ name: str, version: int, fingerprint: str, files: list(obj({ path: str, mode, content_base64: str })) });
+
 export const OPERATIONS: Record<string, OperationDef> = {
   search_shared_skills: {
     name: 'search_shared_skills',
     words: 'search',
     kind: 'catalog',
     phase: 1,
-    mcp: true,
+    faces: ['mcp', 'cli', 'web'],
+    effect: 'reads',
+    run: 'search',
+    output: SEARCH_OUTPUT,
     input: {
       type: 'object',
       properties: {
@@ -72,7 +161,10 @@ export const OPERATIONS: Record<string, OperationDef> = {
     words: 'get',
     kind: 'catalog',
     phase: 1,
-    mcp: true,
+    faces: ['mcp', 'cli', 'web'],
+    effect: 'reads',
+    run: 'read',
+    output: READ_OUTPUT,
     input: {
       type: 'object',
       properties: {
@@ -89,7 +181,10 @@ export const OPERATIONS: Record<string, OperationDef> = {
     words: 'versions',
     kind: 'catalog',
     phase: 1,
-    mcp: true,
+    faces: ['mcp', 'cli', 'web'],
+    effect: 'reads',
+    run: 'versions',
+    output: VERSIONS_OUTPUT,
     input: { type: 'object', properties: { name, cursor: { type: 'string', maxLength: 200 } }, required: ['name'] },
   },
   diff_shared_skill_versions: {
@@ -97,14 +192,20 @@ export const OPERATIONS: Record<string, OperationDef> = {
     words: 'diff',
     kind: 'catalog',
     phase: 1,
-    mcp: true,
+    faces: ['mcp', 'cli', 'web'],
+    effect: 'reads',
+    run: 'diff',
+    output: DIFF_OUTPUT,
     input: { type: 'object', properties: { name, from: version, to: version }, required: ['name', 'from', 'to'] },
   },
   publish_version: {
     name: 'publish_version',
     kind: 'catalog',
     phase: 1,
-    mcp: false,
+    faces: ['web'],
+    effect: 'writes_catalog',
+    run: 'publish',
+    output: PUBLISH_OUTPUT,
     input: {
       type: 'object',
       properties: {
@@ -130,7 +231,10 @@ export const OPERATIONS: Record<string, OperationDef> = {
     name: 'fetch_version',
     kind: 'catalog',
     phase: 1,
-    mcp: false,
+    faces: ['web'],
+    effect: 'reads',
+    run: 'fetch',
+    output: FETCH_OUTPUT,
     input: { type: 'object', properties: { name, version, fingerprint: { type: 'string', maxLength: 80 } } },
   },
 
@@ -140,7 +244,10 @@ export const OPERATIONS: Record<string, OperationDef> = {
     words: 'publish',
     kind: 'machine',
     phase: 1,
-    mcp: true,
+    faces: ['mcp'],
+    effect: 'writes_catalog',
+    run: 'publishFolder',
+    output: 'text',
     input: {
       type: 'object',
       properties: {
@@ -163,7 +270,10 @@ export const OPERATIONS: Record<string, OperationDef> = {
     words: 'install',
     kind: 'machine',
     phase: 1,
-    mcp: true,
+    faces: ['mcp', 'cli'],
+    effect: 'writes_machine',
+    run: 'install',
+    output: 'text',
     input: {
       type: 'object',
       properties: { name, version, target: { type: 'string', enum: TARGETS }, policy: { type: 'string', enum: POLICIES } },
@@ -176,7 +286,10 @@ export const OPERATIONS: Record<string, OperationDef> = {
     words: 'update',
     kind: 'machine',
     phase: 1,
-    mcp: true,
+    faces: ['mcp', 'cli'],
+    effect: 'writes_machine',
+    run: 'update',
+    output: 'text',
     input: {
       type: 'object',
       properties: { names: { type: 'array', items: name, maxItems: MAX_UPDATE_NAMES }, dry_run: { type: 'boolean' }, latest: { type: 'boolean' } },
@@ -188,7 +301,10 @@ export const OPERATIONS: Record<string, OperationDef> = {
     words: 'accept',
     kind: 'machine',
     phase: 1,
-    mcp: true,
+    faces: ['mcp', 'cli'],
+    effect: 'writes_machine',
+    run: 'accept',
+    output: 'text',
     input: {
       type: 'object',
       properties: { name, target: { type: 'string', enum: TARGETS }, version, confirm: { type: 'string', maxLength: 2000 }, flags: { type: 'array', items: { type: 'string', maxLength: 40 }, maxItems: 20 } },
@@ -200,7 +316,10 @@ export const OPERATIONS: Record<string, OperationDef> = {
     words: 'status',
     kind: 'machine',
     phase: 1,
-    mcp: true,
+    faces: ['mcp', 'cli'],
+    effect: 'reads',
+    run: 'list',
+    output: 'text',
     input: { type: 'object', properties: {} },
   },
   set_skill_update_policy: {
@@ -208,7 +327,10 @@ export const OPERATIONS: Record<string, OperationDef> = {
     words: 'policy',
     kind: 'machine',
     phase: 1,
-    mcp: true,
+    faces: ['mcp', 'cli'],
+    effect: 'writes_machine',
+    run: 'setPolicy',
+    output: 'text',
     input: { type: 'object', properties: { policy: { type: 'string', enum: POLICIES }, name }, required: ['policy'] },
   },
 };
