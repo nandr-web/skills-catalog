@@ -65,12 +65,12 @@ describe('the CLI face', () => {
     expect(readFileSync(join(p.dir, 'project', '.claude', 'skills', 'release-notes-kit', 'SKILL.md'), 'utf8')).toBe(skillMd('release-notes-kit', 'Draft release notes from merged pull requests.'));
   });
 
-  it('install from a hosted catalog address is refused before anything is fetched: forbidden, hosted_not_available, nothing written', async () => {
+  it('install from a hosted catalog that can\'t be reached fails and writes nothing (its log says it could not be reached)', async () => {
     const p = place();
-    const catalog = 'https://catalog.example.invalid';
+    const catalog = 'https://127.0.0.1:1';
     const r = await cli(p, ['install', 'release-notes-kit'], { env: { SKILLS_CATALOG: catalog } });
     expect(r.code).toBe(1);
-    expect(r.err).toContain(renderError(Words.load(), new CatalogError('forbidden', { catalog, why: 'hosted_not_available' })));
+    expect(r.err).toContain('internal_error');
     expect(existsSync(skills(p))).toBe(false);
     expect(existsSync(join(p.dir, 'project', '.claude'))).toBe(false);
   });

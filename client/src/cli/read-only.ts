@@ -7,13 +7,13 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { actAs, openCatalog, randomIds, type Words } from '@skills-catalog/core';
 import type { Context } from '../operations.ts';
-import type { Settings } from '../settings.ts';
+import { catalogToken, type Settings } from '../settings.ts';
 
 export function readOnlyContext(settings: Settings, words: Words, now: () => Date = () => new Date()): { ctx: Context; close: () => void } {
   let opened: ReturnType<typeof openCatalog> | undefined;
   // Named: anything but the default place, $SKILLS_HOME/catalog.
   const named = settings.catalog !== pathToFileURL(join(settings.home, 'catalog')).href;
-  const catalog = () => (opened ??= openCatalog(settings.catalog, { identity: actAs(settings.developer), readOnly: true, named }));
+  const catalog = () => (opened ??= openCatalog(settings.catalog, { identity: actAs(settings.developer), readOnly: true, named, token: catalogToken(settings) }));
   const close = () => void opened?.then((c) => c.close()).catch(() => {});
   return { ctx: { catalog, words, settings, face: 'cli', now, ids: randomIds }, close };
 }

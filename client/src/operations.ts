@@ -8,7 +8,7 @@ import { actAs, CatalogError, OPERATIONS, openCatalog, randomIds, renderDiff, re
 import { dispatch } from '@skills-catalog/core/http';
 import { appendActivity, logWords } from './activity.ts';
 import { MACHINE } from './machine/index.ts';
-import type { Settings } from './settings.ts';
+import { catalogToken, type Settings } from './settings.ts';
 import { recordUsage } from './usage/record.ts';
 
 export type { Face };
@@ -151,7 +151,7 @@ export function lazyCatalog(settings: Settings): { get: () => Promise<Catalog>; 
   let opened: Promise<Catalog> | undefined;
   return {
     get: () =>
-      (opened ??= openCatalog(settings.catalog, { identity: actAs(settings.developer) }).catch((e) => {
+      (opened ??= openCatalog(settings.catalog, { identity: actAs(settings.developer), token: catalogToken(settings) }).catch((e) => {
         opened = undefined;
         throw e;
       })),

@@ -1,5 +1,6 @@
 // Where the client reads and writes, and who it acts as (contract §7, §8), from the environment it was started with:
 // an assistant's MCP config for the server, the person's shell for the CLI.
+import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -23,7 +24,23 @@ export type Settings = {
   assistantHome: string;
   /** The project a project install goes into (<it>/.claude/skills): the folder the client was started in. */
   projectDir: string;
+  /** SKILLS_TOKEN: a hosted catalog's Bearer token; else the one skills-catalog login saved ($SKILLS_HOME/token). */
+  token?: string;
 };
+
+/** The file skills-catalog login saves a hosted catalog's token in (0600, in the client's own folder). */
+export const tokenFile = (s: Settings) => join(s.home, 'token');
+
+/** The token a hosted catalog is opened with: SKILLS_TOKEN, else the saved one, else none (every call is then
+ *  unauthenticated, whose words say to sign in). */
+export function catalogToken(s: Settings): string | undefined {
+  if (s.token) return s.token;
+  try {
+    return readFileSync(tokenFile(s), 'utf8').trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export function settingsFrom(env: Record<string, string | undefined>, cwd: string = process.cwd()): Settings {
   const home = resolve(env['SKILLS_HOME'] || join(homedir(), '.skills-catalog'));
@@ -39,5 +56,6 @@ export function settingsFrom(env: Record<string, string | undefined>, cwd: strin
     developerInvalid: as !== undefined && !valid,
     assistantHome: resolve(env['SKILLS_ASSISTANT_HOME'] || homedir()),
     projectDir: resolve(cwd),
+    ...(env['SKILLS_TOKEN'] ? { token: env['SKILLS_TOKEN'] } : {}),
   };
 }
