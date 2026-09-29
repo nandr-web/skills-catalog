@@ -244,11 +244,13 @@ describe('the headers on every hosted answer', () => {
         origin: await refusing.handle(req(search)),
         not_found: await w.handler.handle(req({ method: 'GET', path: `/api/v1/files/${'f'.repeat(64)}` })),
         outside: await w.handler.handle(req({ method: 'GET', path: '/elsewhere' })),
+        method: await w.handler.handle(req({ method: 'GET', path: '/api/v1/search_shared_skills' })),
         on_its_way: await w.handler.handle(req({ method: 'GET', path: `/api/v1/files/${'b'.repeat(64)}` })),
         read_scope: await w.handler.handle(req({ method: 'POST', path: '/api/v1/publish_version', body: '{}' }, { authorization: 'Bearer t-reader' })),
         internal_error: await broken.handle(req(search)),
       };
-      expect(Object.fromEntries(Object.entries(answers).map(([k, r]) => [k, r.status]))).toEqual({ ok: 200, link: 302, token_only: 400, no_token: 401, origin: 403, not_found: 404, outside: 404, on_its_way: 503, read_scope: 200, internal_error: 200 });
+      expect(Object.fromEntries(Object.entries(answers).map(([k, r]) => [k, r.status]))).toEqual({ ok: 200, link: 302, token_only: 400, no_token: 401, origin: 403, not_found: 404, outside: 404, method: 405, on_its_way: 503, read_scope: 200, internal_error: 200 });
+      expect(answers.method.headers['allow']).toBe('POST');
       for (const [kind, r] of Object.entries(answers)) {
         for (const [h, v] of Object.entries({ ...SECURITY_HEADERS, ...API_HEADERS })) expect(r.headers[h], `${kind} ${h}`).toBe(v);
         expect(Object.keys(r.headers).filter((h) => h.toLowerCase().startsWith('access-control-')), kind).toEqual([]);

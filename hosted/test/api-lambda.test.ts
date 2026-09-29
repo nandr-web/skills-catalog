@@ -31,6 +31,18 @@ describe('the Lambda adapter', () => {
     expect(r).toEqual({ statusCode: 200, headers: { 'content-type': 'application/json' }, body: '{"ok":true}', isBase64Encoded: false });
   });
 
+  it('the body is decoded only when the handler reads it, so a request the guards refuse is never decoded; read twice, decoded once', async () => {
+    let touched = 0;
+    const e = event({ isBase64Encoded: true });
+    Object.defineProperty(e, 'body', { get: () => (touched++, Buffer.from('{"a":1}').toString('base64')), enumerable: true });
+    await lambdaAdapter({ handle: async () => ({ status: 403, headers: {}, body: '' }) })(e);
+    expect(touched).toBe(0);
+    let seen: unknown[] = [];
+    await lambdaAdapter({ handle: async (r) => ((seen = [r.body, r.body]), { status: 200, headers: {}, body: '' }) })(e);
+    expect(new TextDecoder().decode(seen[0] as Uint8Array)).toBe('{"a":1}');
+    expect(seen[1]).toBe(seen[0]);
+  });
+
   it('a base64 body is decoded; no body is empty', async () => {
     const { seen, handle } = capture();
     await handle(event({ body: Buffer.from('{"a":1}').toString('base64'), isBase64Encoded: true }));
