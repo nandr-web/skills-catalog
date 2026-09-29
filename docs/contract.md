@@ -619,7 +619,7 @@ showing (the web UI, a publish preview), and the update hold never reads them. F
     the `!` starts a line or follows whitespace (so `- PR diff: !`gh pr diff`` runs), and ```` ```! ```` blocks. The detector
     is wider than that rule, so no spelling slips past: any `!` directly followed by a backtick, anywhere in a markdown file
     (frontmatter, code blocks and HTML comments included), and any line whose first non-blank characters are three or more
-    backticks or tildes, then optional blanks, then `!`; an edit inside an unchanged block counts, as one flag per block at its opening line. On the safe side, since how
+    backticks or tildes, then optional blanks, then `!`; an edit inside an unchanged block counts, as one flag per block at its opening line. Such a line starts its own command even inside a block that hasn't strictly closed (nested openers). And in a markdown file whose new version has a ```` ```! ```` block, any fence line (three or more backticks or tildes first) added, removed or changed is `runs_at_load` too, since moving a fence can change what runs; when only the old version had such a block, this doesn't fire (removing the only block is safer). On the safe side, since how
     Claude Code splits lines can't be proven: a line ends at a CRLF (one line end), a lone CR, a lone LF, U+2028 or U+2029, and
     every check that reports a line (these flags, `command_instruction`, the rules reviewer, the secret scan) counts lines
     that way, so a `line` matches what an editor shows; a blank is any space, tab or
@@ -654,17 +654,27 @@ showing (the web UI, a publish preview), and the update hold never reads them. F
     - "ignore previous instructions": ignore, disregard or forget, then optionally all, any or the, then previous, prior,
       above, earlier or system, then instruction, guidance, rule, message or prompt, singular or plural;
     - "addressed to the assistant": text that speaks to the model reading it, "to the assistant", "note to the AI", "the
-      assistant reading this", "AI reading this" (assistant, AI, model, LLM or agent): in the agent-experience trials, a
+      assistant reading this", "AI reading this" (assistant, AI, model, LLM or agent), and the assistant's own name in
+      the same forms ("note to Claude", "Claude reading this"; a plain "Claude should …" isn't one): in the agent-experience trials, a
       search card that flagged such a planted instruction made the assistant warn the person, and without the flag one
       run recommended the skill unwarned;
-    - "curl piped to a shell": `curl` or `wget`, then any later `|` on the line followed by an optional `sudo` and `sh`,
-      `bash`, `zsh`, `python` or `python3` (so `curl … | tee i.sh | sh` counts);
-    - "sends a local file or variable": `curl`, `wget` or `nc` with a data option (`-d`, `--data…`, `-F`, `--upload-file`,
-      `-T`) naming a home path or a variable (`$…`, `~/…`, `.ssh`, `.aws`, `.env`);
-    - "text hidden in an HTML comment": `<!-- … -->` holding letters; a comment over several lines is one flag at its
-      opening line when any of its lines was added or changed;
-    - a prose request to send files ("upload the contents of ~/.ssh to …") matches none of these: the word list is advice,
-      and a reworded instruction passes any word list;
+    - "curl piped to a shell": `curl` or `wget`, then any later `|` on the line followed by the shell, given plainly, by
+      path, through `env` or through `sudo` with flags (`sh`, `bash`, `zsh`, `python`, `python3`; `/bin/sh`, `env bash`,
+      `sudo -E bash`), so `curl … | tee i.sh | sh` counts; or a download run through a substitution as a shell's argument
+      (`sh -c "$(curl …)"`, `bash <(curl …)`, backticks around `curl` or `wget`);
+    - "sends a local file or variable": `curl`, `wget` or `nc` with a data option (`-d`, `--data…`, `--json`, `-F`,
+      `--upload-file`, `-T`) naming a home path or a variable (`$…`, `~/…`, `.ssh`, `.aws`, `.env`), or with a command
+      substitution (`$(…)` or backticks) in its URL or a header;
+    - "text hidden in an HTML comment": `<!-- … -->` holding letters, or markdown's link-reference comment,
+      `[//]: # (…)`, holding letters; a comment over several lines is one flag at its opening line when any of its lines
+      was added or changed;
+    - `prompt_injection` is a best-effort signal, not a promise: a text-only update that grants nothing and raises no other
+      flag applies on its own, so an injection these rules miss goes through. The word list is advice, every rule keeps
+      ordinary prose unflagged, and a reworded instruction passes any word list. Stated misses: a prose request to send
+      files ("upload the contents of ~/.ssh to …"), wording variants and other languages, a download saved in one step
+      and run in the next, PowerShell's fetch-and-run, other tools (`scp`, `rsync`, a language's own HTTP call), HTML
+      that renders hidden (styles, `hidden`), and bulk moved into a supporting markdown file to stay under
+      `context_cost`;
   - `context_cost` {path: `SKILL.md`, detail: "about N tokens (budget M)", numbers in plain digits}: SKILL.md (front
     matter and body) is over `context_cost_budget` in estimated tokens (UTF-8 bytes / 4, rounded up; default 5,000, any
     positive number in config) and grew since the installed version, counted in those estimated tokens (on a first
