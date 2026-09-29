@@ -1,7 +1,7 @@
 // Pre-flight before any live run (brief §2.7): the unit tests pass; every variant renders with nothing unfilled; the
 // catalog server's self-test passes (MCP initialize and tools/list, every allowed tool there); one login probe works.
 // The unit-test step is skipped here (it would run this suite inside itself); `qa agent` runs it.
-import { copyFileSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -46,11 +46,11 @@ describe('pre-flight', () => {
 
   it('failing unit tests name the command that runs all of them, as the pre-flight does (not only the fast ones)', async () => {
     const d = dir(); ok();
-    const empty = scratch('qa-pre-empty-');   // no vitest here: --no-install makes that a failure, never a download
-    mkdirSync(join(empty, 'golden'));
-    copyFileSync(here('../golden/phrases.yaml'), join(empty, 'golden', 'phrases.yaml'));   // the pre-flight reads it too
-    const problems = await preflight(opts(d, { qaDir: empty, skipTests: false }));
-    expect(problems[0]).toBe(`unit tests: failing (run \`npm run test:all\` in ${empty})`);
+    // The test run is stood in for (a real npx could look the package up on the network): it fails.
+    const ran: string[] = [];
+    const problems = await preflight(opts(d, { skipTests: false, runTests: (cwd: string) => (ran.push(cwd), { status: 1 }) }));
+    expect(ran).toEqual([here('..')]);
+    expect(problems[0]).toBe(`unit tests: failing (run \`npm run test:all\` in ${here('..')})`);
   });
 
   it('flags an ask left with an unfilled placeholder', async () => {

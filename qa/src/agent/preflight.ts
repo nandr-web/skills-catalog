@@ -22,6 +22,8 @@ export type PreflightOptions = {
   qaDir: string; scenariosFile: string; surfaceFile: string; variant: string; catalogCommand: string[];
   claude?: string[];      // the assistant, by its full path (default: the machine's ~/.local/bin/claude)
   skipTests?: boolean; skipLogin?: boolean;
+  /** Tests: stands in for running the unit tests (the real one runs `npx --no-install vitest run` in qaDir). */
+  runTests?: (cwd: string, env: NodeJS.ProcessEnv) => { status: number | null };
   scenarios?: string[];   // the round's scenarios (default: all), whose rules must be ones the scorer knows
   machine: Machine;
   report?: (line: string) => void;   // what the person should see before a live round: which assistant, which version
@@ -44,7 +46,7 @@ export async function preflight(o: PreflightOptions): Promise<string[]> {
   // 1. The unit tests (the live and real-machine checks stay off: QA_LIVE and QA_REAL are removed).
   if (!o.skipTests) {
     const env = { ...process.env }; delete env.QA_LIVE; delete env.QA_REAL;
-    const r = spawnSync('npx', ['--no-install', 'vitest', 'run'], { cwd: o.qaDir, env, encoding: 'utf8' });   // never fetches a package
+    const r = (o.runTests ?? ((cwd, e) => spawnSync('npx', ['--no-install', 'vitest', 'run'], { cwd, env: e, encoding: 'utf8' })))(o.qaDir, env);   // never fetches a package
     if (r.status !== 0) problems.push(`unit tests: failing (run \`npm run test:all\` in ${o.qaDir})`);   // all of them, as run here
   }
 
