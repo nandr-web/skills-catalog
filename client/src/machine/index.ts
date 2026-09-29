@@ -4,7 +4,13 @@
 // Import only types from operations.ts here: it imports this file, so a value imported back would be read too early.
 import type { Run } from '../operations.ts';
 import { publishFolder } from './publish-folder.ts';
+import { accept, install, list, setPolicy, update } from './installer.ts';
 
 export const MACHINE_RUNS: Record<string, Run> = {
   publish_skill_to_catalog: publishFolder,
+  install_shared_skill: install,
+  update_installed_skills: update,
+  accept_held_update: accept,
+  list_installed_skills: list,
+  set_skill_update_policy: setPolicy,
 };

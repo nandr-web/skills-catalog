@@ -201,7 +201,7 @@ describe('what Claude Code sends (its frames, recorded with Claude Code 2.1.284)
 });
 
 describe('the words point only at tools that are served', () => {
-  it('every tool the instructions, descriptions and results name is served, but for one known gap: install, which comes with the installer', async () => {
+  it('every tool the instructions, descriptions and results name is served', async () => {
     const { s } = await seeded();
     const init = await s.initialize();
     const list = (await s.send('tools/list')).result.tools as { name: string; description: string; inputSchema: unknown }[];
@@ -220,7 +220,7 @@ describe('the words point only at tools that are served', () => {
     for (const [tool, args] of calls) texts.push(await s.text(tool, args));
     const all = texts.join('\n');
     const named = Object.values(S.names).filter((n) => new RegExp(`\\b${n}\\b`).test(all));
-    expect(named.filter((n) => !list.some((t) => t.name === n))).toEqual([S.names['install']]);
+    expect(named.filter((n) => !list.some((t) => t.name === n))).toEqual([]);
   });
 });
 
