@@ -14,12 +14,12 @@
     "node": ">=24.15"
   },
   "scripts": {
-    "test": "vitest run",
+    "test": "node scripts/node-check.mjs && vitest run",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm test",
+    "check": "node scripts/node-check.mjs && npm run typecheck && npm test",
     "vendor-surface": "node scripts/vendor-surface.ts",
-    "perf": "node --disable-warning=ExperimentalWarning scripts/perf-search.ts",
-    "try-it": "node --disable-warning=ExperimentalWarning scripts/try-it.ts"
+    "perf": "node scripts/node-check.mjs && node --disable-warning=ExperimentalWarning scripts/perf-search.ts",
+    "try-it": "node scripts/node-check.mjs && node --disable-warning=ExperimentalWarning scripts/try-it.ts"
   },
   "dependencies": {
     "yaml": "2.9.1"
