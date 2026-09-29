@@ -6,7 +6,7 @@
 import { createHash } from 'node:crypto';
 import { OPERATIONS, Words } from '@skills-catalog/core';
 import { HTTP_DEVELOPER, HTTP_SEED, SHA, checkHttpCase, httpCases, skillMd } from '@skills-catalog/core/testing/http';
-import type { FileAnswer } from '@skills-catalog/core/http';
+import { API_HEADERS, SECURITY_HEADERS, type FileAnswer } from '@skills-catalog/core/http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createHostedHandler, type HostedRequest } from '../src/api/handler.ts';
 import type { TokenHolder } from '../src/index.ts';
@@ -189,6 +189,36 @@ describe('who is asking, hosted', () => {
       expect(logged[0]).toMatch(/at /);
       expect(logged[0]).not.toContain('release notes body');
       expect(logged[0]).not.toContain('t-dev1');
+    } finally {
+      w.close();
+    }
+  }, 30_000);
+});
+
+describe('the headers on every hosted answer', () => {
+  it("each kind of answer (200, 302, 400, 401, 403, 404, 503, read_scope, internal_error) carries the core's security headers and no-store, and never an Access-Control-* header", async () => {
+    const w = await world(async (sha) => (sha === 'b'.repeat(64) ? { kind: 'on_its_way' } : sha === 'c'.repeat(64) ? { kind: 'link', url: 'https://example.test/x' } : { kind: 'unknown' }));
+    const search = { method: 'POST', path: '/api/v1/search_shared_skills', body: '{"query":"release"}' };
+    const refusing = createHostedHandler({ catalog: {} as never, tokens: { verify: async () => undefined }, words, origin: { allows: async () => false } });
+    const broken = createHostedHandler({ catalog: new Proxy({}, { get: () => () => Promise.reject(new Error('bug')) }) as never, tokens: { verify: async (t) => HOLDERS[t] }, words, origin: THROUGH_THE_EDGE, log: () => {} });
+    try {
+      const answers = {
+        ok: await w.handler.handle(req(search)),
+        link: await w.handler.handle(req({ method: 'GET', path: `/api/v1/files/${'c'.repeat(64)}` })),
+        token_only: await w.handler.handle(req(search, { authorization: 'Bearer t-dev1', 'x-skills-catalog-as': 'bo' })),
+        no_token: await w.handler.handle(req(search, {})),
+        origin: await refusing.handle(req(search)),
+        not_found: await w.handler.handle(req({ method: 'GET', path: `/api/v1/files/${'f'.repeat(64)}` })),
+        outside: await w.handler.handle(req({ method: 'GET', path: '/elsewhere' })),
+        on_its_way: await w.handler.handle(req({ method: 'GET', path: `/api/v1/files/${'b'.repeat(64)}` })),
+        read_scope: await w.handler.handle(req({ method: 'POST', path: '/api/v1/publish_version', body: '{}' }, { authorization: 'Bearer t-reader' })),
+        internal_error: await broken.handle(req(search)),
+      };
+      expect(Object.fromEntries(Object.entries(answers).map(([k, r]) => [k, r.status]))).toEqual({ ok: 200, link: 302, token_only: 400, no_token: 401, origin: 403, not_found: 404, outside: 404, on_its_way: 503, read_scope: 200, internal_error: 200 });
+      for (const [kind, r] of Object.entries(answers)) {
+        for (const [h, v] of Object.entries({ ...SECURITY_HEADERS, ...API_HEADERS })) expect(r.headers[h], `${kind} ${h}`).toBe(v);
+        expect(Object.keys(r.headers).filter((h) => h.toLowerCase().startsWith('access-control-')), kind).toEqual([]);
+      }
     } finally {
       w.close();
     }
