@@ -55,7 +55,7 @@ Type-checks the code, then runs the tests, except the few slow ones listed with 
 npm run check
 ```
 
-You should see **Tests 385 passed (385)**.
+You should see **Tests 376 passed | 15 skipped (391)**. The skipped tests are checks written ahead for behaviour that's planned but not built yet.
 
 <details><summary>What it printed on our machine</summary>
 
@@ -64,7 +64,7 @@ You should see **Tests 385 passed (385)**.
 > node scripts/node-check.mjs && npm run typecheck && npm test
 …
  Test Files  7 passed (7)
-      Tests  385 passed (385)
+      Tests  376 passed | 15 skipped (391)
 ```
 
 </details>
