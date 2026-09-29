@@ -84,6 +84,7 @@ describe('where the catalog runs is said when it\'s opened', () => {
     expect((await Catalog.open(ports('local'))).where).toBe('local');
     await expect(Catalog.open(ports('hosted'))).rejects.toThrow(/hosted catalog needs a links port/);
     await expect(Catalog.open(ports('local', links))).rejects.toThrow(/local catalog has no links port/);
+    for (const where of [undefined, 'Local', 'remote']) await expect(Catalog.open({ ...ports('local'), where } as never)).rejects.toThrow(/where the catalog runs/);
   });
 
   it('the local catalog says it\'s local', async () => {

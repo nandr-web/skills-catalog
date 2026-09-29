@@ -96,10 +96,11 @@ describe('Catalog.file: a stored version\'s file by its sha256', () => {
 
 describe('Catalog.file where storage or a link port answers otherwise (hosted)', () => {
   const sha = 'a'.repeat(64);
+  const reads: string[] = []; // every blob() call: hosted never reads a file into the function (§1.1)
   const bytes = new TextEncoder().encode('x');
   const ports = (state: 'named' | 'on_its_way' | 'unknown', links?: BlobLinks) => ({
     where: links ? ('hosted' as const) : ('local' as const),
-    storage: { fileState: async () => state, blob: async () => bytes } as unknown as Storage,
+    storage: { fileState: async () => state, blob: async () => (reads.push(state), bytes) } as unknown as Storage,
     index: {} as never,
     events: { subscribe: () => {}, deliver: async () => 0 },
     identity: actAs(undefined),
@@ -112,9 +113,11 @@ describe('Catalog.file where storage or a link port answers otherwise (hosted)',
   it('a named file is a link when a BlobLinks port is wired, and its bytes are never read', async () => {
     const asked: string[] = [];
     const links: BlobLinks = { downloadLink: async (s) => (asked.push(s), `https://files.example.invalid/${s}?signed`) };
+    reads.length = 0;
     const c = await open('named', links);
     expect(await c.file(sha)).toEqual({ kind: 'link', url: `https://files.example.invalid/${sha}?signed` });
     expect(asked).toEqual([sha]);
+    expect(reads).toEqual([]);
   });
 
   it('refuses bytes that don\'t match their sha256, as a fetch does', async () => {

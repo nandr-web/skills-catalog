@@ -96,6 +96,8 @@ describe('the published schema is the definitions\' (contract §1.1)', () => {
     expect(errorsOf(body, { ok: false, error: { code: 'invalid_request', field: 'X-Skills-Catalog-As', why: 'token_only' }, words: { error: 'x' } })).toEqual([]);
     expect(errorsOf(body, { ok: false, error: { code: 'invalid_request', field: 'name', why: 'token_only' } })).not.toEqual([]);
     expect(hostedDoc.components.securitySchemes).toEqual({ bearer: expect.objectContaining({ type: 'http', scheme: 'bearer' }) });
+    // The refusal before the API never names what it checks: that header and its value are a secret (§1.1).
+    expect(hostedDoc.components.responses.Refused).toEqual({ description: 'Refused before the API.' });
     expect(hostedDoc.components.parameters).toBeUndefined();
   });
 
