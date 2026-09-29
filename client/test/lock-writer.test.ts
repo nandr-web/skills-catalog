@@ -220,4 +220,45 @@ describe('one writer at a time on the installed-skills lock (golden histories.lo
     expect([(r as CatalogError).code, (r as CatalogError).data]).toEqual(['lock_busy', { path, pid: live.pid }]);
     expect(readLock(p.home).skills[dest(p)]!.version).toBe(1);
   });
+
+  // An update of several skills holds the lock from its first write to its end (§4.5): another run that comes between two
+  // skills finds it held, so lock_busy always means nothing was changed.
+  it('an update holds the lock from its first write to its end: another run between two skills waits', async () => {
+    const p = place();
+    const ctx = ctxFor(p);
+    for (const [name, v1] of [[NAME, versions['prc.v1']!], ['release-note-draft', versions['h1.v1']!]] as const) {
+      await publish(p, name, v1);
+      await install(ctx, { name });
+    }
+    await publish(p, NAME, versions['prc.v2']!);
+    await publish(p, 'release-note-draft', versions['h1.v2']!);
+    const path = lockPath(p);
+    const live = await helper();
+    const second = join(p.osHome, '.claude', 'skills', 'release-note-draft');
+    let tried: 'took it' | 'found it held' | undefined;
+    // After the first skill's write, when the update looks at the second skill's folder: another run tries to take the lock.
+    let wrote = false;
+    race.afterRename = (_from, to) => void (to === join(p.home, 'lock.json') && (wrote = true));
+    race.onLstat = (at) => {
+      if (!wrote || tried || at !== second) return;
+      try {
+        race.fs.writeFileSync(path, JSON.stringify({ pid: live.pid, started: Date.now() }), { flag: 'wx', mode: 0o600 });
+        tried = 'took it';
+      } catch {
+        tried = 'found it held';
+      }
+    };
+    let t = Date.parse('2026-09-29T12:00:00Z');
+    let r: unknown;
+    try {
+      r = await update({ ...ctx, now: () => new Date((t += 1000)) }, {}).catch((e: unknown) => e);
+    } finally {
+      race.onLstat = undefined;
+      race.afterRename = undefined;
+      for (const c of children.splice(0)) c.kill();
+    }
+    expect([tried, (r as { outcome?: string }).outcome]).toEqual(['found it held', 'updated']);
+    expect(Object.values(readLock(p.home).skills).map((e) => [e.name, e.version]).sort()).toEqual([[NAME, 2], ['release-note-draft', 2]].sort());
+    expect(race.fs.existsSync(path)).toBe(false);
+  });
 });

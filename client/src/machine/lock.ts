@@ -189,8 +189,7 @@ function heldBy(path: string): { st: Stats; text?: string; holder?: Holder } | u
 
 /** A lock whose holder is gone, or whose process id now belongs to a process started at another time; one whose holder
  *  can't be read (a run stopped between making it and writing it) once it's older than the wait; and one naming this
- *  very process, which it left behind (a pid reused after a crash): once taken, a change is made in one synchronous step,
- *  so no call of this process holds the lock while another waits. */
+ *  very process that no hold of this process has (heldHere), which it left behind (a pid reused after a crash). */
 function isStale(found: { st: Stats; holder?: Holder }): boolean {
   if (!found.st.isFile()) return false;
   const h = found.holder;
@@ -217,41 +216,69 @@ function removeIfSame(path: string, was: Stats, text?: string): boolean {
   return true;
 }
 
-/** Every change to lock.json, one run at a time: takes $SKILLS_HOME/lock.json.lock (made only if absent, holding this
- *  process's id and start), reads lock.json afresh, lets `change` change it, writes it back (a temp file renamed over
- *  it, so a reader sees the whole old or new file), and removes the lock file, whether the change succeeded or not. A
- *  lock held by another run is waited for up to 5 seconds, then the call refuses with lock_busy {path, pid}, having
- *  changed nothing; a stale one is removed and taken. `now` is the clock the wait is measured by. */
-export async function withLock<T>(home: string, now: () => number, change: (lock: Lock) => T): Promise<T> {
-  mkdirSync(home, { recursive: true, mode: 0o700 });
-  const path = join(home, 'lock.json.lock');
+// Lock files this process holds across awaits (an update of several skills). Another call of this process changes the
+// lock under that hold without waiting: each change is one synchronous step, so none can come between another's read
+// and write. Only a lock file of this process that isn't held here is one it left behind.
+const heldHere = new Set<string>();
+
+/** Takes $SKILLS_HOME/lock.json.lock: made only if absent, holding this process's id and start. A lock held by another run
+ *  is waited for up to 5 seconds, then lock_busy {path, pid}; a stale one is removed and taken. */
+async function take(path: string, now: () => number): Promise<Stats> {
   const deadline = now() + LOCK_WAIT_MS;
-  let mine: Stats | undefined;
-  while (!mine) {
+  for (;;) {
     try {
       const fd = openSync(path, 'wx', 0o600);
       try {
         writeSync(fd, JSON.stringify({ pid: process.pid, started: startedHere() }));
-        mine = fstatSync(fd);
+        return fstatSync(fd);
       } finally {
         closeSync(fd);
       }
-      break;
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
     }
     const found = heldBy(path);
     if (!found) continue;
-    if (isStale(found) && removeIfSame(path, found.st, found.text)) continue;
+    if (!heldHere.has(path) && isStale(found) && removeIfSame(path, found.st, found.text)) continue;
     if (now() >= deadline) throw new CatalogError('lock_busy', { path, pid: found.holder?.pid ?? null });
     await wait(LOCK_RETRY_MS);
   }
+}
+
+/** One run's changes to lock.json (§4.5, one writer at a time): the lock file is taken at the first change and held until
+ *  `release`, so a run with several changes (an update of several skills) holds it from its first write to its end, and
+ *  lock_busy always means nothing was changed. Each change reads lock.json afresh, changes it, and writes it back whole (a
+ *  temp file renamed over it, so a reader sees the whole old or new file). `now` is the clock a wait is measured by. */
+export function holdLock(home: string, now: () => number): { change<T>(fn: (lock: Lock) => T): Promise<T>; release(): void } {
+  const path = join(home, 'lock.json.lock');
+  let mine: Stats | undefined;
+  return {
+    async change<T>(fn: (lock: Lock) => T): Promise<T> {
+      mkdirSync(home, { recursive: true, mode: 0o700 });
+      if (!mine && !heldHere.has(path)) {
+        mine = await take(path, now);
+        heldHere.add(path);
+      }
+      const lock = readLock(home);
+      const out = fn(lock);
+      writeLock(home, lock);
+      return out;
+    },
+    release(): void {
+      if (!mine) return;
+      heldHere.delete(path);
+      removeIfSame(path, mine);
+      mine = undefined;
+    },
+  };
+}
+
+/** One change to lock.json under the lock, which is removed afterwards whether the change succeeded or not. */
+export async function withLock<T>(home: string, now: () => number, change: (lock: Lock) => T): Promise<T> {
+  const hold = holdLock(home, now);
   try {
-    const lock = readLock(home);
-    const out = change(lock);
-    writeLock(home, lock);
-    return out;
+    return await hold.change(change);
   } finally {
-    removeIfSame(path, mine);
+    hold.release();
   }
 }

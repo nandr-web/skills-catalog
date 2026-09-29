@@ -21,7 +21,7 @@ import { reasons } from '@skills-catalog/core';
 import { logWords } from '../activity.ts';
 import { holdWithinADay, recordUsage, type HoldReason, type UsageEvent } from '../usage/record.ts';
 import type { Context, Done } from '../operations.ts';
-import { policyOf, readRecords, withLock, writeConfig, type FolderId, type Lock, type LockEntry, type Policy, type Target } from './lock.ts';
+import { holdLock, policyOf, readRecords, withLock, writeConfig, type FolderId, type Lock, type LockEntry, type Policy, type Target } from './lock.ts';
 
 const quoted = (p: string) => JSON.stringify(p);
 const TARGETS: readonly Target[] = ['user', 'project'];
@@ -651,12 +651,12 @@ function folderFingerprint(dir: string): string | undefined {
 
 /** An intact copy the person recreated (a restore, a branch switch): its identity is recorded again, only while the
  *  folders above it are the real, private ones and it's a real folder itself; nothing is moved. */
-async function recordAgain(ctx: Context, dest: string, target: Target, e: LockEntry): Promise<void> {
+async function recordAgain(ctx: Context, dest: string, target: Target, e: LockEntry, write: <T>(fn: (lock: Lock) => T) => Promise<T> = (fn) => withLock(ctx.settings.home, clockOf(ctx), fn)): Promise<void> {
   const now = idOf(dest);
   if (now === undefined || same(now, fromLock(e.copy))) return;
   skillsFolderFor(dest, target);
   if (!isCopy(lstatOf(dest), now)) return;
-  await withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
+  await write((fresh) => {
     const entry = fresh.skills[dest];
     if (entry) fresh.skills[dest] = { ...entry, copy: toLock(now) };
   });
@@ -757,118 +757,124 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     refusal ??= code;
     saw('refused');
   };
-  for (const e of chosen) {
-    const v = await allVersions(catalog, e.name);
-    // A name reserved since it was installed is refused at every update, up to date or not (§5.3 step 2).
-    try {
-      checkName(e.name);
-    } catch (err) {
-      if (!(err instanceof CatalogError)) throw err;
-      lines.push(s.format(w.refused, { name: e.name, from: e.version, to: v.latest, reason: refusalReason(s, err) }));
-      refused(err.code);
-      continue;
-    }
-    if (v.latest === e.version) {
-      // Nothing newer: an intact copy the person recreated just has its identity recorded again; if its folders fail their
-      // check, it's refused at the version installed.
-      const here = destOf(ctx, e.target, e.name);
+  // The lock is taken at the first write and held to the end (§4.5), so lock_busy always means nothing was changed.
+  const hold = holdLock(ctx.settings.home, clockOf(ctx));
+  try {
+    for (const e of chosen) {
+      const v = await allVersions(catalog, e.name);
+      // A name reserved since it was installed is refused at every update, up to date or not (§5.3 step 2).
       try {
-        if (folderFingerprint(here) === e.fingerprint) await recordAgain(ctx, here, e.target, e);
+        checkName(e.name);
       } catch (err) {
-        if (!(err instanceof CatalogError) || err.code === 'lock_busy') throw err;
-        lines.push(refusedTarget(s, { name: e.name, from: e.version, to: e.version }, err));
+        if (!(err instanceof CatalogError)) throw err;
+        lines.push(s.format(w.refused, { name: e.name, from: e.version, to: v.latest, reason: refusalReason(s, err) }));
         refused(err.code);
         continue;
       }
-      unchanged++;
-      continue;
+      if (v.latest === e.version) {
+        // Nothing newer: an intact copy the person recreated just has its identity recorded again; if its folders fail their
+        // check, it's refused at the version installed.
+        const here = destOf(ctx, e.target, e.name);
+        try {
+          if (folderFingerprint(here) === e.fingerprint) await recordAgain(ctx, here, e.target, e, hold.change);
+        } catch (err) {
+          if (!(err instanceof CatalogError) || err.code === 'lock_busy') throw err;
+          lines.push(refusedTarget(s, { name: e.name, from: e.version, to: e.version }, err));
+          refused(err.code);
+          continue;
+        }
+        unchanged++;
+        continue;
+      }
+      const at = { name: e.name, from: e.version, to: v.latest };
+      targets.push(`${e.name} v${e.version} → v${v.latest}`);
+      const { policy } = policyOf(e, config);
+      // Where it goes, checked as an install checks it: a link or a same-name skill or command may have appeared since.
+      let dest: string;
+      try {
+        dest = checkTarget(ctx, e.target, e.name, lock);
+      } catch (err) {
+        if (!(err instanceof CatalogError)) throw err;
+        lines.push(refusedTarget(s, at, err));
+        refused(err.code);
+        continue;
+      }
+      let to: Side;
+      try {
+        to = await fetchListed(catalog, e.name, v, v.latest);
+      } catch (err) {
+        if (!(err instanceof CatalogError)) throw err;
+        const refusedFingerprint = s.word('update.refused_fingerprint');
+        lines.push(
+          err.code === 'fingerprint_mismatch'
+            ? typeof refusedFingerprint === 'string' ? s.format(refusedFingerprint, at) : asData('refused', { ...at, error: err.toJSON() })
+            : s.format(w.refused, { ...at, reason: refusalReason(s, err) }),
+        );
+        refused(err.code);
+        continue;
+      }
+      const d = gate(await installedSide(catalog, e), to);
+      const confirm = encode({ name: e.name, target: e.target, version: to.version, fingerprint: to.fingerprint, latest: v.latest });
+      const take = { ...at, target: e.target, confirm, flags: JSON.stringify(kinds(d.risk_flags)) };
+      const also = d.risk_flags.length ? s.format(w.held_also, { reasons: reasons(s, d.risk_flags) }) : '';
+      // A copy from another catalog comes first (§5.3): it may be a different skill that shares the name. Never applied
+      // silently; taken on a yes, which records the catalog in use.
+      if (e.catalog !== ctx.settings.catalog) {
+        recordHold(ctx, e.name, to.version, 'other_catalog', d.risk_flags, to.version - e.version);
+        lines.push(s.format(w.held_other_catalog, { ...at, was: e.catalog, now: ctx.settings.catalog, also }));
+        lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
+        saw('held_other_catalog');
+        continue;
+      }
+      // Pinned: stays, and the person may still take this version; it stays pinned, at that version.
+      if (policy === 'pin') {
+        recordHold(ctx, e.name, to.version, 'pin', d.risk_flags, to.version - e.version);
+        lines.push(s.format(w.held_pin, at));
+        lines.push(s.format(ctx.face === 'cli' ? w.held_pin_next_cli : w.held_pin_next, take));
+        saw('held_pin');
+        continue;
+      }
+      // "Tell me first" holds every new version, flagged or not (§5.3: pin, then notify, then the flags); it's taken with
+      // the flags it shows, [] when none.
+      if (policy === 'notify') {
+        recordHold(ctx, e.name, to.version, 'notify', d.risk_flags, to.version - e.version);
+        lines.push(d.risk_flags.length ? s.format(w.held_notify_flagged, { ...at, reasons: reasons(s, d.risk_flags) }) : s.format(w.held_notify, at));
+        lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
+        saw('held_notify');
+        continue;
+      }
+      if (d.risk_flags.length) {
+        recordHold(ctx, e.name, to.version, 'flagged', d.risk_flags, to.version - e.version);
+        lines.push(s.format(w.held_flagged, { ...at, reasons: reasons(s, d.risk_flags) }));
+        lines.push(s.format(ctx.face === 'cli' ? w.held_next_cli : w.held_next, take));
+        saw('held_flagged');
+        continue;
+      }
+      if (req.dry_run) {
+        lines.push(s.format(w.would_update, { ...at, changes: changesOf(s, d) }));
+        continue;
+      }
+      // A folder that changed while it was being written is that skill's refused line; the other skills go on.
+      // Another run holding the lock past the wait refuses the whole call (lock_busy).
+      let written: ReturnType<typeof writeSkill>;
+      try {
+        written = await hold.change((fresh) => {
+          const now = fresh.skills[dest] ?? e;
+          const w = writeSkill(dest, e.target, to.files, now);
+          record(ctx, fresh, dest, now, to, now.policy, now.accepted, toLock(w.copy));
+          return w;
+        });
+      } catch (err) {
+        if (!(err instanceof CatalogError) || err.code === 'lock_busy') throw err;
+        lines.push(refusedTarget(s, at, err));
+        refused(err.code);
+        continue;
+      }
+      lines.push(s.format(w.updated, { ...at, changes: changesOf(s, d) }) + keptLine(s, e.name, written.kept));
+      saw('updated');
     }
-    const at = { name: e.name, from: e.version, to: v.latest };
-    targets.push(`${e.name} v${e.version} → v${v.latest}`);
-    const { policy } = policyOf(e, config);
-    // Where it goes, checked as an install checks it: a link or a same-name skill or command may have appeared since.
-    let dest: string;
-    try {
-      dest = checkTarget(ctx, e.target, e.name, lock);
-    } catch (err) {
-      if (!(err instanceof CatalogError)) throw err;
-      lines.push(refusedTarget(s, at, err));
-      refused(err.code);
-      continue;
-    }
-    let to: Side;
-    try {
-      to = await fetchListed(catalog, e.name, v, v.latest);
-    } catch (err) {
-      if (!(err instanceof CatalogError)) throw err;
-      const refusedFingerprint = s.word('update.refused_fingerprint');
-      lines.push(
-        err.code === 'fingerprint_mismatch'
-          ? typeof refusedFingerprint === 'string' ? s.format(refusedFingerprint, at) : asData('refused', { ...at, error: err.toJSON() })
-          : s.format(w.refused, { ...at, reason: refusalReason(s, err) }),
-      );
-      refused(err.code);
-      continue;
-    }
-    const d = gate(await installedSide(catalog, e), to);
-    const confirm = encode({ name: e.name, target: e.target, version: to.version, fingerprint: to.fingerprint, latest: v.latest });
-    const take = { ...at, target: e.target, confirm, flags: JSON.stringify(kinds(d.risk_flags)) };
-    const also = d.risk_flags.length ? s.format(w.held_also, { reasons: reasons(s, d.risk_flags) }) : '';
-    // A copy from another catalog comes first (§5.3): it may be a different skill that shares the name. Never applied
-    // silently; taken on a yes, which records the catalog in use.
-    if (e.catalog !== ctx.settings.catalog) {
-      recordHold(ctx, e.name, to.version, 'other_catalog', d.risk_flags, to.version - e.version);
-      lines.push(s.format(w.held_other_catalog, { ...at, was: e.catalog, now: ctx.settings.catalog, also }));
-      lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
-      saw('held_other_catalog');
-      continue;
-    }
-    // Pinned: stays, and the person may still take this version; it stays pinned, at that version.
-    if (policy === 'pin') {
-      recordHold(ctx, e.name, to.version, 'pin', d.risk_flags, to.version - e.version);
-      lines.push(s.format(w.held_pin, at));
-      lines.push(s.format(ctx.face === 'cli' ? w.held_pin_next_cli : w.held_pin_next, take));
-      saw('held_pin');
-      continue;
-    }
-    // "Tell me first" holds every new version, flagged or not (§5.3: pin, then notify, then the flags); it's taken with
-    // the flags it shows, [] when none.
-    if (policy === 'notify') {
-      recordHold(ctx, e.name, to.version, 'notify', d.risk_flags, to.version - e.version);
-      lines.push(d.risk_flags.length ? s.format(w.held_notify_flagged, { ...at, reasons: reasons(s, d.risk_flags) }) : s.format(w.held_notify, at));
-      lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
-      saw('held_notify');
-      continue;
-    }
-    if (d.risk_flags.length) {
-      recordHold(ctx, e.name, to.version, 'flagged', d.risk_flags, to.version - e.version);
-      lines.push(s.format(w.held_flagged, { ...at, reasons: reasons(s, d.risk_flags) }));
-      lines.push(s.format(ctx.face === 'cli' ? w.held_next_cli : w.held_next, take));
-      saw('held_flagged');
-      continue;
-    }
-    if (req.dry_run) {
-      lines.push(s.format(w.would_update, { ...at, changes: changesOf(s, d) }));
-      continue;
-    }
-    // A folder that changed while it was being written is that skill's refused line; the other skills go on.
-    // Another run holding the lock past the wait refuses the whole call (lock_busy).
-    let written: ReturnType<typeof writeSkill>;
-    try {
-      written = await withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
-        const now = fresh.skills[dest] ?? e;
-        const w = writeSkill(dest, e.target, to.files, now);
-        record(ctx, fresh, dest, now, to, now.policy, now.accepted, toLock(w.copy));
-        return w;
-      });
-    } catch (err) {
-      if (!(err instanceof CatalogError) || err.code === 'lock_busy') throw err;
-      lines.push(refusedTarget(s, at, err));
-      refused(err.code);
-      continue;
-    }
-    lines.push(s.format(w.updated, { ...at, changes: changesOf(s, d) }) + keptLine(s, e.name, written.kept));
-    saw('updated');
+  } finally {
+    hold.release();
   }
   if (unchanged) lines.push(s.format(w.unchanged, { n: unchanged }));
   const text = [s.format(w.header, { checked: chosen.length }), ...lines].join('\n');

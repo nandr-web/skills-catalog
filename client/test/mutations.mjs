@@ -99,6 +99,7 @@ const MUTATIONS = [
   ['machine/installer.ts', 'a held copy from another catalog at the same version isn\'t found by --accept', 'e.catalog === ctx.settings.catalog) return { installed: e.version };', 'true) return { installed: e.version };'],
   // one writer at a time (lock-race.test.ts)
   ['machine/lock.ts', 'a holder\'s start is read as a local time', "['-o', 'etime=', '-p', String(pid)]", "['-o', 'lstart=', '-p', String(pid)]"],
+  ['machine/installer.ts', 'an update takes the lock again for each skill', '        written = await hold.change((fresh) => {', '        written = await withLock(ctx.settings.home, clockOf(ctx), (fresh) => {'],
   ['machine/lock.ts', 'a live holder is taken for a stale one', "    if ((e as NodeJS.ErrnoException).code === 'ESRCH') return true;", '    return true;'],
 ];
 
