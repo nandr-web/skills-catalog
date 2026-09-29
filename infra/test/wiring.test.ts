@@ -8,10 +8,11 @@ import { describe, expect, it } from 'vitest';
 import { synth } from './synth.ts';
 
 const t = synth('throwaway');
+/** The logical id of the one function whose id starts with `prefix`. */
 const ref = (prefix: string) => {
-  const id = Object.keys(t.toJSON().Resources).find((k) => k.startsWith(prefix));
-  if (!id) throw new Error(`no resource ${prefix}…`);
-  return id;
+  const ids = Object.keys(t.findResources('AWS::Lambda::Function')).filter((k) => k.startsWith(prefix));
+  if (ids.length !== 1) throw new Error(`${ids.length} functions ${prefix}…`);
+  return ids[0]!;
 };
 
 describe('the HTTP API', () => {
