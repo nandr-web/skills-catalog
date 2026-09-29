@@ -694,7 +694,7 @@ results:
       yaml_feature: "show the person the front matter and propose it written plainly (key: value lines, each key once); change it only once they agree."
       key_format: show the person that key and propose retyping it plainly; change it only once they agree.
     exists_untracked: "exists_untracked: {path} already exists and wasn't installed from the catalog, so it was left alone. Ask the user whether to remove or rename it, or install into the other target."
-    secret_suspected: "secret_suspected: {path} line {line} looks like {kind}. Nothing was published. Tell the person where it is (not the value itself); it's their call: they remove it, or allow it for one publish by running ${cli} publish {folder} --allow-suspected-secrets in their own terminal. Do not try to get around it."
+    secret_suspected: "secret_suspected: {path} line {line} looks like {kind}. Nothing was published. Tell the person where it is (not the value itself): to publish, they remove it from {path} line {line} and publish again. If it isn't a secret, there's no way yet to allow it. Do not try to get around it."
     secret_kind:
       aws_access_key: an AWS access key
       private_key: a private key
@@ -840,7 +840,7 @@ companion_skill:
     | find skills for a task | `${cli} search <words>` (no words: list all; `--tag <t>`, `--limit <n>`) |
     | read one before recommending it | `${cli} read <name>` (`--version <n>`, `--files`) |
     | install one | `${cli} install <name>` (`--version <n>`, `--project` for this repository) |
-    | see its history / a change | `${cli} versions <name>`, `${cli} diff <name> <from> <to>` |
+    | see its history / a change | `${cli} versions <name>`, `${cli} diff <name> --from <from> --to <to>` |
     | what's installed, what's behind | `${cli} list` |
     | update installed skills | `${cli} update` |
     | publish a folder | `${cli} publish <folder>` (a preview), then with `--confirm <value>` once the person agrees |
