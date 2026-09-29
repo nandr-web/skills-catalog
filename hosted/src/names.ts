@@ -4,7 +4,7 @@
 // reads). Rebuildable from the versions at any time; writing the same version twice changes nothing.
 
 import { BatchWriteItemCommand, QueryCommand, type BatchWriteItemCommandOutput, type DynamoDBClient, type WriteRequest } from '@aws-sdk/client-dynamodb';
-import type { VersionRecord } from '@skills-catalog/core';
+import type { Storage, VersionPublished, VersionRecord } from '@skills-catalog/core';
 import { versionSk, type Place } from './place.ts';
 
 // DynamoDB's limit on one batch write.
@@ -40,4 +40,15 @@ export class HostedFileNames {
     );
     return (r.Items?.length ?? 0) > 0;
   }
+}
+
+/** The indexer's subscriber to version_published (beside the search index's): it names the event's version's files.
+ *  Run again for the same event, it changes nothing (at-least-once delivery). */
+export function namesIndexer(parts: { storage: Pick<Storage, 'version'>; names: HostedFileNames }): (e: VersionPublished) => Promise<void> {
+  return async (e) => {
+    const v = await parts.storage.version(e.name, e.version);
+    // The event is written in the version's own transaction, so its version is always there.
+    if (!v) throw new Error(`version_published for ${e.name} v${e.version}, which isn't stored`);
+    await parts.names.record(v);
+  };
 }
