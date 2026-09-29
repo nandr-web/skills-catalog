@@ -383,6 +383,22 @@ function fenceChanges(a: TreeFile, b: TreeFile, flagged: ReadonlySet<number>): {
   return out;
 }
 
+// Claude Code may not split lines where this reader does, so in a markdown file whose new version has a ```! block, a
+// lone CR, U+2028 or U+2029 in either version (a CRLF is one ordinary break) means what runs as the skill loads can't be
+// read for sure: runs_at_load once, at the line the new version's first such break ends, or line 1 when only the old
+// version has one (removing one can change what runs as much as adding one). One pass over each text.
+const UNUSUAL_BREAK = /\r(?!\n)|[\u2028\u2029]/;
+export const UNUSUAL_BREAK_DETAIL = "has an unusual line break, so what runs when the skill loads can't be read for sure";
+function unusualBreak(a: TreeFile | undefined, b: TreeFile): number | null {
+  if (!isMarkdown(b.path) || !isText(b.bytes)) return null;
+  const now = decodeText(b.bytes);
+  const at = now.search(UNUSUAL_BREAK);
+  const was = a && isText(a.bytes) ? decodeText(a.bytes) : '';
+  if (at < 0 && !UNUSUAL_BREAK.test(was)) return null;
+  if (!fenceLines(now).opener) return null;
+  return at < 0 ? 1 : now.slice(0, at).split(LINE_BREAK).length;
+}
+
 // What a version grants, so a changed instruction could act without asking (contract §5.3): an injected command, or a
 // front matter key on neither the safe list nor the non-granting list. Each says what it grants, for the flag's detail.
 function grantsOf(files: readonly TreeFile[], fm: Record<string, unknown>, safeKeys: readonly string[], nonGranting: readonly string[]): string[] {
@@ -471,6 +487,10 @@ export function diffTrees(
       risk.push(own);
       continue;
     }
+    // an unusual line break comes first, then the file's other commands that run at load; it's the file's reason alone
+    // when there are none
+    const odd = b ? unusualBreak(a, b) : null;
+    if (odd !== null) risk.push({ kind: 'runs_at_load', path, line: odd, detail: UNUSUAL_BREAK_DETAIL });
     const injected = b ? newInjections(a, b) : [];
     const fences = a && b ? fenceChanges(a, b, new Set(injected.map((x) => x.line))) : [];
     if (injected.length || fences.length) {
@@ -478,6 +498,7 @@ export function diffTrees(
       for (const x of loads.sort((p, q) => p.line - q.line)) risk.push({ kind: 'runs_at_load', path, line: x.line, detail: flagText(x.detail) });
       continue;
     }
+    if (odd !== null) continue;
     const instructions = path !== MANIFEST || fa.body !== fb.body || safeChanged;
     if (grants.length && instructions) {
       risk.push({ kind: 'instructions_changed', path, detail: flagText(grants.join(' and ')) });

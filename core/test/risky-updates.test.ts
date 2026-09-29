@@ -3,7 +3,7 @@
 // and its risk_flags are compared as a set, on the fields the golden gives.
 
 import { describe, expect, it } from 'vitest';
-import { injections } from '../src/skill-tree/diff.ts';
+import { UNUSUAL_BREAK_DETAIL, injections } from '../src/skill-tree/diff.ts';
 import { checkTree, diffTrees, type RiskFlag } from '../src/skill-tree/index.ts';
 import { injections15f3e65 } from './fixtures/injections-15f3e65.ts';
 import { filesOf, loadGolden } from './golden.ts';
@@ -98,9 +98,33 @@ describe('an injected command is found however the file is written', () => {
     at('Plain.\r\n```!\r\necho QA-MARKER\r\n```\r\n', 6);
     at('Plain.\n`````!\necho QA-MARKER\n`````\n', 6);
   });
-  it('a fence after a CR, U+2028 or U+2029 line break', () => {
-    for (const br of ['\r', '\u2028', '\u2029']) at(`Plain.${br}\`\`\`!\necho QA-MARKER\n\`\`\`\n`, 6);
+  it('a fence after a CR, U+2028 or U+2029 line break, and the unusual break itself at the line it ends', () => {
+    for (const br of ['\r', '\u2028', '\u2029']) {
+      expect(flagsFor(`Plain.${br}\`\`\`!\necho QA-MARKER\n\`\`\`\n`).map((f) => [f.kind, f.line, f.detail]), JSON.stringify(br)).toEqual([
+        ['runs_at_load', 5, UNUSUAL_BREAK_DETAIL],
+        ['runs_at_load', 6, 'echo QA-MARKER'],
+      ]);
+    }
   });
+  it('an unusual line break counts only with a ! block in the new version, and a CRLF never does', () => {
+    const block = '```!\necho QA-MARKER\n```\n';
+    const oldBlock = diffTrees({ files: checkTree([md(`Plain.\n${block}`)]), publisher: 'a' }, { files: checkTree([md(`Plain.\rMore.\n${block}`)]), publisher: 'a' }).risk_flags;
+    expect(oldBlock.map((f) => [f.kind, f.line, f.detail])).toEqual([['runs_at_load', 5, UNUSUAL_BREAK_DETAIL]]);
+    // only the old version had one: line 1
+    const removed = diffTrees({ files: checkTree([md(`Plain.\u2028More.\n${block}`)]), publisher: 'a' }, { files: checkTree([md(`Plain.\nMore.\n${block}`)]), publisher: 'a' }).risk_flags;
+    expect(removed.map((f) => [f.kind, f.line, f.detail])).toEqual([['runs_at_load', 1, UNUSUAL_BREAK_DETAIL]]);
+    // no ! block in the new version, or only CRLFs: no unusual-break flag (the CRLF edit is still an instruction change)
+    expect(flagsFor('Plain.\rMore.\n')).toEqual([]);
+    const crlf = diffTrees({ files: checkTree([md(`Plain.\r\n${block}`)]), publisher: 'a' }, { files: checkTree([md(`Plain.\r\nMore.\r\n${block}`)]), publisher: 'a' }).risk_flags;
+    expect(crlf.map((f) => f.kind)).toEqual(['instructions_changed']);
+    // a file that isn't markdown: nothing
+    const notes = (text: string) => ({ path: 'run.txt', mode: '0644' as const, bytes: Buffer.from(text) });
+    expect(diffTrees({ files: checkTree([md(`Plain.\n${block}`), notes('a\n')]), publisher: 'a' }, { files: checkTree([md(`Plain.\n${block}`), notes('a\rb\n')]), publisher: 'a' }).risk_flags.filter((f) => f.detail === UNUSUAL_BREAK_DETAIL)).toEqual([]);
+  });
+  it('finds an unusual line break in linear time', () => {
+    const block = '```!\necho QA-MARKER\n```\n';
+    expectLinear('half a megabyte of lines, then a lone CR', (s) => `${'Plain line.\n'.repeat(Math.round(40_000 * s))}Late.\r${block}`, (body) => flagsFor(body));
+  }, 120_000);
   it('a fence after a no-break space, a zero-width space or a byte-order mark', () => {
     // The zero-width space and the byte-order mark are hidden characters too, so the rules reviewer flags that line as well.
     const BOM = String.fromCharCode(0xfeff);
