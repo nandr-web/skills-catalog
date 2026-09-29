@@ -1460,7 +1460,7 @@
                 },
                 "sha256": {
                   "type": "string",
-                  "maxLength": 64
+                  "pattern": "^[0-9a-f]{64}$"
                 }
               },
               "required": [
@@ -1779,7 +1779,7 @@
               "properties": {
                 "sha256": {
                   "type": "string",
-                  "maxLength": 64
+                  "pattern": "^[0-9a-f]{64}$"
                 },
                 "size": {
                   "type": "integer",

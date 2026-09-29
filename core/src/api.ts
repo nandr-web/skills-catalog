@@ -5,7 +5,7 @@ import { CatalogError, ERROR_CODES, type ErrorCode } from './errors.ts';
 import { MAX_TAGS, MODES, TAG_MAX_LENGTH } from './skill-tree/index.ts';
 
 export type Schema =
-  | { type: 'string'; enum?: readonly string[]; maxLength?: number; minLength?: number }
+  | { type: 'string'; enum?: readonly string[]; maxLength?: number; minLength?: number; pattern?: string }
   | { type: 'integer'; minimum?: number; maximum?: number }
   | { type: 'boolean' }
   | { type: 'array'; items: Schema; maxItems?: number }
@@ -153,8 +153,10 @@ const UPLOAD_LINKS_OUTPUT = obj({
     ],
   }),
 });
-// A file named by its sha256 (hosted, after its upload).
-const sha256 = { type: 'string', maxLength: 64 } as const;
+// A file named by its sha256 (hosted, after its upload). The pattern is for the published schema; the catalog refuses a
+// value that doesn't match it (not_sha256) before it looks anything up (a test holds the two together).
+export const SHA256_PATTERN = '^[0-9a-f]{64}$';
+const sha256 = { type: 'string', pattern: SHA256_PATTERN } as const;
 // The most files one publish may name, in either form (the request's own cap; the skill's file limit is config).
 const MAX_PUBLISH_FILES = 10_000;
 // The most files one request for upload links may name (contract §1.1).

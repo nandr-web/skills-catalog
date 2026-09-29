@@ -3,7 +3,7 @@
 
 import { CatalogError } from './errors.ts';
 import type { BlobLinks, Clock, Events, Identity, Ids, SearchCard, SearchIndex, Storage, UploadAnswer, VersionRecord } from './ports.ts';
-import { DEFAULT_SEARCH_LIMIT, VERSIONS_PAGE, validateInput, type Face, type Where } from './api.ts';
+import { DEFAULT_SEARCH_LIMIT, SHA256_PATTERN, VERSIONS_PAGE, validateInput, type Face, type Where } from './api.ts';
 
 // Each operation checks its input as the face its caller gives (contract §1.1): the client passes its own, the web page's
 // server 'web'. A person-only input (publish's allow_suspected_secrets) passes only as the CLI's; a caller that gives no
@@ -66,7 +66,9 @@ export interface CatalogPorts {
 // A stored version's file, as the files route answers it (§1.1): its bytes (local), a link to them (hosted), on its
 // way (hosted, seconds after a publish), or unknown.
 export type FileAnswer = { kind: 'bytes'; bytes: Uint8Array } | { kind: 'link'; url: string } | { kind: 'on_its_way' } | { kind: 'unknown' };
-const SHA256_HEX = /^[0-9a-f]{64}$/;
+const SHA256_HEX = new RegExp(SHA256_PATTERN);
+// How many uploaded files a hosted publish reads at once.
+const UPLOAD_READS = 8;
 
 // ---------- shapes ----------
 
@@ -281,6 +283,11 @@ function checkSizes(files: readonly { size: number; path?: string }[], limits: L
 function inline(files: InlineFile[], limits: Limits): { path: string; mode: string; bytes: Uint8Array }[] {
   checkRequestSize(files, limits);
   return files.map((f) => ({ path: f.path, mode: f.mode, bytes: Buffer.from(f.content_base64, 'base64') }));
+}
+
+// A file named by something that isn't a sha256 (§9): known before anything is looked up.
+function checkSha256s(files: readonly { sha256: string }[]): void {
+  for (const [i, f] of files.entries()) if (!SHA256_HEX.test(f.sha256)) throw new CatalogError('invalid_request', { field: `files[${i}].sha256`, why: 'not_sha256' });
 }
 
 const notUploaded = (i: number) => new CatalogError('invalid_request', { field: `files[${i}].sha256`, why: 'not_uploaded' });
@@ -603,8 +610,8 @@ export class Catalog {
       record = (await this.versionOf(req.name, req.version)).record;
     }
     // Hosted, links straight from the version read here (strongly consistent), never through the files route's lookup.
-    if (this.p.links) {
-      const links = this.p.links;
+    if (this.p.where === 'hosted') {
+      const links = this.p.links!;
       const files = await Promise.all(record.files.map(async (f) => ({ path: f.path, mode: f.mode, sha256: f.sha256, size: f.size, url: await links.downloadLink(f.sha256) })));
       return { name: record.name, version: record.version, fingerprint: record.fingerprint, files };
     }
@@ -620,25 +627,32 @@ export class Catalog {
     const name = checkName(req.name);
     const skill = await this.p.storage.skill(name);
     if (skill && !skill.owners.includes(publisher)) throw new CatalogError('not_owner', { name, owners: skill.owners });
-    for (const [i, f] of req.files.entries()) if (!SHA256_HEX.test(f.sha256)) throw new CatalogError('invalid_request', { field: `files[${i}].sha256`, why: 'not_sha256' });
+    checkSha256s(req.files);
     checkSizes(req.files, this.config.limits);
     return { name, files: await this.p.links!.uploadLinks(req.files.map((f) => ({ sha256: f.sha256, size: f.size }))) };
   }
 
-  // The hosted form's files: each one's bytes as stored, in order, within the size limits as they're read. A file not
-  // stored, whose bytes don't hash to its name, or named by something that isn't a sha256, was never uploaded.
+  // The hosted form's files: each one's bytes as stored, read UPLOAD_READS at a time and checked in the request's order,
+  // so the first refusal is the same as one by one, and the size limits stop the reads a batch past the limit. Every
+  // file's sha256 is checked before anything is looked up (not_sha256); one not stored, or whose bytes don't hash to its
+  // name, was never uploaded.
   private async uploaded(files: UploadedFile[]): Promise<{ path: string; mode: string; bytes: Uint8Array }[]> {
     const limits = this.config.limits;
     if (files.length > limits.files) throw new CatalogError('too_large', { limit: 'files', max: limits.files, value: files.length });
+    checkSha256s(files);
     const out: { path: string; mode: string; bytes: Uint8Array }[] = [];
     let total = 0;
-    for (const [i, f] of files.entries()) {
-      const bytes = SHA256_HEX.test(f.sha256) ? await this.p.storage.blob(f.sha256) : undefined;
-      if (bytes === undefined || sha256Hex(bytes) !== f.sha256) throw notUploaded(i);
-      if (bytes.length > limits.file_bytes) throw new CatalogError('too_large', { limit: 'file_bytes', max: limits.file_bytes, value: bytes.length, path: f.path });
-      total += bytes.length;
-      if (total > limits.skill_bytes) throw new CatalogError('too_large', { limit: 'skill_bytes', max: limits.skill_bytes, value: total });
-      out.push({ path: f.path, mode: f.mode, bytes });
+    for (let at = 0; at < files.length; at += UPLOAD_READS) {
+      const batch = files.slice(at, at + UPLOAD_READS);
+      const read = await Promise.all(batch.map((f) => this.p.storage.blob(f.sha256)));
+      for (const [j, f] of batch.entries()) {
+        const bytes = read[j];
+        if (bytes === undefined || sha256Hex(bytes) !== f.sha256) throw notUploaded(at + j);
+        if (bytes.length > limits.file_bytes) throw new CatalogError('too_large', { limit: 'file_bytes', max: limits.file_bytes, value: bytes.length, path: f.path });
+        total += bytes.length;
+        if (total > limits.skill_bytes) throw new CatalogError('too_large', { limit: 'skill_bytes', max: limits.skill_bytes, value: total });
+        out.push({ path: f.path, mode: f.mode, bytes });
+      }
     }
     return out;
   }
