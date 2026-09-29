@@ -176,9 +176,9 @@ held updates, which never carries a `confirm`.
 | `preview_skill_publish` | 1 | `folder`, `message?` | the files to send, the files skipped, the diff against the latest, `risk_flags[]`, and the inputs for publishing: `confirm`, `name`, `version` (the number it would become), `files` (how many it would send), `flags[]` (the risk flags' kinds) and, when one was given, `message`; or, when the folder matches the latest, that nothing would change | The first of two steps, so the person sees what would be published before it is. It runs every check a publish runs (the owner, the manifest, the files, the secret scan) as a dry run: nothing is stored, and nothing leaves this machine (against a hosted catalog it diffs with the latest's files fetched by fingerprint). Never pre-allowed by setup (§6): its `folder` chooses what's read, and its result shows the files' text. It's a tool of its own so that a person who answers its prompt with "don't ask again" pre-allows previews only, never a publish. Reads the folder: regular files only (a link, a file with more than one hard link or a special file is `invalid_path` {why: `not_regular_file`}, §4.2), never follows a link out, skips and reports the ignore list (`.git`, `.env*`, `*.pem`, `id_*`, `.DS_Store`). A secret-scan hit anywhere, the body included, **rejects** with `secret_suspected` {path, line, kind} |
 | `publish_skill_to_catalog` | 1 | `folder`, `message?`, `confirm`, `name`, `version`, `files`, `flags[]`, all but `folder` copied from `preview_skill_publish`'s result (`message` exactly as the preview gave it back, and only when it had one) | as `publish_version` | The second step. **Its permission prompt is the consent, so it shows what's agreed to:** `name`, `version`, `files` and `flags` are in its input for that reason (as `accept_held_update` carries its flags). `confirm` is an HMAC-SHA-256 (base64url, 43 characters, short enough for an assistant to copy) over the folder's real path, its fingerprint, the name, the latest version the preview started from (`version` − 1), the message, `files` and the flags' kinds, keyed with a secret only this machine's skills-catalog holds. The publish recomputes it from the folder as it is now and its own inputs, so it verifies only after a preview of the same folder with the same values: otherwise `conflict` {name, folder}, changing nothing, whether the folder's files, the message or an input changed, or the value never came from a preview (the remedy is the same: preview again). A value that isn't 43 base64url characters is `invalid_request` {field: `confirm`, why: `not_a_confirm`}; a missing one is {field: `confirm`, why: `required`}, whose sentence points to the preview. A version published by someone else in between is `conflict` {name, latest}. The details are pinned below the table. A secret-scan hit **rejects** as in the preview; only the person can override it, per publish, with the CLI's `--allow-suspected-secrets`, which is **not in the MCP schema**. Setup never adds this tool to the assistant's allowed tools, so its permission prompt is the person's consent |
 | `install_shared_skill` | 1 | `name`, `version?`, `target?`: `user` (the default, §6) \| `project`; CLI only: `--policy` (not in the MCP schema: install is pre-allowed and setting a policy isn't) | `installed` {`path`, `version`, `fingerprint`, `advisories[]`, `staging?`} \| `unchanged` {version} \| `held` {reason: `flagged` \| `other_catalog` {was, now} \| `pin` \| `notify`, `target`, `version`, `from?` (the installed version, when there is one), `risk_flags[]`, diff, `confirm`} | A first install goes through the update hold as an update from nothing (§5.3): no flags, it installs; flags, it's held and shown, and `accept_held_update` takes it once the person says yes. An install over a skill already installed there follows that skill's policy (the owner's decision): on `pin` or `notify` a different version is held (`pin` or `notify`, with its diff) until the person says yes, since install is pre-allowed and a pin is the person's choice; on `auto` it goes through the update hold like an update. `fetch_version` → a temp folder outside every skills folder (Claude Code watches those for changes) → the checks of §5.3 ("The installer decides") → rename into `<skills dir>/<name>`, the path computed from the target and the name; records the lock. The name is checked against the installer's own copy of the reserved list, at install and at every sync. Never overwrites or shadows what it didn't install: `exists_untracked` {path} when that folder is already in the target and the lock doesn't own it (e.g. a hand-made skill), and `name_in_use` {path} when the other target holds an untracked skill of that name for the current project (in Claude Code a personal skill replaces a project one of the same name), or either target has a command file `.claude/commands/<name>.md` (a skill replaces a command of the same name). Refuses a link anywhere on the way in: before it writes, every folder from below the assistant's home (`user`: `.claude`, `.claude/skills`, `.claude/skills/<name>` under `$SKILLS_ASSISTANT_HOME`, which may itself be a link) or below the project (`project`: the same three) must be a real directory, and the first link found is `target_symlink` {path: that link}; nothing is written through it, and the link, what it points at and the lock stay as they were. `update_installed_skills` checks the same, so an installed copy replaced by a link since is refused, never reported as up to date |
-| `update_installed_skills` | 1 | `names?`, `dry_run?` | per skill: `updated` {from, to, changes, staging?} \| `unchanged` \| `held` {reason: `notify` \| `pin` \| `flagged` \| `cooldown` (§5.3; shared and hosted catalogs) {until} \| `other_catalog` {was, now}, `target`, `version`, `risk_flags[]`, diff, `confirm`} \| `refused` {version, error} (the new version breaks today's rules or doesn't match its fingerprint, §5.3, or a check of §4.5 failed, `error` being `target_changed` or `target_not_private`, with `version` the installed one when nothing newer was to be applied; nothing is installed, and a copy that couldn't go back is kept in staging and named) | One batched status call; skipped if the last sync was under a few minutes ago. A name in `names` that isn't installed is `not_installed` {name} (the first such, in the order given), checked before anything is fetched, and nothing changes; the action is §5.3's table. Where a skill is replaced is computed from its target and name, never read from the lock's `path`. CLI only: `skills-catalog update <name> --latest` takes the newest version now, skipping a cooldown (§5.3); the update hold still applies, and setup never pre-allows it; the MCP schema has no `latest` |
+| `update_installed_skills` | 1 | `names?`, `dry_run?` | per skill: `updated` {from, to, changes, staging?} \| `unchanged` \| `held` {reason: `notify` \| `pin` \| `flagged` \| `cooldown` (§5.3; shared and hosted catalogs) {until} \| `other_catalog` {was, now}, `target`, `version`, `risk_flags[]`, diff, `confirm`} \| `refused` {version, error} (the new version breaks today's rules or doesn't match its fingerprint, §5.3, or a check of §4.5 failed, `error` being `target_changed`, `target_not_private` or `target_unavailable`, with `version` the installed one when nothing newer was to be applied; nothing is installed, and a copy that couldn't go back is kept in staging and named) | One batched status call; skipped if the last sync was under a few minutes ago. A name in `names` that isn't installed is `not_installed` {name} (the first such, in the order given), checked before anything is fetched, and nothing changes; the action is §5.3's table. Where a skill is replaced is computed from its target and name, never read from the lock's `path`. CLI only: `skills-catalog update <name> --latest` takes the newest version now, skipping a cooldown (§5.3); the update hold still applies, and setup never pre-allows it; the MCP schema has no `latest` |
 | `accept_held_update` | 1 | `name`, `target`, `version`, `confirm` (all four from the held result), `flags[]` (the held flags' kinds, e.g. `["runs_at_load", "new_publisher"]`; `[]` for a hold with no risk flags, such as `notify`) | as `updated` (or `installed`) | Takes one held update, or a held first install, once the person says yes. `flags` is in the input so the permission prompt shows the person what they're agreeing to, not only what the assistant said; the server compares it as a set of kinds (order and repeats ignored) and refuses with `conflict`, changing nothing, when a kind is missing or extra. `target` and `version` are in the input for the same reason and are compared exactly, as `confirm` is: `confirm` is tied to the name, the target and the new version's fingerprint, so an older flagged version or another target is `conflict`, changing nothing, and so is a newer version that arrived since. Setup never adds this tool to the assistant's allowed tools, so its permission prompt is the person's consent (the same pattern as publish). The lock records which flags each acceptance let through. CLI: `skills-catalog update <name> --accept` shows the reasons and asks; setup never pre-allows it, so an assistant running it meets the permission prompt (the person's yes), and with no terminal it refuses (exit 3, a backstop) |
-| `list_installed_skills` | 1 | | per installed skill: `version`, `latest`, `policy`, `state`: `same` \| `behind` | Reads the lock; no local-change check in phase 1 (§5.4) |
+| `list_installed_skills` | 1 | | per installed skill: `version`, `latest`, `policy`, `state`: `same` \| `behind`; and `kept[]`: the copies kept in staging (§4.5) | Reads the lock; no local-change check in phase 1 (§5.4) |
 | `set_skill_update_policy` | 1 | `policy`, `cooldown?` (§5.3; later, with shared and hosted catalogs: not in the schema until then), `name?` (none = the global default) | the effective policy | `auto` \| `notify` \| `pin`. A `name` that isn't installed on this machine is `not_installed` {name}, and nothing changes: not `not_found`, whose sentence says the catalog has no such skill, when it may well have one |
 | `setup` | 1 | the setup config (§6) | first, the person's one remaining step ("start a new Claude Code session; this one can't use the tools yet"); then what was written, and "N skills to search; none installed yet" | The colourful wizard, `--yes`, `--config <file>`, the setup skill and the setup doc all produce this config; with no terminal, the no-terminal mode (§6); never asks for a token in chat |
 | `teardown` | 1 | | what was removed | Undoes setup: the MCP entry, the companion skill, the hook, the backed-up settings files restored; and the AWS stack, when setup created one |
@@ -257,7 +257,7 @@ each under its own label (a replaced secret restarts the per-skill hashes, which
   notice and since the look are derived by `stats` from the events' times (the look by skill and version, the notice as the
   latest before the answer), so whoever records an answer needs no state;
 - `policy` {from, to, scope: the catalog or one skill, whether within a day of a hold};
-- `mode` {mode: `default` \| `auto` \| `bypass` \| `sandbox_auto_allow` \| `broad_bash_rule`, surface: `hook` \| `mcp` \|
+- `mode` {mode: `default` \| `auto` \| `bypass` \| `sandbox_auto_allow` \| `broad_bash_rule` \| `unknown`, surface: `hook` \| `mcp` \|
   `update`}, at each sync, so it also counts syncs (a hook's sync counts as a session); `mode` is left out until the
   permissive-mode detection (§5.3) is built;
 - `use` {op: search, read, install, update, publish, …, result: the result or error code}: one per operation, so the
@@ -365,7 +365,10 @@ got -32601, and fell back to `initialize` (protocol 2025-11-25). A replay test o
     license notice and the original file's SHA-256), so it regenerates offline; the script's verify mode fetches the
     original, checks its SHA-256 and that the extract matches it. The table is committed.
   - **Its tests:** the two tables' version headers are equal; U+200B, U+2800, U+3164 and U+A7CE (a Unicode 17 letter) are
-    refused and U+00E9 and U+4E00 aren't, on every runtime; and the table matches a fresh run of the script.
+    refused and U+00E9 and U+4E00 aren't, on every runtime; the table matches a fresh run of the script; the unassigned
+    check runs on the path as given, before any normalisation (a path whose only unassigned code point a newer runtime's
+    NFKC would map away is still refused); and the runtime's Unicode version (`process.versions.unicode`) is at least the
+    table's, so its normalisation data knows every character the table assigns.
   Until it's built, a path using a code point assigned after 16.0 can be judged differently on runtimes on different
   Unicode versions.
 - Regular files only (no links, devices, hardlink tricks); mode `0644` or `0755`. Reading a folder to publish it (§3), a
@@ -425,6 +428,17 @@ Reproducible with coreutils, so tests compute it independently and never trust t
   `path` (for people to read; the installer always computes where a skill goes from its target and name), `installed_at`,
   `catalog`, and the flags each accepted install or update let through. This installer's list is where an installed skill's origin is kept, keyed by where it's
   installed; nothing is written into the skill itself (the owner's decision).
+- **One writer at a time.** Every change to `lock.json` (an install, an update, an accept, a policy change) reads it, changes
+  it and writes it back while holding `$SKILLS_HOME/lock.json.lock`, a file created only if absent (mode 0600) that holds the
+  holder's process id and start time; the change is written to a temporary file and renamed over `lock.json`, and the lock
+  file is removed when the change is done, whether it succeeded or not. So two runs at once (the session-start sync and a
+  person's command) can't lose each other's entries. A run that finds the lock held retries for up to 5 seconds, then
+  refuses with `lock_busy` {path, pid}, changing nothing; its sentence says another skills-catalog run is changing the
+  installed skills and to try again in a moment. A lock whose holder is gone, or whose process id now belongs to a process
+  started at another time, is stale, and so is one whose holder can't be read (a run stopped between creating and writing
+  it) once it's more than 5 seconds old: the next run removes it, but only while it is still that same file owned by this user,
+  and takes the lock the usual way (only one run can create it). Reads (listing installed skills, showing a held update)
+  take no lock: the rename means a reader sees the whole old file or the whole new one.
 - Installed files are never edited by the client except by an install or update of that skill.
 - **Replacing an installed copy, safely.** One rule covers every removal: **nothing is removed by its path unless its
   identity is one the installer recorded**, and no removal follows a link. An identity is {dev, ino, birth} of a real folder
@@ -445,7 +459,11 @@ Reproducible with coreutils, so tests compute it independently and never trust t
     of 002) and isn't 20 (macOS's `staff`, shared by every local user). Otherwise the call refuses and changes nothing:
     `target_not_private` {path, target, home?, own}, whose sentence names the folder and, when it's the person's own,
     suggests `chmod go-w` on it; a folder they don't own (a home owned by root in a container, `HOME=/tmp` in CI) gets another
-    way on instead: `SKILLS_ASSISTANT_HOME` pointing at a folder of theirs, or a project install. The folder above
+    way on instead: `SKILLS_ASSISTANT_HOME` pointing at a folder of theirs, or a project install. When the target's root
+    (the assistant home, or a folder on the way to `.claude`) doesn't exist and can't be made (no permission, a read-only
+    file system, a missing or non-folder parent), the call refuses and changes nothing, with the same way on:
+    `target_unavailable` {path, target, home?}; an update or an accept refuses that skill with it, and any other error
+    making it stays `internal_error`. The folder above
     `.claude` is checked too, since whoever can write it can rename `.claude` and put their own in its place: for a `user`
     install, the assistant's home must pass the same test; for a `project` install, the project folder must be owned by the
     person or by root (a folder's owner can always rename entries in it, sticky bit or not; otherwise `own: false`), and
@@ -489,13 +507,26 @@ Reproducible with coreutils, so tests compute it independently and never trust t
     Under such a timed swap by a program running as the person, a write can land, and the move-aside can rename in a
     folder, from where a swapped-in link pointed; a folder moved that way is kept in staging and named, never deleted. An
     empty folder that appears at a first install's path after the check is replaced by the rename unnoticed (it held
-    nothing). A remount can change a folder's `dev`, and a restore its whole identity, so after one every installed skill
+    nothing). The folders above a project folder aren't checked, so whoever can write a project's parent can point the
+    project at another folder; the project folder itself must still be the person's or root's and private. A remount can change a folder's `dev`, and a restore its whole identity, so after one every installed skill
     looks recreated and its old copy is kept in staging on its next update; each is named in its result, and the person
     can delete them.
+  - **Kept copies, listed and cleared only on the person's yes.** Each copy kept in staging is recorded in the lock when
+    it's kept (`kept`: {name, path, at, why: `recreated` \| `unrecorded` \| `moved_back_failed` \| `swapped`}), so it's
+    never forgotten. Listing installed skills shows them (`kept[]`), with anything else found in a staging folder listed
+    as `unrecorded`, never guessed at. `skills-catalog clear-kept [name…]` deletes them: it's the person's step only (with
+    no terminal it's `person_only`, and no assistant tool offers it), it lists what it will delete and asks, default no,
+    and then deletes each one only if it's still, by identity, the folder that was listed, inside a staging folder that's
+    still the real, private one checked at the start, never following a link. Anything that changed since the list is
+    skipped and named. The lock drops only what was deleted.
 - **A damaged lock or config file is the person's to look at, never repaired.** When `lock.json` or `config.json` isn't
   valid JSON, doesn't have the shape above (a field of the wrong type anywhere, a lock entry's included), or holds a policy
-  other than `auto`, `notify` or `pin` (the global one or a skill's own), every command that reads it refuses with
-  `invalid_local_file` {file: `lock.json` \| `config.json`, why: `not_json` \| `wrong_shape` \| `unknown_policy`, path: the
+  other than `auto`, `notify` or `pin` (the global one or a skill's own), or holds a `context_cost_budget` that is a number
+  but not a positive whole one below 2^53 (0, a negative, a fraction, one that overflows to infinity; a whole number
+  written as `5000.0` is accepted, since the check is on the parsed number; a value that isn't a number is `wrong_shape`),
+  every command that reads it refuses with
+  `invalid_local_file` {file: `lock.json` \| `config.json`, why: `not_json` \| `wrong_shape` \| `unknown_policy` \|
+  `not_a_budget`, path: the
   file's full path, so the person can find it} and changes nothing: install, update, accepting a held update, listing installed skills, setting a policy and setup (which
   would overwrite it). The file is never rewritten or replaced; the sentence names the file, never shows its contents, and
   says to fix or remove it. `teardown` still runs, so there's always a way out, and the session-start hook still exits 0,
@@ -619,10 +650,14 @@ showing (the web UI, a publish preview), and the update hold never reads them. F
     the `!` starts a line or follows whitespace (so `- PR diff: !`gh pr diff`` runs), and ```` ```! ```` blocks. The detector
     is wider than that rule, so no spelling slips past: any `!` directly followed by a backtick, anywhere in a markdown file
     (frontmatter, code blocks and HTML comments included), and any line whose first non-blank characters are three or more
-    backticks or tildes, then optional blanks, then `!`; an edit inside an unchanged block counts, as one flag per block at its opening line. Such a line starts its own command even inside a block that hasn't strictly closed (nested openers). And in a markdown file whose new version has a ```` ```! ```` block, any fence line (three or more backticks or tildes first) added, removed or changed is `runs_at_load` too, since moving a fence can change what runs; when only the old version had such a block, this doesn't fire (removing the only block is safer). On the safe side, since how
+    backticks or tildes, then optional blanks, then `!`; an edit inside an unchanged block counts, as one flag per block at its opening line. Such a line starts its own command even inside a block that hasn't strictly closed (nested openers). And in a markdown file whose new version has a ```` ```! ```` block, any fence line (three or more backticks or tildes first) added, removed or changed is `runs_at_load` too, since moving a fence can change what runs; when only the old version had such a block, this doesn't fire (removing the only block is safer). Which fence lines changed is decided by order, not by counting texts, since a fence that only moved can re-nest blocks: the two versions' fence lines are compared in order from the start and from the end, and every new-version fence line between the first and the last difference is flagged; where an old fence line there has no counterpart, the version diff says which old fence lines were removed (they're left out of the order comparison, which is then made again), and each is flagged at the line now standing where it was (for a changed line, its replacement: the diff lists a change's removals before its insertions); if the diff gives up then (more than 4,000 differing lines, removed and added together), every fence line of the new version counts as changed and no removal is placed (so every changed fence line is flagged, beside any other flags in the file, and a pure move or swap is caught). And each ```` ```! ```` block is compared whole, its opening line with everything inside it: a block whose contents differ from every block of the old version is flagged at its opening line even when no line's text changed (a closing line moved past a line pulls that line into the block). A line is flagged at most once: a fence line that opens or closes a block whose opening line is already flagged in the same diff adds nothing (so a new block is one flag). An added or changed fence line is flagged at its line in the new version; a removed one at the new version's line that now stands where it was (the next line, or the last line if it was at the end). What starts a command is read widely and what ends a block narrowly: a ```` ```! ```` line starts its own block even inside another one (the nested openers above), and a line ends pending blocks only when it's indented at most three spaces (a tab isn't one) and its first characters are the block's character, followed only by spaces and tabs (as in CommonMark; the wider blank above is for what starts a command, never for a closer); it then ends every pending block of that character whose opener is no longer than it. Any other fence line inside a block (an info string after it, fewer characters, deeper indentation) is content, and a block with no closer runs to the end of the file. On the safe side, since how
     Claude Code splits lines can't be proven: a line ends at a CRLF (one line end), a lone CR, a lone LF, U+2028 or U+2029, and
     every check that reports a line (these flags, `command_instruction`, the rules reviewer, the secret scan) counts lines
-    that way, so a `line` matches what an editor shows; a blank is any space, tab or
+    that way, so a `line` matches what an editor shows. Because Claude Code may not split there, a changed markdown file
+    whose new version has a ```` ```! ```` block, where either version has a lone CR, U+2028 or U+2029 anywhere (a CRLF
+    doesn't count: removing one can change what runs as much as adding one), is `runs_at_load` once, at the first such
+    line end's line in the new version (or line 1 when only the old version had one), with the detail "has an unusual line break, so what runs when
+    the skill loads can't be read for sure"; a blank is any space, tab or
     character of §4.2's invisible set (a no-break space, a zero-width character, a byte-order mark). A markdown file that
     isn't valid UTF-8 is flagged `runs_at_load` at line 1, since it can't be read the same way everywhere. The same
     detector decides whether a skill "has an injected command" below;
@@ -647,40 +682,76 @@ showing (the web UI, a publish preview), and the update hold never reads them. F
   file's own reason (as `capability_frontmatter` does). On each added or changed line of a markdown file (every line, on a
   first install), without regard to case:
   - `prompt_injection` {path, line, detail}, one per line, the first rule that matches naming it:
-    - hidden characters: any bidi override or isolate, or any other character of §4.2's invisible set, except a tab, a
-      space separator (a no-break space isn't hiding anything) and a variation selector or zero-width joiner inside an emoji
-      sequence, and a byte-order mark (U+FEFF) as a file's first character, which marks its encoding; the detail names the
+    - hidden characters: any bidi override or isolate, or any other character of §4.2's invisible set, except those that
+      writing and emoji need and that can't hide text:
+      - a tab, and a space separator (a no-break space isn't hiding anything);
+      - a variation selector or zero-width joiner inside an emoji sequence;
+      - a flag's tag sequence: U+1F3F4, then three to six tag letters or digits (U+E0030–E0039, U+E0061–E007A: a region
+        and subdivision code, as England's flag is), then U+E007F; a longer run, and tag characters anywhere else, stay
+        flagged, since they can smuggle text;
+      - the direction marks U+200E, U+200F and U+061C (marks, not overrides: they can't reorder a run);
+      - a zero-width non-joiner or joiner (U+200C, U+200D) with a character of one of these blocks on each side,
+        whatever that character's category (a joiner often follows a virama or a vowel mark, as in क्\u{200d}ष: ka, virama, joiner, ssa), in a script
+        that writes with them:
+        Arabic (U+0600–06FF, U+0750–077F, U+08A0–08FF, U+FB50–FDFF, U+FE70–FEFE), Syriac (U+0700–074F), and the
+        Indic blocks U+0900–0DFF; between Latin, Greek or Cyrillic letters they stay flagged ("ig\u{200c}nore");
+      - private-use characters (U+E000–F8FF, planes 15 and 16), which show as icons in some fonts and hold no text;
+      - a byte-order mark (U+FEFF) as a file's first character, which marks its encoding (elsewhere it's flagged).
+      A soft hyphen (U+00AD) stays flagged: it hides inside a word and markdown has no need of it. The detail names the
       first, "hidden character U+" and its hex in capitals, at least four digits ("hidden character U+202E");
     - "ignore previous instructions": ignore, disregard or forget, then optionally all, any or the, then previous, prior,
       above, earlier or system, then instruction, guidance, rule, message or prompt, singular or plural;
-    - "addressed to the assistant": text that speaks to the model reading it, "to the assistant", "note to the AI", "the
-      assistant reading this", "AI reading this" (assistant, AI, model, LLM or agent), and the assistant's own name in
-      the same forms ("note to Claude", "Claude reading this"; a plain "Claude should …" isn't one): in the agent-experience trials, a
+    - "addressed to the assistant": text that speaks to the model reading it, in three forms only: "to the <noun>:"
+      (followed by a colon), "note to (the) <noun>", and "(the) <noun> reading this", where the noun is assistant, AI,
+      model, LLM, agent or Claude. So "Send the diff to the model and wait for its summary" and "Claude should …" aren't
+      flagged: in the agent-experience trials, a
       search card that flagged such a planted instruction made the assistant warn the person, and without the flag one
       run recommended the skill unwarned;
-    - "curl piped to a shell": `curl` or `wget`, then any later `|` on the line followed by the shell, given plainly, by
-      path, through `env` or through `sudo` with flags (`sh`, `bash`, `zsh`, `python`, `python3`; `/bin/sh`, `env bash`,
-      `sudo -E bash`), so `curl … | tee i.sh | sh` counts; or a download run through a substitution as a shell's argument
-      (`sh -c "$(curl …)"`, `bash <(curl …)`, backticks around `curl` or `wget`);
+    - "curl piped to a shell": `curl` or `wget` with at least one argument, then any later single `|` (not `||`) on the
+      line followed, after blanks of any length, by the shell, given plainly, by path, through `env` (with any
+      `NAME=value` settings) or through `sudo` with any flags and options, each word read whole whatever its length (`sh`,
+      `bash`, `zsh`, and `python` or `python3` unless given a module with `-m` or a script file; `/bin/sh`, `env FOO=1 bash`,
+      `sudo -E -H bash`), so `curl … | tee i.sh | sh` counts; or a download run through a substitution as a shell's
+      argument or into `eval`, `source` or `.` (`sh -c "$(curl …)"` with or without blanks inside the quote, `bash <(curl …)`,
+      `eval "$(curl …)"`, `source <(curl …)`, backticks around `curl` or `wget`);
     - "sends a local file or variable": `curl`, `wget` or `nc` with a data option (`-d`, `--data…`, `--json`, `-F`,
-      `--upload-file`, `-T`) naming a home path or a variable (`$…`, `~/…`, `.ssh`, `.aws`, `.env`), or with a command
-      substitution (`$(…)` or backticks) in its URL or a header;
+      `--upload-file`, `-T`, those letters inside a cluster such as `-sd` or `-sT`, and `wget`'s `--post-data` and
+      `--post-file`) naming a home path or a variable (`$…`, `~/…`, `.ssh`, `.aws`, `.env`), or with a command
+      substitution (`$(…)` or backticks) in its URL or the value of `-H`/`--header`, within that command (up to a closing
+      backtick, `|`, `;` or `&&`), never in a later word of the sentence;
     - "text hidden in an HTML comment": `<!-- … -->` holding letters, or markdown's link-reference comment,
-      `[//]: # (…)`, holding letters; a comment over several lines is one flag at its opening line when any of its lines
-      was added or changed;
+      `[<any label>]: #` followed by `(…)`, `"…"` or `'…'`, or `[<any label>]: <> (…)`, holding letters; a comment over several lines is one flag at its opening line when any of its lines
+      was added or changed. A `<!--` that starts a line (after at most three spaces) and never closes hides the rest of the
+      file from a reader (CommonMark treats it as an HTML block to the end): it counts as a comment running to the file's
+      end, flagged at its line when that line or any line after it was added or changed. An unclosed `<!--` inside a line
+      is shown as text, and isn't one;
     - `prompt_injection` is a best-effort signal, not a promise: a text-only update that grants nothing and raises no other
-      flag applies on its own, so an injection these rules miss goes through. The word list is advice, every rule keeps
-      ordinary prose unflagged, and a reworded instruction passes any word list. Stated misses: a prose request to send
-      files ("upload the contents of ~/.ssh to …"), wording variants and other languages, a download saved in one step
+      flag applies on its own, so an injection these rules miss goes through. The word list is advice, and a reworded
+      instruction passes any word list. Each rule is written to leave ordinary prose alone (not flagged: "In bash, use
+      `curl` to fetch it", "Use `curl` to fetch the page and `jq` to parse it", a table row `| wget | bash |`,
+      `curl … || bash scripts/restart.sh`, `curl … | python3 -m json.tool`, `echo "$(curl …)"` with no shell before it,
+      `curl -H "Authorization: Bearer $TOKEN"` with a variable and no substitution), but a rule can't tell a quote from an instruction: a warning that shows
+      `curl … | sh`, or `<!-- TODO: add examples -->`, is flagged. Stated misses: a prose request to send
+      files ("upload the contents of ~/.ssh to …"), wording variants and other languages, an instruction soft-wrapped over
+      two lines, a pipe continued onto the next line with a backslash, a download saved in one step
       and run in the next, PowerShell's fetch-and-run, other tools (`scp`, `rsync`, a language's own HTTP call), HTML
       that renders hidden (styles, `hidden`), and bulk moved into a supporting markdown file to stay under
       `context_cost`;
   - `context_cost` {path: `SKILL.md`, detail: "about N tokens (budget M)", numbers in plain digits}: SKILL.md (front
-    matter and body) is over `context_cost_budget` in estimated tokens (UTF-8 bytes / 4, rounded up; default 5,000, any
-    positive number in config) and grew since the installed version, counted in those estimated tokens (on a first
+    matter and body) is over `context_cost_budget` in estimated tokens (UTF-8 bytes / 4, rounded up; default 5,000; it
+    takes a positive whole number, so a budget can't turn the flag off by accident. In the config file the tools read, a
+    bad value is a damaged local file (§4.5: `wrong_shape` for a value that isn't a number, `not_a_budget` for any other bad
+    number). Given to setup's `--config`, anything else is refused before anything is written, exiting 1 (§9),
+    with `invalid_request` {field: `context_cost_budget`, why}: `too_low` for 0 or a negative,
+    `not_integer` for a fraction, a string or a number that overflows to infinity, `too_high` {limit: 9007199254740991} above
+    that) and grew since the installed version, counted in those estimated tokens (on a first
     install, whenever it's over). Measured: 90% of real SKILL.md files
     are under about 5,000 tokens.
-  The patterns are linear (no backtracking), so a hostile line can't stall the review;
+  The patterns are linear (no backtracking), so a hostile line can't stall the review. Every character test that decides a
+  flag uses pinned Unicode 16.0 data (§4.2's invisible table; the emoji properties from Unicode's emoji data, the same way),
+  so the catalog and every installer give the same verdict for the same version whatever runtime each uses. Two tests stay
+  on the runtime because they can't change a hold: whether a comment holds letters (it could differ only for letters
+  assigned after Unicode 16.0), and the search tokenizer (ranking only);
 - from agent reviewers (phase 2), when their reviews exist; a missing agent review never holds an update.
 
 One reason per file, the first that applies: `runnable_file`, then `runs_at_load` (one flag per added or changed `!` line or
@@ -745,7 +816,25 @@ mode is detected, added or changed text can get one more flag.
 - **How the installer tells** (setup reads the same, and its summary says so). It reads Claude Code's settings files as Claude
   Code does: managed, then the project's `.claude/settings.local.json` and `.claude/settings.json`, then the user's
   `~/.claude/settings.json`. A single value comes from the highest file that sets it; lists (`permissions.allow`) merge across
-  all of them (Claude Code's settings page). The modes, first found wins, in this order:
+  all of them (Claude Code's settings page). Managed settings are `managed-settings.json` and the files of the
+  `managed-settings.d/` folder beside it, read after it in byte order of their names, only names ending in `.json` and not
+  starting with a dot (a later file's single value wins, lists combine, nested
+  blocks merge key by key), in `/Library/Application Support/ClaudeCode/` on macOS and `/etc/claude-code/` on Linux and WSL
+  (Claude Code's managed-settings page; `SKILLS_MANAGED_SETTINGS` replaces that folder, §8). Each file is opened read-only,
+  without following a link, and read up to 1 MiB; nothing is ever written to them. A file that isn't there is simply absent.
+  A file that is there but can't be used (unreadable, over 1 MiB, not valid JSON, a link, or a key this check reads with the
+  wrong type) can't be ruled out as permissive, so it's the mode `unknown` below and fails toward asking. The keys it
+  reads, with their types: `permissions` and `sandbox` (objects), `permissions.defaultMode` (a string; one it doesn't know
+  is just not permissive), `permissions.allow` (a list of strings), `sandbox.enabled` and `sandbox.autoAllowBashIfSandboxed`
+  (booleans), and, from managed settings only, `permissions.disableBypassPermissionsMode` and `permissions.disableAutoMode`
+  (strings) and `allowManagedPermissionRulesOnly` (a boolean, narrowing only allow rules); any other key is ignored.
+  Every unusable file is named in setup's summary, in reading order. Managed settings
+  can also narrow the others, and the check follows them: `permissions.disableBypassPermissionsMode` or
+  `permissions.disableAutoMode` set to `"disable"` there means that mode isn't counted, and
+  `allowManagedPermissionRulesOnly` true there means only managed allow rules count. `acceptEdits`, `plan`, `dontAsk`
+  (which denies anything that would prompt) and `default` aren't permissive modes here: in each of them Claude Code still
+  asks, or refuses, before a command outside the person's rules runs. The mode found is the `mode` of `command_instruction`
+  and of the usage `mode` event (§3). The modes, first found wins, in this order:
   - `auto`: `permissions.defaultMode` is `auto`, from user or managed settings only (Claude Code ignores that value in
     project and local settings);
   - `bypass`: `permissions.defaultMode` is `bypassPermissions`, from user or managed settings only;
@@ -759,7 +848,12 @@ mode is detected, added or changed text can get one more flag.
     `timeout`, `time`, `command`, `exec`, `eval`, `nice`, `watch`. So `Bash(python3 *)`, `Bash(python3:*)`, `Bash(node*)`,
     `Bash(sh -c *)`, `Bash(python3 -c *)`, `Bash(uv run python *)` and `Bash(env *)` count; `Bash(git *)`, and a rule with no
     `*` such as `Bash(python3 scripts/check.py)`, don't. The list is a best effort (other programs can run commands too,
-    such as `find -exec`), and the friction review can widen it.
+    such as `find -exec`), and the friction review can widen it;
+  - `unknown`: none of the above was found, but a settings file that is there couldn't be used (above), so the check
+    can't tell; it counts as permissive. A flag doesn't name the file (a flag is about the skill's text, and its shape
+    stays the same); setup's summary names it, with why it couldn't be used, never its contents: `unreadable`, `too_big`
+    (over 1 MiB), `not_json` (not valid JSON, or valid JSON that isn't an object at the top), `link`, or `wrong_type` {key}
+    (the setting's dotted name as read, or its block's name when the block isn't an object; never its value).
 - **Order**: `other_catalog`, then `pin`, then `notify`, then the flags. `command_instruction` is a flag like any other (`held: flagged`), and
   `accept_flagged_updates` lets it through like any flag. A pinned skill and a version still in its cooldown ask nothing and
   produce no notice (§3).
@@ -769,8 +863,9 @@ mode is detected, added or changed text can get one more flag.
   the lock. It comes before `pin` and `notify` in the order, since it's about where the skill comes from.
 - **A first install** goes through the update hold as usual, `command_instruction` included: flagged, it's held; otherwise it
   installs.
-- **What it can't see**: a mode given for one session (`--permission-mode`, `--settings`) or switched during a session. The
-  check reads the files at each sync, so it's a best effort; "What the update hold doesn't cover" lists it.
+- **What it can't see**: a mode given for one session (`--permission-mode`, `--settings`) or switched during a session;
+  managed settings delivered by a macOS configuration profile (MDM) rather than a file; and Windows, which the tools don't
+  support. The check reads the files at each sync, so it's a best effort; "What the update hold doesn't cover" lists it.
 - **When the approvals are reviewed** (with the usage metrics, §3; starting thresholds from the friction research, to be tuned). Any one
   flags the rule for review, with its numbers:
   - avoidance, once: updates turned off, `accept_flagged_updates` turned on, everything pinned, or setup torn down within 7
@@ -962,6 +1057,9 @@ with a seamless/discreet label saying for demo purposes)."
   registration read and write the assistant's files (`.claude.json`, `.claude/settings.json`, `.claude/skills`). An
   agent-level test runs the assistant with the real home (for its login) and this setting inside the sandbox, so a setup the
   assistant runs never touches the owner's settings. The test runner refuses to start unless it points into the sandbox.
+- `SKILLS_MANAGED_SETTINGS`: the folder read as Claude Code's managed settings (its `managed-settings.json` and
+  `managed-settings.d/`, §5.3), in place of the system one. Tests always set it; the test runner refuses to start unless it
+  points into the sandbox, so no test reads the machine's real managed settings.
 - `SKILLS_SYNC_ON_START=0` turns off the sync at MCP start, so update tests decide when sync happens.
 - `SKILLS_ACTIVITY_LOG`: where the MCP server's activity log goes (§3), so a test or the demo can read it.
 - Clock and ids are injected.
@@ -980,10 +1078,12 @@ a log file in `$SKILLS_HOME`, named in the message.
 `invalid_name` {name, why} (§4.1), `invalid_path` {path, why} (the whys: §4.2), `too_large` {limit, max, value},
 `not_found` {suggestions} or {path}, `not_owner` {name, owners}, `conflict` {name, latest} (also when a held update's version
 was overtaken, with its own sentence) or {name, fingerprint} (a publish whose files don't match its `expected_fingerprint`, §2) or {name, folder} (a publish whose confirm doesn't verify for the folder as it is
-now and its inputs, §3), `forbidden`, `unauthenticated` (locally: no acting identity set, so its sentence points to setup's `me` or `--as`; hosted: sign in), `exists_untracked` {path}, `name_in_use` {path},
+now and its inputs, §3), `forbidden` (or {catalog, why: `hosted_not_available`}, below), `unauthenticated` (locally: no acting identity set, so its sentence points to setup's `me` or `--as`; hosted: sign in), `exists_untracked` {path}, `name_in_use` {path},
 `target_symlink` {path}, `secret_suspected` {path, line, kind}, `invalid_developer_setting` {setting} (§4.1),
-`fingerprint_mismatch` {name, version, expected, got} (§5.3), `not_installed` {name} (§3), `invalid_local_file` {file, why, path} (§4.5), `target_changed` {path, staging?, elsewhere?, temp?: true when `path` is a staging folder}, `target_not_private` {path, target: `user` \| `project`, home?: true when
-`path` is the assistant's home above `.claude`, own: whether this user owns the folder} (§4.5). Each error carries the code and one plain sentence, and `why`
+`fingerprint_mismatch` {name, version, expected, got} (§5.3), `lock_busy` {path, pid} (another run is changing the installed
+skills, §4.5), `not_installed` {name} (§3), `invalid_local_file` {file, why, path} (§4.5), `target_changed` {path, staging?, elsewhere?, temp?: true when `path` is a staging folder}, `target_not_private` {path, target: `user` \| `project`, home?: true when
+`path` is the assistant's home above `.claude`, own: whether this user owns the folder} (§4.5), `target_unavailable`
+{path, target, home?: true when `path` is the assistant's home} (the target's root doesn't exist and can't be made, §4.5). Each error carries the code and one plain sentence, and `why`
 and `problem` are codes with a sentence each (wording in the agent-experience notes).
 
 **An error's sentence is an instruction to the agent** (the agent-experience trials): one that asks for a change to the person's files
@@ -993,6 +1093,19 @@ tells the agent to propose the change to the person and make it only once they a
 person-only CLI override; until then it says to remove the secret and publish again.
 
 A read's own input whys are in its row (§2): `name_and_names`, `required`, `paths_need_one_name`.
+
+The request checks every operation shares (its schema, §2) give `invalid_request` {field, why} with these whys:
+`not_one_of` {allowed} (a value outside the listed ones), `not_integer`, `too_low` {limit, value}, `too_high` {limit, value},
+`not_boolean`, `not_list`, `not_object` (the request itself, or a field that must be one), and `unknown_field` (a field the
+operation doesn't take, named with its path, e.g. `filters.owner`). Elsewhere: `not_a_cursor` (a `cursor` that no earlier page
+gave), `not_base64` (a file's `content_base64`, named by its index), `fingerprint_or_name_and_version` (a fetch given a
+fingerprint and a name or version too: one or the other), and `not_a_catalog_url` (a catalog location that is neither a local
+folder nor a catalog address). A hosted catalog address, where only a local one is built, is `forbidden` {catalog, why:
+`hosted_not_available`}.
+
+**`person_only`** (CLI, exit 3): a step only the person may take, asked for with no terminal: `update <name> --accept`,
+`--allow-suspected-secrets`, `clear-kept`, and a publish without the preview's confirm. Nothing is done; the output gives the exact command
+back for the person to run in their own terminal (§3), and the step is recorded as `person_only`, never as a failure of the tool.
 
 Limits on a request (more than 20 names or 20 paths in a read, a `limit` over 50, more than 10 tags in a search filter or a
 tag over 32 characters: `invalid_request` {field: `filters.tags`, why: `too_many` or `item_too_long`, limit};
