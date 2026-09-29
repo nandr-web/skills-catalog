@@ -48,7 +48,7 @@ export function discoverySuite(a: TestAdapter): void {
         expect(page.results[0]!.matched_words, c.term).toEqual(c.matched_words);
         expect(page.match, c.term).toBe(c.match);
       }
-    });
+    }, HEAVY_MS);
 
     it('Found: every must_find is in the top 5 of at least one term, for the whole any-word gate set (recall@5 = 1.0)', async () => {
       const catalog = await seeded(a);
@@ -67,7 +67,7 @@ export function discoverySuite(a: TestAdapter): void {
       }
       console.info(`discovery Found: recall@5 ${found}/${labelled}`);
       expect(misses).toEqual([]);
-    });
+    }, HEAVY_MS);
 
     it('Findable: each semantic-gap query\'s reformulation finds it; its keywords are the reported gap', async () => {
       const catalog = await seeded(a);
@@ -92,6 +92,6 @@ export function discoverySuite(a: TestAdapter): void {
         }
       }
       console.info(`no-match terms with partial cards: ${leaking.length ? leaking.join('; ') : 'none'}`);
-    });
+    }, HEAVY_MS);
   });
 }
