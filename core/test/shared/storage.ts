@@ -112,4 +112,35 @@ export function storageSuite(a: TestAdapter): void {
       expect(await catalog.search({})).toEqual(before);
     });
   });
+
+  // The hosted publish names files already uploaded (contract §1.1): commit takes {sha256} without bytes and checks each
+  // is stored, inside the commit; one that isn't is not_uploaded, and nothing changes.
+  describe(`the commit point takes files by sha256 alone [${a.name}]`, () => {
+    async function published() {
+      const { store, catalog } = await openOn(a);
+      await catalog.publish(request('pr-review-checklist', historyVersion(histories.versions['prc.v1'])), ana);
+      const storage = (catalog as any).p.storage as Storage;
+      const { version: _, ...v1 } = (await storage.version('pr-review-checklist', 1))!;
+      const next = { ...v1, fingerprint: 'b'.repeat(64), message: 'by sha256' };
+      const event = (version: number) => ({ type: 'version_published' as const, name: v1.name, version, fingerprint: next.fingerprint, publisher: v1.publisher, at: v1.published_at });
+      return { store, storage, v1, next, event };
+    }
+
+    it('a file that was never stored is not_uploaded, naming it, and storage is exactly as it was', async () => {
+      const { store, storage, v1, next, event } = await published();
+      const missing = sha('never uploaded\n');
+      const before = await store.snapshot();
+      const r = await storage.commit(next, [...v1.files.map((f) => ({ sha256: f.sha256 })), { sha256: missing }], { expectedLatest: 1 }, event);
+      expect(r).toEqual({ kind: 'not_uploaded', missing: [missing] });
+      expect(await store.snapshot()).toBe(before);
+    });
+
+    it('files all stored: the version is created and points at them', async () => {
+      const { store, storage, v1, next, event } = await published();
+      const r = await storage.commit(next, v1.files.map((f) => ({ sha256: f.sha256 })), { expectedLatest: 1 }, event);
+      expect(r).toMatchObject({ kind: 'created', record: { version: 2, fingerprint: next.fingerprint } });
+      expect(await store.versionsIn('pr-review-checklist')).toEqual([1, 2]);
+      for (const f of v1.files) expect(await storage.blob(f.sha256)).toBeDefined();
+    });
+  });
 }
