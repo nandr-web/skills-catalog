@@ -144,6 +144,24 @@ export function storageSuite(a: TestAdapter): void {
       expect(await store.snapshot()).toBe(before);
     });
 
+    it('a missing file named twice (two files with the same bytes) is listed once', async () => {
+      const { storage, v1, next, event } = await published();
+      const missing = sha('twice\n');
+      const r = await storage.commit(next, [...v1.files.map((f) => ({ sha256: f.sha256 })), { sha256: missing }, { sha256: missing }], { expectedLatest: 1 }, event);
+      expect(r).toEqual({ kind: 'not_uploaded', missing: [missing] });
+    });
+
+    it('a mixed commit, a new file with its bytes and one never stored: not_uploaded, no version, and the new bytes are taken back where the adapter takes back', async () => {
+      const { store, storage, v1, next, event } = await published();
+      const before = await store.blobs();
+      const fresh = new TextEncoder().encode('new with bytes\n');
+      const missing = sha('never uploaded either\n');
+      const r = await storage.commit(next, [...v1.files.map((f) => ({ sha256: f.sha256 })), { sha256: sha(fresh), bytes: fresh }, { sha256: missing }], { expectedLatest: 1 }, event);
+      expect(r).toEqual({ kind: 'not_uploaded', missing: [missing] });
+      expect(await store.versionsIn('pr-review-checklist')).toEqual([1]);
+      if (a.takesBackRefusedFiles) expect(await store.blobs()).toEqual(before);
+    });
+
     it('files all stored: the version is created and points at them', async () => {
       const { store, storage, v1, next, event } = await published();
       const r = await storage.commit(next, v1.files.map((f) => ({ sha256: f.sha256 })), { expectedLatest: 1 }, event);
