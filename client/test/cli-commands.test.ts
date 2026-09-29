@@ -260,7 +260,7 @@ describe('update --accept on the command line', () => {
 
 // Every command a CLI word names is one the CLI serves, with the flags it names: an assistant that runs what the words
 // say never meets "unknown command". Commands still to come are listed, and the test trips when one is served.
-const NOT_SERVED_YET = ['preview', 'publish', 'setup', 'teardown', 'login'];
+const NOT_SERVED_YET = ['preview', 'publish', 'setup', 'teardown', 'login', 'serve'];
 // Where a word uses the product's name as the subject of a sentence ("skills-catalog hit a bug"), not as a command. Kept
 // by hand on purpose: any other word after the name is taken as a command, so a mistyped command can't pass as prose.
 const PROSE = ['hit', 'won', 'never', 'forget'];
