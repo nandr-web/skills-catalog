@@ -108,6 +108,16 @@ describe('read', () => {
 describe('the read commands never write (contract §6)', () => {
   const READS = [['search', 'notes'], ['read', 'x'], ['versions', 'x'], ['diff', 'x', '--from', '1', '--to', '2']];
 
+  // Which open a command gets is the CLI's choice (run.ts: the read-only one only for a command marked readOnly). The read
+  // commands always get it; besides them only stats may (it opens no catalog; served once the installer records holds);
+  // install, update (--accept included, the same command) and policy always get the writing open, never the read-only one.
+  it('the read commands open read-only, nothing else does but stats; install, update and policy always write', () => {
+    const readOnly = Object.entries(COMMANDS).filter(([, c]) => c.readOnly).map(([w]) => w);
+    expect(readOnly).toEqual(expect.arrayContaining(['search', 'read', 'versions', 'diff', 'list']));
+    expect(readOnly.filter((w) => !['search', 'read', 'versions', 'diff', 'list', 'stats'].includes(w))).toEqual([]);
+    for (const w of ['install', 'update', 'policy']) expect(COMMANDS[w]?.readOnly, w).toBeFalsy();
+  });
+
   // A mistyped path is never mistaken for an empty catalog.
   it('pointed at a named folder with no catalog: not a catalog (exit 1), and nothing is created', async () => {
     const p = place();
