@@ -527,6 +527,28 @@ histories:
       - {from: gate.g0, to: gate.g0-bang-curl, permissive: auto, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "an injected command is runs_at_load, which comes first: no command_instruction for that line"}
       - {from: null, to: gate.g0-curl, permissive: auto, risk_flags: [{kind: command_instruction, path: SKILL.md, line: 6, instruction: fetch_and_run, mode: auto}], note: "a first install in auto mode is checked too, so it's held: flagged"}
 
+
+  gate_generated:
+    note: >-
+      Pairs too big to write out. Each file is `parts` joined: a string as it is, or {repeat: text, count: N}, the text
+      written N times with {n} replaced by 1..N. The version diff gives up past 4,000 differing lines, removed and added
+      together (contract §5.3, fb0c9682); then every fence line of the new version counts as changed, deduped as usual.
+      reference.md is gate.g0's in both versions.
+    pending: "a version diff that gives up past 4,000 differing lines (contract fb0c9682)"
+    cases:
+      - id: diff-gives-up
+        from:
+          SKILL.md: {parts: ["---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n~~~\nkept\n~~~\n", {repeat: "a{n}\n", count: 2001}, "```\ncode\n```\n```!\necho QA-MARKER\n```\n"]}
+          reference.md: "Step one.\n"
+        to:
+          SKILL.md: {parts: ["---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n~~~\nkept\n~~~\n", {repeat: "b{n}\n", count: 2001}, "```!\necho QA-MARKER\n```\n```\ncode\n```\n"]}
+          reference.md: "Step one.\n"
+        risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: runs_at_load, path: SKILL.md, line: 2010}, {kind: runs_at_load, path: SKILL.md, line: 2013}]
+        note: >-
+          4,002 differing lines in the middle, so the diff gives up: every new fence line counts, one flag per block, the
+          unchanged ~~~ block at 6 included (a diff that doesn't give up leaves it alone); the ! block's text is unchanged,
+          so it's flagged at 2010 as a fence, not as a new block
+
   installer:
     name: stale-rules
     note: >-

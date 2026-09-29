@@ -35,6 +35,8 @@ describe('pending golden rows', () => {
 });
 
 const PENDING: string[] = [
+  // A version diff that gives up past 4,000 differing lines.
+  'histories.histories.gate_generated',
   // One filter tag over 32 characters: item_too_long.
   'skills.search_filters[1]',
   // The front matter counted first in the read budget.
