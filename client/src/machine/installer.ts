@@ -85,21 +85,35 @@ function writeSkill(ctx: Context, dest: string, files: readonly TreeFile[]): voi
 
 type Side = { version: number; fingerprint: string; publisher: string; files: TreeFile[] };
 
-/** A version's bytes, checked against `claimed` (the catalog's fingerprint, or the lock's for an installed copy). */
-async function fetchChecked(catalog: Catalog, name: string, version: number, publisher: string, claimed?: string): Promise<Side> {
+/** A fingerprint as the catalog claimed it, shown only in the fingerprint's form (§5.3 step 1). */
+const inForm = (x: unknown) => (typeof x === 'string' && /^sha256:[0-9a-f]{64}$/.test(x) ? x : null);
+
+/** A version's bytes, checked against `claimed`: the catalog's record of that version in its versions list, or the lock's
+ *  for an installed copy; never the fingerprint sent with the bytes. A reply for another version than the one asked for
+ *  is refused the same way. */
+async function fetchChecked(catalog: Catalog, name: string, version: number, publisher: string, claimed: string | undefined): Promise<Side> {
   const r = await catalog.fetch({ name, version });
   const files = r.files.map((f) => ({ path: f.path, mode: f.mode, bytes: Buffer.from(f.content_base64, 'base64') }));
-  const expected = claimed ?? r.fingerprint;
-  return { version, fingerprint: expected, publisher, files: checkFetched(name, version, expected, files) };
+  if (r.version !== version) throw new CatalogError('fingerprint_mismatch', { name, version, expected: inForm(claimed), got: inForm(r.fingerprint) });
+  const checked = checkFetched(name, version, claimed, files);
+  // Past the check, `claimed` is the bytes' own fingerprint.
+  return { version, fingerprint: claimed as string, publisher, files: checked };
 }
 
-/** The installed copy as the catalog holds it, checked against the lock; null when it fails today's rules (stored under
- *  older ones) or can't be fetched, so the new version is gated as a first install, from nothing (fails closed). */
-async function installedSide(catalog: Catalog, e: LockEntry): Promise<Side | null> {
+/** The version `version` as the catalog's versions list records it, fetched and checked. */
+const fetchListed = (catalog: Catalog, name: string, v: VersionsResult, version: number) => {
+  const row = v.versions.find((x) => x.version === version);
+  return fetchChecked(catalog, name, version, row?.publisher ?? '', row?.fingerprint);
+};
+
+/** The installed copy as the catalog holds it, checked against the lock. When it fails today's rules (stored under older
+ *  ones) or can't be fetched, it counts as no version at all, so the new version is gated as a first install (fails
+ *  closed); its publisher, from the lock, is still compared, since no rule changes who published. */
+async function installedSide(catalog: Catalog, e: LockEntry): Promise<Side> {
   try {
     return await fetchChecked(catalog, e.name, e.version, e.publisher, e.fingerprint);
   } catch (err) {
-    if (err instanceof CatalogError) return null;
+    if (err instanceof CatalogError) return { version: e.version, fingerprint: e.fingerprint, publisher: e.publisher, files: [] };
     throw err;
   }
 }
@@ -119,7 +133,6 @@ async function allVersions(catalog: Catalog, name: string): Promise<VersionsResu
   return { ...first, versions };
 }
 
-const publisherOf = (v: VersionsResult, version: number) => v.versions.find((x) => x.version === version)?.publisher ?? '';
 
 // ---------- the confirm of a held change ----------
 
@@ -182,7 +195,7 @@ export async function pendingHold(ctx: Context, name: string, target: Target = '
   if (e && v.latest === e.version) return { installed: e.version };
   const at = e ? e.target : target;
   if (!e) checkTarget(ctx, at, name, lock);
-  const to = await fetchChecked(catalog, name, v.latest, publisherOf(v, v.latest));
+  const to = await fetchListed(catalog, name, v, v.latest);
   const flags = gate(e ? await installedSide(catalog, e) : null, to).risk_flags;
   if (!flags.length) return e ? { installed: e.version } : null;
   return {
@@ -211,7 +224,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   const lock = readLock(ctx.settings.home);
   const dest = checkTarget(ctx, target, req.name, lock);
   const existing = lock.skills[dest];
-  const to = await fetchChecked(catalog, req.name, version, publisherOf(v, version));
+  const to = await fetchListed(catalog, req.name, v, version);
   const from = existing ? await installedSide(catalog, existing) : null;
   const flags = gate(from, to).risk_flags;
   if (flags.length) {
@@ -259,7 +272,7 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const lock = readLock(ctx.settings.home);
   const dest = checkTarget(ctx, t.target, req.name, lock);
   const existing = lock.skills[dest];
-  const to = await fetchChecked(catalog, req.name, t.version, publisherOf(v, t.version));
+  const to = await fetchListed(catalog, req.name, v, t.version);
   if (to.fingerprint !== t.fingerprint) throw conflict();
   const flags = gate(existing ? await installedSide(catalog, existing) : null, to).risk_flags;
   if (!sameSet(req.flags, kinds(flags))) throw conflict();
@@ -327,7 +340,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     }
     let to: Side;
     try {
-      to = await fetchChecked(catalog, e.name, v.latest, publisherOf(v, v.latest));
+      to = await fetchListed(catalog, e.name, v, v.latest);
     } catch (err) {
       if (!(err instanceof CatalogError)) throw err;
       const refusedFingerprint = s.word('update.refused_fingerprint');

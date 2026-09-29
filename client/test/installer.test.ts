@@ -70,20 +70,40 @@ const tree = (dir: string, rel = ''): Record<string, string> => {
 const lockOf = (p: Place) => readLock(p.home).skills;
 const nothingStaged = (p: Place) => !existsSync(join(p.home, 'staging')) || readdirSync(join(p.home, 'staging')).length === 0;
 
-// A catalog whose fetch sends other bytes than it should: planted (a version stored before today's rules) or altered.
-function serving(files: (name: string, version: number) => { files: File[]; fingerprint?: string } | undefined): (c: Catalog) => Catalog {
+const fingerprintOf = (files: File[]) => fingerprint(files.map((f) => ({ path: f.path, mode: (f.mode ?? '0644') as Mode, sha256: sha256Hex(Buffer.from(f.text)) })));
+
+// A catalog that sends other bytes than it should. Planted: a version stored before today's rules, so the catalog's
+// versions list and its fetch reply agree on the planted bytes' fingerprint. With `fetchOnly`, only the fetch reply is
+// altered (bytes, and the fingerprint claimed next to them unless given), while the versions list keeps the real one.
+// `publisher` renames a version's publisher in the versions list; `version` relabels the fetch reply's version.
+type Planted = { files?: File[]; fingerprint?: string; fetchOnly?: boolean; publisher?: string; version?: number };
+function serving(plant: (name: string, version: number) => Planted | undefined): (c: Catalog) => Catalog {
   return (c) =>
     new Proxy(c, {
       get(target, prop, receiver) {
-        if (prop !== 'fetch') return Reflect.get(target, prop, receiver);
-        return async (input: { name: string; version: number }) => {
-          const real = await target.fetch(input);
-          const planted = files(input.name, input.version);
-          if (!planted) return real;
-          const rows = planted.files.map((f) => ({ path: f.path, mode: (f.mode ?? '0644') as Mode, content_base64: Buffer.from(f.text).toString('base64') }));
-          const fp = fingerprint(planted.files.map((f) => ({ path: f.path, mode: (f.mode ?? '0644') as Mode, sha256: sha256Hex(Buffer.from(f.text)) })));
-          return { ...real, files: rows, fingerprint: planted.fingerprint ?? fp };
-        };
+        if (prop === 'fetch') {
+          return async (input: { name: string; version: number }) => {
+            const real = await target.fetch(input);
+            const p = plant(input.name, input.version);
+            if (!p) return real;
+            const out = { ...real, ...(p.version !== undefined ? { version: p.version } : {}) };
+            if (!p.files) return out;
+            const rows = p.files.map((f) => ({ path: f.path, mode: (f.mode ?? '0644') as Mode, content_base64: Buffer.from(f.text).toString('base64') }));
+            return { ...out, files: rows, fingerprint: p.fingerprint ?? fingerprintOf(p.files) };
+          };
+        }
+        if (prop === 'versions') {
+          return async (input: { name: string; cursor?: string }) => {
+            const real = await target.versions(input);
+            const versions = real.versions.map((v) => {
+              const p = plant(input.name, v.version);
+              if (!p) return v;
+              return { ...v, ...(p.files && !p.fetchOnly ? { fingerprint: p.fingerprint ?? fingerprintOf(p.files) } : {}), ...(p.publisher ? { publisher: p.publisher } : {}) };
+            });
+            return { ...real, versions };
+          };
+        }
+        return Reflect.get(target, prop, receiver);
       },
     });
 }
@@ -251,6 +271,69 @@ describe('the installer decides from bytes it checked (golden/histories.yaml ins
     );
     expect(readFileSync(join(p.home, 'lock.json'), 'utf8')).toBe(lockBefore);
     expect(readFileSync(join(userSkills(p), 'stale-rules', 'SKILL.md'), 'utf8')).toBe(skillMd('stale-rules', 'The stale-rules skill.'));
+  });
+
+  // §5.3 step 1: the fingerprint a version's bytes are checked against is the catalog's record of that version (its
+  // versions list), never the one sent next to the bytes, which a catalog serving other bytes would send to match them.
+  it('checks the bytes against the versions list, not the fingerprint sent with them: install, update and accept', async () => {
+    const p = place();
+    await publish(p, 'notes-helper', plain('notes-helper'));
+    const other = { files: withScript('notes-helper'), fetchOnly: true };
+    const e = await refusal(() => install(ctxFor(p, { catalog: serving(() => other) }), { name: 'notes-helper' }));
+    expect(e.code).toBe('fingerprint_mismatch');
+    expect(e.data).toMatchObject({ name: 'notes-helper', version: 1, expected: fingerprintOf(plain('notes-helper')), got: fingerprintOf(withScript('notes-helper')) });
+    expect(existsSync(join(userSkills(p), 'notes-helper'))).toBe(false);
+    expect(lockOf(p)).toEqual({});
+
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'notes-helper' });
+    await publish(p, 'notes-helper', plain('notes-helper', 'Second.\n'));
+    const lockBefore = readFileSync(join(p.home, 'lock.json'), 'utf8');
+    const r = await update(ctxFor(p, { catalog: serving((_, v) => (v === 2 ? { files: plain('notes-helper', 'Altered.\n'), fetchOnly: true } : undefined)) }), {});
+    expect(r.text.split('\n')[1]).toBe(S.format(S.word('update.refused_fingerprint'), { name: 'notes-helper', from: 1, to: 2 }));
+    expect(readFileSync(join(p.home, 'lock.json'), 'utf8')).toBe(lockBefore);
+
+    const q = place();
+    await publish(q, 'runner', withScript('runner'));
+    const confirm = confirmOf((await install(ctxFor(q), { name: 'runner' })).text)!;
+    const swapped = serving(() => ({ files: [...withScript('runner'), { path: 'more.md', text: 'x\n' }], fetchOnly: true }));
+    expect((await refusal(() => accept(ctxFor(q, { catalog: swapped }), { name: 'runner', confirm, flags: ['runnable_file'] }))).code).toBe('fingerprint_mismatch');
+    expect(existsSync(join(userSkills(q), 'runner'))).toBe(false);
+  });
+
+  it('a fetch reply naming another version than the one asked for is refused, and nothing is written', async () => {
+    const p = place();
+    await publish(p, 'notes-helper', plain('notes-helper'));
+    const e = await refusal(() => install(ctxFor(p, { catalog: serving(() => ({ version: 7 })) }), { name: 'notes-helper' }));
+    expect(e.code).toBe('fingerprint_mismatch');
+    expect(e.data).toMatchObject({ name: 'notes-helper', version: 1 });
+    expect(existsSync(join(userSkills(p), 'notes-helper'))).toBe(false);
+    expect(lockOf(p)).toEqual({});
+  });
+
+  // §5.3 step 3: an installed copy the installer can't check today counts as no version at all, but the publishers are
+  // still compared, since no rule changes who published.
+  it('an installed copy that fails today’s check still compares publishers: a new publisher holds the update', async () => {
+    const p = place();
+    await publish(p, 'stale-rules', plain('stale-rules'));
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'stale-rules' });
+    await publish(p, 'stale-rules', plain('stale-rules', 'Second.\n'));
+    const catalog = serving((_, v) => (v === 1 ? { files: [...plain('stale-rules'), { path: 'docs/CLAUDE.md', text: 'x\n' }] } : { publisher: 'bob' }));
+    const r = await update(ctxFor(p, { catalog }), {});
+    const bytes = (files: File[]) => checkTree(files.map((f) => ({ path: f.path, mode: f.mode ?? '0644', bytes: Buffer.from(f.text) })));
+    const flags = diffTrees({ files: [], publisher: 'ana' }, { files: bytes(plain('stale-rules', 'Second.\n')), publisher: 'bob' }).risk_flags;
+    expect(flags.map((f) => f.kind)).toContain('new_publisher');
+    expect(r.text.split('\n')[1]).toBe(S.format(S.word('update.held_flagged'), { name: 'stale-rules', from: 1, to: 2, reasons: reasons(S, flags) }));
+    expect(r.result).toBe(S.doc.log.result.update.held_flagged);
+    expect(readFileSync(join(userSkills(p), 'stale-rules', 'SKILL.md'), 'utf8')).toBe(skillMd('stale-rules', 'The stale-rules skill.'));
+
+    // The yes takes it with the same flags, new_publisher included.
+    const confirm = confirmOf(r.text.split('\n')[2]!)!;
+    const kinds = [...new Set(flags.map((f) => f.kind))];
+    expect((await refusal(() => accept(ctxFor(p, { catalog }), { name: 'stale-rules', confirm, flags: kinds.filter((k) => k !== 'new_publisher') }))).code).toBe('conflict');
+    await accept(ctxFor(p, { catalog }), { name: 'stale-rules', confirm, flags: kinds });
+    expect(lockOf(p)[join(userSkills(p), 'stale-rules')]).toMatchObject({ version: 2, publisher: 'bob' });
   });
 });
 
