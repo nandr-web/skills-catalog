@@ -4,6 +4,10 @@
 
 <p align="center"><img alt="Node.js 24.15 or later" src="https://img.shields.io/badge/node-%E2%89%A5%2024.15-2f6f3e"> <img alt="Runs on macOS and Linux" src="https://img.shields.io/badge/runs%20on-macOS%20%7C%20Linux-3a4a56"> <img alt="Status: usable today, guided setup next" src="https://img.shields.io/badge/status-usable%20today%2C%20setup%20next-2f6f3e"></p>
 
+<p align="center"><img alt="The one-click demo in one terminal window: on the left, ana's assistant publishes two skills, then version 2 of one, which adds a script; in the middle, bob's assistant finds and installs it, compares the versions, is refused publishing over ana's skill, searches for something the catalog doesn't have and gets only a close match, and his update that could run something new is held until he says yes; on the right, the steps to look for, each ticked when the demo sees it (the first, setup, is planned and not in the demo yet); at the bottom, the catalog server logs every call" src="docs/pictures/one-click-demo.gif" width="100%"></p>
+
+<p align="center"><sub>Two developers' assistants (scripted stand-ins, no model) on the real catalog and its MCP server, recorded from <a href="qa/README.md#the-one-click-demo">the one-click demo</a>.</sub></p>
+
 <p align="center"><a href="#try-it">Try it</a> · <a href="docs/architecture.md">Architecture</a> · <a href="docs/decisions.md">Decisions</a> · <a href="docs/contract.md">Contract</a></p>
 
 - **Publish once.** A skill goes into a shared catalog with its version and fingerprint; nobody hands files around.
