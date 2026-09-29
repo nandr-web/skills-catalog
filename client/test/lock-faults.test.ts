@@ -3,7 +3,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { CatalogError } from '@skills-catalog/core';
+import { Surface, renderError, type CatalogError } from '@skills-catalog/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { holdLock, startFromEtime, withLock } from '../src/machine/lock.ts';
 import { race } from './race-fs.ts';
@@ -12,6 +12,7 @@ import { place } from './server.ts';
 vi.mock('node:fs', async (o) => (await import('./race-fs.ts')).mockFs(await o()));
 // `ps` says this process started three days ago (a server running since before the laptop slept); any other pid is asked
 // for real.
+const S = Surface.load();
 const THREE_DAYS_MS = 3 * 24 * 3600 * 1000;
 vi.mock('node:child_process', async (o) => {
   const real = await o<typeof import('node:child_process')>();
@@ -58,6 +59,7 @@ describe('the lock file under faults', () => {
     race.stats = (path) => (path === lockPath(h) ? { uid: (process.getuid?.() ?? 0) + 1 } : undefined);
     const e = await withLock(h, fast(), () => undefined).catch((x: unknown) => x);
     expect([(e as CatalogError).code, (e as CatalogError).data]).toEqual(['lock_busy', { path: lockPath(h), pid: null }]);
+    expect(renderError(S, e as CatalogError)).toBe(S.format(S.word('errors').lock_busy_unusable, { path: lockPath(h) }));
     expect(existsSync(lockPath(h))).toBe(true);
   });
 

@@ -268,6 +268,9 @@ export function renderError(s: Surface, e: CatalogError): string {
       const setting = w.developer_setting?.[String(d['setting'])];
       return setting === undefined ? asData(e.code, d) : fill(w.invalid_developer_setting, { setting });
     }
+    // With no holder to name (another user's file, a link, anything but a regular file), the file is named instead.
+    case 'lock_busy':
+      return d['pid'] === null && typeof w.lock_busy_unusable === 'string' ? fill(w.lock_busy_unusable, d) : typeof w.lock_busy === 'string' ? fill(w.lock_busy, d) : asData(e.code, d);
     default: {
       const t = w[e.code];
       return typeof t === 'string' ? fill(t, d) : asData(e.code, d);

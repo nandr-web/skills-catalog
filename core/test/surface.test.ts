@@ -410,6 +410,15 @@ describe('the surface (vendored, recommended variant)', () => {
     expect(r({ path: '/work/team app', target: 'user' })).toContain('/work/team app ');
   });
 
+  it('lock_busy names the holder\'s process, or, with no holder to name, the file for the person to look at', () => {
+    const s = Surface.load();
+    const w = s.word('errors');
+    expect(renderError(s, new CatalogError('lock_busy', { path: '/h/lock.json.lock', pid: 4242 }))).toBe(s.format(w.lock_busy, { path: '/h/lock.json.lock', pid: 4242 }));
+    const unusable = renderError(s, new CatalogError('lock_busy', { path: '/h/lock.json.lock', pid: null }));
+    expect(unusable).toBe(s.format(w.lock_busy_unusable, { path: '/h/lock.json.lock' }));
+    expect(unusable).not.toMatch(/[{}]/);
+  });
+
   it('a damaged lock or config file names the file by its path, says why, and what removing it would do', () => {
     const s = Surface.load();
     const w = s.word('errors');
