@@ -3,6 +3,7 @@
 // is looked up or read, so an unknown caller learns nothing of what exists; the acting-as header is refused; a read-scope
 // token is refused whatever changes the catalog, before it runs.
 
+import { createHash } from 'node:crypto';
 import { OPERATIONS, Words } from '@skills-catalog/core';
 import { HTTP_DEVELOPER, HTTP_SEED, SHA, checkHttpCase, httpCases, skillMd } from '@skills-catalog/core/testing/http';
 import type { FileAnswer } from '@skills-catalog/core/http';
@@ -65,6 +66,23 @@ describe("the web API's shared cases, hosted", () => {
       }
     }, 30_000);
   }
+});
+
+describe('the files route, hosted, answered by the catalog', () => {
+  it('without a file part the handler asks the catalog: a file published seconds ago is on its way (503), an unknown one 404', async () => {
+    const catalog = await hostedAdapter(() => emu!.endpoint).store().open();
+    try {
+      const s = HTTP_SEED[0]!;
+      await catalog.publish({ name: s.name, files: [{ path: 'SKILL.md', mode: '0644', content_base64: Buffer.from(skillMd(s.name, s.description)).toString('base64') }] }, { actor: async () => HTTP_DEVELOPER }, 'web');
+      const published = createHash('sha256').update(skillMd(s.name, s.description)).digest('hex');
+      const handler = createHostedHandler({ catalog, tokens: { verify: async (t) => HOLDERS[t] }, words });
+      // The names lookup is the indexer's, seconds after a publish; the upload is just made, so it's on its way.
+      expect((await handler.handle(req({ method: 'GET', path: `/api/v1/files/${published}` }))).status).toBe(503);
+      expect((await handler.handle(req({ method: 'GET', path: `/api/v1/files/${'f'.repeat(64)}` }))).status).toBe(404);
+    } finally {
+      catalog.close();
+    }
+  }, 30_000);
 });
 
 describe('who is asking, hosted', () => {
