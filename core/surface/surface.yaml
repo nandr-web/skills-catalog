@@ -664,6 +664,8 @@ results:
     held_notify_cli: "{name} v{version} was NOT installed: {name} v{from} is installed here and its setting is \"tell me first\", so another version waits for their yes.{also} Tell the person. Don't install it yourself: the person does, by running {command} in their own terminal."
     held_other_catalog: '{name} v{version} was NOT installed yet: the {name} here came from another catalog ({was}) and this one comes from {now}, so it may be a different skill that shares the name.{also} Tell the person and ask whether to replace it. Only if they agree: ${accept} with name "{name}", target "{target}", version {version}, confirm "{confirm}" and flags {flags}, all exactly as given here.'
     held_other_catalog_cli: "{name} v{version} was NOT installed yet: the {name} here came from another catalog ({was}) and this one comes from {now}, so it may be a different skill that shares the name.{also} Tell the person. Don't install it yourself: the person does, by running {command} in their own terminal."
+    held_over: '{name} v{version} was NOT installed: {name} v{from} is installed here, and v{version} can run things on this machine without asking, because {reasons}. Tell the person each reason in plain words and ask whether to take v{version}. Only if they agree: ${accept} with name "{name}", target "{target}", version {version}, confirm "{confirm}" and flags {flags}, all exactly as given here.'
+    held_over_cli: "{name} v{version} was NOT installed: {name} v{from} is installed here, and v{version} can run things on this machine without asking, because {reasons}. Tell the person each reason in plain words. Don't install it yourself: the person does, by running {command} in their own terminal."
     held_cli: "{name} v{version} was NOT installed yet: it can run things on this machine without asking, because {reasons}. Tell the person each reason in plain words. Don't install it yourself: the person does, by running {command} in their own terminal."
     installed_after_yes: "Installed {name} v{version} to {path} after the person agreed (fingerprint checked). Updates: {policy}."
     done: "Installed {name} v{version} to {path} (fingerprint checked). Updates: {policy}."
@@ -719,13 +721,13 @@ results:
       required: is required
       contradicting_flags: was set by two flags that contradict each other (use one)
       not_a_confirm: isn't a confirm value a preview gives
-      not_a_cursor: isn't a next_cursor from an earlier result
+      not_a_cursor: isn't a cursor an earlier page gave
       not_a_developer_name: isn't a valid developer name (lowercase letters, digits and single hyphens)
       not_base64: isn't base64 text
       name_and_names: can't be given together with name (use one of them)
       paths_need_one_name: work only with one name, not names (read the other skills' files in their own calls)
       fingerprint_or_name_and_version: goes alone (give a fingerprint, or a name and a version, not both)
-      not_a_catalog_url: isn't a catalog address (a file:// URL to a local folder)
+      not_a_catalog_url: isn't a local folder or a catalog address
       hosted_not_available: is a hosted catalog, which this version doesn't support yet
     invalid_manifest_problem:
       missing: is missing
@@ -810,6 +812,8 @@ results:
     invalid_request: "invalid_request: {field} {why}, so nothing was done. Correct the call and try again."
     invalid_request_cli: "invalid_request: {field} {why}, so nothing was done. Correct the command and run it again."
     invalid_request_limit: "invalid_request: {field} {why}; the limit is {limit}. Nothing was done: call again within it (for example in batches)."
+    invalid_request_allowed: "invalid_request: {field} {why}: {allowed}. Nothing was done: call again with one of them."
+    invalid_request_allowed_cli: "invalid_request: {field} {why}: {allowed}. Nothing was done: run it again with one of them."
     invalid_request_limit_cli: "invalid_request: {field} {why}; the limit is {limit}. Nothing was done: run it again within it (for example in batches)."
     unauthenticated: "unauthenticated: the catalog needs the person to sign in, so nothing was done. Ask them to run ${cli} login in their own terminal; never ask for a password or token in the chat."
     invalid_developer_setting: "invalid_developer_setting: the developer name in {setting} isn't a valid name (lowercase letters, digits and single hyphens), so nothing was done. It's a setting, not something in this call: don't retry or change the call. Tell the person; they fix it there, or run ${cli} setup in their own terminal."
