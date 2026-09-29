@@ -74,6 +74,7 @@ export function snapshot(dir: string): string {
       rows('SELECT * FROM versions ORDER BY name, version'),
       rows('SELECT id, event FROM outbox ORDER BY id'),
       rows('SELECT * FROM search_cards ORDER BY name'),
+      rows('SELECT * FROM pending_blobs ORDER BY sha256'),
       walk(join(root, 'blobs')).join('\n'),
     ].join('\n---\n');
   } finally {
