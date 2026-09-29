@@ -1,17 +1,9 @@
 id: skill-agent-first
 title: "Agent-first: an MCP and/or skill for everything"
-workstream: architect
-added: 2026-09-28
-from: owner
-source: "../word for word/2026-09-28-prd-notes-final.md"
+phase: "1"
+source: "the owner's notes on the PRD"
 quote: "Everything should be agent-first, so we should have an MCP and/or skill for all of this"
 want: "As a developer working through an AI assistant, I want everything to be agent-first, with an MCP and/or skill for all of it, so that my assistant can do all of it for me."
-confirmed: true
-status: idea
-phase: "1"
-relates: [skill-assistant-access]
-arch:
-  lands_in: [mcp, cli]
-  approach: "contract.md §1: each operation defined once, faces generated"
-  design: "none"
 accept: "Every operation in the contract's registry is reachable by an assistant (an MCP tool, or the companion skill with the CLI), except those marked for a person only; nothing the web UI can do is out of an agent's reach."
+confirmed: true
+relates: [skill-assistant-access]

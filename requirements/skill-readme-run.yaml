@@ -1,18 +1,9 @@
 id: skill-readme-run
 title: "Runs on a reviewer's machine from a short README"
-workstream: architect
-added: 2026-09-28
-from: owner
-source: "the PRD, docs/prd (section assumptions) (skills_catalog_prd.pdf v0.1.0, word for word)"
+phase: "1"
+source: "the PRD, Assumptions and constraints"
 quote: "Self-contained: it should run on a reviewer's machine from a short README."
 want: "As a reviewer of the exercise, I want it to be self-contained and run on my machine from a short README, so that I can try it myself."
-confirmed: true
-status: idea
-phase: "1"
-decision: a recorded decision
-relates: [skills-scope, skill-readme-visual, skill-local-default]
-arch:
-  lands_in: [core, cli]
-  approach: "the local home: the core runs in-process against a folder (contract.md §7)"
-  design: "none"
 accept: "The README's quickstart, run word for word in a fresh home folder, installs, runs the tests and completes the publish → discover → retrieve loop with no account and no server."
+confirmed: true
+relates: [skill-readme-visual, skill-local-default]

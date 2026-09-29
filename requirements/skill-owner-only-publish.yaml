@@ -1,17 +1,9 @@
 id: skill-owner-only-publish
 title: "Only a skill's owners can publish it"
-workstream: architect
-added: 2026-09-28
-from: owner
-source: "../word for word/2026-09-28-hosted-access-answer.md"
+phase: "1"
+source: "the owner's decision on who may publish"
 quote: "only owners can publish"
 want: "As Developer 1, I want only a skill's owners to be able to publish it, so that no one else can change what my skill's subscribers get."
-confirmed: true
-status: idea
-phase: "1"
-relates: [skills-hosted-access, skill-demo-identity, skill-owner-permissions]
-arch:
-  lands_in: [core]
-  approach: "contract.md §7 'Who may publish'; not_owner (§9)"
-  design: "none"
 accept: "Locally, in the core: the first publisher owns the name; a publish of that name by anyone else returns a clear not-owner error naming the owners, and stores nothing; the recorded publisher is always the acting identity."
+confirmed: true
+relates: [skill-demo-identity, skill-owner-permissions]

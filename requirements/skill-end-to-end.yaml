@@ -1,17 +1,9 @@
 id: skill-end-to-end
 title: "Publish once, reuse through an assistant, end to end"
-workstream: architect
-added: 2026-09-28
-from: owner
-source: "the PRD, docs/prd (section goals) (skills_catalog_prd.pdf v0.1.0, word for word)"
+phase: "1"
+source: "the PRD, Goals"
 quote: "Developer 1 publishes a skill; Developer 2, through an AI assistant, discovers and retrieves the same skill, no file handoff, no repo sharing"
 want: "As Developer 2, I want to discover and retrieve, through an AI assistant, the same skill Developer 1 published, with no file handoff and no repo sharing, so that skill reuse is low-effort and consistent."
-confirmed: true
-status: idea
-phase: "1"
-relates: [skill-publish, skill-discover, skill-retrieve]
-arch:
-  lands_in: [core, installer, mcp]
-  approach: "contract.md §2–§3: publish_skill_to_catalog → search_shared_skills → install_shared_skill"
-  design: "none"
 accept: "One scripted run: Developer 1 publishes a skill; Developer 2's assistant, asked in plain words, finds it and installs it; the installed files' fingerprint equals the published one; no file or repo was handed over."
+confirmed: true
+relates: [skill-publish, skill-discover, skill-retrieve]

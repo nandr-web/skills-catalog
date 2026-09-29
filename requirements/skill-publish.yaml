@@ -1,17 +1,9 @@
 id: skill-publish
 title: "Publish a skill"
-workstream: architect
-added: 2026-09-28
-from: owner
-source: "the PRD, docs/prd (section fr-01) (skills_catalog_prd.pdf v0.1.0, word for word)"
+phase: "1"
+source: "the PRD, FR-01"
 quote: "As Developer 1, I want to publish my skill to the catalog so another developer can reuse it without me handing over files."
 want: "As Developer 1, I want to publish my skill to the catalog so another developer can reuse it without me handing over files."
-confirmed: true
-status: idea
-phase: "1"
-relates: [skill-versions]
-arch:
-  lands_in: [core, cli, mcp]
-  approach: "contract.md §2 publish_version, §3 publish_skill_to_catalog (two steps: see, then confirm), §5.1 (all or nothing)"
-  design: "none"
 accept: "From FR-01 and UC-01: a developer can publish a skill (manifest + any supporting files) to the catalog; a published skill is available to another developer, complete; a skill missing a name, description, or body is rejected with an explanation, and nothing partial is stored; a confirmation is returned."
+confirmed: true
+relates: [skill-versions]

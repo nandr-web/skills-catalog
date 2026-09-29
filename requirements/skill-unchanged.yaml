@@ -1,17 +1,9 @@
 id: skill-unchanged
 title: "A retrieved skill is complete and unchanged"
-workstream: architect
-added: 2026-09-28
-from: owner
-source: "the PRD, docs/prd (section nfr) (skills_catalog_prd.pdf v0.1.0, word for word)"
+phase: "1"
+source: "the PRD, Non-functional requirements"
 quote: "A retrieved skill is complete and unchanged from what was published, no silent loss or alteration."
 want: "As Developer 2, I want a retrieved skill to be complete and unchanged from what was published, with no silent loss or alteration, so that I have the same skill Developer 1 published."
-confirmed: true
-status: idea
-phase: "1"
-relates: [skill-retrieve]
-arch:
-  lands_in: [core, installer]
-  approach: "contract.md §4.3 fingerprint"
-  design: "none"
 accept: "Publish then retrieve; compare against the original (the PRD's method): the test computes the fingerprint of every file, byte and file mode, itself and it matches."
+confirmed: true
+relates: [skill-retrieve]

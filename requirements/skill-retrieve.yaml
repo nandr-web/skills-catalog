@@ -1,17 +1,9 @@
 id: skill-retrieve
 title: "Retrieve a skill through an AI assistant"
-workstream: architect
-added: 2026-09-28
-from: owner
-source: "the PRD, docs/prd (section fr-03) (skills_catalog_prd.pdf v0.1.0, word for word)"
+phase: "1"
+source: "the PRD, FR-03"
 quote: "As Developer 2, I want my AI assistant to retrieve a published skill so I get the same one Developer 1 has, ready to use."
 want: "As Developer 2, I want my AI assistant to retrieve a published skill so I get the same one Developer 1 has, ready to use."
-confirmed: true
-status: idea
-phase: "1"
-relates: [skill-unchanged]
-arch:
-  lands_in: [core, installer, mcp]
-  approach: "contract.md §2 read_shared_skill (read), §3 install_shared_skill (ready to use, fingerprint-checked)"
-  design: "none"
 accept: "From FR-03 and UC-03: through an AI assistant, a developer can retrieve a named skill; it is complete and unchanged from what was published (manifest + supporting files); retrieving a skill that doesn't exist returns a clear \"not found.\""
+confirmed: true
+relates: [skill-unchanged]

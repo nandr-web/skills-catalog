@@ -1,17 +1,9 @@
 id: skill-web-delta
 title: "Phase 2: Web UI: see what changed between versions"
-workstream: web
-added: 2026-09-28
-from: owner
-source: "../word for word/2026-09-28-prd-notes-final.md"
+phase: "2"
+source: "the owner's notes on the PRD"
 quote: "And importantly, a delta UX to view changes across revisions."
 want: "As a developer, I want a delta view of the changes across a skill's revisions, so that I can see what changed."
-confirmed: true
-status: idea
-phase: "2"
-relates: [skill-versions]
-arch:
-  lands_in: [web, core]
-  approach: "contract.md §2 diff_shared_skill_versions, with each risk flag's reason (§5.3)"
-  design: "in review: the designer's mock-ups (the design notes)"
 accept: "Choosing two versions shows each file added, changed or removed with its differences, and flags new scripts and changed frontmatter."
+confirmed: true
+relates: [skill-versions]

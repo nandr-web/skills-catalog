@@ -1,17 +1,9 @@
 id: skill-bundle-votes
 title: "Later: Community votes on bundles"
-workstream: architect
-added: 2026-09-28
-from: owner
-source: "../word for word/2026-09-28-prd-notes-final.md"
+phase: "later"
+source: "the owner's notes on the PRD"
 quote: "likely with community feedback like votes."
 want: "As a developer, I want community feedback like votes on shared bundles, so that good bundles stand out."
-confirmed: true
-status: idea
-phase: "later"
-relates: [skills-hosted-access, skill-bundles]
-arch:
-  lands_in: [core, web]
-  approach: "contract.md §2 (later: vote, unvote); needs the hosted sign-in"
-  design: "none"
 accept: "A signed-in person votes once per bundle and can take it back; counts show on the bundle; an unsigned request can't vote."
+confirmed: true
+relates: [skill-bundles]

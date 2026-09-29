@@ -1,18 +1,9 @@
 id: skill-setup-by-agent
 title: "An agent can run the guided setup"
-workstream: architect
-added: 2026-09-28
-from: owner
-source: "../word for word/2026-09-28-scope-delivery-readme.md"
+phase: "1"
+source: "the owner's decision on scope and delivery"
 quote: "Let's create a guided CLI that can be run by an agent instead as a skill / by reading a doc."
 want: "As a developer, I want the guided CLI setup to be something my agent can run instead of me, as a skill or by reading a doc, so that setup is agent-first too."
-confirmed: true
-status: idea
-phase: "1"
-decision: a recorded decision
-relates: [skill-setup-welcome, skill-agent-first]
-arch:
-  lands_in: [cli, installer]
-  approach: "contract.md §6: one setup schema for the wizard, --config, the setup skill and the setup doc"
-  design: "none"
 accept: "An assistant given only the setup skill or the setup doc completes setup in a sandbox, choosing the same options the person would, with no one typing into the CLI; the result equals the same answers given to the wizard."
+confirmed: true
+relates: [skill-setup-welcome, skill-agent-first]

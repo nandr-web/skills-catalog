@@ -1,17 +1,9 @@
 id: skill-list-get
 title: "List with filters, and Get one or several"
-workstream: architect
-added: 2026-09-28
-from: owner
-source: "../word for word/2026-09-28-prd-notes-final.md"
+phase: "1"
+source: "the owner's notes on the PRD"
 quote: "Get (a specific skill or skills up to a limit)"
 want: "As an AI assistant acting for a developer, I want to List skills (likely with filters) and Get a specific skill or skills up to a limit, so that I can do the search myself, a-la progressive disclosure, whatever the backend."
-confirmed: true
-status: idea
-phase: "1"
-relates: [skill-discover]
-arch:
-  lands_in: [core, mcp]
-  approach: "contract.md §2 search_shared_skills (optional words added, ranked by any word: the whole list fits one tool result only up to ~50–70 skills), read_shared_skill"
-  design: "none"
 accept: "Search with no words is the List, with filters and pages; get takes one name or up to 20; asking for more returns a clear error naming the limit."
+confirmed: true
+relates: [skill-discover]

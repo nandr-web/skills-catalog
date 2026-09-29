@@ -1,17 +1,9 @@
 id: skill-merge-share-suggestions
 title: "Later: find merges and sharing for your own skills"
-workstream: architect
-added: 2026-09-28
-from: owner
-source: "../word for word/2026-09-28-prd-notes-final.md"
+phase: "later"
+source: "the owner's notes on the PRD"
 quote: "pass over ones own skills and determine if there's room to merge with others / share or get other skills."
 want: "As a developer, I want a pass over my own skills that finds room to merge with others, share mine, or get other skills, so that I don't keep near-copies."
-confirmed: true
-status: idea
-phase: "later"
-relates: [skill-recommend-from-sessions, skill-quality-reviews]
-arch:
-  lands_in: [installer]
-  approach: "later; could reuse the quality reviewers' measurements"
-  design: "none"
 accept: "It lists each own skill with its near-duplicates in the catalog, and the unpublished ones worth sharing; it changes nothing on its own."
+confirmed: true
+relates: [skill-recommend-from-sessions, skill-quality-reviews]

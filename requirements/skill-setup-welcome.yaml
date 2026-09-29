@@ -1,17 +1,9 @@
 id: skill-setup-welcome
 title: "A welcoming setup, from a CLI installer or a prompt"
-workstream: architect
-added: 2026-09-28
-from: owner
-source: "../word for word/2026-09-28-prd-notes-final.md"
+phase: "1"
+source: "the owner's notes on the PRD"
 quote: "we'd make it a welcome, intuitive, (colorful) UX that asks you if you want auto-updates on (with a default of yes in case someone wants to run fast / unattended)."
 want: "As a developer setting up skill searching and fetching, from a CLI installer or a prompt for an agent, I want a welcome, intuitive, colorful setup that asks if I want auto-updates on (default yes), so that I never need to go into a file or run a CLI to configure it."
-confirmed: true
-status: idea
-phase: "1"
-relates: [skill-setup-unattended, skill-auto-updates]
-arch:
-  lands_in: [cli, installer]
-  approach: "contract.md §3 setup, teardown; §6"
-  design: "none"
 accept: "The installer asks once, in colour, with auto-updates defaulting to yes; an agent can run the same setup from a prompt; the file and the CLI exist too; teardown undoes everything setup wrote."
+confirmed: true
+relates: [skill-setup-unattended, skill-auto-updates]

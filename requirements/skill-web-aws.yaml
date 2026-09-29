@@ -1,17 +1,9 @@
 id: skill-web-aws
 title: "AWS, opt-in: Web UI: stack, security and deployment into my AWS account"
-workstream: web
-added: 2026-09-28
-from: owner
-source: "../word for word/2026-09-28-prd-notes-final.md"
+phase: "aws"
+source: "the owner's notes on the PRD"
 quote: "a sub-architect plan the web application stack, security, deployment into my AWS account"
 want: "As the owner, I want the web application's stack, security and deployment into my AWS account planned, so that the web UI can run there."
-confirmed: true
-status: idea
-phase: "aws"
-relates: [skills-hosted-access, skill-signed-in-read]
-arch:
-  lands_in: [web, aws]
-  approach: "the web plan, parked with AWS"
-  design: "none"
 accept: "A reviewed plan covers stack, security and deployment; one command deploys a throwaway stack and tears it down, leaving nothing behind; nothing is reachable without the sign-in the owner chooses."
+confirmed: true
+relates: [skill-signed-in-read]

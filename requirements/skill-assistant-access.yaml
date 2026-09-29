@@ -1,17 +1,9 @@
 id: skill-assistant-access
 title: "Access is through an AI assistant"
-workstream: architect
-added: 2026-09-28
-from: owner
-source: "the PRD, docs/prd (section nfr) (skills_catalog_prd.pdf v0.1.0, word for word)"
+phase: "1"
+source: "the PRD, Non-functional requirements"
 quote: "Discover and retrieve happen through an AI assistant acting for the developer on natural-language intent, not only a direct human-operated interface."
 want: "As Developer 2, I want discover and retrieve to happen through an AI assistant acting for me on natural-language intent, not only a direct human-operated interface, so that I can reuse skills with little effort."
-confirmed: true
-status: idea
-phase: "1"
-relates: [skill-agent-first, skill-agent-qa]
-arch:
-  lands_in: [mcp]
-  approach: "contract.md §1 (MCP face) and the companion skill"
-  design: "none"
 accept: "Exercise discover and retrieve via an AI assistant (the PRD's method): the QA plan's agent scenarios drive a real assistant in plain words, and the trace shows catalog calls before the answer."
+confirmed: true
+relates: [skill-agent-first, skill-agent-qa]
