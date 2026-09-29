@@ -5,7 +5,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { closeSync } from 'node:fs';
 import { signalGroup } from './groups.ts';
 import { fileURLToPath } from 'node:url';
-import { allRunProcesses, checkSees, compare, markedProcesses, runProcesses, snapshot, watchOn, type Difference, type Tools } from './check.ts';
+import { allRunProcesses, checkSees, compare, markedProcesses, runProcesses, snapshot, startNow, watchOn, type Difference, type Tools } from './check.ts';
 import { createMarker, type Holder, type Marker } from './marker.ts';
 import { janitor, DEFAULT_TTL_MS } from './janitor.ts';
 import type { Cleanup } from './leftovers.ts';
@@ -93,7 +93,7 @@ export async function qaRun(o: RunOptions): Promise<RunResult> {
     // The run's marker as the command's descriptor 3: what it starts keeps it (marker.ts). qa keeps its own descriptor
     // open until the leftovers are stopped: while a file is open its inode number can't go to another file, so no later
     // program's descriptor 3 can match it after the sandbox (and the marker) are deleted.
-    const made = createMarker(sb.root, Date.now());
+    const made = createMarker(sb.root, startNow(o.tools));   // the run's start as ps reads it (check.ts)
     marker = made.marker;
     held = made.fd;
     const io = o.stdio ?? 'ignore';

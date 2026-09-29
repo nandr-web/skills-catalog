@@ -150,6 +150,17 @@ export function procProcesses(runId: string, proc = '/proc', uid = process.getui
   });
 }
 
+/** When ps says a process started right now began (ms, whole seconds): the run's start, as ps will read its processes'.
+ *  Linux's ps counts a start from a boot time kept in whole seconds, and in a VM it can run seconds early, so a
+ *  process started after the run would look older than the clock's start; read from ps too, the two agree. */
+export function startNow(tools: Tools = DEFAULT_TOOLS): number {
+  const r = run('/bin/sh', ['-c', 'exec "$0" -o lstart= -p $$', tools.ps], (status) => status === 0, { LC_ALL: 'C' });   // ps's own start
+  const out = (r.stdout ?? '').trim();
+  const at = Date.parse(out);
+  if (!/^\w{3} \w{3}\s+\d+ \d\d:\d\d:\d\d \d{4}$/.test(out) || !Number.isFinite(at)) throw new CheckBlind(`the before/after check can't read when ${tools.ps} says a process started (it printed ${JSON.stringify(out.slice(0, 40))}), so it can't tell the run's processes from older ones; nothing was run`);
+  return at;
+}
+
 /** The processes holding the run's marker on descriptor 3 (marker.ts): the run's (this user's, started at or after the
  *  run did), and the others, named. `only`: just these (a re-check right before a signal). lsof failing makes the check
  *  blind, as for ports. */
@@ -193,7 +204,7 @@ export async function checkSees(runId: string, tools: Tools = DEFAULT_TOOLS): Pr
   if (!existsSync(tools.lsof)) throw new CheckBlind("this run needs lsof to check that it cleans up after itself, and it isn't installed. Install it (e.g. `sudo apt install lsof`) and run again. Nothing was run");
   // The marker process holds a marker on descriptor 3, as a run's command does (marker.ts): this file, which exists
   // already (nothing to make or delete) and which nothing else holds as its descriptor 3.
-  const made = markerOf(fileURLToPath(import.meta.url), Date.now());
+  const made = markerOf(fileURLToPath(import.meta.url), startNow(tools));
   let marker: ChildProcess | undefined;
   try {
     marker = spawn(process.execPath, ['-e', "const s = require('net').createServer().listen(0, '127.0.0.1', () => console.log(s.address().port)); setTimeout(() => process.exit(0), 60000)"], {

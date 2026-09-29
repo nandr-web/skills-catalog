@@ -5,10 +5,10 @@ import { chmodSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'no
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CheckBlind, DEFAULT_TOOLS, checkSees, checksProcesses, procProcesses, runProcesses, toolsFor } from '../src/check.ts';
+import { CheckBlind, DEFAULT_TOOLS, checkSees, checksProcesses, procProcesses, runProcesses, startNow, toolsFor } from '../src/check.ts';
 import { newRunId, qaRun } from '../src/run.ts';
 import { sandboxBase } from '../src/sandbox.ts';
-import { cleanup, machine, PROCESS_TEST_MS, qaSync, scratch } from './machine.ts';
+import { cleanup, machine, PROCESS_TEST_MS, qaSync, scratch, skewedPs } from './machine.ts';
 
 vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start processes (see PROCESS_TEST_MS)
 
@@ -35,8 +35,20 @@ describe('the process and port checks fail closed', () => {
     await expect(checkSees(newRunId(), DEFAULT_TOOLS)).resolves.toBeUndefined();
   });
 
+  // Linux's ps counts a start from a boot time kept in whole seconds, and in a VM it can run seconds early: a process
+  // started after the run then looks older than it. The run's start is read from ps too, so the two agree.
+  it('a ps whose start times run early (a Linux VM\'s) still sees its own marker process hold the marker', async () => {
+    const ps = skewedPs();
+    expect(Math.abs(startNow({ ...DEFAULT_TOOLS, ps }) - (Date.now() - 90_000))).toBeLessThan(3000);
+    await expect(checkSees(newRunId(), { ...DEFAULT_TOOLS, ps })).resolves.toBeUndefined();
+  });
+
+  it('a ps that can\'t say when a process started refuses the run', () => {
+    expect(() => startNow({ ...DEFAULT_TOOLS, ps: BLIND })).toThrow(CheckBlind);
+  });
+
   it('a ps that runs and sees nothing, or an lsof that sees no port, refuses', async () => {
-    await expect(checkSees(newRunId(), blindList())).rejects.toThrow(/can't see this run's own marker process/);
+    await expect(checkSees(newRunId(), blindList())).rejects.toThrow(/can't see this run's own marker process|can't read when .* says a process started/);   // macOS: ps is asked the run's start first
     await expect(checkSees(newRunId(), { ...DEFAULT_TOOLS, lsof: BLIND })).rejects.toThrow(/can't see the port/);
     await expect(checkSees(newRunId(), { ...DEFAULT_TOOLS, lsof: '/nonexistent/lsof' })).rejects.toThrow(CheckBlind);
   });

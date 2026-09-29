@@ -94,6 +94,9 @@ const MUTATIONS = [
   ['check.ts', "an lsof line the check can't read is skipped", 'if (odd !== undefined) throw', 'if (false) throw'],
   ['run.ts', 'a pid is signalled without being looked at again', 'if (!sys.still(pid, runId, marker, tools)) continue;', ''],
   ['run.ts', 'the re-check asks about every holder, not that pid', 'markedProcesses(marker, tools, [pid])', 'markedProcesses(marker, tools)'],
+  ['check.ts', "the check's own marker process is timed by the clock, not by ps (a Linux VM's ps runs early)", 'markerOf(fileURLToPath(import.meta.url), startNow(tools))', 'markerOf(fileURLToPath(import.meta.url), Date.now())'],
+  ['run.ts', "the run's start is the clock's, not ps's", 'createMarker(sb.root, startNow(o.tools))', 'createMarker(sb.root, Date.now())'],
+  ['check.ts', "a start ps can't give is taken anyway", "if (!/^\\w{3} \\w{3}\\s+\\d+ \\d\\d:\\d\\d:\\d\\d \\d{4}$/.test(out) || !Number.isFinite(at)) throw", 'if (false) throw'],
   ['run.ts', 'a run starts without proving the check can see', 'await checkSees(runId, o.tools);', ''],
   // the tests stop what they start (a mutant here can leave a sleep or listener that ends itself within 60 s)
   ['test/machine.ts', 'a test\'s detached child outlives the test', 'onTestFinished(() => stopGroup(child));', ''],

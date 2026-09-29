@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CheckBlind, DEFAULT_TOOLS, markedProcesses } from '../src/check.ts';
 import { qaRun, stillTheRuns, stopEscaped } from '../src/run.ts';
-import { cleanup, machine, scratch } from './machine.ts';
+import { cleanup, machine, scratch, skewedPs } from './machine.ts';
 import { createMarker, heldOnFd3, sortHolders, type Marker } from '../src/marker.ts';
 
 const MARKER: Marker = { path: '/x/.run-marker', dev: 16777231, ino: 63215361, since: Date.parse('Tue Sep 29 03:31:30 2026') };
@@ -85,6 +85,13 @@ describe('the marker\'s number stays the run\'s until the check is done', () => 
       beforeStop: ({ fd, marker }) => { const st = fstatSync(fd); seen = { nlink: st.nlink, same: st.ino === marker.ino && st.dev === marker.dev }; },
     });
     expect(seen).toEqual({ nlink: 0, same: true });
+  });
+
+  it('the run\'s start is the one ps gives a process started with it, so an early ps (a Linux VM\'s) still counts the run\'s', { timeout: 60_000 }, async () => {
+    const m = machine();
+    let since = 0;
+    await qaRun({ machine: m, command: ['/usr/bin/true'], tools: { ...DEFAULT_TOOLS, ps: skewedPs() }, beforeStop: ({ marker }) => { since = marker.since; } });
+    expect(Math.abs(since - (Date.now() - 90_000))).toBeLessThan(5000);
   });
 });
 

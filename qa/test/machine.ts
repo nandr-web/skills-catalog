@@ -3,13 +3,13 @@
 // machinery passes one explicitly, and the qa command line runs here only with `--fake-machine <dir>`.
 // This file is the only test code that starts the qa command line (test/meta.test.ts checks that).
 import { spawn, spawnSync, type ChildProcess, type SpawnOptions } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, realpathSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { onTestFinished } from 'vitest';
-import { PS, runProcesses } from '../src/check.ts';
+import { DEFAULT_TOOLS, PS, runProcesses } from '../src/check.ts';
 import { exists, groupIsOurs, signalGroup } from '../src/groups.ts';
 import { fakeMachine, type Machine } from '../src/machine.ts';
 import { RUN_ID } from '../src/safe-delete.ts';
@@ -65,6 +65,14 @@ export function scratch(prefix = 'qa-test-'): string {
   const d = realpathSync.native(mkdtempSync(join(tmpdir(), prefix)));
   made.push(d);
   return d;
+}
+
+/** The real ps, every start time it prints 90 s early (fixtures/skewed-ps.cjs), by its full path in the test's own folder. */
+export function skewedPs(): string {
+  const p = join(scratch(), 'ps');
+  writeFileSync(p, `#!/bin/sh\nexec '${process.execPath}' '${fileURLToPath(new URL('./fixtures/skewed-ps.cjs', import.meta.url))}' '${DEFAULT_TOOLS.ps}' "$@"\n`);
+  chmodSync(p, 0o700);
+  return p;
 }
 
 export type TestMachine = Machine & { dir: string };
