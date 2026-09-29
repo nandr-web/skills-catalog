@@ -34,6 +34,8 @@ export interface LocalOptions {
   named?: boolean;
   // Test seam for the read-only open: runs right before its last check for a -wal file (db.ts openReadOnly).
   beforeImmutable?: () => void;
+  // Test seam for the writing open: runs right after an older catalog's table of which versions name a file is filled.
+  afterFileIndex?: () => void;
 }
 
 export const systemClock: Clock = { now: () => new Date() };
@@ -65,9 +67,9 @@ function unreadable(dir: string, e: unknown): CatalogError {
 }
 
 // The writing open's database; a file whose tables aren't the catalog's own is refused like an unreadable one.
-function writingDb(dir: string): LocalDb {
+function writingDb(dir: string, opts: LocalOptions): LocalDb {
   try {
-    return new LocalDb(join(dir, DB_FILE));
+    return new LocalDb(join(dir, DB_FILE), opts.afterFileIndex ? { afterFileIndex: opts.afterFileIndex } : {});
   } catch (e) {
     if (e instanceof NotCatalogTables) throw unreadable(dir, e);
     throw e;
@@ -79,7 +81,7 @@ export async function openLocalCatalog(dir: string, opts: LocalOptions = {}): Pr
   if (!readOnly) mkdirSync(dir, { recursive: true, mode: 0o700 });
   const clock = opts.clock ?? systemClock;
   const ids = opts.ids ?? randomIds;
-  const db = readOnly ? readOnlyDb(dir, opts) : writingDb(dir);
+  const db = readOnly ? readOnlyDb(dir, opts) : writingDb(dir, opts);
   const meta = new SqliteMetadataStore(db);
   const blobs = new FolderBlobStore(dir, ids, clock, readOnly);
   const storage = new LocalStorage(opts.wrapMeta ? opts.wrapMeta(meta) : meta, opts.wrapBlobs ? opts.wrapBlobs(blobs) : blobs, clock);

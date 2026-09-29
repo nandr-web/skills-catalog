@@ -1,12 +1,15 @@
 // The local budgets (the QA plan §7) on a generated 10,000-skill catalog: open, publish, search, read and a file by
-// its sha256 (the files route: a stored one, and one no version names, which looks through every version), p95 over
+// its sha256 (the files route: a stored one, and one no version names), p95 over
 // 200 calls each, in-process (the MCP server adds its own transport on top). `--files n` gives each skill n files
-// (SKILL.md and n-1 notes). Builds the catalog in a fresh folder under the OS temp folder and removes it after.
+// (SKILL.md and n-1 notes). Builds the catalog in a fresh folder under the OS temp folder and removes it after;
+// `--keep` keeps it, and `--at <folder>` measures a kept one again without building (same --skills and --files). Last,
+// once: the first writing open of a catalog from before the table of which versions name a file, which fills it.
 //
-//   node scripts/perf-search.ts [--skills 10000] [--files 1] [--calls 200] [--keep]
+//   node scripts/perf-search.ts [--skills 10000] [--files 1] [--calls 200] [--keep] [--at <folder>]
 
 import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -34,7 +37,9 @@ async function timed(times: number[], fn: () => Promise<unknown>): Promise<void>
   times.push(performance.now() - t);
 }
 
-const dir = mkdtempSync(join(tmpdir(), 'skills-catalog-perf-'));
+const atIndex = process.argv.indexOf('--at');
+const at = atIndex > 0 ? process.argv[atIndex + 1] : undefined;
+const dir = at ?? mkdtempSync(join(tmpdir(), 'skills-catalog-perf-'));
 const ana = actAs('ana');
 let catalog = await openLocalCatalog(join(dir, 'catalog'));
 try {
@@ -45,7 +50,7 @@ try {
   const sha = (b64: string) => createHash('sha256').update(Buffer.from(b64, 'base64')).digest('hex');
   const publishMs: number[] = [];
   const t0 = performance.now();
-  for (const s of corpus) await timed(publishMs, () => catalog.publish({ name: s.name, files: s.files }, ana));
+  if (!at) for (const s of corpus) await timed(publishMs, () => catalog.publish({ name: s.name, files: s.files }, ana));
   const buildS = (performance.now() - t0) / 1000;
   // Every CLI call opens the catalog (schema check, outbox delivery, the orphan-blob sweep).
   const openMs: number[] = [];
@@ -70,18 +75,28 @@ try {
   for (let i = 0; i < CALLS; i++) await timed(unknownMs, () => catalog.file(createHash('sha256').update(`not stored ${i}`).digest('hex')));
   const rows = [
     ['open (a CLI call pays this once)', p95(openMs), BUDGET.search],
-    ['publish', p95(publishMs), BUDGET.publish],
+    ['publish', publishMs.length ? p95(publishMs) : undefined, BUDGET.publish],
     ['search (words)', p95(searchMs), BUDGET.search],
     ['search (no words, whole catalog)', p95(listMs), BUDGET.search],
     ['read (contents)', p95(readMs), BUDGET.read],
     ['a file by its sha256 (stored)', p95(namedMs), BUDGET.file],
-    ['a file by its sha256 (no version names it: every version looked through)', p95(unknownMs), BUDGET.file],
+    ['a file by its sha256 (no version names it)', p95(unknownMs), BUDGET.file],
   ] as const;
-  console.log(`catalog: ${SKILLS} skills of ${FILES} files, built in ${buildS.toFixed(1)} s; ${CALLS} calls each`);
-  for (const [what, ms, budget] of rows) console.log(`${ms <= budget ? 'ok  ' : 'OVER'} ${what}: p95 ${ms.toFixed(1)} ms (budget ${budget} ms)`);
-  process.exitCode = rows.every(([, ms, budget]) => ms <= budget) ? 0 : 1;
+  const measured = rows.filter(([, ms]) => ms !== undefined);
+  catalog.close();
+  const older = new DatabaseSync(join(dir, 'catalog', 'catalog.sqlite'));
+  older.exec('DROP TABLE version_files');
+  older.close();
+  const t1 = performance.now();
+  catalog = await openLocalCatalog(join(dir, 'catalog'));
+  const fillMs = performance.now() - t1;
+  console.log(`catalog: ${SKILLS} skills of ${FILES} files, ${at ? `kept at ${at}` : `built in ${buildS.toFixed(1)} s`}; ${CALLS} calls each`);
+  for (const [what, ms, budget] of measured) console.log(`${ms! <= budget ? 'ok  ' : 'OVER'} ${what}: p95 ${ms!.toFixed(1)} ms (budget ${budget} ms)`);
+  console.log(`once: the first writing open of an older catalog, filling the table of which versions name a file: ${fillMs.toFixed(0)} ms`);
+  process.exitCode = measured.every(([, ms, budget]) => ms! <= budget) ? 0 : 1;
 } finally {
   catalog.close();
-  if (!process.argv.includes('--keep')) rmSync(dir, { recursive: true, force: true });
+  // Only a catalog this run built is removed; one given with --at is always kept.
+  if (!at && !process.argv.includes('--keep')) rmSync(dir, { recursive: true, force: true });
   else console.log(`kept: ${dir}`);
 }

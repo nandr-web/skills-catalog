@@ -53,7 +53,7 @@ export class LocalStorage implements Storage {
   }
 
   async fileState(sha256: string): Promise<FileState> {
-    return this.meta.referencesBlob(sha256) ? 'named' : 'unknown';
+    return this.meta.namesFile(sha256) ? 'named' : 'unknown';
   }
 
   async commit(

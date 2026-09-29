@@ -35,8 +35,13 @@ function toRecord(r: VersionRow): VersionRecord {
 export class SqliteMetadataStore {
   private readonly local: LocalDb;
 
+  // Whether the catalog has the table of which versions name a file: a writing open always makes it; a read-only open
+  // of a catalog from before it looks through the versions instead.
+  private readonly indexed: boolean;
+
   constructor(local: LocalDb) {
     this.local = local;
+    this.indexed = local.hasTable('version_files');
   }
 
   private get db() {
@@ -78,8 +83,14 @@ export class SqliteMetadataStore {
     return (this.db.prepare('SELECT count(*) AS n FROM skills').get() as { n: number }).n;
   }
 
-  // Whether some version names this file: a scan of every version's file list (no index to migrate), with a text
-  // match first so only the rows that hold the sha256 are parsed.
+  // Whether some stored version names this file, for the file route: one lookup in the table the commit writes.
+  namesFile(sha256: string): boolean {
+    if (!this.indexed) return this.referencesBlob(sha256);
+    return this.db.prepare('SELECT 1 FROM version_files WHERE sha256 = ? LIMIT 1').get(sha256) !== undefined;
+  }
+
+  // Whether some version names this file, read from the versions themselves: what removing a file goes by, so a row
+  // missing from the table can never cost a stored file. A text match first, so only the rows that hold it are parsed.
   referencesBlob(sha256: string): boolean {
     return (
       this.db
@@ -126,6 +137,8 @@ export class SqliteMetadataStore {
           'INSERT INTO versions (name, version, fingerprint, publisher, message, published_at, files, description, tags, frontmatter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         )
         .run(v.name, version, v.fingerprint, v.publisher, v.message, v.published_at, JSON.stringify(v.files), v.description, JSON.stringify(v.tags), JSON.stringify(v.frontmatter));
+      const named = this.db.prepare('INSERT OR IGNORE INTO version_files (sha256, name, version) VALUES (?, ?, ?)');
+      for (const sha of new Set(v.files.map((f) => f.sha256))) named.run(sha, v.name, version);
       if (s) this.db.prepare('UPDATE skills SET latest = ? WHERE name = ?').run(version, v.name);
       else this.db.prepare('INSERT INTO skills (name, owners, latest) VALUES (?, ?, ?)').run(v.name, JSON.stringify([v.publisher]), version);
       this.db.prepare('INSERT INTO outbox (event) VALUES (?)').run(JSON.stringify(event(version)));

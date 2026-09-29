@@ -29,6 +29,12 @@ CREATE TABLE IF NOT EXISTS versions (
   PRIMARY KEY (name, version)
 );
 CREATE INDEX IF NOT EXISTS versions_by_fingerprint ON versions (fingerprint);
+CREATE TABLE IF NOT EXISTS version_files (
+  sha256 TEXT NOT NULL,
+  name TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  PRIMARY KEY (sha256, name, version)
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS pending_blobs (
   sha256 TEXT PRIMARY KEY,
   at TEXT NOT NULL
@@ -70,7 +76,7 @@ function distrust(db: DatabaseSync): void {
 // as SQLite does, without regard to case. `required` must be there (the read-only open's); any other of the catalog's
 // tables may be missing (the writing open makes it) but never wrong.
 export class NotCatalogTables extends Error {}
-const OWN_TABLES = ['skills', 'versions', 'outbox', 'search_cards'];
+const OWN_TABLES = ['skills', 'versions', 'version_files', 'outbox', 'search_cards'];
 const FTS_TABLE = 'search_fts';
 const REAL_TABLE = /^CREATE\s+TABLE\s/i;
 const FTS5_TABLE = /^CREATE\s+VIRTUAL\s+TABLE\s+("?)search_fts\1\s+USING\s+fts5\s*\(/i;
@@ -93,6 +99,18 @@ function checkOwnTables(db: DatabaseSync, required: readonly string[]): void {
   }
 }
 
+// Fills the table of which versions name a file from the versions themselves, one row per distinct file; a version whose
+// file list can't be read is skipped (the file is someone else's input, contract §6).
+export const FILL_FILE_INDEX = `INSERT OR IGNORE INTO version_files (sha256, name, version)
+  SELECT json_extract(f.value, '$.sha256'), v.name, v.version FROM versions v, json_each(v.files) f
+  WHERE json_valid(v.files) AND json_type(v.files) = 'array' AND json_type(f.value, '$.sha256') = 'text'`;
+
+export interface LocalDbOptions {
+  // Test seam: runs inside the writing open's transaction right after the table of which versions name a file was made
+  // and filled (a crash part-way through).
+  afterFileIndex?: () => void;
+}
+
 export class LocalDb {
   readonly db: DatabaseSync;
   // True when the search index was dropped because its tokenizer changed: the catalog rebuilds it from the versions.
@@ -100,7 +118,7 @@ export class LocalDb {
 
   // A path opens a catalog to write: the file is made if missing, switched to WAL and given the schema (':memory:' is an
   // empty one). An open DatabaseSync is read as it is: no WAL switch, schema or index check (the read commands' open).
-  constructor(file: string | DatabaseSync) {
+  constructor(file: string | DatabaseSync, opts: LocalDbOptions = {}) {
     if (file instanceof DatabaseSync) {
       this.db = file;
       this.indexReset = false;
@@ -121,9 +139,20 @@ export class LocalDb {
       const fts = this.db.prepare("SELECT sql FROM sqlite_master WHERE name = 'search_fts'").get() as { sql: string } | undefined;
       const stale = fts !== undefined && !fts.sql.includes(`'${TOKENIZE}'`);
       if (stale) this.db.exec('DROP TABLE search_fts; DELETE FROM search_cards;');
+      // A catalog from before the table gets it made and filled here, in this same transaction, so a crash leaves
+      // neither and the next writing open does it again.
+      const indexed = this.hasTable('version_files');
       this.db.exec(SCHEMA);
+      if (!indexed) {
+        this.db.exec(FILL_FILE_INDEX);
+        opts.afterFileIndex?.();
+      }
       return stale;
     });
+  }
+
+  hasTable(name: string): boolean {
+    return this.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) !== undefined;
   }
 
   // Switching a fresh file to WAL takes a moment's exclusive lock, and SQLite answers "database is locked" there at
