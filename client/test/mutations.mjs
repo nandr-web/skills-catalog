@@ -81,6 +81,21 @@ const MUTATIONS = [
   ['machine/publish-folder.ts', 'publish always checks as MCP (the person\'s CLI override is refused)', "validateInput<Input>('publish_skill_to_catalog', args, ctx.face)", "validateInput<Input>('publish_skill_to_catalog', args, 'mcp')"],
   // the core's words for a command the person runs (golden command_quoting)
   ['core:render.ts', 'a folder in a command isn\'t shell-quoted', "{ folder: shellQuote(String(d['folder'])) }", "{ folder: String(d['folder']) }"],
+  // the installer's folders (contract §4.5; installer-race.test.ts)
+  ['machine/installer.ts', 'a folder others can write counts as private', '  if ((s.mode & 0o002n) !== 0n) return false;\n', ''],
+  ['machine/installer.ts', 'a uid of 0 is read as no uid (root in a container)', '  if (uid === undefined) return true;', '  if (!uid) return true;'],
+  ['machine/installer.ts', 'the folder above .claude isn\'t checked', "  if (open) throw notPrivate(root, target, r, target === 'user');\n", ''],
+  ['machine/installer.ts', 'a folder on the way that can\'t be made is a failure of the tool', "      if (!UNMAKEABLE.has((e as NodeJS.ErrnoException).code ?? '')) throw e;", '      throw e;'],
+  ['machine/installer.ts', 'a moved-aside folder is removed by its path alone', '  if (!isCopy(lstatOf(path), id)) return false;\n', ''],
+  ['machine/installer.ts', 'staging isn\'t looked at again before its .gitignore', '    stagingThere();\n    try {', '    try {'],
+  ['machine/installer.ts', 'staging isn\'t looked at again before the temp folder is made', '  stagingThere();\n  const tmp', '  const tmp'],
+  ['machine/installer.ts', 'a .gitignore already in a new staging folder is a failure of the tool', "      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;\n      failed ??= stagingDir;", '      throw e;\n      failed ??= stagingDir;'],
+  // installing over an installed copy (held-table.test.ts)
+  ['machine/installer.ts', 'the same version from another catalog replaces the installed copy', 'const otherCatalog = existing !== undefined && existing.catalog !== ctx.settings.catalog;', 'const otherCatalog = false;'],
+  ['machine/installer.ts', 'a held copy from another catalog at the same version isn\'t found by --accept', 'e.catalog === ctx.settings.catalog) return { installed: e.version };', 'true) return { installed: e.version };'],
+  // one writer at a time (lock-race.test.ts)
+  ['machine/lock.ts', 'a holder\'s start is read as a local time', "['-o', 'etime=', '-p', String(pid)]", "['-o', 'lstart=', '-p', String(pid)]"],
+  ['machine/lock.ts', 'a live holder is taken for a stale one', "    if ((e as NodeJS.ErrnoException).code === 'ESRCH') return true;", '    return true;'],
 ];
 
 // A mutant is caught by its first failing test, so mutant runs stop there (--bail 1); the baseline runs everything.

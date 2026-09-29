@@ -602,6 +602,37 @@ describe('the staging folder swapped right after its check', () => {
     });
   }
 
+  // A staging folder already there (a kept copy in it) has no .gitignore to write: the look before the temp folder is made
+  // is the one that catches a link swapped in right after its check, before anything is made where it points.
+  it('a staging folder already there, swapped for a link right after its check: nothing is ever made where it points', async () => {
+    const p = place();
+    await publish(p, 'alpha', 'Body.\n');
+    const staging = stagingDir(p);
+    race.fs.mkdirSync(join(p.dir, 'project', '.claude', 'skills'), { recursive: true });
+    race.fs.mkdirSync(staging, { mode: 0o700 });
+    race.fs.writeFileSync(join(staging, '.gitignore'), '*\n');
+    race.fs.mkdirSync(join(staging, 'kept'));
+    const theirs = join(p.dir, 'theirs');
+    race.fs.mkdirSync(theirs);
+    let looks = 0;
+    let madeInTheirs = false;
+    race.stats = (at) => {
+      if (at !== staging || ++looks !== 1) return undefined;
+      race.fs.renameSync(staging, join(p.dir, 'aside'));
+      race.fs.symlinkSync(theirs, staging);
+      return undefined;
+    };
+    race.onLstat = () => void (madeInTheirs ||= race.fs.readdirSync(theirs).length > 0);
+    let r: unknown;
+    try {
+      r = await install(ctxFor(p), { name: 'alpha', target: 'project' }).catch((e: unknown) => e);
+    } finally {
+      clearHooks();
+    }
+    expect(refusalOf(r)).toEqual({ code: 'target_changed', data: { path: staging, temp: true } });
+    expect([madeInTheirs, race.fs.readdirSync(theirs)]).toEqual([false, []]);
+  });
+
   it('in an update, the skill it happened to is refused and the next one still updates', async () => {
     const p = place();
     const ctx = ctxFor(p);
