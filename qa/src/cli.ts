@@ -16,7 +16,7 @@ import { janitor } from './janitor.ts';
 import type { Cleanup } from './leftovers.ts';
 import { machineFor, type Machine } from './machine.ts';
 import { UnsafeError } from './safe-delete.ts';
-import { CheckBlind } from './check.ts';
+import { CheckBlind, checksProcesses } from './check.ts';
 import { traceCheck } from './trace-check.ts';
 import { newRunId, qaRun, type RunResult } from './run.ts';
 import { childEnv, FailSafeError } from './sandbox.ts';
@@ -68,7 +68,7 @@ const USAGE = `qa: the skills catalog's QA tools
 
 /** A run's last line: its status, and that nothing was left behind when that's so. */
 function statusLine(name: string, r: RunResult): string {
-  const nothing = process.platform === 'darwin' ? ', nothing left behind' : '; files, settings and ports unchanged; processes not checked on this system yet';
+  const nothing = checksProcesses(process.platform) ? ', nothing left behind' : '; files, settings and ports unchanged; processes not checked on this system yet';
   return `qa ${name} ${r.runId}: ${r.status}${r.differences.length ? '' : nothing}`;
 }
 

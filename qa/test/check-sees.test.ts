@@ -5,7 +5,7 @@ import { chmodSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'no
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CheckBlind, DEFAULT_TOOLS, checkSees, procProcesses, runProcesses } from '../src/check.ts';
+import { CheckBlind, DEFAULT_TOOLS, checkSees, checksProcesses, procProcesses, runProcesses, toolsFor } from '../src/check.ts';
 import { newRunId, qaRun } from '../src/run.ts';
 import { sandboxBase } from '../src/sandbox.ts';
 import { cleanup, machine, PROCESS_TEST_MS, qaSync, scratch } from './machine.ts';
@@ -91,6 +91,12 @@ describe('the process list on Linux, from /proc', () => {
 
   it('only this user\'s: another user\'s process is never listed', () => {
     expect(procProcesses('20260929T010203Z-abcd1234', tree(), process.getuid!() + 1)).toEqual([]);
+  });
+
+  it('Linux lists from /proc and macOS with ps, and on both a run can say nothing was left behind', () => {
+    expect(toolsFor('linux').proc).toBe('/proc');
+    expect(toolsFor('darwin').proc).toBeUndefined();
+    expect([checksProcesses('linux'), checksProcesses('darwin'), checksProcesses('freebsd')]).toEqual([true, true, false]);
   });
 
   it('a /proc that can\'t be read makes the check blind', () => {

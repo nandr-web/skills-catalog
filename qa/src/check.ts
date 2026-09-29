@@ -30,7 +30,11 @@ export type Watch = Roots & {
 export type Tools = { ps: string; lsof: string; proc?: string };
 const system = (...paths: string[]) => paths.find((p) => existsSync(p)) ?? paths[0]!;
 export const PS = system('/bin/ps', '/usr/bin/ps');
-export const DEFAULT_TOOLS: Tools = { ps: PS, lsof: system('/usr/sbin/lsof', '/usr/bin/lsof', '/sbin/lsof'), ...(process.platform === 'linux' ? { proc: '/proc' } : {}) };
+/** The tools for a platform: on Linux, a run's processes come from /proc. */
+export const toolsFor = (platform: NodeJS.Platform): Tools => ({ ps: PS, lsof: system('/usr/sbin/lsof', '/usr/bin/lsof', '/sbin/lsof'), ...(platform === 'linux' ? { proc: '/proc' } : {}) });
+export const DEFAULT_TOOLS: Tools = toolsFor(process.platform);
+/** Whether the check lists a run's processes on this platform (macOS with ps -E, Linux from /proc). */
+export const checksProcesses = (platform: NodeJS.Platform): boolean => platform === 'darwin' || platform === 'linux';
 
 /** The check can't see this machine's processes or ports: a run is refused, never passed blind. */
 export class CheckBlind extends Error {

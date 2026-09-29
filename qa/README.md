@@ -109,8 +109,8 @@ Options go after `--`, so npm passes them on:
 | `npm run demo -- --server "<command>"` | Another catalog MCP server (its words split at spaces, the first an absolute path) |
 
 The demo runs inside `qa run`: its own tmux server (never yours) in a fresh sandbox, panes whose `PATH` is only
-`/usr/bin` and `/bin` and whose home is inside the sandbox, and at the end the check that nothing outside the sandbox changed. On Linux, the
-part of that check that looks for leftover processes is still being added.
+`/usr/bin` and `/bin` and whose home is inside the sandbox, and at the end the check that nothing outside the sandbox
+changed, leftover processes and open ports included (on Linux, the processes are read from /proc).
 
 ## How it stays safe
 
