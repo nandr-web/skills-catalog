@@ -1,6 +1,6 @@
 # Requirements
 
-**40 requirements:** 5 built, 23 being built, 4 in phase 2, 3 for AWS, 4 later, 1 plan.
+**44 requirements:** 5 built, 24 being built, 6 in phase 2, 1 in phase 3, 3 for AWS, 4 later, 1 plan.
 
 Every requirement, in the PRD's or the owner's words, confirmed by the owner (2 still awaiting the owner's confirmation, marked below); where it lives in the design; and the
 automated checks that hold it. Generated from the requirement list and the QA plan's traceability file, so it can't drift.
@@ -49,7 +49,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - interface: secret_suspected with path and line; the ignore list skipped and reported; the MCP schema has no override (being built)
   - interface: secret_suspected's text never repeats the secret's value (nor the sentinel) (being built)
   - agent: A7s no tool call carries the override (being built)
-  - unit: the scan's shapes (a71b627, 24ba09b): each secret_scan line gives its kind (tried in the pinned order) or nothing; a match stands alone on its kind's alphabet; placeholders, bare prefixes and a URL with no password aren't flagged; the \b misses after _ or a quote are caught; password_or_token keys per 9fa56a6 (a whole part, excluded next parts, :=, =>, --flags) and values that refer to a secret (env reads, calls, dotted names) not flagged
+  - unit: the scan's shapes (a71b627, 24ba09b, 9fa56a6, bad7db3, d6e6a87; with gitlab, huggingface, sendgrid, npm, google_oauth tokens, pgpass lines, base64 auth): each secret_scan line gives its kind (tried in the pinned order) or nothing; a match stands alone on its kind's alphabet; placeholders, bare prefixes and a URL with no password aren't flagged; the \b misses after _ or a quote are caught; password_or_token keys per 9fa56a6 (a whole part, excluded next parts, :=, =>, --flags) and values that refer to a secret (env reads, calls, dotted names) not flagged
   - unit: UTF-16 with a BOM and Latin-1 files are decoded and scanned, lines counted in the decoded text; UTF-16 without a BOM and any file with a NUL aren't
   - unit: every joined planted value (join) is asserted to be what the scan flags, so a broken join can't pass
   - storage: the core's publish_version runs the same secret scan: a planted secret gives secret_suspected {path, line, kind} and stores nothing, its value never echoed; allow_suspected_secrets: true publishes; no MCP schema carries that field
@@ -135,7 +135,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Done when:** From FR-02 and UC-02: through an AI assistant, in natural language, a developer can find published skills that match a described need; each result identifies the skill (at least name and description); when nothing matches, the assistant clearly says so.
 - **Where it lives:** the core, the MCP server; contract §2
 - **Checked by:**
-  - interface: search recall@5 = 1.0 on the must-pass set for the adapter's mode (keyword-gate-any for any-word, the contract's) and on each semantic-gap reformulation
+  - interface: search recall@5 = 1.0 on the must-pass set for the adapter's mode (the any-word mode, the contract's) and on each semantic-gap reformulation
   - interface: semantic-gap misses reported (not pass/fail) so a later semantic search shows its gain
   - interface: every card lists matched_words; the common-words list equals the adapter's
   - interface: every page says catalog_size 64 on the corpus; total_matches equals the distinct cards across all pages, and is 0 exactly when match is none
@@ -245,16 +245,25 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 > As Developer 2, I want auto-updates as a user option, global and overridable per skill, as part of the initial delivery, so that my installed skills stay the same as the catalog.
 
 - **Source:** the owner's notes on the PRD
-- **Done when:** A global update policy with per-skill overrides; the update hold's table (contract.md §5.3) passes the QA plan's policy goldens; an update replaces the installed copy (the owner's stance for now: local edits not shared upstream may be lost, as with other installed tools; handling them is an open question); with auto-updates on, every surface (session start, the assistant, the CLI) asks the person only when an update carries a flag, and while the assistant runs commands without asking (auto mode, bypass, the sandbox's auto-allow or a broad Bash rule), text that tells it to run commands, fetch and run, install packages or read secrets is flagged (the owner's decisions).
+- **Done when:** A global update policy with per-skill overrides; the update hold's table (contract.md §5.3) passes the QA plan's policy goldens; installing a newer version over a pinned or notify skill waits for the person's yes, as an update does (the owner's decision); an update replaces the installed copy (the owner's stance for now: local edits not shared upstream may be lost, as with other installed tools; handling them is an open question); with auto-updates on, every surface (session start, the assistant, the CLI) asks the person only when an update carries a flag, and while the assistant runs commands without asking (auto mode, bypass, the sandbox's auto-allow or a broad Bash rule), text that tells it to run commands, fetch and run, install packages or read secrets is flagged (the owner's decisions).
 - **Where it lives:** the installer; contract §3, §5.3
 - **Checked by:**
   - unit: held-update table
+  - interface: update as a process exits 1 when any skill's update is refused, beside one held, flagged or updated too, and a refusal outranks a hold in its use event's outcome; held only, updated only or nothing to do exits 0 (histories.yaml update_exit)
   - interface: a damaged lock.json or config.json (not JSON, a wrong type anywhere, a policy outside auto/notify/pin) makes install, update, accept, list, set policy and setup refuse with invalid_local_file {file, why, path}; the file stays byte-identical and its contents never show; a mistyped pin never updates; teardown still runs and the session-start hook prints one fixed line (policy.yaml local_files)
+  - interface: one writer at a time on lock.json: a held lock is retried for 5 s, then lock_busy {path, pid} changing nothing; a gone holder, a reused pid or an old unreadable lock is stale and taken; a link, a folder, another user's lock or one replaced after the check is never removed; the lock goes after a failed change too; two writers keep both entries; reads take no lock (histories.yaml lock_writer)
+  - interface: install and update decide again under the lock from the fresh entry, with only the version already fetched: another catalog now is held other_catalog, pin or notify now held, an equal or newer version unchanged, a different older one flagged against itself (its files the only read under the lock); removed meanwhile is left out, or not_installed when named; an accept whose entry changed is conflict {name, held: true} (histories.yaml under_lock)
+  - interface: a context_cost_budget in config.json that isn't a positive whole number below 2^53 is a damaged file: not_a_budget for a bad number, wrong_shape for a non-number, 5000.0 accepted; setup's --config refuses one with invalid_request too_low, not_integer or too_high, exit 1, writing nothing (policy.yaml local_files, setup_budget)
   - unit: the diff's risk_flags for each version pair (installed, new): runs_at_load by the wide detector (any ! right before a backtick, anywhere: a tab, a no-break space, KEY=, an HTML comment, a code block, the frontmatter; a fence of 3+ backticks or tildes then !; one per block at its opening line, an edit inside an unchanged block included), capability_frontmatter per key off the safe list (hooks, context, agent, allowed-tools widened, disable-model-invocation removed, an unknown key), instructions_changed only when the new version grants (a key neither safe nor non-granting, or an injected command) for a file added, changed (bytes or mode) or removed and for SKILL.md when its body or any safe key changed, runnable_file for an executable, a script or a command position (python, uv run, bun, deno, '. x', ${CLAUDE_SKILL_DIR}/x, an injected command's target), and {path: SKILL.md, line, to, detail: runs a file outside the skill} for a target outside it, with or without a grant; one reason per file, field/from/to/line carried; the safe list raises nothing without a grant
+  - unit: fences for runs_at_load: a ! fence inside another block starts its own command; a block ends only at a line indented at most three spaces of its character, at least as many, then only spaces or tabs, else runs to the end; in a file whose new version has a ! block, each fence line added, changed or removed is flagged (a removed one where it stood, adjacent ones once), except one opening or closing a flagged block; removing the only ! block raises nothing
+  - unit: past 4,000 differing lines the version diff gives up and every fence line of the new version counts as changed, one flag per block
   - unit: the review matrix: six changes × a skill that grants something or nothing × update or first install; every cell held, except new body steps without a grant (applied or installed: Claude Code's own prompts stay the person's say)
   - unit: flag text (path, from, to, detail) is plain text: invisible characters escaped as \u{XXXX}, then cut to 200 code points ending in …; never rendered as markdown on any face
   - interface: the installer decides from bytes it checked: each fetched version re-validated with today's rules; the newest failing one is refused {version, error} with the lock and installed copy unchanged and no fallback to an older version; fetched bytes that don't match the fingerprint give fingerprint_mismatch {name, version, expected, got} (install: the error; update: refused), the fetched copy deleted and nothing written; an unparseable SKILL.md is refused, never diffed as empty; a name reserved since is invalid_name at install and every sync; a catalog row that claims no flags still gives the installer's own flags
   - interface: install and update refuse a link anywhere below the target's root (.claude, .claude/skills, the skill's own folder; user or project) with target_symlink {path: the first link}, never writing through it and leaving the lock unchanged; the assistant home itself may be a link
+  - interface: replacing an installed copy removes nothing by path unless its identity {dev, ino, birth} is the recorded one, and deletes the old copy only after every check passed: an entry without copy, a reused inode or a recreated real folder is kept in staging (named in updated or installed) while the new copy goes in; a recreated intact folder with nothing newer only has its identity recorded; staging lives on the target's volume (0700, .gitignore *, removed when that is all it holds), so a project on another volume installs (that row needs a second volume under the guard's conditions)
+  - interface: something swapped in after the checks (a link at the skill's path, the skills folder, .claude or the staging folder replaced, or the placed copy's folder moved) gives target_changed {path: the first path that failed, staging?, elsewhere?, temp?}: moved back or kept and named, never deleted through a link, never a reported success; a first install refuses without moving what it finds
+  - interface: target_not_private {path, target, home?, own}: the staging folder, .claude and .claude/skills (a project's too) owned by the user and not writable by others (group-writable only when gid equals the uid and isn't 20), the home above .claude too; a project folder must be the person's or root's, group-writable only for the person's private group or with the sticky bit, world-writable only with the sticky bit; the call changes nothing
   - interface: the expected fingerprint is the version list's (the lock's for the installed side), never the fetch's own claim: a fetch serving other bytes and claiming their fingerprint gives fingerprint_mismatch
   - interface: new_publisher compares the lock's recorded publisher (the catalog's for an older entry) with the new version's, also when the installed version fails today's rules; a first install never has it
   - unit: safe_frontmatter_keys and non_granting_keys are fixed in code: a config can remove keys, and a config that adds one is refused by setup (invalid_request {field}, nothing written, exit 1)
@@ -274,6 +283,9 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - interface: MCP schemas: install_shared_skill has no policy input (the CLI's --policy only), update_installed_skills has no latest, accept_held_update requires flags
   - interface: a skill not installed here is not_installed {name}: set_skill_update_policy, and update_installed_skills names (the first such name in order, before any fetch); nothing changes
   - unit: accept_flagged_updates never applies to a first install (the first-install row with accept: true stays held: flagged)
+  - interface: an install over an installed skill follows its policy like an update: pinned or tell-me-first holds any other version, older included, as held pin or notify with target, version and from until the person says yes, and accepting keeps the policy at the new version; on auto an unflagged one installs and a flagged one is held even with accept_flagged_updates on; the same version is unchanged {version} when the copy is intact, else written again
+  - interface: a lock entry from another catalog is held other_catalog {was, now} on update and on install, before pin, notify and the flags and even with accept_flagged_updates on; accepting records the catalog in use
+  - interface: accept_held_update takes name, target, version and confirm from the held result: another target, an older or a missing version is conflict and changes nothing; a missing target or version is invalid_request {field, why: required}
   - unit: while a permissive mode is detected, each added or changed line that tells the assistant to run a shell command, fetch and run, install packages or read secrets gets command_instruction {path, line, instruction, mode} (after runnable_file and runs_at_load, before instructions_changed); none in the default mode; harmless prose gets none; a first install is checked too; the flag holds like any other, and accept_flagged_updates lets it through (command_instruction_cases); pinned and cooldown skills ask nothing and give no notice
   - unit: settings to mode as Claude Code reads them (permissive_settings): managed, the project's settings.local and settings, then the user's; one value from the highest file, allow lists merged; auto and bypass only from user or managed settings; the sandbox's auto-allow on by default; Bash, Bash(*), PowerShell(*) and a rule with a * whose first word holds the * or is a runner (interpreters, wrappers like env and sudo) count, Bash(git *) and one exact command don't; several modes give the first in order; fake home, project and managed root only
   - interface: a hold with no risk flags (notify, a cooldown) is taken with flags: [] and refused with any kind named
@@ -307,6 +319,60 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - interface: locally with no acting identity, a publish is unauthenticated and its sentence points to setup's me or --as
   - interface: a developer name follows the skill-name rule: --as with a space or a line feed is invalid_request {field: --as, why: not_a_developer_name} (a request field names itself); a bad SKILLS_AS, MCP config name or setup me is invalid_developer_setting {setting}, saying to fix the setting; nothing runs
 
+### Risky updates wait for my yes on every assistant
+
+> As a developer, I want risky updates to wait for my yes on every assistant I use, so that nothing risky reaches my assistant unasked.
+
+- **Source:** the owner's decision (`docs/decisions.md`)
+- **Done when:** On every supported assistant, a flagged update is held until the person says yes; the assistant can't give that yes without asking the person (its own permission prompt, or an add-on where it has none).
+- **Where it lives:** the installer, the CLI, the MCP server; contract §5.3
+- **Checked by:**
+  - unit: held-update table
+  - interface: update as a process exits 1 when any skill's update is refused, beside one held, flagged or updated too, and a refusal outranks a hold in its use event's outcome; held only, updated only or nothing to do exits 0 (histories.yaml update_exit)
+  - interface: a damaged lock.json or config.json (not JSON, a wrong type anywhere, a policy outside auto/notify/pin) makes install, update, accept, list, set policy and setup refuse with invalid_local_file {file, why, path}; the file stays byte-identical and its contents never show; a mistyped pin never updates; teardown still runs and the session-start hook prints one fixed line (policy.yaml local_files)
+  - interface: one writer at a time on lock.json: a held lock is retried for 5 s, then lock_busy {path, pid} changing nothing; a gone holder, a reused pid or an old unreadable lock is stale and taken; a link, a folder, another user's lock or one replaced after the check is never removed; the lock goes after a failed change too; two writers keep both entries; reads take no lock (histories.yaml lock_writer)
+  - interface: install and update decide again under the lock from the fresh entry, with only the version already fetched: another catalog now is held other_catalog, pin or notify now held, an equal or newer version unchanged, a different older one flagged against itself (its files the only read under the lock); removed meanwhile is left out, or not_installed when named; an accept whose entry changed is conflict {name, held: true} (histories.yaml under_lock)
+  - interface: a context_cost_budget in config.json that isn't a positive whole number below 2^53 is a damaged file: not_a_budget for a bad number, wrong_shape for a non-number, 5000.0 accepted; setup's --config refuses one with invalid_request too_low, not_integer or too_high, exit 1, writing nothing (policy.yaml local_files, setup_budget)
+  - unit: the diff's risk_flags for each version pair (installed, new): runs_at_load by the wide detector (any ! right before a backtick, anywhere: a tab, a no-break space, KEY=, an HTML comment, a code block, the frontmatter; a fence of 3+ backticks or tildes then !; one per block at its opening line, an edit inside an unchanged block included), capability_frontmatter per key off the safe list (hooks, context, agent, allowed-tools widened, disable-model-invocation removed, an unknown key), instructions_changed only when the new version grants (a key neither safe nor non-granting, or an injected command) for a file added, changed (bytes or mode) or removed and for SKILL.md when its body or any safe key changed, runnable_file for an executable, a script or a command position (python, uv run, bun, deno, '. x', ${CLAUDE_SKILL_DIR}/x, an injected command's target), and {path: SKILL.md, line, to, detail: runs a file outside the skill} for a target outside it, with or without a grant; one reason per file, field/from/to/line carried; the safe list raises nothing without a grant
+  - unit: fences for runs_at_load: a ! fence inside another block starts its own command; a block ends only at a line indented at most three spaces of its character, at least as many, then only spaces or tabs, else runs to the end; in a file whose new version has a ! block, each fence line added, changed or removed is flagged (a removed one where it stood, adjacent ones once), except one opening or closing a flagged block; removing the only ! block raises nothing
+  - unit: past 4,000 differing lines the version diff gives up and every fence line of the new version counts as changed, one flag per block
+  - unit: the review matrix: six changes × a skill that grants something or nothing × update or first install; every cell held, except new body steps without a grant (applied or installed: Claude Code's own prompts stay the person's say)
+  - unit: flag text (path, from, to, detail) is plain text: invisible characters escaped as \u{XXXX}, then cut to 200 code points ending in …; never rendered as markdown on any face
+  - interface: the installer decides from bytes it checked: each fetched version re-validated with today's rules; the newest failing one is refused {version, error} with the lock and installed copy unchanged and no fallback to an older version; fetched bytes that don't match the fingerprint give fingerprint_mismatch {name, version, expected, got} (install: the error; update: refused), the fetched copy deleted and nothing written; an unparseable SKILL.md is refused, never diffed as empty; a name reserved since is invalid_name at install and every sync; a catalog row that claims no flags still gives the installer's own flags
+  - interface: install and update refuse a link anywhere below the target's root (.claude, .claude/skills, the skill's own folder; user or project) with target_symlink {path: the first link}, never writing through it and leaving the lock unchanged; the assistant home itself may be a link
+  - interface: replacing an installed copy removes nothing by path unless its identity {dev, ino, birth} is the recorded one, and deletes the old copy only after every check passed: an entry without copy, a reused inode or a recreated real folder is kept in staging (named in updated or installed) while the new copy goes in; a recreated intact folder with nothing newer only has its identity recorded; staging lives on the target's volume (0700, .gitignore *, removed when that is all it holds), so a project on another volume installs (that row needs a second volume under the guard's conditions)
+  - interface: something swapped in after the checks (a link at the skill's path, the skills folder, .claude or the staging folder replaced, or the placed copy's folder moved) gives target_changed {path: the first path that failed, staging?, elsewhere?, temp?}: moved back or kept and named, never deleted through a link, never a reported success; a first install refuses without moving what it finds
+  - interface: target_not_private {path, target, home?, own}: the staging folder, .claude and .claude/skills (a project's too) owned by the user and not writable by others (group-writable only when gid equals the uid and isn't 20), the home above .claude too; a project folder must be the person's or root's, group-writable only for the person's private group or with the sticky bit, world-writable only with the sticky bit; the call changes nothing
+  - interface: the expected fingerprint is the version list's (the lock's for the installed side), never the fetch's own claim: a fetch serving other bytes and claiming their fingerprint gives fingerprint_mismatch
+  - interface: new_publisher compares the lock's recorded publisher (the catalog's for an older entry) with the new version's, also when the installed version fails today's rules; a first install never has it
+  - unit: safe_frontmatter_keys and non_granting_keys are fixed in code: a config can remove keys, and a config that adds one is refused by setup (invalid_request {field}, nothing written, exit 1)
+  - interface: a first install is held like an update whatever the policy: a flagged skill gives held: flagged with a confirm, accept_held_update installs it; an unflagged one installs
+  - interface: update_installed_skills replaces a hand-edited copy and records version and fingerprint in the lock (phase 1: the owner's decision)
+  - agent: A10 update my skills
+  - agent: A10u an unattended update holds a flagged change
+  - agent: A10n the hold is reported when the next session starts: a system message names it, and the assistant relays it
+  - setup: the session-start hook: while an update is held it prints JSON with systemMessage and additionalContext; with nothing held it prints nothing
+  - setup: the session-start hook always exits 0, even with the catalog missing or broken, and stops syncing after 2 seconds
+  - setup: the 'synced recently' stamp stops a second sync at MCP start
+  - setup: teardown removes the hook and restores settings.json byte for byte
+  - manual: how the interactive terminal shows the session-start message, looked at once (manual)
+  - agent: A10g a held update is relayed to the person and never accepted by the assistant
+  - interface: accept_held_update with the held result's confirm installs that version, and the lock records the flags it let through
+  - interface: accept_held_update's flags[] is compared with the held flags as a set (order and repeats ignored); a missing or extra kind is conflict and changes nothing (the accept_cases)
+  - interface: MCP schemas: install_shared_skill has no policy input (the CLI's --policy only), update_installed_skills has no latest, accept_held_update requires flags
+  - interface: a skill not installed here is not_installed {name}: set_skill_update_policy, and update_installed_skills names (the first such name in order, before any fetch); nothing changes
+  - unit: accept_flagged_updates never applies to a first install (the first-install row with accept: true stays held: flagged)
+  - interface: an install over an installed skill follows its policy like an update: pinned or tell-me-first holds any other version, older included, as held pin or notify with target, version and from until the person says yes, and accepting keeps the policy at the new version; on auto an unflagged one installs and a flagged one is held even with accept_flagged_updates on; the same version is unchanged {version} when the copy is intact, else written again
+  - interface: a lock entry from another catalog is held other_catalog {was, now} on update and on install, before pin, notify and the flags and even with accept_flagged_updates on; accepting records the catalog in use
+  - interface: accept_held_update takes name, target, version and confirm from the held result: another target, an older or a missing version is conflict and changes nothing; a missing target or version is invalid_request {field, why: required}
+  - unit: while a permissive mode is detected, each added or changed line that tells the assistant to run a shell command, fetch and run, install packages or read secrets gets command_instruction {path, line, instruction, mode} (after runnable_file and runs_at_load, before instructions_changed); none in the default mode; harmless prose gets none; a first install is checked too; the flag holds like any other, and accept_flagged_updates lets it through (command_instruction_cases); pinned and cooldown skills ask nothing and give no notice
+  - unit: settings to mode as Claude Code reads them (permissive_settings): managed, the project's settings.local and settings, then the user's; one value from the highest file, allow lists merged; auto and bypass only from user or managed settings; the sandbox's auto-allow on by default; Bash, Bash(*), PowerShell(*) and a rule with a * whose first word holds the * or is a runner (interpreters, wrappers like env and sudo) count, Bash(git *) and one exact command don't; several modes give the first in order; fake home, project and managed root only
+  - interface: a hold with no risk flags (notify, a cooldown) is taken with flags: [] and refused with any kind named
+  - setup: setup reads the assistant's permission settings, and its summary says when a permissive mode will hold every update, naming the mode; the session-start notice names it as the reason
+  - interface: a newer version published between hold and accept gives conflict and changes nothing; a confirm for another name or version is refused
+  - setup: setup's allowed tools never include accept_held_update, preview_skill_publish, publish_skill_to_catalog or set_skill_update_policy, nor the CLI's preview or publish commands (24ba09b); update_installed_skills is pre-allowed through MCP, and through the CLI only Bash(skills-catalog update) exactly: update <name>, --accept and --latest still ask
+  - setup: accept_flagged_updates is set only by the terminal wizard: true from --config, --yes or the no-terminal mode is refused (invalid_request {field: accept_flagged_updates}, nothing written, exit 1); while it's on, the session-start notice says so
+
 ### Everything local by default; AWS is an option, off
 
 > As a developer, I want everything to run locally by default, with the guided setup offering to set it up in AWS as an option that's off by default, so that nothing needs an account or a server unless I choose it.
@@ -337,6 +403,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - cleanup: a fake assistant and the MCP server started from the run's own mcp.json each record their environment: no planted marker, and only allow-listed names
   - agent: every live run: a marker planted in the runner's environment never appears in any tool result or answer
   - unit: fail-safe guard is on in every run, and trips when HOME points elsewhere (real home from the OS)
+  - unit: the harness's own chmod, rename, link, recreate and rm go through the fail-safe too: a path equal to the real home (also with a trailing slash or /.) or outside the sandbox is refused before any system call (a spy on the injected file-system functions sees zero calls)
   - unit: safe deletion: a symlinked base deletes nothing; a symlinked run folder is skipped; a run id with '..' is rejected; a live run is kept; an entry without run.json is skipped, never judged by mtime
   - unit: safe deletion outside the base: only the run's own leftovers; a non-UUID session id, a slug outside the base's prefix or colliding with another run, and a path differing only in case are refused
   - unit: tests of teardown and the janitor use a fake home and tmp root; a test resolving a deletion path under the real ones fails
@@ -352,6 +419,10 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Checked by:**
   - unit: every flagged fixture gets exactly its expected findings, each grounded (path, line, evidence on that line)
   - unit: every valid fixture gets a review with no findings
+  - unit: prompt_injection {path, line, detail}: one per added or changed markdown line (every line on a first install, front matter included), the first rule naming it: hidden characters (not tab, space separators, emoji selectors and joiners, or a file's leading BOM), ignore previous instructions, addressed to the assistant, curl piped to a shell, sends a local file or variable, text hidden in an HTML comment (a multi-line one at its opening line); stated misses get no flag
+  - unit: context_cost {path: SKILL.md, detail: about N tokens (budget M)}: over the budget in estimated tokens (UTF-8 bytes / 4, rounded up) and grown in estimated tokens since the installed version, or over on a first install; the budget from config
+  - perf: the review stays linear: a pathological line per rule, 100 KB to 400 KB, at most 2.5 times slower per doubling, under a 10 s hang guard
+  - unit: the reviewer's flags join the diff's in each update pair whose new version plants a flagged line
   - unit: the 64-skill discovery corpus gets no findings (no noise on good skills)
   - interface: a card carries quality only when the skill is flagged; read returns reviews; install and update return advisories
   - unit: one reason per file: a script path gets runnable_file only, never also non_markdown
@@ -380,6 +451,10 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Checked by:**
   - unit: every flagged fixture gets exactly its expected findings, each grounded (path, line, evidence on that line)
   - unit: every valid fixture gets a review with no findings
+  - unit: prompt_injection {path, line, detail}: one per added or changed markdown line (every line on a first install, front matter included), the first rule naming it: hidden characters (not tab, space separators, emoji selectors and joiners, or a file's leading BOM), ignore previous instructions, addressed to the assistant, curl piped to a shell, sends a local file or variable, text hidden in an HTML comment (a multi-line one at its opening line); stated misses get no flag
+  - unit: context_cost {path: SKILL.md, detail: about N tokens (budget M)}: over the budget in estimated tokens (UTF-8 bytes / 4, rounded up) and grown in estimated tokens since the installed version, or over on a first install; the budget from config
+  - perf: the review stays linear: a pathological line per rule, 100 KB to 400 KB, at most 2.5 times slower per doubling, under a 10 s hang guard
+  - unit: the reviewer's flags join the diff's in each update pair whose new version plants a flagged line
   - unit: the 64-skill discovery corpus gets no findings (no noise on good skills)
   - interface: a card carries quality only when the skill is flagged; read returns reviews; install and update return advisories
   - unit: one reason per file: a script path gets runnable_file only, never also non_markdown
@@ -395,6 +470,10 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Checked by:**
   - unit: every flagged fixture gets exactly its expected findings, each grounded (path, line, evidence on that line)
   - unit: every valid fixture gets a review with no findings
+  - unit: prompt_injection {path, line, detail}: one per added or changed markdown line (every line on a first install, front matter included), the first rule naming it: hidden characters (not tab, space separators, emoji selectors and joiners, or a file's leading BOM), ignore previous instructions, addressed to the assistant, curl piped to a shell, sends a local file or variable, text hidden in an HTML comment (a multi-line one at its opening line); stated misses get no flag
+  - unit: context_cost {path: SKILL.md, detail: about N tokens (budget M)}: over the budget in estimated tokens (UTF-8 bytes / 4, rounded up) and grown in estimated tokens since the installed version, or over on a first install; the budget from config
+  - perf: the review stays linear: a pathological line per rule, 100 KB to 400 KB, at most 2.5 times slower per doubling, under a 10 s hang guard
+  - unit: the reviewer's flags join the diff's in each update pair whose new version plants a flagged line
   - unit: the 64-skill discovery corpus gets no findings (no noise on good skills)
   - interface: a card carries quality only when the skill is flagged; read returns reviews; install and update return advisories
   - unit: one reason per file: a script path gets runnable_file only, never also non_markdown
@@ -420,7 +499,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Done when:** Every run records recall of the labelled discovery queries, tokens per successful discovery and first-query time, and keeps them per run so trends show.
 - **Where it lives:** the test suite
 - **Checked by:**
-  - interface: search recall@5 = 1.0 on the must-pass set for the adapter's mode (keyword-gate-any for any-word, the contract's) and on each semantic-gap reformulation
+  - interface: search recall@5 = 1.0 on the must-pass set for the adapter's mode (the any-word mode, the contract's) and on each semantic-gap reformulation
   - interface: semantic-gap misses reported (not pass/fail) so a later semantic search shows its gain
   - interface: every card lists matched_words; the common-words list equals the adapter's
   - interface: every page says catalog_size 64 on the corpus; total_matches equals the distinct cards across all pages, and is 0 exactly when match is none
@@ -436,6 +515,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Where it lives:** the CLI, the installer; contract §6
 - **Checked by:**
   - setup: wizard through a pseudo-terminal: Enter at the auto-update prompt means yes; AWS prompt defaults to no
+  - setup: setup writes only its own entries (one MCP server in .claude.json, one SessionStart group and the 8 allow rules in settings.json) byte for byte by the agreed layout, keeps every other byte, backs each changed file up (two kept), refuses a link, an unusable or foreign file, a race it can't win, sudo, a folder that isn't private, an unsafe install folder and CLAUDE_CONFIG_DIR without SKILLS_ASSISTANT_HOME, changing nothing; teardown gives the input back byte for byte and leaves what the person changed; the hook exits 0 within 2.5 s and never opens the transcript; claude is never started (golden/setup.yaml)
   - setup: --yes means auto-updates on and hosting local
   - agent: A12 set it up from the README's hand-off prompt
   - agent: A12s a vague ask never touches the assistant's own settings
@@ -473,6 +553,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Where it lives:** the CLI, the installer; contract §3, §6
 - **Checked by:**
   - setup: wizard through a pseudo-terminal: Enter at the auto-update prompt means yes; AWS prompt defaults to no
+  - setup: setup writes only its own entries (one MCP server in .claude.json, one SessionStart group and the 8 allow rules in settings.json) byte for byte by the agreed layout, keeps every other byte, backs each changed file up (two kept), refuses a link, an unusable or foreign file, a race it can't win, sudo, a folder that isn't private, an unsafe install folder and CLAUDE_CONFIG_DIR without SKILLS_ASSISTANT_HOME, changing nothing; teardown gives the input back byte for byte and leaves what the person changed; the hook exits 0 within 2.5 s and never opens the transcript; claude is never started (golden/setup.yaml)
   - setup: --yes means auto-updates on and hosting local
   - agent: A12 set it up from the README's hand-off prompt
   - agent: A12s a vague ask never touches the assistant's own settings
@@ -499,6 +580,24 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Checked by:**
   - interface: a bundle installs exactly its pinned versions
 
+### One install reaches every assistant I use
+
+> As a developer using more than one assistant, I want one install to reach all of them, so that I don't install or update a skill once per assistant.
+
+- **Source:** the owner's decision (`docs/decisions.md`)
+- **Done when:** One install or update puts the skill where each of the person's supported assistants reads it (e.g. ~/.agents/skills and ~/.claude/skills), recorded once in the lock, and each place is checked as §4.5 says.
+- **Where it lives:** the installer
+- **Checked by:** (no check mapped yet)
+
+### The pi coding agent
+
+> As a developer using pi, I want to find, install and update our shared skills from it, so that a skill shared once works for me too.
+
+- **Source:** the owner's decision (`docs/decisions.md`)
+- **Done when:** From pi, a developer finds, installs and updates skills from the catalog through the CLI pi runs; installed skills land where pi reads them (~/.agents/skills); pi's own MCP is used once a pi release ships it.
+- **Where it lives:** the CLI, the installer; contract §3
+- **Checked by:** (no check mapped yet)
+
 ### Usage metrics, kept on the machine
 
 > As the owner, I want the catalog to count how it's used (searches that find nothing, installs, updates held and how long each waits for a yes, updates declined), kept on the machine and summarised on request, so that friction and gaps show as numbers and decisions like holding updates can be reviewed.
@@ -510,6 +609,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Checked by:**
   - interface: a scripted sequence (a search with no match, a partial one, an install, an update applied, one held and taken later with the injected clock, one held and declined) gives exactly the expected counts and wait times in skills-catalog stats
   - interface: the counts live under $SKILLS_HOME only and follow the activity log's rules: a sentinel planted in a query, a skill's text and a publish message never appears in them
+  - interface: stats never reads a day it couldn't read as empty: day files another user's, hard-linked, over 8 MiB, not a regular file or unreadable are skipped and counted by why in one line after the header (fixed order, one why per file, counts only, no paths), exit 0; only day files within the kept 90 days count; a bad line is skipped; the window comes from the days read; nothing readable prints the unreadable-only line alone, and a usage folder that's a link or not a folder its own line alone (histories.yaml stats_unreadable)
   - cleanup: the before/after check shows nothing written outside $SKILLS_HOME and no network use
 
 ### Web UI: see what changed between versions
@@ -532,6 +632,17 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Checked by:**
   - web: Playwright view and publish on the local server (the web plan)
   - manual: the owner reviews the mock-ups (manual)
+
+## Phase 3: other assistants, not started without the owner's approval
+
+### Phase 3: Copilot, Codex, Cursor and Gemini CLI
+
+> As a developer using Copilot, Codex, Cursor or Gemini CLI, I want to find, install and update our shared skills from it, so that a skill shared once works for everyone.
+
+- **Source:** the owner's decision (`docs/decisions.md`)
+- **Done when:** From each of the four assistants, a developer finds, installs and updates skills from the catalog (its MCP entry written or printed by setup; skills installed where it reads them); not started without the owner's approval.
+- **Where it lives:** the MCP server, the installer, the CLI
+- **Checked by:** (no check mapped yet)
 
 ## AWS, opt-in: designed, not built
 
