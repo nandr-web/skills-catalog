@@ -171,10 +171,17 @@ export interface FetchResult {
 // ---------- helpers ----------
 
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
-const ACTOR = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+// A developer name, the acting identity (the faces check SKILLS_AS and --as with it once, at start).
+export const ACTOR = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 
 function encodeCursor(offset: number): string {
   return Buffer.from(JSON.stringify({ o: offset })).toString('base64url');
+}
+
+// A search or versions cursor's offset (the faces need it to say "showing 11-20"); a cursor this catalog didn't give out
+// is invalid_request.
+export function cursorOffset(cursor: string | undefined): number {
+  return decodeCursor(cursor);
 }
 
 function decodeCursor(cursor: string | undefined): number {
@@ -188,7 +195,7 @@ function decodeCursor(cursor: string | undefined): number {
   throw new CatalogError('invalid_request', { field: 'cursor', why: 'not_a_cursor' });
 }
 
-function checkActor(actor: unknown): string {
+export function checkActor(actor: unknown): string {
   if (actor === undefined || actor === null || actor === '') throw new CatalogError('unauthenticated', {});
   if (typeof actor !== 'string' || !ACTOR.test(actor)) throw new CatalogError('invalid_request', { field: 'as', why: 'not_a_developer_name' });
   return actor;

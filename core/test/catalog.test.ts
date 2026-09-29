@@ -409,6 +409,19 @@ describe('search: discoverable, any word, and says how it matched (contract §2)
     reopened.close();
   });
 
+  it('the faces can read a cursor\'s offset and check a developer name with the core\'s own rules', async () => {
+    const { cursorOffset, checkActor } = await import('../src/catalog.ts');
+    const { catalog } = await openTest();
+    for (let i = 0; i < 7; i++) await catalog.publish(request(`note-${i}`, filesOf({ 'SKILL.md': `---\nname: note-${i}\ndescription: Notes ${i}.\n---\nBody.\n` })!), actAs('ana'));
+    const first = await catalog.search({ limit: 3 });
+    expect(cursorOffset(undefined)).toBe(0);
+    expect(cursorOffset(first.next_cursor)).toBe(3);
+    expect((await errorOf(() => cursorOffset('not-ours'))).data).toMatchObject({ field: 'cursor' });
+    expect(checkActor('dev2')).toBe('dev2');
+    expect((await errorOf(() => checkActor('Dev 2\n'))).data).toMatchObject({ field: 'as' });
+    expect((await errorOf(() => checkActor(undefined))).code).toBe('unauthenticated');
+  });
+
   it('filters by tags and publisher, and pages with a cursor', async () => {
     const { catalog } = (await openTest());
     for (let i = 0; i < 12; i++) {

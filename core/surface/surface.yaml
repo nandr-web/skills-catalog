@@ -375,6 +375,7 @@ tools:
         bare: Confirm.
         guided: The confirm value from the preview, once the person agreed. Leave out to preview.
 results:
+  acting_as: (Acting as {developer}, for demo purposes.)
   search:
     header: 'Shared catalog: {count} of {total} skills match "{query}" ({ranking}).'
     header_all: "Shared catalog: {total} skills; showing {first}-{last}, by name."
@@ -429,6 +430,8 @@ results:
       - --- end of {path} {token} ---
     files: "Files: {files}."
     omitted: 'Not shown here, to keep this result short ({used} of {limit} used): {files}. They are part of the skill. To read them: ${get} with name "{name}" and paths (up to 20 at a time); to use the skill, install it.'
+    body_omitted: "The skill's instructions (the body of its SKILL.md) are not shown here, to keep this result short ({used} of {limit} used). To read them: ${get} with name \"{name}\" and paths [\"SKILL.md\"]; to use the skill, install it."
+    too_big: "Too big to read in a conversation (over {limit} each): {files}. They are part of the skill; to use it, install it."
     next: 'To use it here: ${install} with name "{name}".'
   quality:
     card_flagged: "- {name} (v{version}, {publisher}; tags: {tags}). Review: {notes}. {description}"
@@ -450,7 +453,7 @@ results:
     unchanged: "- {n} already up to date."
     held_flagged: "- Waiting for the person: {name} v{from} -> v{to} was NOT installed, because {reasons}."
     held_next: 'Tell the person each reason in plain words and ask whether to take it. Do not take it yourself. Only if they agree: ${accept} with name "{name}" and confirm "{confirm}". Otherwise {name} stays on v{from}.'
-    held_next_cli: "Tell the person each reason in plain words and ask whether to take it. Do not take it yourself: only the person can, by running ${cli} update {name} --accept in their own terminal. Otherwise {name} stays on v{from}."
+    held_next_cli: "Tell the person each reason in plain words and ask whether to take it. Do not take it yourself: the person takes it by running ${cli} update {name} --accept in their own terminal. Otherwise {name} stays on v{from}."
     held_notify: '- {name} v{to} is available; its setting is "tell me first", so it stays on v{from}. Ask the person whether to take it.'
     held_pin: "- {name} stays on v{from} (pinned); v{to} is available."
     reason:
@@ -602,6 +605,7 @@ results:
     invalid_request: "invalid_request: {field} {why}, so nothing was done. Correct the call and try again."
     invalid_request_limit: "invalid_request: {field} {why}; the limit is {limit}. Nothing was done: call again within it (for example in batches)."
     unauthenticated: "unauthenticated: the catalog needs the person to sign in, so nothing was done. Ask them to run ${cli} login in their own terminal; never ask for a password or token in the chat."
+    unauthenticated_local: "unauthenticated: no developer name is set for this catalog, so nothing was published. Tell the person; they set theirs by running ${cli} setup in their own terminal. Never choose a name for them."
     forbidden: "forbidden: the catalog doesn't allow this for the person signed in, so nothing was done. Tell them; don't look for another way around it."
     forbidden_hosted: "forbidden: {catalog} is a hosted catalog, and this version runs locally only, so nothing was done. Tell the person; ${cli} setup points it at a local folder."
     internal_error: "internal_error: ${cli} hit a bug (the details are in {log}). The bug is in ${cli}, not in the person's setup: nothing on this machine needs fixing, and don't edit ${cli}'s files. Tell the person, and give them the log's path."
