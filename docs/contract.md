@@ -23,7 +23,9 @@ every face (the MCP tool, the CLI command, the HTTP route's handler).
 | **Catalog** | the core, local or hosted | CLI, HTTP, typed web client; MCP where marked | search, read, versions, diff, publish a version, fetch a version; later bundles, votes, yank, tokens, reviews |
 | **Machine** | the client, on your machine | MCP, CLI | publish a folder, install, update, list installed, set policy, setup, teardown; CLI only: serve, login, logout |
 
-For phase 1: MCP and CLI bindings; the HTTP binding plugs in with the web UI (phase 2) from the same registry.
+For phase 1: MCP and CLI bindings; the HTTP binding plugs in with the web UI (phase 2) from the same registry. Each
+operation lists the faces it has (`faces`: `mcp`, `cli`, `web`); the web face serves catalog operations only (search, read,
+versions, diff, `fetch_version`, `publish_version`), never a machine operation.
 
 **Names:** the CLI command, the npm package and the MCP server are all `skills-catalog`, the product's name (e.g.
 `skills-catalog setup`). Not `skills`: that's the public skills.sh CLI (`npx skills add`), which models already know
@@ -35,7 +37,11 @@ comma-separated value, and an empty one is written `none` (`--flags runnable_fil
 paths can hold a comma or be named `none`, so `paths` is a repeated `--path <p>`, one path each. Either way every input
 stays a visible token in a permission prompt.
 Shorthands: `install --project` for `--target project`, and `read --files` or `--contents` for `--include`; two that
-contradict are `invalid_request` {field} (exit 1).
+contradict are `invalid_request` {field, why: `contradicting_flags`} (exit 1). A command's main inputs are positional, in
+this order, and the rest are flags: `search [<words>…]`, `read <name>…` (several names fill `names`), `versions <name>`,
+`diff <name> --from <from> --to <to>` (named, since two bare numbers swap easily in a prompt), `install <name>`, `update [<name>…]`, `list`, `policy <auto|notify|pin> [<name>]` (no name: the
+global default), `preview <folder>`, `publish <folder>`; `setup`, `teardown`, `serve`, `login`, `logout` and `stats` take
+flags only.
 
 **The MCP server carries `instructions`** (~260 tokens; wording in the agent-experience notes). Claude Code
 puts server instructions in the system prompt while deferred tools show only their names. In the agent-experience trials, without
@@ -48,10 +54,10 @@ written by hand too, and a lint checks that every tool the instructions or the s
 | Operation | Phase | MCP? | In | Out | Errors |
 |---|---|---|---|---|---|
 | `search_shared_skills` | 1 | yes | `query?` (words), `filters?` {`tags[]`, `publisher`, `updated_since`}, `limit` (default 10, max 50), `cursor?` | `results[]`: cards {`name`, `description`, `latest_version`, `tags`, `publisher`, `quality?`, `matched_words[]`}; `total_matches`, `catalog_size` ("3 of 52 skills match"); `match`: `all` (some card matched every content word) \| `partial` (cards only share some words) \| `none` (empty); `next_cursor?`; `ranking`: `none` (no words) \| `lexical` \| `semantic` \| `hybrid` | `invalid_request` |
-| `read_shared_skill` | 1 | yes | `name` or `names[]` (≤20); `version?` (default latest); `include`: `manifest` (default) \| `files` \| `contents`; `paths[]?` (≤20, with one `name`: only those files) | per skill: `name`, `version`, `latest_version`, `fingerprint`, `published_at`, `publisher`, `manifest` {frontmatter, body} (either can be left out for the budget: then `frontmatter` is absent and `frontmatter_omitted`, `grant_keys` and `grant_keys_more?` sit on `manifest`, or `body_omitted`; `frontmatter: null` means unreadable, §4.4), `reviews[]`, `stored_under_older_rules?` {error} (§4.4); with `files`: the file list {path, mode, size, sha256, `type`: text \| binary}; with `contents`: also `content` on text files, SKILL.md included (binary never inlined), all within the read's inline budget (below; the manifest body counts too): a front matter, body or file past it has `frontmatter_omitted`, `body_omitted` or `content_omitted: true`, and the result says `inline_budget` {limit, used, omitted} | `invalid_request` {field: `names`, why: `name_and_names`} (both given), {field: `name`, why: `required`} (neither), {field: `paths`, why: `paths_need_one_name`} (`paths[]` with `names`); per name: `not_found` {`suggestions[]`} (never an empty success); `not_found` {`path`} for a path the version doesn't have |
+| `read_shared_skill` | 1 | yes | `name` or `names[]` (≤20); `version?` (default latest); `include`: `manifest` (default) \| `files` \| `contents`; `paths[]?` (≤20, with one `name`: only those files) | per skill: `name`, `version`, `latest_version`, `fingerprint`, `published_at`, `publisher`, `owners[]` (who may publish it, §7), `manifest` {frontmatter, body} (either can be left out for the budget: then `frontmatter` is absent and `frontmatter_omitted`, `grant_keys` and `grant_keys_more?` sit on `manifest`, or `body_omitted`; `frontmatter: null` means unreadable, §4.4), `reviews[]`, `stored_under_older_rules?` {error} (§4.4); with `files`: the file list {path, mode, size, sha256, `type`: text \| binary, `flags` {binary, executable, script}, computed by the same function as the diff's, so a page's "can run" marks match its compare}; with `contents`: also `content` on text files, SKILL.md included (binary never inlined), all within the read's inline budget (below; the manifest body counts too): a front matter, body or file past it has `frontmatter_omitted`, `body_omitted` or `content_omitted: true`, and the result says `inline_budget` {limit, used, omitted} | `invalid_request` {field: `names`, why: `name_and_names`} (both given), {field: `name`, why: `required`} (neither), {field: `paths`, why: `paths_need_one_name`} (`paths[]` with `names`); per name: `not_found` {`suggestions[]`} (never an empty success); `not_found` {`path`} for a path the version doesn't have |
 | `list_shared_skill_versions` | 1 | yes | `name`, `cursor?` | `latest`, `versions[]` {`version`, `fingerprint`, `published_at`, `publisher`, `message`, `flags[]`} | `not_found` {`suggestions[]`} |
 | `diff_shared_skill_versions` | 1 | yes | `name`, `from`, `to` (versions) | `files[]` {`path`, `status`: added \| changed \| removed, `flags` {binary, executable, script}, `unified?`}; `frontmatter_changes[]` {field, from, to}; `publisher_changed`; `risk_flags[]` (§5.3); `stored_under_older_rules?` {from?: {error}, to?: {error}} (§4.4) | `not_found` |
-| `publish_version` | 1 | no (`publish_skill_to_catalog` calls it) | `name`, `files[]` {`path`, `mode`, `content_base64`}, `message?` (one line, §4.1: a line break or control character is `invalid_request` {field: message, why: control_character}), `expected_latest?`, `dry_run?`, `allow_suspected_secrets?` (a person's override, per publish; never in an MCP schema) | `name`, `version`, `fingerprint`, `created` (false when identical to the latest), `dry_run` (echoed), `publisher` (the acting identity), `diff_from_latest`, `risk_flags[]`, `stored_under_older_rules?` {from: {error}} (§5.1) | `invalid_manifest` {problem, fields}, `invalid_name` {name, why}, `invalid_path` {path, why}, `too_large` {limit, max, value}, `secret_suspected` {path, line, kind}, `not_owner` {name, owners}, `conflict` {name, latest}, `forbidden`, `unauthenticated` |
+| `publish_version` | 1 | no (`publish_skill_to_catalog` calls it) | `name`, `files[]` {`path`, `mode`, `content_base64`}, `message?` (one line, §4.1: a line break or control character is `invalid_request` {field: message, why: control_character}), `expected_latest?`, `expected_fingerprint?` (the files must have exactly this fingerprint, else `conflict` {name, fingerprint}: the web editor sends the one its dry run showed), `dry_run?`, `allow_suspected_secrets?` (a person's override, per publish; never in an MCP schema) | `name`, `version`, `fingerprint`, `created` (false when identical to the latest), `dry_run` (echoed), `publisher` (the acting identity), `diff_from_latest`, `risk_flags[]`, `stored_under_older_rules?` {from: {error}} (§5.1) | `invalid_manifest` {problem, fields}, `invalid_name` {name, why}, `invalid_path` {path, why}, `too_large` {limit, max, value}, `secret_suspected` {path, line, kind}, `not_owner` {name, owners}, `conflict` {name, latest}, `forbidden`, `unauthenticated` |
 | `fetch_version` | 1 | no | `name` and `version`, or `fingerprint` | `fingerprint`, `files[]` {path, mode, content_base64}; cacheable by fingerprint | `not_found` |
 
 - **Keyword search ranks by any word** (bm25; common words dropped), because agents search with any-of-these-words queries
@@ -113,28 +119,41 @@ written by hand too, and a lint checks that every tool the instructions or the s
   whole folders have a median of 20 KB and a 90th percentile of 154 KB.
 - **The secret scan runs in the core's publish too**, the same function the client's preview uses (the shared `skill-tree`
   module), so no face can skip it: a hit is `secret_suspected` {path, line, kind}, whose sentence names the file and line and
-  never repeats the value. `allow_suspected_secrets` lets it through for that one publish; only a person sets it (the CLI
-  flag at a terminal, §3; later a checkbox in the web editor).
+  never repeats the value. `allow_suspected_secrets` lets it through for that one publish; only a person sets it, with the
+  CLI flag at a terminal (§3). It's CLI-only: never in the MCP schema, and never offered in the web editor.
 - **What the scan looks for** (a secret's shape, no allow-list; the patterns are in the shared `skill-tree` module). The
-  kinds, in the order they're tried, the first that matches a line naming the hit: `aws_access_key`, `private_key`,
+  kinds, in the order they're tried, the first that matches a line naming the hit: `aws_access_key`, `private_key` (a
+  `-----BEGIN … PRIVATE KEY-----` line, ` BLOCK` included, so PGP's too),
   `github_token`, `slack_token`, `anthropic_key`, `openai_key`, `stripe_key` (`sk_` or `rk_`, then `live_` or `test_`,
   then 16 or more letters and digits), `google_api_key` (`AIza` and 35 more of letters, digits, `_` and `-`), `jwt` (three
   dot-separated base64url parts whose first two start `eyJ`), `url_credentials` (`scheme://user:password@host` with a
-  non-empty password, any scheme), `password_or_token` (a key, a run of letters, digits, `_`, `-`, `.` and spaces, holding password, passwd,
-  secret, secret key, private key, api key, access key, access token, auth token or token as a whole part of it, in any
-  case, with `_`, `-`, a space or nothing inside the words, and not followed by a part that names something else about it
+  non-empty password, any scheme), `gitlab_token` (`glpat-` and 20 or more of letters, digits, `_` and `-`),
+  `huggingface_token` (`hf_` and 30 or more letters and digits), `sendgrid_key` (`SG.`, then two `.`-separated parts of 16
+  or more letters, digits, `_` and `-`), `npm_token` (`npm_` and 36 letters and digits), `google_oauth_token` (`ya29.` and 20 or more letters,
+  digits, `_` and `-`, so a dotted-looking token isn't taken for a dotted name), `pgpass_line` (only in a file named
+  `.pgpass` or `pgpass`: a line of five `:`-separated fields whose last is non-empty), `password_or_token` (a key, a run of letters, digits, `_`, `-`, `.` and spaces, holding password, passwd,
+  pass, pwd, secret, secret key, private key, api key, access key, access token, auth token or token as a whole part of
+  it (digits may follow the word, as in `PASSWORD2`; a key that is exactly `auth` or `_auth`, as in `.npmrc` and Docker's
+  `"auth": "…"`, counts only when its value decodes as base64 to `user:password`), in any case, with `_`, `-`, a space or nothing inside the words, and not followed by a part that names something else about it
   (`hint`, `length`, `len`, `min`, `max`, `policy`, `prompt`, `label`, `field`, `name`, `file`, `path`, `type`, `count`,
   `expiry`, `expires`, `ttl`, `url`): so `MYPASSWORD=`, `client_secret:`, `AWS_SECRET_ACCESS_KEY=`, `SECRET_KEY_BASE=`,
   `DB_PASSWORD_PROD=`, `"api key": "…"` and `--password …` count, and `TOKENS=`, `password_hint=` and `DB_PASSWORD_FILE=`
   don't; then an optional closing quote, `:`, `=`, `:=` or `=>` with spaces around it (or, for a `--flag`, a space or `=`),
-  an optional opening quote, and a value of 12 or more characters that aren't spaces or quotes).
-  A match must stand alone: not preceded or followed by another character of its own alphabet. Not flagged: a prefix alone
+  an optional opening quote, and a value of 12 or more characters that aren't spaces or quotes, or, inside quotes that close on the same
+  line, any 12 or more up to the closing quote, spaces included; also `<key>value</key>` with such a key). A command's
+  `-u user:password` isn't a kind of its own (`docker run -u 1000:1000` would look the same), nor is a value on the next line.
+  A match must stand alone: not followed by another character of its own alphabet, and not preceded by a letter or digit,
+  so a prefix-shaped kind after `_` still counts (`MY_TOKEN_ghp_…`). Not flagged: a prefix alone
   in prose (`sk_live_`, `AIza`, `eyJ`), a URL with a user and no password, and a URL password that is a placeholder
   (`<password>`, `${DB_PASS}`, `$DB_PASS`); the word `password` as a URL's password is flagged, since it could be real.
-  Nor is a `password_or_token` value that refers to a secret instead of holding one: a placeholder (`<…>`, `${…}`, `$X`,
-  `$env:X`), a read of the environment (`process.env.X`, `process.env["X"]`, `os.environ[…]`, `os.environ.get(…)`,
-  `os.getenv(…)`, `ENV["X"]`, `System.getenv(…)`), a call (a name followed by `(`), or a dotted name
-  (`self.tokenizer.encode`, `config.api_key`).
+  Nor is a `password_or_token` value that refers to a secret instead of holding one, when that reference is the whole
+  value (a trailing `;`, `,` or `)` allowed): a placeholder (`<…>`; `${…}`; `$` and an environment-style name, `[A-Z_][A-Z0-9_]*`; `$env:X`), a read of the
+  environment (`process.env.X`, `process.env["X"]`, `os.environ[…]`, `os.environ.get(…)`, `os.getenv(…)`, `ENV["X"]`,
+  `System.getenv(…)`), a call (a name followed by `(`), or a dotted name (`self.tokenizer.encode`, `config.api_key`). So
+  `$DB_PASS` isn't flagged and `$uperSecretPassw0rd`, `<x>realsecretvalue123` or `${A}realsecretvalue123` is. A value
+  starting `ya29.` or `eyJ` is never a reference, whatever its shape. The kinds' order holds whatever key is in front: a
+  JWT under a secret key is `jwt`. Within a key, the longest word decides: `SECRET_KEY_FILE=` is "secret key" followed by
+  "file", so it isn't flagged.
   The first hit in path order is reported. Every file is scanned as text when it decodes: UTF-8, UTF-16 with a byte-order
   mark, or, for bytes that are neither and hold no NUL, Latin-1; lines are counted in the decoded text (a CRLF counts once,
   and a byte-order mark isn't part of line 1). (Whether a read
@@ -147,7 +166,8 @@ written by hand too, and a lint checks that every tool the instructions or the s
 Later (same registry): bundles (`create_bundle`, `publish_bundle_version`, `read_bundle`, `list_bundles`: phase 2, local);
 `vote`, `unvote` (later, hosted: needs identity); `yank_version` (hide a version published by mistake, e.g. with a secret,
 without renumbering); `create_token` (shown once, scope read or publish, with expiry), `list_tokens`, `revoke_token` (AWS, "a
-signed-in person only, not an agent"); `list_reviews`, `submit_review` (phase 2, a reviewer identity only).
+signed-in person only, not an agent"); `list_reviews`, `submit_review` (phase 2, a reviewer identity only). Also later, for the web UI: a read-only operation listing installed skills and
+held updates, which never carries a `confirm`.
 
 ## 3. Machine operations
 
@@ -155,14 +175,14 @@ signed-in person only, not an agent"); `list_reviews`, `submit_review` (phase 2,
 |---|---|---|---|---|
 | `preview_skill_publish` | 1 | `folder`, `message?` | the files to send, the files skipped, the diff against the latest, `risk_flags[]`, and the inputs for publishing: `confirm`, `name`, `version` (the number it would become), `files` (how many it would send), `flags[]` (the risk flags' kinds) and, when one was given, `message`; or, when the folder matches the latest, that nothing would change | The first of two steps, so the person sees what would be published before it is. It runs every check a publish runs (the owner, the manifest, the files, the secret scan) as a dry run: nothing is stored, and nothing leaves this machine (against a hosted catalog it diffs with the latest's files fetched by fingerprint). Never pre-allowed by setup (§6): its `folder` chooses what's read, and its result shows the files' text. It's a tool of its own so that a person who answers its prompt with "don't ask again" pre-allows previews only, never a publish. Reads the folder: regular files only (a link, a file with more than one hard link or a special file is `invalid_path` {why: `not_regular_file`}, §4.2), never follows a link out, skips and reports the ignore list (`.git`, `.env*`, `*.pem`, `id_*`, `.DS_Store`). A secret-scan hit anywhere, the body included, **rejects** with `secret_suspected` {path, line, kind} |
 | `publish_skill_to_catalog` | 1 | `folder`, `message?`, `confirm`, `name`, `version`, `files`, `flags[]`, all but `folder` copied from `preview_skill_publish`'s result (`message` exactly as the preview gave it back, and only when it had one) | as `publish_version` | The second step. **Its permission prompt is the consent, so it shows what's agreed to:** `name`, `version`, `files` and `flags` are in its input for that reason (as `accept_held_update` carries its flags). `confirm` is an HMAC-SHA-256 (base64url, 43 characters, short enough for an assistant to copy) over the folder's real path, its fingerprint, the name, the latest version the preview started from (`version` − 1), the message, `files` and the flags' kinds, keyed with a secret only this machine's skills-catalog holds. The publish recomputes it from the folder as it is now and its own inputs, so it verifies only after a preview of the same folder with the same values: otherwise `conflict` {name, folder}, changing nothing, whether the folder's files, the message or an input changed, or the value never came from a preview (the remedy is the same: preview again). A value that isn't 43 base64url characters is `invalid_request` {field: `confirm`, why: `not_a_confirm`}; a missing one is {field: `confirm`, why: `required`}, whose sentence points to the preview. A version published by someone else in between is `conflict` {name, latest}. The details are pinned below the table. A secret-scan hit **rejects** as in the preview; only the person can override it, per publish, with the CLI's `--allow-suspected-secrets`, which is **not in the MCP schema**. Setup never adds this tool to the assistant's allowed tools, so its permission prompt is the person's consent |
-| `install_shared_skill` | 1 | `name`, `version?`, `target?`: `user` (the default, §6) \| `project`; CLI only: `--policy` (not in the MCP schema: install is pre-allowed and setting a policy isn't) | `installed` {`path`, `version`, `fingerprint`, `advisories[]`} \| `held` {reason: `flagged`, `risk_flags[]`, `confirm`} | A first install goes through the update hold as an update from nothing (§5.3): no flags, it installs; flags, it's held and shown, and `accept_held_update` takes it once the person says yes. `fetch_version` → a temp folder outside every skills folder (Claude Code watches those for changes) → the checks of §5.3 ("The installer decides") → rename into `<skills dir>/<name>`, the path computed from the target and the name; records the lock. The name is checked against the installer's own copy of the reserved list, at install and at every sync. Never overwrites or shadows what it didn't install: `exists_untracked` {path} when that folder is already in the target and the lock doesn't own it (e.g. a hand-made skill), and `name_in_use` {path} when the other target holds an untracked skill of that name for the current project (in Claude Code a personal skill replaces a project one of the same name), or either target has a command file `.claude/commands/<name>.md` (a skill replaces a command of the same name). Refuses a link anywhere on the way in: before it writes, every folder from below the assistant's home (`user`: `.claude`, `.claude/skills`, `.claude/skills/<name>` under `$SKILLS_ASSISTANT_HOME`, which may itself be a link) or below the project (`project`: the same three) must be a real directory, and the first link found is `target_symlink` {path: that link}; nothing is written through it, and the link, what it points at and the lock stay as they were. `update_installed_skills` checks the same, so an installed copy replaced by a link since is refused, never reported as up to date |
-| `update_installed_skills` | 1 | `names?`, `dry_run?` | per skill: `updated` {from, to, changes} \| `unchanged` \| `held` {reason: `notify` \| `pin` \| `flagged` \| `cooldown` (§5.3; shared and hosted catalogs) {until}, `risk_flags[]`, diff, `confirm`} \| `refused` {version, error} (the new version breaks today's rules or doesn't match its fingerprint, §5.3; nothing changes) | One batched status call; skipped if the last sync was under a few minutes ago. A name in `names` that isn't installed is `not_installed` {name} (the first such, in the order given), checked before anything is fetched, and nothing changes; the action is §5.3's table. Where a skill is replaced is computed from its target and name, never read from the lock's `path`. CLI only: `skills-catalog update <name> --latest` takes the newest version now, skipping a cooldown (§5.3); the update hold still applies, and setup never pre-allows it; the MCP schema has no `latest` |
-| `accept_held_update` | 1 | `name`, `confirm` (from the held result), `flags[]` (the held flags' kinds, e.g. `["runs_at_load", "new_publisher"]`; `[]` for a hold with no risk flags, such as `notify`) | as `updated` (or `installed`) | Takes one held update, or a held first install, once the person says yes. `flags` is in the input so the permission prompt shows the person what they're agreeing to, not only what the assistant said; the server compares it as a set of kinds (order and repeats ignored) and refuses with `conflict`, changing nothing, when a kind is missing or extra. `confirm` is tied to the name and the new version's fingerprint: `conflict` if a newer version arrived since. Setup never adds this tool to the assistant's allowed tools, so its permission prompt is the person's consent (the same pattern as publish). The lock records which flags each acceptance let through. CLI: `skills-catalog update <name> --accept` shows the reasons and asks; setup never pre-allows it, so an assistant running it meets the permission prompt (the person's yes), and with no terminal it refuses (exit 3, a backstop) |
+| `install_shared_skill` | 1 | `name`, `version?`, `target?`: `user` (the default, §6) \| `project`; CLI only: `--policy` (not in the MCP schema: install is pre-allowed and setting a policy isn't) | `installed` {`path`, `version`, `fingerprint`, `advisories[]`, `staging?`} \| `unchanged` {version} \| `held` {reason: `flagged` \| `other_catalog` {was, now} \| `pin` \| `notify`, `target`, `version`, `from?` (the installed version, when there is one), `risk_flags[]`, diff, `confirm`} | A first install goes through the update hold as an update from nothing (§5.3): no flags, it installs; flags, it's held and shown, and `accept_held_update` takes it once the person says yes. An install over a skill already installed there follows that skill's policy (the owner's decision): on `pin` or `notify` a different version is held (`pin` or `notify`, with its diff) until the person says yes, since install is pre-allowed and a pin is the person's choice; on `auto` it goes through the update hold like an update. `fetch_version` → a temp folder outside every skills folder (Claude Code watches those for changes) → the checks of §5.3 ("The installer decides") → rename into `<skills dir>/<name>`, the path computed from the target and the name; records the lock. The name is checked against the installer's own copy of the reserved list, at install and at every sync. Never overwrites or shadows what it didn't install: `exists_untracked` {path} when that folder is already in the target and the lock doesn't own it (e.g. a hand-made skill), and `name_in_use` {path} when the other target holds an untracked skill of that name for the current project (in Claude Code a personal skill replaces a project one of the same name), or either target has a command file `.claude/commands/<name>.md` (a skill replaces a command of the same name). Refuses a link anywhere on the way in: before it writes, every folder from below the assistant's home (`user`: `.claude`, `.claude/skills`, `.claude/skills/<name>` under `$SKILLS_ASSISTANT_HOME`, which may itself be a link) or below the project (`project`: the same three) must be a real directory, and the first link found is `target_symlink` {path: that link}; nothing is written through it, and the link, what it points at and the lock stay as they were. `update_installed_skills` checks the same, so an installed copy replaced by a link since is refused, never reported as up to date |
+| `update_installed_skills` | 1 | `names?`, `dry_run?` | per skill: `updated` {from, to, changes, staging?} \| `unchanged` \| `held` {reason: `notify` \| `pin` \| `flagged` \| `cooldown` (§5.3; shared and hosted catalogs) {until} \| `other_catalog` {was, now}, `target`, `version`, `risk_flags[]`, diff, `confirm`} \| `refused` {version, error} (the new version breaks today's rules or doesn't match its fingerprint, §5.3; nothing changes) | One batched status call; skipped if the last sync was under a few minutes ago. A name in `names` that isn't installed is `not_installed` {name} (the first such, in the order given), checked before anything is fetched, and nothing changes; the action is §5.3's table. Where a skill is replaced is computed from its target and name, never read from the lock's `path`. CLI only: `skills-catalog update <name> --latest` takes the newest version now, skipping a cooldown (§5.3); the update hold still applies, and setup never pre-allows it; the MCP schema has no `latest` |
+| `accept_held_update` | 1 | `name`, `target`, `version`, `confirm` (all four from the held result), `flags[]` (the held flags' kinds, e.g. `["runs_at_load", "new_publisher"]`; `[]` for a hold with no risk flags, such as `notify`) | as `updated` (or `installed`) | Takes one held update, or a held first install, once the person says yes. `flags` is in the input so the permission prompt shows the person what they're agreeing to, not only what the assistant said; the server compares it as a set of kinds (order and repeats ignored) and refuses with `conflict`, changing nothing, when a kind is missing or extra. `target` and `version` are in the input for the same reason and are compared exactly, as `confirm` is: `confirm` is tied to the name, the target and the new version's fingerprint, so an older flagged version or another target is `conflict`, changing nothing, and so is a newer version that arrived since. Setup never adds this tool to the assistant's allowed tools, so its permission prompt is the person's consent (the same pattern as publish). The lock records which flags each acceptance let through. CLI: `skills-catalog update <name> --accept` shows the reasons and asks; setup never pre-allows it, so an assistant running it meets the permission prompt (the person's yes), and with no terminal it refuses (exit 3, a backstop) |
 | `list_installed_skills` | 1 | | per installed skill: `version`, `latest`, `policy`, `state`: `same` \| `behind` | Reads the lock; no local-change check in phase 1 (§5.4) |
 | `set_skill_update_policy` | 1 | `policy`, `cooldown?` (§5.3; later, with shared and hosted catalogs: not in the schema until then), `name?` (none = the global default) | the effective policy | `auto` \| `notify` \| `pin`. A `name` that isn't installed on this machine is `not_installed` {name}, and nothing changes: not `not_found`, whose sentence says the catalog has no such skill, when it may well have one |
 | `setup` | 1 | the setup config (§6) | first, the person's one remaining step ("start a new Claude Code session; this one can't use the tools yet"); then what was written, and "N skills to search; none installed yet" | The colourful wizard, `--yes`, `--config <file>`, the setup skill and the setup doc all produce this config; with no terminal, the no-terminal mode (§6); never asks for a token in chat |
 | `teardown` | 1 | | what was removed | Undoes setup: the MCP entry, the companion skill, the hook, the backed-up settings files restored; and the AWS stack, when setup created one |
-| `serve` (CLI only) | 2 | `port?` | the local URL | Serves the web UI and the HTTP face on your machine, no sign-in: 127.0.0.1 only, a Host allow-list, exact Origin + JSON + a per-launch token on writes, no CORS |
+| `serve` (CLI only) | 2 | `port?` | the local URL | Serves the web UI and the HTTP face on your machine, no sign-in, for a local catalog only: bound to 127.0.0.1 (not `localhost`), a Host allow-list, exact Origin and JSON, no CORS. It prints a one-time pairing link (`#p=<code>`); the page trades the code once, through `POST /api/pair`, for a session token that every `/api` call carries. Read-only plus dry runs unless started with `serve --publish`. With no terminal it refuses (exit 3) before making any secret. The acting identity comes per request (§7) |
 | `login` (CLI only) | AWS | `scope`: `read` \| `publish` | who you're signed in as, the scope, the expiry | The person completes a browser sign-in (a device code, so it works on a remote machine too) and approves the token; stored in `$SKILLS_HOME/credentials` (mode 0600), never in a project file, an MCP config, a URL or the chat. AWS `setup` calls it; when an agent runs setup, the person finishes the sign-in |
 | `logout` (CLI only) | AWS | | done | Revokes the token and deletes the file |
 
@@ -233,8 +253,9 @@ each under its own label (a replaced secret restarts the per-skill hashes, which
 - `look` {skill, version, surface: `cli` \| `assistant` \| `web`}: a held update's changes were opened: `diff_shared_skill_versions` for the
   held version, the CLI showing the diff or `update <name> --accept` showing the reasons, or the web compare screen. The
   held result's own diff doesn't count, since it reaches the assistant whether or not anyone looks;
-- `answer` {skill, version, `yes` \| `no` \| `pin` \| `superseded`, seconds since the notice, seconds since the look, how
-  many answered together};
+- `answer` {skill, version, `yes` \| `no` \| `pin` \| `superseded`, how many answered together}; the seconds since the
+  notice and since the look are derived by `stats` from the events' times (the look by skill and version, the notice as the
+  latest before the answer), so whoever records an answer needs no state;
 - `policy` {from, to, scope: the catalog or one skill, whether within a day of a hold};
 - `mode` {mode: `default` \| `auto` \| `bypass` \| `sandbox_auto_allow` \| `broad_bash_rule`, surface: `hook` \| `mcp` \|
   `update`}, at each sync, so it also counts syncs (a hook's sync counts as a session); `mode` is left out until the
@@ -399,11 +420,70 @@ Reproducible with coreutils, so tests compute it independently and never trust t
   (the SQLite file and the files by digest), shared by every developer acting on this machine; installed skills go to the
   assistant's own folder, `~/.claude/skills/<name>/` for Claude Code (under `$SKILLS_ASSISTANT_HOME`). XDG folders are not used.
 - **Config** (`$SKILLS_HOME/config.json`, mode 0600): §6's setup config.
-- **Lock file** (`$SKILLS_HOME/lock.json`): per installed skill and target: `version`, `fingerprint`, `publisher`, `policy?`, `target`,
+- **Lock file** (`$SKILLS_HOME/lock.json`): per installed skill and target: `version`, `fingerprint`, `publisher`, `copy` {dev,
+  ino, birth} (the installed folder's identity, recorded when it's written), `policy?`, `target`,
   `path` (for people to read; the installer always computes where a skill goes from its target and name), `installed_at`,
   `catalog`, and the flags each accepted install or update let through. This installer's list is where an installed skill's origin is kept, keyed by where it's
   installed; nothing is written into the skill itself (the owner's decision).
 - Installed files are never edited by the client except by an install or update of that skill.
+- **Replacing an installed copy, safely.** One rule covers every removal: **nothing is removed by its path unless its
+  identity is one the installer recorded**, and no removal follows a link. An identity is {dev, ino, birth} of a real folder
+  (never a link's own; `birth` is its birth time in whole milliseconds), and all three must match, since a file system can reuse
+  an inode; `birth` is left out where the file system doesn't keep one (it reads 0), and a lock entry recorded with {dev,
+  ino} only stays valid.
+  - **Staging on the target's own volume.** A copy is written in a staging folder beside the skills folder, on the same
+    volume, so moving it in is a rename that can't fail across volumes: `<root>/.claude/.skills-catalog-staging/`, where
+    `<root>` is `$SKILLS_ASSISTANT_HOME` for `user` and the project for `project` (mode 0700, removed when it holds nothing but its own `.gitignore`). Claude Code loads skills only from the
+    skills folders themselves, so a skill in staging isn't picked up. The installer records the identity of each staging
+    folder it makes, checks it again before writing into it, and cleans it up only while it's still that folder. When it
+    makes the staging folder it writes a `.gitignore` of `*` into it, since a kept copy can hold the person's local edits.
+    The staging folder, `.claude` and `.claude/skills` must be owned by this user and not writable by others: not
+    world-writable, and group-writable only for a group of the user's own, which Node can't look up, so the test is the
+    user-private-group convention: the folder's group id equals the user's id (as Ubuntu makes it by default, with a umask
+    of 002) and isn't 20 (macOS's `staff`, shared by every local user). Otherwise the call refuses and changes nothing:
+    `target_not_private` {path, target, home?, own}, whose sentence names the folder and, when it's the person's own,
+    suggests `chmod go-w` on it; a folder they don't own (a home owned by root in a container, `HOME=/tmp` in CI) gets another
+    way on instead: `SKILLS_ASSISTANT_HOME` pointing at a folder of theirs, or a project install. The folder above
+    `.claude` is checked too, since whoever can write it can rename `.claude` and put their own in its place: for a `user`
+    install, the assistant's home must pass the same test; for a `project` install, the project folder (whoever owns it) may
+    be group-writable (a shared checkout's group already controls every file in it, `.claude`'s settings included, so
+    refusing would protect nothing and make installing impossible there), but not world-writable unless it has the sticky
+    bit; its `.claude` and `.claude/skills` still take the strict test above. The limits of the group test: a private group whose id differs from the user's is refused (it fails closed); a
+    shared group whose id happens to equal the user's would pass; and a private group that someone added another member to
+    by hand isn't detected.
+  - **Replacing.** The installed folder is moved aside into a fresh staging path and the new one moved in. The moved-aside
+    folder is deleted only when its identity equals the lock's `copy`. A different identity has two causes, told apart by
+    the checked folders. When `.claude` and the skills folder are still the real, private folders checked at the start,
+    the skill's folder is a real folder inside them, so the person or their tools recreated it (a restore, a branch
+    switch, deleting and re-adding it by hand): it's handled like an entry recorded before `copy` existed, below, and never
+    deleted, since it may hold the person's edits. When those checks fail, something swapped it in between: it's moved
+    back and nothing is installed, `target_changed` {path, staging?}; if it can't be moved back, it stays in staging and
+    `staging` names that path so the person can recover it. A lock entry recorded before `copy` existed, or a recreated
+    folder, is never deleted: the moved-aside folder is kept in staging, the new copy goes in, the result names the staging
+    path, and the lock records the new copy's identity. A recreated folder that's complete and unchanged (its fingerprint
+    matches the lock's) when nothing is to be replaced just has its identity recorded again, with nothing moved; when the
+    checked folders fail, even an intact one is `target_changed`. Only a real folder can be "recreated": a link or anything
+    else at the skill's path is refused, `target_symlink` or `exists_untracked` when the check finds it, `target_changed`
+    when it appears after. A first install finds nothing at the skill's path or refuses without moving anything: a link is
+    `target_symlink`, anything else `exists_untracked` {path}.
+  - **The order.** The moved-aside copy is deleted (when its identity allows) only after every check has passed, the
+    write checks below included. When a check fails after the new copy is placed, the old copy goes back if it can, and
+    otherwise stays in staging and is named, so the lock never names a copy that's gone. `target_changed`'s `path` is the
+    first path that failed its check: the skill's path, the skills folder, `.claude`, or a staging folder that was swapped
+    or replaced by a link between uses (then `temp: true`, since nothing installed was touched). A result that kept a copy in staging says where: `updated` and `installed` carry
+    `staging?` (§3).
+  - **Writes are checked as removals are.** The skills folder's identity is taken when the path is checked; after a copy is
+    placed (or an old one put back), the parent of the skill's path must still be that folder. If it isn't, the copy is
+    taken back out into a fresh staging path, deleted only if it's still the copy just written (otherwise kept and named),
+    and the call refuses with `target_changed`, never reporting success. When a swapped-in link may have sent the copy
+    somewhere the installer can't know and it couldn't be taken back, `target_changed` carries `elsewhere: true`, and the
+    sentence says so and asks the person to look.
+  - **The limits, said plainly:** Node has no directory-relative file operations, so a program running as the person can
+    still race these checks; the installer narrows the window and never reports success when a check fails afterwards. An
+    empty folder that appears at a first install's path after the check is replaced by the rename unnoticed (it held
+    nothing). A remount can change a folder's `dev`, and a restore its whole identity, so after one every installed skill
+    looks recreated and its old copy is kept in staging on its next update; each is named in its result, and the person
+    can delete them.
 - **A damaged lock or config file is the person's to look at, never repaired.** When `lock.json` or `config.json` isn't
   valid JSON, doesn't have the shape above (a field of the wrong type anywhere, a lock entry's included), or holds a policy
   other than `auto`, `notify` or `pin` (the global one or a skill's own), every command that reads it refuses with
@@ -475,7 +555,10 @@ deletes only pending blobs older than 7 days, and the append re-checking its blo
   rewrite a line, set a link or the clipboard) or ring it. In the rendered text of a read and of a diff's changed lines,
   every C0 control character except TAB and LF (U+0000–U+0008, U+000B–U+001F), DEL (U+007F) and every C1 control character
   (U+0080–U+009F) is shown in the flag text's form, `\u{XXXX}` in lowercase hex (ESC is `\u{001b}`). A CR directly before
-  an LF is kept, as part of a CRLF line ending; any other CR is escaped. Only the rendering changes: stored bytes, the
+  an LF is kept, as part of a CRLF line ending; any other CR is escaped. So is every other character of the invisible set
+  the path rules refuse (§4.2's table: bidi overrides and isolates such as U+202E, zero-width characters such as U+200B,
+  U+2028 and U+2029, other spaces than the plain one), since those can reorder or hide text a person reads; a zero-width
+  joiner inside an emoji shows escaped too, the price of never hiding text. Only the rendering changes: stored bytes, the
   fingerprint and JSON fields (`content`, `unified`) stay exact.
 
 ### 5.3 Risky updates wait for a yes (the owner's decision)
@@ -528,8 +611,13 @@ showing (the web UI, a publish preview), and the update hold never reads them. F
     the `!` starts a line or follows whitespace (so `- PR diff: !`gh pr diff`` runs), and ```` ```! ```` blocks. The detector
     is wider than that rule, so no spelling slips past: any `!` directly followed by a backtick, anywhere in a markdown file
     (frontmatter, code blocks and HTML comments included), and any line whose first non-blank characters are three or more
-    backticks or tildes, then optional blanks, then `!`; an edit inside an unchanged block counts, as one flag per block at its opening line. The same detector decides
-    whether a skill "has an injected command" below;
+    backticks or tildes, then optional blanks, then `!`; an edit inside an unchanged block counts, as one flag per block at its opening line. On the safe side, since how
+    Claude Code splits lines can't be proven: a line ends at a CRLF (one line end), a lone CR, a lone LF, U+2028 or U+2029, and
+    every check that reports a line (these flags, `command_instruction`, the rules reviewer, the secret scan) counts lines
+    that way, so a `line` matches what an editor shows; a blank is any space, tab or
+    character of §4.2's invisible set (a no-break space, a zero-width character, a byte-order mark). A markdown file that
+    isn't valid UTF-8 is flagged `runs_at_load` at line 1, since it can't be read the same way everywhere. The same
+    detector decides whether a skill "has an injected command" below;
   - `capability_frontmatter`: a frontmatter key added, changed or removed that isn't on the safe list {field, from, to}. The
     safe list (`safe_frontmatter_keys`, fixed in code; config can only remove keys from it, never add): `name`, `description`, `when_to_use`, `argument-hint`, `arguments`,
     `license`, `compatibility`, `metadata`, `version`, `tags`. Every other key counts (`allowed-tools`, `hooks`, `context`,
@@ -540,12 +628,41 @@ showing (the web UI, a publish preview), and the update hold never reads them. F
     nor the list of keys known to grant nothing (`non_granting_keys`, fixed in code, config can only remove: `model`, `effort`, `disable-model-invocation`,
     `user-invocable`, `paths`, `disallowed-tools`; a change to one of these is still its own `capability_frontmatter` flag).
     So `allowed-tools`, `hooks`, `context`, `agent`, `shell` and any key Claude Code adds later count: it fails closed like the
-    safe list. The detail names the grant ("the skill pre-approves Bash(python3 *); its instructions changed");
+    safe list. The detail names the grant (`pre-approves Bash(python3 *)`), and the flag reads "its instructions changed while it
+    pre-approves Bash(python3 *)";
   - `non_markdown`: any other non-markdown file added or changed;
   - `new_publisher`: a different publisher {from, to};
 - from the rules reviewer (§10), run by the installer on the fetched version, so the update hold never waits for the catalog:
   prompt-injection patterns (instructions to ignore prior guidance, exfiltration or curl-to-shell, hidden unicode, HTML
-  comments), and context cost over the configured budget;
+  comments), and context cost over the configured budget. It's one pure function in the shared `skill-tree` module, beside
+  the diff, run by the installer and by the catalog when a version is published; its flags join the diff's, beside a
+  file's own reason (as `capability_frontmatter` does). On each added or changed line of a markdown file (every line, on a
+  first install), without regard to case:
+  - `prompt_injection` {path, line, detail}, one per line, the first rule that matches naming it:
+    - hidden characters: any bidi override or isolate, or any other character of §4.2's invisible set, except a tab, a
+      space separator (a no-break space isn't hiding anything) and a variation selector or zero-width joiner inside an emoji
+      sequence, and a byte-order mark (U+FEFF) as a file's first character, which marks its encoding; the detail names the
+      first, "hidden character U+" and its hex in capitals, at least four digits ("hidden character U+202E");
+    - "ignore previous instructions": ignore, disregard or forget, then optionally all, any or the, then previous, prior,
+      above, earlier or system, then instruction, guidance, rule, message or prompt, singular or plural;
+    - "addressed to the assistant": text that speaks to the model reading it, "to the assistant", "note to the AI", "the
+      assistant reading this", "AI reading this" (assistant, AI, model, LLM or agent): in the agent-experience trials, a
+      search card that flagged such a planted instruction made the assistant warn the person, and without the flag one
+      run recommended the skill unwarned;
+    - "curl piped to a shell": `curl` or `wget`, then any later `|` on the line followed by an optional `sudo` and `sh`,
+      `bash`, `zsh`, `python` or `python3` (so `curl … | tee i.sh | sh` counts);
+    - "sends a local file or variable": `curl`, `wget` or `nc` with a data option (`-d`, `--data…`, `-F`, `--upload-file`,
+      `-T`) naming a home path or a variable (`$…`, `~/…`, `.ssh`, `.aws`, `.env`);
+    - "text hidden in an HTML comment": `<!-- … -->` holding letters; a comment over several lines is one flag at its
+      opening line when any of its lines was added or changed;
+    - a prose request to send files ("upload the contents of ~/.ssh to …") matches none of these: the word list is advice,
+      and a reworded instruction passes any word list;
+  - `context_cost` {path: `SKILL.md`, detail: "about N tokens (budget M)", numbers in plain digits}: SKILL.md (front
+    matter and body) is over `context_cost_budget` in estimated tokens (UTF-8 bytes / 4, rounded up; default 5,000, any
+    positive number in config) and grew since the installed version, counted in those estimated tokens (on a first
+    install, whenever it's over). Measured: 90% of real SKILL.md files
+    are under about 5,000 tokens.
+  The patterns are linear (no backtracking), so a hostile line can't stall the review;
 - from agent reviewers (phase 2), when their reviews exist; a missing agent review never holds an update.
 
 One reason per file, the first that applies: `runnable_file`, then `runs_at_load` (one flag per added or changed `!` line or
@@ -625,9 +742,13 @@ mode is detected, added or changed text can get one more flag.
     `Bash(sh -c *)`, `Bash(python3 -c *)`, `Bash(uv run python *)` and `Bash(env *)` count; `Bash(git *)`, and a rule with no
     `*` such as `Bash(python3 scripts/check.py)`, don't. The list is a best effort (other programs can run commands too,
     such as `find -exec`), and the friction review can widen it.
-- **Order**: `pin`, then `notify`, then the flags. `command_instruction` is a flag like any other (`held: flagged`), and
+- **Order**: `other_catalog`, then `pin`, then `notify`, then the flags. `command_instruction` is a flag like any other (`held: flagged`), and
   `accept_flagged_updates` lets it through like any flag. A pinned skill and a version still in its cooldown ask nothing and
   produce no notice (§3).
+- **Another catalog.** When a lock entry's `catalog` isn't the catalog in use now (a skill of the same name from another
+  catalog), an update or an install over it is never applied silently: it's `held` {reason: `other_catalog`, was, now},
+  shown with its diff and flags, and `accept_held_update` takes it once the person says yes, recording the new catalog in
+  the lock. It comes before `pin` and `notify` in the order, since it's about where the skill comes from.
 - **A first install** goes through the update hold as usual, `command_instruction` included: flagged, it's held; otherwise it
   installs.
 - **What it can't see**: a mode given for one session (`--permission-mode`, `--settings`) or switched during a session. The
@@ -672,7 +793,15 @@ Code's default permission mode. It doesn't cover:
 | `auto` | any | `held: flagged`, shown with its diff and the flags; in unattended runs, held and reported at the next session (see "Telling the person", §3) |
 
 A first install follows the `auto` rows whatever the policy: no flags, it installs; flags, `held: flagged`, shown with its
-files and the flags (there's no earlier version to diff against).
+files and the flags (there's no earlier version to diff against). An install over an installed skill follows that skill's
+rows, like an update (the owner's decision: installing a newer version of a pinned skill waits for the person's yes). Any
+other version counts, an older one included: on `pin` or `notify` it's held; on `auto` it goes through the update hold,
+diffed from the installed version, so an unflagged older version installs (a downgrade), and the result is `installed`,
+the lock's version moving and its accepted flags unchanged. The same version installed again is `unchanged` {version},
+with nothing written and the lock unchanged, when the installed copy is complete and unchanged (its fingerprint matches
+the lock's); otherwise that version is written again, whatever the policy, since no version changes. Accepting a held
+`pin` or `notify` (an install's or an update's: both carry a `confirm`) keeps the policy, so a pinned skill stays
+pinned, at the new version.
 
 **A cooldown (the owner's decision; designed now, built with shared and hosted catalogs).** Nearly every real attack through
 auto-update was someone with publish rights shipping a normal-looking version that auto-update delivered within hours; of ten
@@ -702,7 +831,7 @@ checkers to monitor latest; so that there's benefit in waiting)". So:
 
 An update replaces the installed copy (§5.4). A setup option, `accept_flagged_updates` (default false), lets a person opt out of
 the update hold for updates on unattended machines. Only the terminal wizard sets it (never `--yes`, `--config` or the no-terminal
-mode, since a permission prompt doesn't show a file's contents); it never applies to a first install; the session-start notice
+mode, since a permission prompt doesn't show a file's contents); it never applies to an install, a first one or one over an installed skill (an assistant asks for installs on its own, so a flagged version it asks for is held), nor to `other_catalog`, which is about where a skill comes from; the session-start notice
 says it's on; and the lock records each update it let through.
 
 ### 5.4 Local edits to an installed skill: an open question for the owner
@@ -775,7 +904,7 @@ with it, 9 of 9 ran ours first.
 | `MetadataStore` (compare-and-append versions, latest pointer) | SQLite (`node:sqlite`) | DynamoDB |
 | `BlobStore` (put-if-absent, get by sha256) | a folder by digest | S3 |
 | `SearchIndex` (upsert, query, rebuild) | SQLite FTS5 (`tokenize='porter unicode61'`), any-word bm25 | an index file in S3, ranked in the Lambda (to ~10–30k skills), then OpenSearch Serverless |
-| `Identity` (request → who's asking) | "act as" (phase 1): `--as <developer>`, `SKILLS_AS`, or the MCP server's config; default: your name from setup | sign-in, or a personal token (parked with AWS) |
+| `Identity` (request → who's asking) | "act as" (phase 1): `--as <developer>`, `SKILLS_AS`, or the MCP server's config; the web face, per request, in an `X-Skills-Catalog-As` header (a body field would break the own-fields rule, §2), only setup's `me` or one of its `demo_developers`, checked as `--as` is; default: your name from setup | sign-in, or a personal token (parked with AWS) |
 | `TokenStore` (hashed personal tokens) | none | DynamoDB |
 | `Events` (publish events, delivered at least once) | in-process, from an outbox table in SQLite | DynamoDB stream → a queue → an indexer handler (same bundle) that rewrites the search file in S3; one writer at a time (a queue with concurrency 1). Skill files in S3 are create-only; the search file is the one object that's rewritten |
 | `Reviewer` (a version in, a review out) | the built-in rules reviewer (phase 1); agent reviewers (phase 2) | the same, run by the event handler |
@@ -830,10 +959,11 @@ a log file in `$SKILLS_HOME`, named in the message.
 `internal_error` {log}, `invalid_request` {field, why, limit?}, `invalid_manifest` {problem, fields} (the problems: §4.1),
 `invalid_name` {name, why} (§4.1), `invalid_path` {path, why} (the whys: §4.2), `too_large` {limit, max, value},
 `not_found` {suggestions} or {path}, `not_owner` {name, owners}, `conflict` {name, latest} (also when a held update's version
-was overtaken, with its own sentence) or {name, folder} (a publish whose confirm doesn't verify for the folder as it is
+was overtaken, with its own sentence) or {name, fingerprint} (a publish whose files don't match its `expected_fingerprint`, §2) or {name, folder} (a publish whose confirm doesn't verify for the folder as it is
 now and its inputs, §3), `forbidden`, `unauthenticated` (locally: no acting identity set, so its sentence points to setup's `me` or `--as`; hosted: sign in), `exists_untracked` {path}, `name_in_use` {path},
 `target_symlink` {path}, `secret_suspected` {path, line, kind}, `invalid_developer_setting` {setting} (§4.1),
-`fingerprint_mismatch` {name, version, expected, got} (§5.3), `not_installed` {name} (§3), `invalid_local_file` {file, why, path} (§4.5). Each error carries the code and one plain sentence, and `why`
+`fingerprint_mismatch` {name, version, expected, got} (§5.3), `not_installed` {name} (§3), `invalid_local_file` {file, why, path} (§4.5), `target_changed` {path, staging?, elsewhere?, temp?: true when `path` is a staging folder}, `target_not_private` {path, target: `user` \| `project`, home?: true when
+`path` is the assistant's home above `.claude`, own: whether this user owns the folder} (§4.5). Each error carries the code and one plain sentence, and `why`
 and `problem` are codes with a sentence each (wording in the agent-experience notes).
 
 **An error's sentence is an instruction to the agent** (the agent-experience trials): one that asks for a change to the person's files
@@ -891,8 +1021,10 @@ revised design) and reviews of the core's code and its architecture changed thes
 | What setup pre-allows (generated from the registry; read-only commands never write); absolute paths from `process.execPath`; the prompt as the person's yes for person-only flags; `accept_flagged_updates` only from the terminal wizard; notices with fixed words; the MCP server's activity log | §3, §6, §8 | the activity log with the MCP server, the prompt as the person's yes for person-only flags with the CLI; the rest with setup and the session-start hook, later |
 | A cooldown before auto-update applies a new version (0 locally, about 3 days for a shared or hosted catalog); the latest on request (watcher policy, `--latest`, accepting a held one), through the prompt; a report or withdrawal during the wait holds that version for everyone | §3, §5.3, §6, §7, §10 | decided by the owner; designed now, built with shared and hosted catalogs (a local catalog waits 0, so nothing changes in phase 1) |
 | The two-step publish as consent: the publish repeats the name, version, file count and flags so its prompt shows them, and its `confirm` is a MAC only this machine's skills-catalog can make (`not_a_confirm` otherwise); an ignored folder skipped once, unwalked; paths in commands shell-quoted | §3, §5.2, §9 | with the MCP server and the CLI |
+| An install over a pinned or notify skill held until the person says yes, like an update (the owner's decision); `accept_held_update` names the target and version; a skill from another catalog held (`other_catalog`) | §3, §5.3 | with the installer |
+| Nothing removed by path unless its identity {dev, ino, birth} is one the installer recorded, else `target_changed`; staging on the target's own volume (a project on another volume installs); writes checked like removals; a first install never moves what it finds | §4.5, §9 | with the installer |
 | A damaged lock or config file refused with `invalid_local_file`, never repaired, an unknown policy never taken as `auto`; teardown still runs | §4.5, §9 | with the installer |
-| The secret scan's new shapes (`stripe_key`, `google_api_key`, `jwt`, `url_credentials`), a key ending in a secret word after `_` or a quote, matches that stand alone, UTF-16 and Latin-1 files scanned | §2 | the core's next update |
+| The secret scan's new shapes (`stripe_key`, `google_api_key`, `jwt`, `url_credentials`, `gitlab_token`, `huggingface_token`, `sendgrid_key`, `npm_token`, `google_oauth_token`, `pgpass_line`; PGP private keys), a key ending in a secret word after `_` or a quote, matches that stand alone, UTF-16 and Latin-1 files scanned | §2 | the core's next update |
 | The preview as its own tool, `preview_skill_publish`, and CLI command, `preview`, so the publish's prompt can't be pre-allowed by answering a preview | §3, §6 | with the MCP server and the CLI |
 | One Unicode version for the path rules, the case-folding table's: code points it doesn't assign are refused on every runtime | §4.2 | the core's next update |
 | Stored versions re-checked when the core's rules change, and those that fail reported | §5.3 | later |
