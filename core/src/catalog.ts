@@ -679,8 +679,10 @@ export class Catalog {
     const name = checkName(req.name);
     const skill = await this.p.storage.skill(name);
     if (skill && !skill.owners.includes(publisher)) throw new CatalogError('not_owner', { name, owners: skill.owners });
-    checkSizes(req.files, this.config.limits);
-    return { name, files: await this.p.links!.uploadLinks(req.files.map((f) => ({ sha256: f.sha256, size: f.size }))) };
+    // One answer per distinct file, its size counted once (a skill can hold the same bytes twice).
+    const files = [...new Map(req.files.map((f) => [f.sha256, { sha256: f.sha256, size: f.size }])).values()];
+    checkSizes(files, this.config.limits);
+    return { name, files: await this.p.links!.uploadLinks(files) };
   }
 
   // The hosted form's files: each one's bytes as stored, read UPLOAD_READS at a time and checked in the request's order,
