@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="d d-architecture" viewBox="0 0 538 710" width="538" height="710" role="img" aria-label="What on your machine is built, and what is next? The core catalog is built; the parts around it come next.">
-<title>Your machine, built and next</title>
+<svg xmlns="http://www.w3.org/2000/svg" class="d d-architecture" viewBox="0 0 634 546" width="634" height="546" role="img" aria-label="What on your machine is built, and what is next? Everything but the guided setup is built.">
+<title>Your machine, today and next</title>
 <style>.d { --d-page: #ECF0F3; --d-canvas: #F9FBFC; --d-ink: #13202A; --d-ink2: #3A4A56; --d-line: #B7C4CD; --d-grid: #D5DDE3; --d-shade: #E1E7EB; --d-accent: #137052; --d-accent-soft: #D9EDE3; --d-hot: #B23A0A; --d-hot-soft: #F8E2D5; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .d, svg.d:root { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
@@ -85,46 +85,51 @@
 /* groups (boundaries) */
 .d-group { fill: var(--d-grid); fill-opacity: 0.35; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
 .d-group-label { font-size: 10.5px; fill: var(--d-ink2); letter-spacing: 0.06em; font-weight: 500; }</style>
-<defs><marker id="your-machine-built-and-next-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="your-machine-built-and-next-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="your-machine-built-and-next-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="your-machine-built-and-next-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="your-machine-built-and-next-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="your-machine-built-and-next-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="your-machine-built-and-next-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="your-machine-built-and-next-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
-<rect class="d-bg" width="538" height="710"/>
-<rect class="d-group" x="20" y="120" width="497.3" height="360" rx="6"/>
-<text class="d-group-label" x="25" y="132.5">NEXT, NOT BUILT YET</text>
-<path class="d-edge d-edge--proposed" d="M229 58 L229 198.5" marker-end="url(#your-machine-built-and-next-arrow)"/>
-<path class="d-edge d-edge--proposed" d="M391 58 L391 174" marker-end="url(#your-machine-built-and-next-arrow)"/>
-<path class="d-edge d-edge--proposed" d="M229 236.5 L229 297" marker-end="url(#your-machine-built-and-next-arrow)"/>
-<path class="d-edge d-edge--proposed" d="M367.7 227 L367.7 274 Q367.7 279 362.7 279 L272 279 Q267 279 267 284 L267 297" marker-end="url(#your-machine-built-and-next-arrow)"/>
-<path class="d-edge d-edge--proposed" d="M414.3 227 L414 482 Q414 487 414 492 L414 523" marker-end="url(#your-machine-built-and-next-arrow)"/>
-<path class="d-edge d-edge--proposed" d="M267 350 L267 397 Q267 402 272 402 L306 402 Q311 402 311 407 L311 420" marker-end="url(#your-machine-built-and-next-arrow)"/>
-<path class="d-edge d-edge--proposed" d="M229 350 L229 500 Q229 505 234 505 L340 505 Q345 505 345 510 L345 523" marker-end="url(#your-machine-built-and-next-arrow)"/>
-<path class="d-edge" d="M380 576 L380 631" marker-end="url(#your-machine-built-and-next-arrow)"/>
-<rect class="d-node" x="176" y="20" width="105" height="38" rx="19"/>
-<text class="d-label" x="228.5" y="39">developer</text>
-<rect class="d-node" x="327" y="20" width="127" height="38" rx="19"/>
-<text class="d-label" x="390.5" y="39">AI assistant</text>
-<rect class="d-node d-node--proposed" x="173" y="198.5" width="112" height="38" rx="3"/>
-<text class="d-label" x="229" y="217.5">CLI + setup</text>
-<rect class="d-node d-node--proposed" x="321" y="174" width="140" height="53" rx="3"/>
-<text class="d-label" x="391" y="193.5">assistant tools</text>
-<text class="d-note" x="391" y="209.5">MCP</text>
-<rect class="d-node d-node--proposed" x="191" y="297" width="114" height="53" rx="3"/>
-<text class="d-label" x="248" y="316.5">installer</text>
-<text class="d-note" x="248" y="332.5">update policy</text>
-<path class="d-node d-node--proposed" d="M248 426 A63 6 0 0 1 374 426 V458 A63 6 0 0 1 248 458 Z"/>
-<path class="d-node-detail" d="M248 426 A63 6 0 0 0 374 426"/>
-<text class="d-label" x="311" y="445">skills folder</text>
-<rect class="d-node d-node--focus" x="275" y="523" width="209" height="53" rx="3"/>
-<text class="d-label d-label--strong" x="379.5" y="542.5">core catalog</text>
-<text class="d-note d-note--focus" x="379.5" y="558.5">built: publish, search, diff</text>
-<path class="d-node" d="M319 637 A60.5 6 0 0 1 440 637 V684 A60.5 6 0 0 1 319 684 Z"/>
-<path class="d-node-detail" d="M319 637 A60.5 6 0 0 0 440 637"/>
-<text class="d-label" x="379.5" y="656.5">local store</text>
-<text class="d-note" x="379.5" y="672.5">SQLite + files</text>
-<text class="d-edge-label" x="261.5" y="128.3">commands</text>
-<text class="d-edge-label" x="429.5" y="92.8">tool calls</text>
-<text class="d-edge-label" x="258.5" y="266.8">install</text>
-<text class="d-edge-label" x="317.3" y="268.5">install</text>
-<text class="d-edge-label" x="459.2" y="357">search, read</text>
-<text class="d-edge-label" x="293" y="376">writes</text>
-<text class="d-edge-label" x="280.5" y="494.5">fetch, publish</text>
-<text class="d-edge-label" x="428" y="603.5">reads, writes</text>
+<defs><marker id="your-machine-today-and-next-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="your-machine-today-and-next-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="your-machine-today-and-next-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="your-machine-today-and-next-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="your-machine-today-and-next-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="your-machine-today-and-next-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="your-machine-today-and-next-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="your-machine-today-and-next-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
+<rect class="d-bg" width="634" height="546"/>
+<path class="d-edge d-edge--proposed" d="M215 58 L215 105 Q215 110 210 110 L85 110 Q80 110 80 115 L80 128" marker-end="url(#your-machine-today-and-next-arrow)"/>
+<path class="d-edge" d="M250 58 L250 106 Q250 110 254 110 L254 110 Q258 110 258 114 L258 143" marker-end="url(#your-machine-today-and-next-arrow)"/>
+<path class="d-edge" d="M446 58 L446 128" marker-end="url(#your-machine-today-and-next-arrow)"/>
+<path class="d-edge" d="M258 196 L258 232 Q258 233 259 233 L259 233 Q260 233 260 234 L260 251" marker-end="url(#your-machine-today-and-next-arrow)"/>
+<path class="d-edge" d="M423 181 L423 228 Q423 233 418 233 L315 233 Q310 233 310 238 L310 251" marker-end="url(#your-machine-today-and-next-arrow)"/>
+<path class="d-edge" d="M469 181 L469 359" marker-end="url(#your-machine-today-and-next-arrow)"/>
+<path class="d-edge" d="M260 304 L260 359" marker-end="url(#your-machine-today-and-next-arrow)"/>
+<path class="d-edge" d="M310 304 L310 336 Q310 341 315 341 L409 341 Q414 341 414 346 L414 359" marker-end="url(#your-machine-today-and-next-arrow)"/>
+<path class="d-edge" d="M442 412 L442 467" marker-end="url(#your-machine-today-and-next-arrow)"/>
+<rect class="d-node" x="180" y="20" width="105" height="38" rx="19"/>
+<text class="d-label" x="232.5" y="39">developer</text>
+<rect class="d-node" x="382" y="20" width="127" height="38" rx="19"/>
+<text class="d-label" x="445.5" y="39">AI assistant</text>
+<rect class="d-node d-node--proposed" x="20" y="128" width="119" height="55" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="51.4" y="134" width="56.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="79.5" y="141.5">PLANNED</text>
+<text class="d-label" x="79.5" y="164">guided setup</text>
+<rect class="d-node" x="175" y="143" width="165" height="53" rx="3"/>
+<text class="d-label" x="257.5" y="162.5">CLI</text>
+<text class="d-note" x="257.5" y="178.5">install, list, update</text>
+<rect class="d-node" x="376" y="128" width="140" height="53" rx="3"/>
+<text class="d-label" x="446" y="147.5">assistant tools</text>
+<text class="d-note" x="446" y="163.5">MCP</text>
+<rect class="d-node" x="209" y="251" width="152" height="53" rx="3"/>
+<text class="d-label" x="285" y="270.5">installer</text>
+<text class="d-note" x="285" y="286.5">holds risky updates</text>
+<path class="d-node" d="M197 365 A63 6 0 0 1 323 365 V397 A63 6 0 0 1 197 397 Z"/>
+<path class="d-node-detail" d="M197 365 A63 6 0 0 0 323 365"/>
+<text class="d-label" x="260" y="384">skills folder</text>
+<rect class="d-node d-node--focus" x="359" y="359" width="165" height="53" rx="3"/>
+<text class="d-label d-label--strong" x="441.5" y="378.5">core catalog</text>
+<text class="d-note d-note--focus" x="441.5" y="394.5">publish, search, diff</text>
+<path class="d-node" d="M381 473 A60.5 6 0 0 1 502 473 V520 A60.5 6 0 0 1 381 520 Z"/>
+<path class="d-node-detail" d="M381 473 A60.5 6 0 0 0 502 473"/>
+<text class="d-label" x="441.5" y="492.5">local store</text>
+<text class="d-note" x="441.5" y="508.5">SQLite + files</text>
+<text class="d-edge-label" x="147.5" y="99.5">runs once (planned)</text>
+<text class="d-edge-label" x="282.5" y="84">commands</text>
+<text class="d-edge-label" x="484.5" y="93">tool calls</text>
+<text class="d-edge-label" x="287.5" y="214.5">install</text>
+<text class="d-edge-label" x="366.5" y="222.5">install</text>
+<text class="d-edge-label" x="542.5" y="270">search, read, publish</text>
+<text class="d-edge-label" x="286" y="331.5">writes</text>
+<text class="d-edge-label" x="333" y="322.5">fetch</text>
+<text class="d-edge-label" x="490" y="439.5">reads, writes</text>
 </svg>

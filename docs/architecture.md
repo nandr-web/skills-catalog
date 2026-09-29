@@ -4,15 +4,15 @@ What runs on your machine today, what comes next, and the hosted option designed
 
 ## Today, and next
 
-![Built today: the core catalog and its local store. Next, not built yet: the CLI and setup, the assistant's tools (MCP), the installer and the skills folder](pictures/today.svg)
+![Your machine today: a developer's commands reach the CLI and an AI assistant's tool calls reach the assistant tools (MCP); both install through the installer, which writes the skills folder and holds risky updates; the assistant tools search, read and publish in the core catalog, which keeps a local store (SQLite and files). Only the guided setup is planned, not built yet](pictures/today.svg)
 
-**Built today, and next.** The core catalog is built and tested. The CLI, the assistant's tools and the installer come next, each on the same contract ([contract.md](contract.md)).
+**Built today, and next.** The core catalog, the assistant's tools (MCP), the installer with its update gate, and a small CLI (`install`, `list`, `update`) are built and tested, all on the same contract ([contract.md](contract.md)). The guided setup comes next.
 
 ## Later: a hosted catalog (one contract, two homes)
 
-![One contract, two homes: on your machine, the core catalog is built and the installer, CLI and assistant tools are planned; a hosted catalog in your AWS account is designed but not built](pictures/shape.svg)
+![One contract, two homes: on your machine, the CLI, the MCP server, the installer, the skills folder and the core catalog with its local store are built; a hosted catalog in your AWS account and a web UI are designed but not built](pictures/shape.svg)
 
-**One contract, two homes.** Assistants and people reach one catalog through one contract ([contract.md](contract.md)). The core catalog runs on your machine today, and the installer, CLI and assistant tools come next; a hosted catalog in your AWS account is designed, not built. The owner's notes on the PRD asked for exactly this: "build the experience, interface and contracts without coupling ourselves with a specific choice".
+**One contract, two homes.** Assistants and people reach one catalog through one contract ([contract.md](contract.md)). The core catalog, the installer, the CLI and the assistant's tools run on your machine today; a hosted catalog in your AWS account is designed, not built. The owner's notes on the PRD asked for exactly this: "build the experience, interface and contracts without coupling ourselves with a specific choice".
 
 ## The parts
 
@@ -21,8 +21,8 @@ What runs on your machine today, what comes next, and the hosted option designed
 | **Core** | Validates skills (the Agent Skills `SKILL.md` format), assigns versions, computes fingerprints, diffs versions, flags risky changes. Pure logic, no storage of its own | Built |
 | **Local catalog** | SQLite for records and keyword search (FTS5), and a folder of files stored by fingerprint. Safe across processes | Built |
 | **Replaceable parts** | Storage, file store, search index, events, clock, ids and identity sit behind small interfaces, so a DynamoDB + S3 or a search-service version can drop in, checked by the same tests | Built as interfaces; local versions built |
-| **Installer** | Puts a skill into your assistant's skills folder, records where it came from, applies updates by your policy (auto, notify or pin), and stops risky ones | Next |
-| **The assistant's tools (MCP) and the CLI** | Generated from the one contract, so they can't drift apart | Next |
+| **Installer** | Puts a skill into your assistant's skills folder, records where it came from, applies updates by your policy (auto, notify or pin), and holds risky ones for the person's yes | Built (more kinds of risky change: next) |
+| **The assistant's tools (MCP) and the CLI** | Generated from the one contract, so they can't drift apart | Built: all ten assistant tools; the CLI's `install`, `list` and `update` (the rest: next) |
 | **Guided setup** | One colourful command (an assistant can run it too), auto-updates on by default, `--yes` or a file for unattended setup, `teardown` to undo it | Next |
 | **Web UI, hosted catalog, bundles, agent reviewers** | Designed; parked until phase 1 is done | Later |
 
