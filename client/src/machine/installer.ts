@@ -13,7 +13,7 @@
 // Node has no directory-relative file operations, so another program running as the same person can still race these
 // checks; the installer narrows the window.
 
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync, type BigIntStats } from 'node:fs';
+import { closeSync, constants, existsSync, fchmodSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync, writeSync, type BigIntStats } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CatalogError, shellQuote, validateInput, type Catalog, type Surface, type VersionsResult } from '@skills-catalog/core';
 import { checkFetched, checkName, diffTrees, flagText, type RiskFlag, type TreeDiff, type TreeFile } from '@skills-catalog/core/skill-tree';
@@ -61,26 +61,57 @@ function checkTarget(ctx: Context, target: Target, name: string, lock: Lock): st
 // .claude and .claude/skills under the target's root, made one folder at a time. Each is checked and its identity taken
 // from the same lstat, so the identity is always a real folder's, never a link's own: a link that appeared since
 // checkTarget is refused, not followed. writeSkill checks these identities again after every move. The folders it makes
-// are 0755 whatever the umask, so they pass the privacy check (a umask of 002 would make them group-writable).
+// are 0755 whatever the umask (madeAs), so they pass the privacy check (a umask of 002 would make them group-writable).
 type Anchor = { path: string; id: Id };
 function skillsFolderFor(dest: string, target: Target): Anchor[] {
   const skills = dirname(dest);
   const claude = dirname(skills);
   const root = dirname(claude);
-  mkdirSync(root, { recursive: true, mode: 0o755 });
+  const missing: string[] = [];
+  for (let at = root; !existsSync(at) && dirname(at) !== at; at = dirname(at)) missing.unshift(at);
+  for (const at of missing) makeFolder(at, 0o755);
   // The folder above .claude (§4.5): the assistant home is held to the same rule as .claude; a project folder may be
   // group-writable (a team's checkout) but not world-writable unless sticky, as /tmp is. It may be reached through a link.
   const r = statSync(root, { bigint: true });
   const open = target === 'user' ? !isPrivate(r) : (r.mode & 0o002n) !== 0n && (r.mode & 0o1000n) === 0n;
   if (open) throw new CatalogError('target_not_private', { path: root });
   return [claude, skills].map((path) => {
-    try {
-      mkdirSync(path, { mode: 0o755 });
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
-    }
+    makeFolder(path, 0o755);
     return realFolder(path);
   });
+}
+
+// Modes set exactly, whatever the umask: a umask of 002 would leave a skill's folders group-writable (on macOS the group
+// is staff, every local user), and a strict one could leave an executable unrunnable. Set through a handle that doesn't
+// follow a link, so a link swapped in is never changed.
+function madeAs(path: string, mode: number): void {
+  const fd = openSync(path, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+  try {
+    fchmodSync(fd, mode);
+  } finally {
+    closeSync(fd);
+  }
+}
+/** Makes a folder with exactly `mode`; one already there is left as it is. Returns whether it was made here. */
+function makeFolder(path: string, mode: number): boolean {
+  try {
+    mkdirSync(path, { mode });
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+    return false;
+  }
+  madeAs(path, mode);
+  return true;
+}
+/** A new file with exactly `mode`, created, never opened where something already stands. */
+function writeNew(path: string, bytes: Uint8Array, mode: number): void {
+  const fd = openSync(path, 'wx', mode);
+  try {
+    for (let at = 0; at < bytes.length; ) at += writeSync(fd, bytes, at);
+    fchmodSync(fd, mode);
+  } finally {
+    closeSync(fd);
+  }
 }
 
 // A folder that must be a real folder, not a link, private to the person, with its identity taken from the same lstat.
@@ -170,19 +201,14 @@ function moved(from: string, to: string): boolean {
 function writeSkill(dest: string, target: Target, files: readonly TreeFile[], entry: LockEntry | undefined): { copy: Id; kept?: string } {
   const anchors = skillsFolderFor(dest, target);
   const stagingDir = join(anchors[0]!.path, STAGING);
-  let made = false;
-  try {
-    mkdirSync(stagingDir, { mode: 0o700 });
-    made = true;
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
-  }
+  const made = makeFolder(stagingDir, 0o700);
   const staging = realFolder(stagingDir);
   anchors.push(staging);
   const anchored = () => anchors.every((a) => isCopy(lstatOf(a.path), a.id));
   // A kept copy may hold the person's local edits: git ignores everything here, so `git add -A` can't commit it.
   if (made) writeFileSync(join(stagingDir, '.gitignore'), '*\n', { flag: 'wx', mode: 0o600 });
   const tmp = mkdtempSync(join(stagingDir, 'install-'));
+  madeAs(tmp, 0o700);
   const copy = idOf(tmp)!;
   try {
     // Nothing is written until the folders are still the ones checked, and each file only while the temp folder is still
@@ -190,10 +216,11 @@ function writeSkill(dest: string, target: Target, files: readonly TreeFile[], en
     if (!anchored()) throw new CatalogError('target_changed', { path: dest });
     for (const f of files) {
       if (!isCopy(lstatOf(tmp), copy)) throw new CatalogError('target_changed', { path: dest });
-      const full = join(tmp, f.path);
-      mkdirSync(dirname(full), { recursive: true });
-      writeFileSync(full, f.bytes, { mode: f.mode === '0755' ? 0o755 : 0o644, flag: 'wx' });
+      const parts = f.path.split('/');
+      for (let i = 1; i < parts.length; i++) makeFolder(join(tmp, ...parts.slice(0, i)), 0o755);
+      writeNew(join(tmp, f.path), f.bytes, f.mode === '0755' ? 0o755 : 0o644);
     }
+    madeAs(tmp, 0o755);
     // Folders left in staging because they couldn't be put back: named in the refusal (the staging folder itself when
     // more than one is there).
     const left: string[] = [];

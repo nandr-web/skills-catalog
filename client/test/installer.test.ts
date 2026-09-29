@@ -163,6 +163,42 @@ describe('install (contract §3 install_shared_skill)', () => {
     }
   });
 
+  // Another local user in the same group must not be able to edit a script that later runs as the person, and a strict
+  // umask must not leave an executable unrunnable: the installed copy's modes are the manifest's, whatever the umask.
+  it('the installed copy has exactly its manifest\'s modes whatever the umask: folders 0755, files 0644 or 0755; the fingerprint is unchanged', async () => {
+    const files: File[] = [...withScript('notes-helper'), { path: 'docs/deep/ref.md', text: 'Deep.\n' }];
+    for (const umask of [0o002, 0o133]) {
+      const p = place();
+      await publish(p, 'notes-helper', files);
+      // The installer's own folder is already there, as after setup; what's pinned here is the installed copy.
+      mkdirSync(p.home, { recursive: true, mode: 0o700 });
+      const was = process.umask(umask);
+      let r;
+      try {
+        r = await install(ctxFor(p), { name: 'notes-helper' });
+        if (r.result === S.doc.log.result.install.held) r = await accept(ctxFor(p), { name: 'notes-helper', confirm: confirmOf(r.text), flags: ['runnable_file'] });
+      } finally {
+        process.umask(was);
+      }
+      const dest = join(userSkills(p), 'notes-helper');
+      const modes: Record<string, string> = {};
+      const walk = (rel: string) => {
+        const s = lstatSync(join(dest, rel));
+        modes[rel || '.'] = (s.mode & 0o7777).toString(8);
+        if (s.isDirectory()) for (const e of readdirSync(join(dest, rel))) walk(rel ? `${rel}/${e}` : e);
+      };
+      walk('');
+      expect([umask.toString(8), modes]).toEqual([
+        umask.toString(8),
+        { '.': '755', 'SKILL.md': '644', scripts: '755', 'scripts/run.sh': '755', docs: '755', 'docs/deep': '755', 'docs/deep/ref.md': '644' },
+      ]);
+      const installed = Object.entries(modes).filter(([rel]) => lstatSync(join(dest, rel)).isFile());
+      const fp = fingerprint(installed.map(([rel, m]) => ({ path: rel, mode: `0${m}` as Mode, sha256: sha256Hex(readFileSync(join(dest, rel))) })));
+      expect(fp).toBe(fingerprintOf(files));
+      expect(lockOf(p)[dest]!.fingerprint).toBe(fp);
+    }
+  });
+
   it('a project install goes into the project; a version can be named', async () => {
     const p = place();
     await publish(p, 'notes-helper', plain('notes-helper'));
