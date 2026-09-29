@@ -49,6 +49,16 @@ describe('round trip: fetch and read give back exactly what was published', () =
     expect(bin.files!.find((f) => f.path === 'logo.png')!.type).toBe('binary');
   });
 
+  it('read with a version gives that version and the latest; catalog_size counts names, not versions', () => {
+    const { catalog } = openTest();
+    for (const v of ['h1.v1', 'h1.v2', 'h1.v3']) catalog.publish(request('release-note-draft', historyVersion(histories.versions[v])), 'ana');
+    expect(catalog.read({ name: 'release-note-draft', version: 1 }).skills[0]).toMatchObject({ version: 1, latest_version: 3 });
+    expect(catalog.read({ name: 'release-note-draft' }).skills[0]).toMatchObject({ version: 3, latest_version: 3 });
+    const missing = catalog.read({ names: ['release-notes'] }).skills[0]!;
+    expect('version' in missing || 'latest_version' in missing).toBe(false);
+    expect(catalog.search({ query: 'release' })).toMatchObject({ catalog_size: 1, total_matches: 1 });
+  });
+
   it('read defaults to the manifest only, with the version, publisher and date', () => {
     const { catalog } = openTest();
     catalog.publish(request('release-note-draft', historyVersion(histories.versions['h1.v1'])), 'dev1');
@@ -173,6 +183,19 @@ describe('only owners publish (contract §7)', () => {
     expect(snapshot(dir)).toBe(before);
     expect(catalog.publish(request('pr-review-checklist', v2), 'dev1')).toMatchObject({ created: true, version: 2, publisher: 'dev1' });
     expect(catalog.read({ name: 'pr-review-checklist' }).skills[0]).toMatchObject({ publisher: 'dev1' });
+  });
+
+  it('refusals come in one order, dry run or not: not_owner, then conflict, then validation', () => {
+    const { dir, catalog } = openTest();
+    catalog.publish(request('pr-review-checklist', historyVersion(histories.versions['prc.v1'])), 'dev1');
+    const before = snapshot(dir);
+    const broken = filesOf({ 'SKILL.md': '---\nname: pr-review-checklist\n---\n\n' })!;
+    for (const dry of [false, true]) {
+      expect(errorOf(() => catalog.publish(request('pr-review-checklist', broken, { dry_run: dry, expected_latest: 0 }), 'dev2')).code).toBe('not_owner');
+      expect(errorOf(() => catalog.publish(request('pr-review-checklist', broken, { dry_run: dry, expected_latest: 0 }), 'dev1')).code).toBe('conflict');
+      expect(errorOf(() => catalog.publish(request('pr-review-checklist', broken, { dry_run: dry }), 'dev1')).code).toBe('invalid_manifest');
+    }
+    expect(snapshot(dir)).toBe(before);
   });
 
   it('the publisher is the acting identity: none is unauthenticated, a bad one is refused', () => {

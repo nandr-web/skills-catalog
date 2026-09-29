@@ -251,7 +251,7 @@ export class Catalog {
       match: hits.length === 0 ? 'none' : words.length === 0 || hits.some((h) => h.matched_words.length === words.length) ? 'all' : 'partial',
       ranking: words.length === 0 ? 'none' : 'lexical',
       total_matches: hits.length,
-      catalog_size: this.p.index.count(),
+      catalog_size: this.p.meta.count(), // names, not versions
     };
     if (offset + limit < hits.length) out.next_cursor = encodeCursor(offset + limit);
     return out;
@@ -330,6 +330,15 @@ export class Catalog {
     const req = validateInput<PublishInput>('publish_version', input);
     const publisher = checkActor(actor);
     const name = checkName(req.name);
+
+    // One order of refusals, dry run or not: not_owner, then conflict, then the files. Owner and latest are checked
+    // before any byte is stored, so a refused publish leaves storage exactly as it was; the append checks again,
+    // atomically, for a publish that raced this one.
+    const skill = this.p.meta.skill(name);
+    if (skill && !skill.owners.includes(publisher)) throw new CatalogError('not_owner', { name, owners: skill.owners });
+    const latestNo = skill?.latest ?? 0;
+    if (req.expected_latest !== undefined && req.expected_latest !== latestNo) throw new CatalogError('conflict', { name, latest: latestNo, expected_latest: req.expected_latest });
+
     const raw = req.files.map((f, i) => {
       if (!BASE64.test(f.content_base64)) throw new CatalogError('invalid_request', { field: `files[${i}].content_base64`, why: 'not base64' });
       return { path: f.path, mode: f.mode, bytes: Buffer.from(f.content_base64, 'base64') };
@@ -338,13 +347,6 @@ export class Catalog {
     const md = checkManifest(tree, name);
     const entries = tree.map(entryOf);
     const fingerprint = fingerprintOf(entries);
-
-    // Checked before any byte is stored, so a refused publish leaves storage exactly as it was; the append checks
-    // again, atomically, for a publish that raced this one.
-    const skill = this.p.meta.skill(name);
-    if (skill && !skill.owners.includes(publisher)) throw new CatalogError('not_owner', { name, owners: skill.owners });
-    const latestNo = skill?.latest ?? 0;
-    if (req.expected_latest !== undefined && req.expected_latest !== latestNo) throw new CatalogError('conflict', { name, latest: latestNo, expected_latest: req.expected_latest });
     const latest = skill ? this.p.meta.version(name, latestNo) : undefined;
     const diff = diffTrees(latest ? { files: this.tree(latest), publisher: latest.publisher } : null, { files: tree, publisher }, this.config.capabilityKeys);
     const result = (version: number, created: boolean): PublishResult => ({
