@@ -319,6 +319,13 @@ describe('the words file (vendored, recommended variant)', () => {
     expect(missing).toEqual([]);
   });
 
+  it('a publish the local page\'s server wasn\'t started to allow has its own sentence, as a hosted catalog has', () => {
+    const s = Words.load();
+    const w = s.word('errors');
+    expect(renderError(s, new CatalogError('forbidden', { why: 'read_only' }))).toBe(s.format(w.forbidden_read_only, {}));
+    expect(renderError(s, new CatalogError('forbidden', {}))).toBe(s.format(w.forbidden, {}));
+  });
+
   it('a link in a published folder and a confirm from elsewhere each have their own sentence', () => {
     const s = Words.load();
     const w = s.word('errors');
