@@ -19,14 +19,7 @@ export type Run = (ctx: Context, args: unknown) => Promise<Done>;
 
 /** Words the client waits for from the agent-facing surface, as paths from the surface's top. Until one lands it's shown
  *  as data, and a test fails the moment it appears in the vendored surface, so it gets wired. */
-export const CLIENT_WORD_GAPS: readonly string[] = [
-  'results.policy_name',
-  'results.policy_source',
-  'results.status',
-  'results.policy_set',
-  'results.update.none_installed',
-  'results.update.refused_fingerprint',
-];
+export const CLIENT_WORD_GAPS: readonly string[] = [];
 
 const NONE = '-';
 

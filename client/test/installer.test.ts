@@ -14,6 +14,7 @@ import { open, request, skillMd } from './seed.ts';
 import { place, type Place } from './server.ts';
 
 const S = Surface.load();
+const AUTO_DEFAULT = S.word('policy_name').auto + S.word('policy_source').default;
 const run = (op: string) => MACHINE_RUNS[op]!;
 const install = run('install_shared_skill');
 const update = run('update_installed_skills');
@@ -95,7 +96,7 @@ describe('install (contract §3 install_shared_skill)', () => {
     const dest = join(userSkills(p), 'notes-helper');
     expect(tree(dest)).toEqual({ 'SKILL.md 644': skillMd('notes-helper', 'The notes-helper skill.'), 'reference.md 644': 'More.\n' });
     expect(r.text).toBe(
-      S.format(S.word('install.done'), { name: 'notes-helper', version: 1, path: JSON.stringify(dest), policy: 'auto' }) + '\n' + S.format(S.word('install.live'), { name: 'notes-helper' }),
+      S.format(S.word('install.done'), { name: 'notes-helper', version: 1, path: JSON.stringify(dest), policy: AUTO_DEFAULT }) + '\n' + S.format(S.word('install.live'), { name: 'notes-helper' }),
     );
     expect(r.result).toBe(S.doc.log.result.install.installed);
     const e = lockOf(p)[dest]!;
@@ -135,7 +136,7 @@ describe('install (contract §3 install_shared_skill)', () => {
 
     const taken = await accept(ctx, { name: 'runner', confirm, flags: ['runnable_file', 'runnable_file'] });
     const dest = join(userSkills(p), 'runner');
-    expect(taken.text).toBe(S.format(S.word('install.installed_after_yes'), { name: 'runner', version: 1, path: JSON.stringify(dest), policy: 'auto' }));
+    expect(taken.text).toBe(S.format(S.word('install.installed_after_yes'), { name: 'runner', version: 1, path: JSON.stringify(dest), policy: AUTO_DEFAULT }));
     expect(taken.result).toBe(S.doc.log.result.accept);
     expect(tree(dest)['scripts/run.sh 755']).toBe('#!/bin/sh\necho run\n');
     expect(lockOf(p)[dest]!.accepted).toEqual([{ version: 1, flags: ['runnable_file'] }]);
@@ -330,8 +331,15 @@ describe('update (contract §3 update_installed_skills, §5.3)', () => {
     for (const name of ['a-skill', 'b-skill']) await install(ctx, { name });
     await publish(p, 'b-skill', plain('b-skill', 'Second.\n'));
     const r = await list(ctx, {});
-    expect(r.text).toContain('"name":"a-skill"');
-    expect(r.text).toContain('"state":"behind"');
+    const line = (name: string, state: string) => S.format(S.word('status.line'), { name, version: 1, state, policy: AUTO_DEFAULT });
+    expect(r.text).toBe(
+      [
+        S.format(S.word('status.header'), { n: 2 }),
+        line('a-skill', S.format(S.word('status.state.same'))),
+        line('b-skill', S.format(S.word('status.state.behind'), { latest: 2 })),
+        S.format(S.word('status.next_behind')),
+      ].join('\n'),
+    );
     expect(r.result).toBe(S.doc.log.result.status);
   });
 

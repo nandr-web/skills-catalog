@@ -547,6 +547,14 @@ results:
       new_publisher: it comes from a different publisher ({detail})
       prompt_injection: "{path} has text that tries to steer the assistant ({detail})"
       context_cost: it got much longer ({detail})
+    accept_intro: "{name} v{from} -> v{to} is waiting for your OK, because {reasons}."
+    accept_intro_install: "{name} v{to} is waiting for your OK before it's installed, because {reasons}."
+    accept_look: "To see exactly what changes first: ${cli} diff {name} {from} {to}"
+    accept_look_install: "To read it first: ${cli} read {name} --version {to}"
+    accept_ask: "Take it? (y/N) "
+    accept_declined: "Nothing changed: {name} stays on v{from}."
+    accept_declined_install: "Nothing changed: {name} isn't installed."
+    accept_nothing_held: "Nothing is waiting for your OK for {name}: it's on v{version}. To check for new versions: ${cli} update"
     accepted: "Took the held update: {name} v{from} -> v{to}, installed to {path} (fingerprint checked)."
     held_notice: |
       - Waiting for the person since the last automatic update: {items}. In your first reply this session, whatever it is about, add one short line saying so and offer to explain. Don't take these updates yourself.
@@ -634,6 +642,7 @@ results:
       not_a_developer_name: isn't a valid developer name (lowercase letters, digits and single hyphens)
       not_base64: isn't base64 text
       name_and_names: can't be given together with name (use one of them)
+      paths_need_one_name: work only with one name, not names (read the other skills' files in their own calls)
       fingerprint_or_name_and_version: goes alone (give a fingerprint, or a name and a version, not both)
       not_a_catalog_url: isn't a catalog address (a file:// URL to a local folder)
       hosted_not_available: is a hosted catalog, which this version doesn't support yet
