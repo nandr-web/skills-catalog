@@ -2,10 +2,6 @@
 // holds cost and whether they changed an answer, and what asks for a review of when updates are held (§5.3). Read from
 // $SKILLS_HOME/usage only, never sent anywhere; the events name no skill. Not an operation of the registry: it reads
 // this machine's own counts, so it runs on its own and touches no catalog.
-//
-// Not served yet: it isn't in run.ts's COMMANDS until the installer records its holds and the person's yes, since a
-// summary without them would say no update was ever held. The test that trips when they're recorded is in
-// test/usage-look.test.ts.
 import type { Surface } from '@skills-catalog/core';
 import { readUsage } from '../../usage/record.ts';
 import { usageStats, type ReviewRule, type UsageStats } from '../../usage/stats.ts';

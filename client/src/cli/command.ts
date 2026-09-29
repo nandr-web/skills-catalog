@@ -26,8 +26,7 @@ export type Env = { ctx: Context; s: Surface; io: Io; words: readonly string[]; 
 export class Usage extends Error {}
 
 export type Command = {
-  /** The registry's operation; for a command that only runs on its own, its own name (stats, which is built but not
-   *  served yet: see commands/stats.ts). */
+  /** The registry's operation; for a command that only runs on its own, its own name (stats). */
   op: string;
   /** The flags it takes, by name (no leading --). */
   flags: Record<string, FlagType>;

@@ -3,15 +3,11 @@
 // machine, and no skill is named (the events hold only hashes).
 import { describe, expect, it } from 'vitest';
 import { recordUsage } from '../src/usage/record.ts';
-import { renderStats } from '../src/cli/commands/stats.ts';
 import { COMMANDS } from '../src/cli/run.ts';
-import { readUsage } from '../src/usage/record.ts';
-import { usageStats } from '../src/usage/stats.ts';
 import { cli, S } from './cli-io.ts';
 import { place, type Place } from './server.ts';
 
-// Until stats is served (it waits for the installer to record holds and a yes), its output is what the command would print.
-const runStats = async (p: Place) => ({ code: 0, err: '', out: renderStats(S, usageStats(readUsage(p.home))) + '\n' });
+const runStats = (p: Place) => cli(p, ['stats']);
 
 const DAY = 86_400_000;
 const w = (path: string, fields: Record<string, unknown> = {}) => S.format(S.word(`stats.${path}`), fields);
@@ -66,9 +62,11 @@ describe('stats', () => {
 });
 
 describe('stats as a command', () => {
-  it('is not served yet (this trips when it is: then run the tests above through the command itself)', async () => {
+  it('is served, and takes no words: `stats x` gets the usage and exits 1, and nothing is counted', async () => {
     const p = place();
-    expect(Object.keys(COMMANDS)).not.toContain('stats');
-    for (const argv of [['stats'], ['stats', 'x']]) expect((await cli(p, argv)).code, argv.join(' ')).toBe(1);
+    expect(Object.keys(COMMANDS)).toContain('stats');
+    const r = await cli(p, ['stats', 'x']);
+    expect(r.code).toBe(1);
+    expect((await runStats(p)).out.trimEnd()).toBe(S.format(S.word('stats.empty'), {}));
   });
 });
