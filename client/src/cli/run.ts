@@ -8,7 +8,7 @@
 // command can fake a terminal. Setup never pre-allows it, so an assistant running it meets the permission prompt.
 
 import { parseArgs } from 'node:util';
-import { CatalogError, Surface, checkActor, inputSchema, renderError, toCatalogError } from '@skills-catalog/core';
+import { CatalogError, Surface, checkActor, inputSchema, renderError, shellQuote, toCatalogError } from '@skills-catalog/core';
 import { actingAs, contextFor, perform, type Context } from '../operations.ts';
 import { pendingHold } from '../machine/installer.ts';
 import type { Target } from '../machine/lock.ts';
@@ -54,9 +54,6 @@ function flagsOf(cmd: Command): Flag[] {
 
 // A number where one is expected; anything else goes to the registry as typed, which refuses it in its own words.
 const numberOr = (v: string): number | string => (/^-?\d+$/.test(v) ? Number(v) : v);
-
-// A value in a command line the person can paste: POSIX single quotes when it needs any.
-const shellQuote = (v: string) => (/^[A-Za-z0-9._\/-]+$/.test(v) ? v : `'${v.replaceAll("'", `'\\''`)}'`);
 
 /** The commands this CLI serves, as the surface names them, and the MCP server. */
 export function usage(s: Surface): string {
