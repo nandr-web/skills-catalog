@@ -22,13 +22,17 @@ export type StageConfig = {
   rateLimitPer5Min: number;
   /** Demo: the exact Lambda runtime version the throwaway smoke test proved (manual runtime updates). */
   runtimeVersionArn?: string | undefined;
-  /** Demo: a monthly budget in US dollars, and CloudFront's flat-rate Free plan. */
-  budgetUsd?: number | undefined;
+  /** A monthly budget in US dollars (throwaway too: a forgotten stack is the likeliest surprise bill). */
+  budgetUsd: number;
+  /** Demo: CloudFront's flat-rate Free plan. */
   freePlan: boolean;
+  /** Where the alarms go: an email address given at the deploy go, never in code (like the account). */
+  alertEmail?: string | undefined;
 };
 
 /** Set at the deploy go (the owner's account); synth needs only a fixed value. */
 export const ACCOUNT = '111111111111';
+// us-east-1 only: the web ACL for CloudFront lives in this stack, and one can only be made there.
 export const REGION = 'us-east-1';
 
 /** What each preset names the same way: its account and region, and its parameters under /skills-catalog/<preset>/. */
@@ -43,7 +47,7 @@ function named(preset: PresetName) {
 }
 
 export const PRESETS: Record<PresetName, StageConfig> = {
-  throwaway: { ...named('throwaway'), removal: RemovalPolicy.DESTROY, keepHistory: false, throttle: { rate: 20, burst: 40 }, rateLimitPer5Min: 1000, freePlan: false },
+  throwaway: { ...named('throwaway'), removal: RemovalPolicy.DESTROY, keepHistory: false, throttle: { rate: 20, burst: 40 }, rateLimitPer5Min: 1000, budgetUsd: 5, freePlan: false },
   // runtimeVersionArn is set at the demo deploy go, to the version the throwaway smoke test proved.
   demo: { ...named('demo'), removal: RemovalPolicy.RETAIN, keepHistory: true, throttle: { rate: 50, burst: 100 }, rateLimitPer5Min: 2000, budgetUsd: 10, freePlan: true },
 };

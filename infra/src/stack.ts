@@ -34,6 +34,7 @@ export class CatalogStack extends Stack {
       deadLetters: this.events.deadLetters,
       pipeName: this.events.pipe.ref,
       budgetUsd: config.budgetUsd,
+      alertEmail: config.alertEmail,
       freePlan: config.freePlan ? { distributionArn: this.site.distribution.distributionArn, webAclArn: this.site.webAcl.attrArn } : undefined,
     });
   }
