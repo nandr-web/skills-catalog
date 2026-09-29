@@ -977,7 +977,7 @@ describe('update (contract §3 update_installed_skills, §5.3)', () => {
 // file is never repaired or rewritten, and an unknown policy never falls back to automatic updates.
 describe('a damaged lock or config file (contract §4.5 invalid_local_file)', () => {
   const entry = (p: Place, name: string) => lockOf(p)[join(userSkills(p), name)]!;
-  const damages: { file: 'lock.json' | 'config.json'; why: string; bytes: (p: Place) => string }[] = [
+  const damages: { file: 'lock.json' | 'config.json'; why: string; bytes: (p: Place) => string; key?: string }[] = [
     { file: 'lock.json', why: 'not_json', bytes: () => '{"skills": {' },
     { file: 'lock.json', why: 'wrong_shape', bytes: () => '[]' },
     { file: 'lock.json', why: 'wrong_shape', bytes: () => 'null' },
@@ -988,6 +988,8 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
     // A folder identity is a number, or a decimal string of digits past 2^53 (no sign, no leading zeros).
     ...['-1', '01', '1.5', '1e3', 'x', '', ' 1'].map((ino) => ({ file: 'lock.json' as const, why: 'wrong_shape', bytes: (p: Place) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), copy: { ...entry(p, 'runner').copy!, ino } } } }) })),
     { file: 'lock.json', why: 'unknown_policy', bytes: (p) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), policy: 'pinn' } } }) },
+    // An acceptance's `by` is absent (the person's yes) or accept_flagged_updates; nothing else.
+    { file: 'lock.json', why: 'wrong_shape', bytes: (p) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), accepted: [{ version: 1, flags: [], by: 'someone' }] } } }) },
     { file: 'config.json', why: 'not_json', bytes: () => 'update_policy: pin\n' },
     { file: 'config.json', why: 'wrong_shape', bytes: () => '"pin"' },
     { file: 'config.json', why: 'wrong_shape', bytes: () => 'null' },
@@ -1000,10 +1002,38 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
     ...['0', '-1', '1.5', '1e400', '9007199254740992'].map((b) => ({ file: 'config.json' as const, why: 'not_a_budget', bytes: () => `{"context_cost_budget": ${b}}` })),
     ...['"true"', '1', 'null'].map((b) => ({ file: 'config.json' as const, why: 'wrong_shape', bytes: () => `{"accept_flagged_updates": ${b}}` })),
     ...['safe_frontmatter_keys', 'non_granting_keys'].flatMap((k) => ['"name"', '[1]', '["model", null]', '{}'].map((b) => ({ file: 'config.json' as const, why: 'wrong_shape', bytes: () => `{"${k}": ${b}}` }))),
+    // config.json holds exactly §6's keys, fail closed: an unknown key (a misspelled update_policy set to pin must never
+    // mean auto), or a key added to safe_frontmatter_keys (config can only remove), is wrong_shape naming that key.
+    { file: 'config.json', why: 'wrong_shape', key: 'update_polcy', bytes: () => '{"update_polcy": "pin"}' },
+    { file: 'config.json', why: 'wrong_shape', key: 'hooks', bytes: () => '{"safe_frontmatter_keys": ["name", "hooks"]}' },
+    // The first unknown key in JSON.parse's order, which puts integer-like keys first (a stated limit).
+    { file: 'config.json', why: 'wrong_shape', key: '10', bytes: () => '{"zeta": 1, "10": 2}' },
+    // Each known key has its shape.
+    ...[
+      '{"hosting": "cloud"}',
+      '{"catalog": 5}',
+      '{"catalog": ""}',
+      '{"overrides": ["pin"]}',
+      '{"session_start_hook": "yes"}',
+      '{"claude_config_dir": "relative/claude"}',
+      '{"me": "Not A Name"}',
+      '{"demo_developers": ["dev1", 2]}',
+      '{"demo_developers": "dev1"}',
+      '{"aws": "us-east-1"}',
+      '{"targets": ["cursor"]}',
+      '{"targets": "claude-code"}',
+      '{"cooldown": "3d"}',
+      '{"cooldown": -1}',
+      '{"cooldown": 31536001}',
+      '{"cooldown": 1.5}',
+    ].map((b) => ({ file: 'config.json' as const, why: 'wrong_shape', bytes: () => b })),
+    { file: 'config.json', why: 'unknown_policy', bytes: () => '{"overrides": {"runner": "Pin"}}' },
   ];
 
   it('the setup keys, well formed, are read as they are (a whole budget written as 5000.0, the largest safe one, empty lists)', async () => {
-    for (const bytes of ['{"context_cost_budget": 5000.0, "accept_flagged_updates": false}', '{"context_cost_budget": 9007199254740991, "safe_frontmatter_keys": [], "non_granting_keys": ["model"]}']) {
+    // Every key of §6, well formed, as setup writes them.
+    const all = JSON.stringify({ hosting: 'local', catalog: '/somewhere/catalog', update_policy: 'notify', overrides: { runner: 'pin' }, cooldown: 31536000, accept_flagged_updates: false, safe_frontmatter_keys: ['name', 'description'], non_granting_keys: ['model'], context_cost_budget: 5000, command_instruction_patterns: [], targets: ['claude-code'], session_start_hook: true, claude_config_dir: '/somewhere/claude', me: 'ana', demo_developers: ['dev1', 'dev2'], aws: {} });
+    for (const bytes of [all, '{"context_cost_budget": 5000.0, "accept_flagged_updates": false}', '{"context_cost_budget": 9007199254740991, "safe_frontmatter_keys": [], "non_granting_keys": ["model"]}']) {
       const p = place();
       await publish(p, 'runner', plain('runner'));
       mkdirSync(p.home, { recursive: true, mode: 0o700 });
@@ -1037,7 +1067,7 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
       ];
       for (const [what, call] of calls) {
         const e = await refusal(call);
-        expect([what, d.why, e.code, e.data]).toEqual([what, d.why, 'invalid_local_file', { file: d.file, why: d.why, path: file }]);
+        expect([what, d.why, e.code, e.data]).toEqual([what, d.why, 'invalid_local_file', { file: d.file, why: d.why, path: file, ...(d.key ? { key: d.key } : {}) }]);
       }
       expect(readFileSync(file, 'utf8')).toBe(bytes);
       expect(tree(join(userSkills(p), 'runner'))).toEqual(installed);

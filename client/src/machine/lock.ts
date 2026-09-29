@@ -4,9 +4,10 @@
 
 import { spawnSync } from 'node:child_process';
 import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, writeSync, type Stats } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { CatalogError } from '@skills-catalog/core';
+import { ACTOR, CatalogError } from '@skills-catalog/core';
+import { DEFAULT_SAFE_FRONTMATTER_KEYS } from '@skills-catalog/core/skill-tree';
 
 export type Policy = 'auto' | 'notify' | 'pin';
 export type Target = 'user' | 'project';
@@ -63,7 +64,8 @@ const isIdPart = (n: unknown) => (typeof n === 'number' && Number.isSafeInteger(
 function entryWhy(e: unknown): Why | undefined {
   if (!isObject(e)) return 'wrong_shape';
   const strings = ['name', 'fingerprint', 'publisher', 'path', 'installed_at', 'catalog'].every((k) => typeof e[k] === 'string');
-  const accepted = Array.isArray(e['accepted']) && e['accepted'].every((a) => isObject(a) && isCount(a['version']) && isStrings(a['flags']));
+  // `by` is absent (the person's yes) or the setting that let it through, nothing else (§4.5).
+  const accepted = Array.isArray(e['accepted']) && e['accepted'].every((a) => isObject(a) && isCount(a['version']) && isStrings(a['flags']) && (a['by'] === undefined || a['by'] === 'accept_flagged_updates'));
   const c = e['copy'];
   const copy = c === undefined || (isObject(c) && [c['dev'], c['ino']].every(isIdPart) && (c['birth'] === undefined || isIdPart(c['birth']) || (typeof c['birth'] === 'number' && Number.isFinite(c['birth']) && c['birth'] > 0)));
   if (!strings || !TARGETS.includes(e['target'] as string) || !isCount(e['version']) || !accepted || !copy) return 'wrong_shape';
@@ -76,26 +78,55 @@ function lockWhy(x: unknown): Why | undefined {
   return whys.includes('wrong_shape') ? 'wrong_shape' : whys.find((w) => w !== undefined);
 }
 
-/** Why the setup keys (§6) are refused, if they are: accept_flagged_updates is true or false, the key lists are lists of
- *  names, and context_cost_budget is a number (else the wrong shape) that is a positive whole one below 2^53 (else not a
- *  budget; 5000.0 is 5000 once parsed). */
-function setupKeysWhy(x: Record<string, unknown>): Why | undefined {
-  const flag = x['accept_flagged_updates'];
-  if (flag !== undefined && typeof flag !== 'boolean') return 'wrong_shape';
-  for (const k of ['safe_frontmatter_keys', 'non_granting_keys']) if (x[k] !== undefined && !isStrings(x[k])) return 'wrong_shape';
-  const budget = x['context_cost_budget'];
-  if (budget === undefined) return undefined;
-  if (typeof budget !== 'number') return 'wrong_shape';
-  return Number.isSafeInteger(budget) && budget >= 1 ? undefined : 'not_a_budget';
-}
+// config.json's keys are exactly §6's; any other is refused naming it, so a misspelled update_policy set to pin never
+// falls back to automatic updates. Each key has its shape; the key lists can only remove keys the code holds.
+type Refusal = Why | { why: Why; key: string };
+const HOSTING: readonly string[] = ['local', 'aws'];
+const MAX_COOLDOWN_S = 365 * 24 * 3600;
+// The assistants setup writes for in this phase.
+const SETUP_TARGETS: readonly string[] = ['claude-code'];
+const isName = (x: unknown) => typeof x === 'string' && ACTOR.test(x);
+const CONFIG_KEYS: Record<string, (x: unknown) => Refusal | undefined> = {
+  hosting: (x) => (typeof x === 'string' && HOSTING.includes(x) ? undefined : 'wrong_shape'),
+  catalog: (x) => (typeof x === 'string' && x !== '' ? undefined : 'wrong_shape'),
+  update_policy: policyWhy,
+  overrides: (x) => {
+    if (!isObject(x)) return 'wrong_shape';
+    const whys = Object.values(x).map(policyWhy);
+    return whys.includes('wrong_shape') ? 'wrong_shape' : whys.find((w) => w !== undefined);
+  },
+  // A wait in whole seconds, up to a year (§5.3's cooldown; built with shared and hosted catalogs).
+  cooldown: (x) => (Number.isSafeInteger(x) && (x as number) >= 0 && (x as number) <= MAX_COOLDOWN_S ? undefined : 'wrong_shape'),
+  accept_flagged_updates: (x) => (typeof x === 'boolean' ? undefined : 'wrong_shape'),
+  safe_frontmatter_keys: (x) => {
+    if (!isStrings(x)) return 'wrong_shape';
+    const added = (x as string[]).find((k) => !DEFAULT_SAFE_FRONTMATTER_KEYS.includes(k));
+    return added === undefined ? undefined : { why: 'wrong_shape', key: added };
+  },
+  non_granting_keys: (x) => (isStrings(x) ? undefined : 'wrong_shape'),
+  // A number that isn't a positive whole one below 2^53 isn't a budget; 5000.0 is 5000 once parsed.
+  context_cost_budget: (x) => (typeof x !== 'number' ? 'wrong_shape' : Number.isSafeInteger(x) && x >= 1 ? undefined : 'not_a_budget'),
+  command_instruction_patterns: (x) => (Array.isArray(x) ? undefined : 'wrong_shape'),
+  targets: (x) => (Array.isArray(x) && x.every((t) => typeof t === 'string' && SETUP_TARGETS.includes(t)) ? undefined : 'wrong_shape'),
+  session_start_hook: (x) => (typeof x === 'boolean' ? undefined : 'wrong_shape'),
+  claude_config_dir: (x) => (typeof x === 'string' && isAbsolute(x) ? undefined : 'wrong_shape'),
+  me: (x) => (isName(x) ? undefined : 'wrong_shape'),
+  demo_developers: (x) => (Array.isArray(x) && x.every(isName) ? undefined : 'wrong_shape'),
+  aws: (x) => (isObject(x) ? undefined : 'wrong_shape'),
+};
 
-function configWhy(x: unknown): Why | undefined {
+/** Why config.json is refused, if it is: the first unknown key (in the order JSON.parse keeps, which puts integer-like
+ *  keys first), else the first shape that's wrong (the wrong shape before an unknown policy or a bad budget). */
+function configWhy(x: unknown): Refusal | undefined {
   if (!isObject(x)) return 'wrong_shape';
-  const whys = [policyWhy(x['update_policy']), setupKeysWhy(x)];
-  return whys.includes('wrong_shape') ? 'wrong_shape' : whys.find((w) => w !== undefined);
+  const unknown = Object.keys(x).find((k) => !Object.hasOwn(CONFIG_KEYS, k));
+  if (unknown !== undefined) return { why: 'wrong_shape', key: unknown };
+  const whys = Object.entries(x).map(([k, v]) => CONFIG_KEYS[k]!(v)).filter((w) => w !== undefined);
+  const why = (w: Refusal) => (typeof w === 'string' ? w : w.why);
+  return whys.find((w) => why(w) === 'wrong_shape') ?? whys[0];
 }
 
-function readJson<T>(home: string, name: 'lock.json' | 'config.json', empty: T, why: (x: unknown) => Why | undefined): T {
+function readJson<T>(home: string, name: 'lock.json' | 'config.json', empty: T, why: (x: unknown) => Refusal | undefined): T {
   const path = join(home, name);
   let text: string;
   try {
@@ -111,7 +142,7 @@ function readJson<T>(home: string, name: 'lock.json' | 'config.json', empty: T, 
     throw new CatalogError('invalid_local_file', { file: name, why: 'not_json', path });
   }
   const refused = why(value);
-  if (refused) throw new CatalogError('invalid_local_file', { file: name, why: refused, path });
+  if (refused) throw new CatalogError('invalid_local_file', typeof refused === 'string' ? { file: name, why: refused, path } : { file: name, why: refused.why, path, key: refused.key });
   return value as T;
 }
 
