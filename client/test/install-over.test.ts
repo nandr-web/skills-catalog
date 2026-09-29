@@ -1,10 +1,10 @@
 // An install over a skill already installed, and a lock entry from another catalog (contract §3, §5.3; the owner's
 // decision): the installer table's rows in golden/histories.yaml that have an installed copy and an install, or a copy
 // from another catalog, run as they are. Nothing here fills in or changes an expected value.
-import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { CatalogError, Surface, actAs } from '@skills-catalog/core';
-import type { RiskFlag } from '@skills-catalog/core/skill-tree';
+import { fingerprint, sha256Hex, type RiskFlag } from '@skills-catalog/core/skill-tree';
 import { loadGolden } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
 import { contextFor, type Context } from '../src/operations.ts';
@@ -97,6 +97,19 @@ describe('an install over an installed skill, and a skill from another catalog (
       await plant(p, row.plant);
       const first = await install(ctx, { name: NAME, version: row.installed.version });
       expect(first.outcome).toBe('installed');
+      // `lock_planted`: the copy as it was installed elsewhere, its files recorded in the lock by their fingerprint, even
+      // where this catalog holds other files under the same version.
+      if (row.installed.lock_planted) {
+        const files = filesOf(row.installed.files);
+        rmSync(dest(p), { recursive: true });
+        for (const [path, text] of Object.entries(files)) {
+          mkdirSync(dirname(join(dest(p), path)), { recursive: true });
+          writeFileSync(join(dest(p), path), text, { mode: 0o644 });
+        }
+        const lock = JSON.parse(readFileSync(lockFile(p), 'utf8'));
+        lock.skills[dest(p)].fingerprint = fingerprint(Object.entries(files).map(([path, text]) => ({ path, mode: '0644' as const, sha256: sha256Hex(Buffer.from(text)) })));
+        writeFileSync(lockFile(p), JSON.stringify(lock, null, 2) + '\n');
+      }
       expect(tree(dest(p))).toEqual(filesOf(row.installed.files));
       if (row.installed.policy) await policy(ctx, { name: NAME, policy: row.installed.policy });
       const CATALOG = readLock(p.home).skills[dest(p)]!.catalog;
@@ -143,7 +156,8 @@ describe('an install over an installed skill, and a skill from another catalog (
         expect(readLock(p.home).skills[dest(p)]!.version).toBe(e.installed.version);
       }
       if (e.unchanged) {
-        expect([r.outcome, r.text]).toEqual(['unchanged', S.format(S.word('install.unchanged'), { name: NAME, version: e.unchanged.version })]);
+        if (row.install) expect([r.outcome, r.text]).toEqual(['unchanged', S.format(S.word('install.unchanged'), { name: NAME, version: e.unchanged.version })]);
+        else expect([r.outcome, r.text.split('\n')]).toEqual(['unchanged', expect.arrayContaining([S.format(S.word('update.unchanged'), { n: 1 })])]);
       }
       if (row.lock_unchanged) expect(readFileSync(lockFile(p), 'utf8')).toBe(lockBefore);
       if (row.installed_unchanged) expect(tree(dest(p))).toEqual(treeBefore);
