@@ -9,6 +9,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { Catalog } from '../src/catalog.ts';
+import { LocalDb, openReadOnly } from '../src/local/db.ts';
 import { DB_FILE, actAs, openLocalCatalog } from '../src/local/index.ts';
 import { openCatalog } from '../src/open.ts';
 import { errorOf, openTest, request } from './helpers.ts';
@@ -126,6 +127,77 @@ describe('a read-only open of a catalog file the reads can\'t use', () => {
     const dir = sandbox();
     writeFileSync(join(dir, DB_FILE), '');
     expect((await errorOf(() => readOnly(dir, false))).toJSON()).toEqual({ code: 'invalid_request', field: 'catalog', why: 'catalog_unreadable', path: dir });
+  });
+
+  it('that isn\'t a database, refuses with catalog_unreadable and SQLite\'s code, never its message', async () => {
+    const dir = sandbox();
+    writeFileSync(join(dir, DB_FILE), 'not a database, and a message a person should never be shown');
+    expect((await errorOf(() => readOnly(dir))).toJSON()).toEqual({ code: 'invalid_request', field: 'catalog', why: 'catalog_unreadable', path: dir, sqlite_code: 26 });
+  });
+});
+
+// A catalog file in someone else's folder is untrusted input (contract §6): SQLite doesn't trust its schema, and the
+// tables the reads use must be the catalog's own (real tables, and the search's fts5 table), with no view or trigger
+// anywhere in the file, checked before any read, on the read-only open and the writing one alike.
+describe('a catalog file made to mislead', () => {
+  const crafted = async (sql: string) => {
+    const dir = await published();
+    const w = new DatabaseSync(join(dir, DB_FILE));
+    w.exec(sql);
+    w.close();
+    return dir;
+  };
+  const unreadable = (dir: string) => ({ code: 'invalid_request', field: 'catalog', why: 'catalog_unreadable', path: dir });
+  const cases: [string, string][] = [
+    ['skills is a view', "DROP TABLE skills; CREATE VIEW skills AS SELECT 'alpha' AS name, '[]' AS owners, 1 AS latest"],
+    // a view that never ends: reading it would hang the command
+    ['search_cards is a view that recurses', 'DROP TABLE search_cards; CREATE VIEW search_cards AS WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r) SELECT n AS name, n AS description, 1 AS latest_version, n AS tags, n AS publisher, n AS updated_at FROM r'],
+    ['versions is a view', 'ALTER TABLE versions RENAME TO v2; CREATE VIEW versions AS SELECT * FROM v2'],
+    ['search_fts is a plain table', 'DROP TABLE search_fts; CREATE TABLE search_fts (name, words, description)'],
+    ['it has a view by another name', 'CREATE VIEW anything AS SELECT 1'],
+    ['it has a trigger', "CREATE TRIGGER t AFTER INSERT ON versions BEGIN DELETE FROM skills; END"],
+  ];
+  for (const [what, sql] of cases) {
+    it(`where ${what}, a read-only open refuses with catalog_unreadable and writes nothing`, async () => {
+      const dir = await crafted(sql);
+      const before = contents(dir);
+      expect((await errorOf(() => readOnly(dir))).toJSON()).toEqual(unreadable(dir));
+      expect(contents(dir)).toEqual(before);
+    });
+
+    it(`where ${what}, the writing open refuses with catalog_unreadable and writes nothing`, async () => {
+      const dir = await crafted(sql);
+      const before = contents(dir);
+      expect((await errorOf(() => openLocalCatalog(dir))).toJSON()).toEqual(unreadable(dir));
+      expect(contents(dir)).toEqual(before);
+    });
+  }
+
+  it('SQLite never trusts the file\'s own schema, on either open', async () => {
+    const dir = await published();
+    const writing = new LocalDb(join(dir, DB_FILE));
+    try {
+      expect(writing.db.prepare('PRAGMA trusted_schema').get()).toEqual({ trusted_schema: 0 });
+    } finally {
+      writing.close();
+    }
+    const reading = openReadOnly(join(dir, DB_FILE));
+    try {
+      expect(reading.prepare('PRAGMA trusted_schema').get()).toEqual({ trusted_schema: 0 });
+    } finally {
+      reading.close();
+    }
+  });
+
+  it('a fresh catalog still opens for writing, its tables made and checked', async () => {
+    const fresh = join(sandbox(), 'fresh');
+    const catalog = await openLocalCatalog(fresh);
+    try {
+      await catalog.publish(request('alpha', skill('alpha')), actAs('ana'));
+      expect(await reads(catalog)).toEqual(['alpha']);
+    } finally {
+      catalog.close();
+    }
   });
 });
 
