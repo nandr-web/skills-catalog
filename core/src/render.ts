@@ -186,6 +186,12 @@ export function renderError(s: Surface, e: CatalogError): string {
     case 'forbidden':
       // A hosted catalog asked of this local-only version is a setup matter, not a permission.
       return e.data['why'] === 'hosted_not_available' ? fill(w.forbidden_hosted, d) : fill(w.forbidden, d);
+    case 'secret_suspected': {
+      const kind = w.secret_kind?.[String(d['kind'])];
+      return kind === undefined ? asData(e.code, d) : fill(w.secret_suspected, { ...d, kind });
+    }
+    case 'internal_error':
+      return d['log'] === undefined ? fill(w.internal_error_no_log, d) : fill(w.internal_error, d);
     default: {
       const t = w[e.code];
       return typeof t === 'string' ? fill(t, d) : asData(e.code, d);

@@ -178,12 +178,18 @@ describe('the read\'s inline budget (golden reads)', () => {
     const withFrontmatter = items.filter((i) => Object.keys(i.manifest.frontmatter).length > 0).length;
     if (c.expect.frontmatter_returned !== undefined) expect(withFrontmatter).toBe(c.expect.frontmatter_returned === true ? items.length : c.expect.frontmatter_returned);
     expect(r.inline_budget).toEqual(c.expect.inline_budget);
-    if (c.expect.tool_result_tokens_max !== undefined) {
-      // About 4 bytes a token (contract §2), on the words an assistant gets.
-      const md = new Map<string, string>();
-      for (const item of items) md.set(item.name, Buffer.from((await catalog.fetch({ name: item.name, version: item.version })).files.find((f) => f.path === 'SKILL.md')!.content_base64, 'base64').toString());
-      const text = renderRead(Surface.load(), r, (item) => md.get(item.name)!, counterIds());
-      expect(Buffer.byteLength(text, 'utf8') / 4).toBeLessThanOrEqual(c.expect.tool_result_tokens_max);
+    // The words an assistant gets for this read.
+    const s = Surface.load();
+    const md = new Map<string, string>();
+    for (const item of items) md.set(item.name, Buffer.from((await catalog.fetch({ name: item.name, version: item.version })).files.find((f) => f.path === 'SKILL.md')!.content_base64, 'base64').toString());
+    const text = renderRead(s, r, (item) => md.get(item.name)!, counterIds());
+    // About 4 bytes a token (contract §2).
+    if (c.expect.tool_result_tokens_max !== undefined) expect(Buffer.byteLength(text, 'utf8') / 4).toBeLessThanOrEqual(c.expect.tool_result_tokens_max);
+    // A text over the whole budget is pointed to a read on its own (contract §2: one path reads up to the file limit).
+    if (c.expect.sentence_points_to === 'read_alone') {
+      const tooBig = s.word('get.too_big') as string;
+      expect(text).toContain(tooBig.slice(0, tooBig.indexOf('{')));
+      expect(text).toContain(`${JSON.stringify(req.name)} and paths holding just that file`);
     }
   });
 });

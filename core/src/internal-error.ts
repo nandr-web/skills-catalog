@@ -14,7 +14,7 @@ export function toCatalogError(e: unknown, home: string, now: Date = new Date())
     mkdirSync(logs, { recursive: true, mode: 0o700 });
     writeFileSync(log, `${now.toISOString()}\n${e instanceof Error ? (e.stack ?? e.message) : String(e)}\n`, { mode: 0o600, flag: 'wx' }); // a new file only, never through an existing file or link
   } catch {
-    return new CatalogError('internal_error', { log: 'none (the log could not be written)' });
+    return new CatalogError('internal_error', {}); // no log: its sentence says the log couldn't be written either
   }
   return new CatalogError('internal_error', { log });
 }

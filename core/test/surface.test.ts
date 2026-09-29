@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { readFileSync } from 'node:fs';
 import { DEFAULT_SEARCH_LIMIT, MAX_READ_NAMES, MAX_READ_PATHS, MAX_SEARCH_LIMIT, OPERATIONS } from '../src/registry.ts';
-import { MAX_TAGS, TAG_MAX_LENGTH, checkTree, diffTrees } from '../src/skill-tree/index.ts';
+import { MAX_TAGS, SECRET_KINDS, TAG_MAX_LENGTH, checkTree, diffTrees } from '../src/skill-tree/index.ts';
 import { WORD_GAPS, renderDiff, renderError, renderRead, renderSearch, renderVersions } from '../src/render.ts';
 import { SURFACE_FILE, Surface } from '../src/surface.ts';
 import { toCatalogError } from '../src/internal-error.ts';
@@ -90,6 +90,13 @@ describe('the surface (vendored, recommended variant)', () => {
     const key = renderError(s, new CatalogError('invalid_manifest', { folder: 'x', problem: 'key_format', fields: ['allowed​-tools'] }));
     expect(key).toContain(JSON.stringify('allowed​-tools'));
     expect(key).not.toContain('invalid_manifest: problem');
+    expect(Object.keys(s.word('errors.secret_kind')).sort()).toEqual([...SECRET_KINDS].sort());
+    for (const [kind, words] of Object.entries<string>(s.word('errors.secret_kind'))) {
+      const secret = renderError(s, new CatalogError('secret_suspected', { path: 'scripts/call.sh', line: 3, kind, folder: 'keys' }));
+      expect(secret, kind).toContain(`looks like ${words}.`);
+      expect(secret, kind).not.toContain(kind);
+    }
+    expect(renderError(s, new CatalogError('invalid_path', { path: 'docs/CLAUDE.md', why: 'memory_file' }))).toContain(s.word('errors.why.memory_file'));
   });
 
   it('keeps a skill inside its fence: the markers carry a token made for the read, so no planted marker closes it', async () => {
@@ -273,8 +280,8 @@ describe('internal errors (contract §9)', () => {
       if (plant === 'file') writeFileSync(log, 'already here\n');
       else symlinkSync(target, log);
       const e = toCatalogError(new Error('boom'), home, now);
-      expect(e.code, plant).toBe('internal_error');
-      expect(e.data['log'], plant).not.toBe(log);
+      expect(e.toJSON(), plant).toEqual({ code: 'internal_error' });
+      expect(renderError(Surface.load(), e)).toBe(Surface.load().word('errors.internal_error_no_log'));
       expect(readFileSync(target, 'utf8'), plant).toBe('the person\'s file\n');
       if (plant === 'file') expect(readFileSync(log, 'utf8')).toBe('already here\n');
       else expect(lstatSync(log).isSymbolicLink()).toBe(true);

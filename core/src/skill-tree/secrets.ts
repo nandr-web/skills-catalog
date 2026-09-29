@@ -22,6 +22,9 @@ const RULES: readonly [SecretKind, RegExp][] = [
   ['password_or_token', /\b(?:password|passwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token|token)\s*[:=]\s*['"]?[A-Za-z0-9/+_\-.]{12,}/i],
 ];
 
+// Every kind a hit can have (the faces word each one).
+export const SECRET_KINDS: readonly SecretKind[] = RULES.map(([kind]) => kind);
+
 // The first suspected secret in a skill's text files, in path order, or null. Binary files aren't scanned.
 export function scanSecrets(files: readonly TreeFile[]): SecretHit | null {
   for (const f of files) {
