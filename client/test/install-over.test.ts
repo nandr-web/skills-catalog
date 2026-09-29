@@ -129,9 +129,13 @@ describe('an install over an installed skill, and a skill from another catalog (
           expect(r.text).toBe(S.format(S.word(`install.${key}`), at));
         }
         if (e.risk_flags?.length) expect(r.text).toContain(S.word('update.held_also').split('{reasons}')[0]);
-        // `from` is shown where the sentence has a place for it (the flagged install's sentence has none).
-        const word = row.install ? S.word(`install.${key}`) : S.word(`update.${e.held === 'flagged' ? 'held_flagged' : key}`);
+        // The installed version is named: a flagged install over an installed copy has its own sentence for that.
+        const word = row.install ? S.word(`install.${e.held === 'flagged' ? 'held_over' : key}`) : S.word(`update.${e.held === 'flagged' ? 'held_flagged' : key}`);
+        if (row.install) expect(r.text.startsWith(word.split('{')[0]!)).toBe(true);
+        if (row.install) expect(r.text.startsWith(S.format(word.split(/\{(?!name\}|version\})/)[0]!, { name: NAME, version: held!.version }))).toBe(true);
+        // `from` is data in every held result; the sentence names it where it has a place for it.
         if (e.from !== undefined && word.includes('{from}')) expect(r.text).toContain(`${NAME} v${e.from}`);
+        if (e.held !== 'other_catalog') expect(word).toContain('{from}');
         if (e.was !== undefined) expect([r.text.includes(vars(e.was)!), r.text.includes(vars(e.now)!)]).toEqual([true, true]);
       }
       if (e.installed) {

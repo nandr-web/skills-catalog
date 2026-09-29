@@ -541,7 +541,9 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
     return { text, target: `${req.name} v${version}`, result: log.result('install', `held_${reason}`), outcome: 'held' };
   }
   if (flags.length) {
-    const text = s.format(ctx.face === 'cli' ? w.held_cli : w.held, { ...held, reasons: reasons(s, flags) });
+    // Over an installed copy the sentence names the version installed now.
+    const over = existing ? { word: 'held_over', from: existing.version } : { word: 'held' };
+    const text = s.format(w[ctx.face === 'cli' ? `${over.word}_cli` : over.word], { ...held, ...over, reasons: reasons(s, flags) });
     return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held' };
   }
   const written = writeSkill(dest, target, to.files, existing);
