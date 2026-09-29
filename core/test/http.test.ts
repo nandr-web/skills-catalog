@@ -25,7 +25,7 @@ async function seeded(): Promise<Catalog> {
 /** A transport past its guards: the core's route, then the catalog's answer. A file case's catalog answers only its
  *  fingerprint's lookup, and fails the case if a malformed one reaches it. */
 async function answer(c: HttpCase, catalog: Catalog): Promise<HttpResponse> {
-  if (c.refuse) return refuse(c.refuse, { words: W });
+  if (c.refuse) return refuse(c.refuse, { words: W, ...(c.challenge ? { challenge: c.challenge } : {}) });
   const req = c.request!;
   const r = route(req.method, req.path);
   switch (r.kind) {
@@ -57,13 +57,20 @@ describe('the shared cases', () => {
   }
 });
 
-describe('the published schema (docs/api/openapi.json) says what these answer', () => {
-  const schema = JSON.parse(readFileSync(new URL('../../docs/api/openapi.json', import.meta.url), 'utf8')) as {
+describe('the published schemas (docs/api/openapi.local.json, openapi.hosted.json) say what these answer', () => {
+  type Schema = {
     paths: Record<string, Record<string, { responses: Record<string, unknown> }>>;
-    components: { schemas: { Words: { properties: Record<string, unknown> }; ErrorCode?: { enum?: string[] } } };
+    components: { schemas: { Words: { properties: Record<string, unknown> } } };
   };
+  const load = (f: string) => JSON.parse(readFileSync(new URL(`../../docs/api/${f}`, import.meta.url), 'utf8')) as Schema;
+  const local = load('openapi.local.json');
+  const hosted = load('openapi.hosted.json');
+  // A link to a file and a file on its way are answers only a hosted catalog gives; everything else, both do.
+  const schemaOf = (c: HttpCase) => (c.file?.kind === 'link' || c.file?.kind === 'on_its_way' ? hosted : local);
   const pathOf = (path: string) => (path.startsWith('/api/v1/files/') ? '/api/v1/files/{sha256}' : path);
-  const routed = httpCases.filter((c) => c.request && schema.paths[pathOf(c.request.path)]);
+  const routed = httpCases.filter((c) => c.request && local.paths[pathOf(c.request.path)]);
+  const everyRouteLacks = (schema: Schema, status: number) =>
+    Object.entries(schema.paths).flatMap(([p, ms]) => Object.entries(ms).filter(([, o]) => !(String(status) in o.responses)).map(([m]) => `${m} ${p}`));
 
   it('each status a route answers is one its schema declares; a method it doesn\'t declare is 405', async () => {
     expect(routed.length).toBeGreaterThan(10);
@@ -72,7 +79,7 @@ describe('the published schema (docs/api/openapi.json) says what these answer', 
       const undeclared: string[] = [];
       for (const c of routed) {
         const r = await answer(c, catalog);
-        const operation = schema.paths[pathOf(c.request!.path)]![c.request!.method.toLowerCase()];
+        const operation = schemaOf(c).paths[pathOf(c.request!.path)]![c.request!.method.toLowerCase()];
         const declared = operation ? Object.keys(operation.responses) : ['405'];
         if (!declared.includes(String(r.status))) undeclared.push(`${c.request!.method} ${pathOf(c.request!.path)} ${r.status}`);
       }
@@ -85,8 +92,8 @@ describe('the published schema (docs/api/openapi.json) says what these answer', 
   it('each envelope has only the published keys, and words only the published words', async () => {
     const catalog = await seeded();
     try {
-      const wordKeys = Object.keys(schema.components.schemas.Words.properties);
-      for (const c of [...routed, ...httpCases.filter((x) => x.refuse === 'token_only')]) {
+      const wordKeys = Object.keys(local.components.schemas.Words.properties);
+      for (const c of [...routed, ...httpCases.filter((x) => x.refuse === 'token_only' || x.challenge)]) {
         const r = await answer(c, catalog);
         if (!String(r.headers['content-type']).startsWith('application/json')) continue;
         const body = JSON.parse(String(r.body)) as Record<string, unknown>;
@@ -96,6 +103,17 @@ describe('the published schema (docs/api/openapi.json) says what these answer', 
     } finally {
       catalog.close();
     }
+  });
+
+  it('the hosted schema declares a 401 on every route (sign-in, with its challenge)', () => {
+    expect(everyRouteLacks(hosted, STATUS.no_token)).toEqual([]);
+  });
+
+  // A tripwire: contract §1.1 answers the act-as header on a hosted catalog with 400 (token_only) on every /api/v1 route,
+  // files included, and the hosted schema doesn't declare it yet (told to the core owner). When it does, this fails:
+  // make it a plain `it`.
+  it.fails('the hosted schema declares a 400 (token_only) on every route', () => {
+    expect(everyRouteLacks(hosted, STATUS.token_only)).toEqual([]);
   });
 });
 
@@ -182,9 +200,9 @@ describe('operationResponse', () => {
     try {
       const seen: string[] = [];
       const run = async (op: string, input: unknown) => (seen.push(op), dispatch(op, input, { catalog, developer: 'dev1', face: 'web' }));
-      const ok = await operationResponse({ op: 'search_shared_skills', raw: new TextEncoder().encode('{}'), developer: 'dev1', words: W, run });
+      const ok = await operationResponse({ op: 'search_shared_skills', raw: new TextEncoder().encode('{}'), developer: 'dev1', words: W, run, where: 'local' });
       expect([ok.status, seen]).toEqual([200, ['search_shared_skills']]);
-      const bug = () => operationResponse({ op: 'search_shared_skills', raw: new TextEncoder().encode('{}'), developer: 'dev1', words: W, run: async () => { throw new TypeError('a bug'); } });
+      const bug = () => operationResponse({ op: 'search_shared_skills', raw: new TextEncoder().encode('{}'), developer: 'dev1', words: W, where: 'local', run: async () => { throw new TypeError('a bug'); } });
       await expect(bug()).rejects.toThrow(TypeError);
     } finally {
       catalog.close();

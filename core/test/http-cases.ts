@@ -23,8 +23,9 @@ export type HttpCase = {
   request?: { method: string; path: string; body?: string | 'cut' };
   /** For GET /api/v1/files/<sha256>: what the catalog answers for that fingerprint. */
   file?: FileAnswer;
-  /** A guard's refusal, by kind. */
+  /** A guard's refusal, by kind; `challenge` for a catalog with sign-in (hosted). */
   refuse?: Refusal;
+  challenge?: 'Bearer';
   expect: {
     status: number;
     /** A subset of the JSON body (objects matched key by key, arrays and values exactly). */
@@ -65,7 +66,8 @@ export const httpCases: readonly HttpCase[] = [
   ...[SHA.toUpperCase(), SHA.slice(1), `${SHA}0`, 'z'.repeat(64), ''].map((bad): HttpCase => ({ name: `a malformed fingerprint "${bad.slice(0, 8)}…": 404, never looked up`, request: file(bad), expect: { status: 404, text: NOT_FOUND_TEXT } })),
   { name: 'POST on a file: 405', request: { method: 'POST', path: `/api/v1/files/${SHA}`, body: '{}' }, expect: { status: 405 } },
   // The guards' refusals: one table of numbers.
-  { name: 'no token or a wrong one: 401', refuse: 'no_token', expect: { status: 401 } },
+  { name: 'no token or a wrong one: 401', refuse: 'no_token', expect: { status: 401, text: '' } },
+  { name: 'no sign-in on a catalog that has one: 401, unauthenticated in the envelope, WWW-Authenticate: Bearer', refuse: 'no_token', challenge: 'Bearer', expect: { status: 401, json: { ok: false, error: { code: 'unauthenticated' } }, words: ['error'], headers: { 'www-authenticate': 'Bearer' } } },
   { name: 'a Host, Origin or Sec-Fetch-Site not its own: 403', refuse: 'refused', expect: { status: 403 } },
   { name: 'a body that isn\'t JSON by its Content-Type: 415', refuse: 'not_json', expect: { status: 415 } },
   { name: 'the local act-as header on a hosted catalog: 400 invalid_request {field: X-Skills-Catalog-As, why: token_only}', refuse: 'token_only', expect: { status: 400, json: { ok: false, error: { code: 'invalid_request', field: 'X-Skills-Catalog-As', why: 'token_only' } } } },

@@ -3,20 +3,16 @@
 // its words, and the files route's answer. Each transport keeps its own reading of the stream (cut at its limit), every
 // guard (run before anything here and before the body is read), and who is acting. Nothing here touches a disk, a socket
 // or the process (test/http-deps.test.ts).
-import { OPERATIONS, validateInput, type Face, type OperationDef } from '../api.ts';
-import type { Catalog } from '../catalog.ts';
+import { OPERATIONS, validateInput, type Face, type OperationDef, type Where } from '../api.ts';
+import type { Catalog, FileAnswer } from '../catalog.ts';
 import { CatalogError, isCatalogError } from '../errors.ts';
 import type { Identity } from '../ports.ts';
 import { renderError } from '../render.ts';
 import { DEFAULT_LIMITS } from '../skill-tree/index.ts';
 import type { Words } from '../words-file.ts';
 
+export type { FileAnswer };
 export type HttpResponse = { status: number; headers: Record<string, string>; body: string | Uint8Array };
-
-/** What the catalog answers for a file's fingerprint (contract §1.1, §7): its bytes (local), a short-lived link to them
- *  (hosted, where a BlobLinks port exists), on its way (uploaded, not yet named by a version: hosted only), or unknown.
- *  Until the core's Catalog.file lands, the same shape is declared here. */
-export type FileAnswer = { kind: 'bytes'; bytes: Uint8Array } | { kind: 'link'; url: string } | { kind: 'on_its_way' } | { kind: 'unknown' };
 
 /** A guard's refusal, by kind, and the files route's non-200 answers: one table, so every transport uses the same numbers.
  *  Operation results, errors included, are never here: they are 200 in the envelope. */
@@ -75,9 +71,9 @@ export function effectOf(op: string): OperationDef['effect'] | undefined {
   return webRow(op)?.effect;
 }
 
-/** A body the transport read (or cut at its limit) as an operation's input, checked as the web face: a person-only input
- *  (cliOnly) is an unknown field here. */
-export function parseBody(op: string, raw: Uint8Array | 'cut', max = BODY_LIMIT): Record<string, unknown> {
+/** A body the transport read (or cut at its limit) as an operation's input, checked as the web face of a catalog `where`
+ *  it is: a person-only input (cliOnly) is an unknown field here, and so is the other kind of catalog's own input. */
+export function parseBody(op: string, raw: Uint8Array | 'cut', where: Where, max = BODY_LIMIT): Record<string, unknown> {
   if (raw === 'cut') throw new CatalogError('too_large', { limit: 'request_bytes', max });
   let parsed: unknown;
   try {
@@ -85,7 +81,7 @@ export function parseBody(op: string, raw: Uint8Array | 'cut', max = BODY_LIMIT)
   } catch {
     throw new CatalogError('invalid_request', { field: 'body', why: 'not_json' });
   }
-  return validateInput<Record<string, unknown>>(op, parsed, 'web');
+  return validateInput<Record<string, unknown>>(op, parsed, 'web', where);
 }
 
 type CatalogMethod = (input: unknown, face: Face) => Promise<unknown>;
@@ -128,12 +124,12 @@ export function envelope(answer: { data: unknown; developer?: string } | { error
  *  error; anything else is a bug the transport turns into internal_error its own way. */
 export async function operationResponse(
   o: Sentences & { op: string; raw: Uint8Array | 'cut'; developer: string | undefined; max?: number } & (
-      | { run: (op: string, input: Record<string, unknown>) => Promise<unknown> }
+      | { run: (op: string, input: Record<string, unknown>) => Promise<unknown>; where: Where }
       | { catalog: Catalog; face: Face }
     ),
 ): Promise<HttpResponse> {
   try {
-    const input = parseBody(o.op, o.raw, o.max);
+    const input = parseBody(o.op, o.raw, 'run' in o ? o.where : o.catalog.where, o.max);
     const data = await ('run' in o ? o.run(o.op, input) : dispatch(o.op, input, { catalog: o.catalog, developer: o.developer, face: o.face }));
     return envelope({ data, developer: o.developer }, o);
   } catch (e) {
@@ -142,11 +138,17 @@ export async function operationResponse(
   }
 }
 
-/** A guard's refusal: its number from the one table, the fixed 404's text, and for token_only the error in the envelope. */
-export function refuse(kind: Refusal, s: Sentences): HttpResponse {
+/** A guard's refusal: its number from the one table, the fixed 404's text, and for token_only the error in the envelope.
+ *  `challenge`, for a catalog with sign-in (hosted): a 401 is the envelope's unauthenticated with WWW-Authenticate naming
+ *  the scheme; a local 401 (the page's session token) stays bare, since there's no sign-in to point to. */
+export function refuse(kind: Refusal, s: Sentences & { challenge?: 'Bearer' }): HttpResponse {
   const status = STATUS[kind];
   if (kind === 'not_found') return { status, headers: { ...SECURITY_HEADERS, 'content-type': 'text/plain; charset=utf-8' }, body: NOT_FOUND };
   if (kind === 'token_only') return { ...envelope({ error: new CatalogError('invalid_request', { field: 'X-Skills-Catalog-As', why: 'token_only' }) }, s), status };
+  if (kind === 'no_token' && s.challenge) {
+    const e = envelope({ error: new CatalogError('unauthenticated', {}) }, s);
+    return { ...e, status, headers: { ...e.headers, 'www-authenticate': s.challenge } };
+  }
   return { status, headers: { ...SECURITY_HEADERS, ...API_HEADERS }, body: '' };
 }
 
