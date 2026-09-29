@@ -159,7 +159,7 @@ describe('the words file (vendored, recommended variant)', () => {
   });
 
   it('the MCP tool list drops CLI-only inputs by the API\'s own filter, for any operation it is given', () => {
-    const op = { name: 'probe', kind: 'machine', phase: 1, faces: ['mcp'], effect: 'writes_catalog', run: 'probe', output: 'text', words: 'publish', cliOnly: ['secret'],
+    const op = { name: 'probe', kind: 'machine', phase: 1, faces: ['mcp'], effect: 'writes_catalog', run: 'probe', output: 'text', errors: [], words: 'publish', cliOnly: ['secret'],
       input: { type: 'object', properties: { folder: { type: 'string' }, secret: { type: 'boolean' } }, required: ['folder'] } } as const;
     const [tool] = Words.load().toolDefs({ probe: op });
     expect(Object.keys(tool!.inputSchema.properties!)).toEqual(['folder']);

@@ -1,7 +1,7 @@
 // The API (contract §1): each operation is defined once, with a typed input schema, and the faces (CLI, MCP,
 // later HTTP) are generated from it. Slice 1 holds the catalog operations; the machine operations join in slice 2.
 
-import { CatalogError, ERROR_CODES } from './errors.ts';
+import { CatalogError, ERROR_CODES, type ErrorCode } from './errors.ts';
 import { MAX_TAGS, MODES, TAG_MAX_LENGTH } from './skill-tree/index.ts';
 
 export type Schema =
@@ -40,6 +40,8 @@ export interface OperationDef {
   input: Extract<Schema, { type: 'object' }>;
   // Its result: a schema for a catalog operation; a machine operation answers in text for now.
   output: OutputSchema | 'text';
+  // The codes it can raise besides COMMON_ERRORS (a test proves them with the golden error rows).
+  errors: readonly ErrorCode[];
   // Inputs only a person at the CLI gives (contract §3): never in the MCP or web schema, and refused from those faces.
   cliOnly?: readonly string[];
 }
@@ -138,6 +140,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     effect: 'reads',
     run: 'search',
     output: SEARCH_OUTPUT,
+    errors: [],
     input: {
       type: 'object',
       properties: {
@@ -165,6 +168,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     effect: 'reads',
     run: 'read',
     output: READ_OUTPUT,
+    errors: ['invalid_name', 'not_found'],
     input: {
       type: 'object',
       properties: {
@@ -185,6 +189,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     effect: 'reads',
     run: 'versions',
     output: VERSIONS_OUTPUT,
+    errors: ['invalid_name', 'not_found'],
     input: { type: 'object', properties: { name, cursor: { type: 'string', maxLength: 200 } }, required: ['name'] },
   },
   diff_shared_skill_versions: {
@@ -196,6 +201,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     effect: 'reads',
     run: 'diff',
     output: DIFF_OUTPUT,
+    errors: ['invalid_name', 'not_found'],
     input: { type: 'object', properties: { name, from: version, to: version }, required: ['name', 'from', 'to'] },
   },
   publish_version: {
@@ -206,6 +212,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     effect: 'writes_catalog',
     run: 'publish',
     output: PUBLISH_OUTPUT,
+    errors: ['unauthenticated', 'not_owner', 'conflict', 'invalid_manifest', 'invalid_name', 'invalid_path', 'too_large', 'secret_suspected'],
     input: {
       type: 'object',
       properties: {
@@ -235,6 +242,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     effect: 'reads',
     run: 'fetch',
     output: FETCH_OUTPUT,
+    errors: ['invalid_name', 'not_found'],
     input: { type: 'object', properties: { name, version, fingerprint: { type: 'string', maxLength: 80 } } },
   },
 
@@ -248,6 +256,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     effect: 'writes_catalog',
     run: 'publishFolder',
     output: 'text',
+    errors: ['conflict', 'unauthenticated', 'not_owner', 'invalid_manifest', 'invalid_name', 'invalid_path', 'too_large', 'secret_suspected'],
     input: {
       type: 'object',
       properties: {
@@ -274,6 +283,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     effect: 'writes_machine',
     run: 'install',
     output: 'text',
+    errors: ['not_found', 'invalid_manifest', 'invalid_name', 'invalid_path', 'too_large', 'fingerprint_mismatch', 'exists_untracked', 'name_in_use', 'target_symlink', 'target_changed', 'target_not_private', 'target_unavailable', 'lock_busy', 'invalid_local_file'],
     input: {
       type: 'object',
       properties: { name, version, target: { type: 'string', enum: TARGETS }, policy: { type: 'string', enum: POLICIES } },
@@ -290,6 +300,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     effect: 'writes_machine',
     run: 'update',
     output: 'text',
+    errors: ['not_installed', 'not_found', 'invalid_manifest', 'invalid_name', 'invalid_path', 'too_large', 'fingerprint_mismatch', 'exists_untracked', 'name_in_use', 'target_symlink', 'target_changed', 'target_not_private', 'target_unavailable', 'lock_busy', 'invalid_local_file'],
     input: {
       type: 'object',
       properties: { names: { type: 'array', items: name, maxItems: MAX_UPDATE_NAMES }, dry_run: { type: 'boolean' }, latest: { type: 'boolean' } },
@@ -305,6 +316,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     effect: 'writes_machine',
     run: 'accept',
     output: 'text',
+    errors: ['conflict', 'not_found', 'invalid_manifest', 'invalid_name', 'invalid_path', 'too_large', 'fingerprint_mismatch', 'exists_untracked', 'name_in_use', 'target_symlink', 'target_changed', 'target_not_private', 'target_unavailable', 'lock_busy', 'invalid_local_file'],
     input: {
       type: 'object',
       properties: { name, target: { type: 'string', enum: TARGETS }, version, confirm: { type: 'string', maxLength: 2000 }, flags: { type: 'array', items: { type: 'string', maxLength: 40 }, maxItems: 20 } },
@@ -320,6 +332,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     effect: 'reads',
     run: 'list',
     output: 'text',
+    errors: ['not_found', 'invalid_local_file'],
     input: { type: 'object', properties: {} },
   },
   set_skill_update_policy: {
@@ -331,6 +344,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     effect: 'writes_machine',
     run: 'setPolicy',
     output: 'text',
+    errors: ['not_installed', 'lock_busy', 'invalid_local_file'],
     input: { type: 'object', properties: { policy: { type: 'string', enum: POLICIES }, name }, required: ['policy'] },
   },
 };

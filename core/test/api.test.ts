@@ -70,6 +70,10 @@ describe('each operation\'s definition (contract §1)', () => {
   it('the assistant\'s tools are exactly the operations with the mcp face', () => {
     const tools = Words.load().toolDefs().map((t) => t.op).sort();
     expect(tools).toEqual(Object.values(OPERATIONS).filter((o) => o.faces.includes('mcp')).map((o) => o.name).sort());
+    // An operation with words but no mcp face (every row today that has words is an MCP one) gets no tool.
+    const cliOnlyOp = { ...OPERATIONS['search_shared_skills']!, name: 'probe', faces: ['cli', 'web'] as const };
+    expect(Words.load().toolDefs({ probe: cliOnlyOp })).toEqual([]);
+    expect(Words.load().toolDefs({ probe: { ...cliOnlyOp, faces: ['mcp'] } }).map((t) => t.op)).toEqual(['probe']);
   });
 
   it('says what it changes: it reads, writes the catalog, or writes this machine', () => {
