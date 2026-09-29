@@ -5,7 +5,7 @@
 // setup's entries must equal the file before, or it's internal_error: a bug here, never the person's file.
 
 import { jsonEqual } from './json-equal.ts';
-import { appendItem, freshText, insertMember, replaceValue } from './json-splice.ts';
+import { appendItem, freshText, insertMember, replaceValue, type Spliced } from './json-splice.ts';
 import { JsonTextError, scanJson, type JsonContainer, type JsonNode } from './json-text.ts';
 import type { Container, EntryKind, RecordEntry } from './setup-record.ts';
 
@@ -21,8 +21,21 @@ export type MergeRefusal =
 export type Merged = { refusal: MergeRefusal } | { text: string | undefined; entries: PlannedEntry[] };
 
 /** What setup changed in a file, for the check: the MCP entry, the hook group at its index, the rules appended last,
- *  and the containers it made. */
-export type Marks = { mcp?: 'inserted' | 'replaced'; hook?: { index: number; replaced: boolean }; rulesAppended?: number; created: Container[] };
+ *  the containers it made, and the values this run put there. */
+export type Marks = {
+  mcp?: 'inserted' | 'replaced';
+  hook?: { index: number; replaced: boolean };
+  rulesAppended?: number;
+  created: Container[];
+  values?: { mcp?: unknown; hook?: unknown; rules?: readonly string[] };
+};
+
+/** Whether `after` is `before` with only the span [start, end) of `after` new: every byte before it and after it is
+ *  the person's, exactly as it was (numbers, escapes, key order, line endings: what parsing would lose). */
+export function onlySpanChanged(before: string, after: string, span: { start: number; end: number }): boolean {
+  const tail = after.length - span.end;
+  return span.start + tail <= before.length && after.slice(0, span.start) === before.slice(0, span.start) && after.slice(span.end) === before.slice(before.length - tail);
+}
 
 type Obj = Record<string, unknown>;
 const isObject = (x: unknown): x is Obj => typeof x === 'object' && x !== null && !Array.isArray(x);
@@ -77,25 +90,54 @@ function withoutSetup(value: Obj, m: Marks, after: boolean): Obj {
   return v;
 }
 
-/** Whether `after` is `before` (an absent file is `{}`) with only setup's entries added, replaced or made. */
+/** Whether `after` is `before` (an absent file is `{}`) with only setup's entries added, replaced or made, and those
+ *  entries are this run's values. */
 export function keptApartFromSetup(before: string | undefined, after: string, m: Marks): boolean {
   try {
     const b = before === undefined ? {} : (JSON.parse(before) as Obj);
     const a = JSON.parse(after) as unknown;
-    return isObject(a) && jsonEqual(withoutSetup(b, m, false), withoutSetup(a, m, true));
+    if (!isObject(a) || !jsonEqual(withoutSetup(b, m, false), withoutSetup(a, m, true))) return false;
+    const v = m.values ?? {};
+    const servers = own(a, 'mcpServers');
+    if (v.mcp !== undefined && !(isObject(servers) && jsonEqual(own(servers, SERVER_NAME), v.mcp))) return false;
+    const hooks = own(a, 'hooks');
+    const groups = isObject(hooks) ? own(hooks, 'SessionStart') : undefined;
+    if (v.hook !== undefined && m.hook && !(Array.isArray(groups) && jsonEqual(groups[m.hook.index], v.hook))) return false;
+    const permissions = own(a, 'permissions');
+    const allow = isObject(permissions) ? own(permissions, 'allow') : undefined;
+    if (v.rules !== undefined && m.rulesAppended && !(Array.isArray(allow) && jsonEqual(allow.slice(allow.length - m.rulesAppended), v.rules))) return false;
+    return true;
   } catch {
     return false;
   }
 }
 
-const checked = (before: string | undefined, text: string, m: Marks, entries: PlannedEntry[]): Merged =>
-  keptApartFromSetup(before, text, m) ? { text, entries } : { refusal: { code: 'internal_error' } };
+/** Splices made one after another, each checked to leave every byte outside its own span as it was. */
+class Splices {
+  text: string;
+  ok = true;
+  constructor(text: string) {
+    this.text = text;
+  }
+  add(next: Spliced): void {
+    this.ok &&= onlySpanChanged(this.text, next.text, next);
+    this.text = next.text;
+  }
+  /** A value replaced in place: its span is the new value's text where the old one's was. */
+  replace(node: JsonNode, next: string): void {
+    this.add({ text: next, start: node.start, end: node.end + next.length - this.text.length });
+  }
+}
+
+const checked = (before: string | undefined, text: string, spansKept: boolean, m: Marks, entries: PlannedEntry[]): Merged =>
+  spansKept && keptApartFromSetup(before, text, m) ? { text, entries } : { refusal: { code: 'internal_error' } };
 
 /** `.claude.json`: `mcpServers["skills-catalog"]` only. `recorded` is the record's entries in this file. */
 export function mergeClaudeJson(before: string | undefined, entry: Obj, recorded: readonly RecordEntry[]): Merged {
   const ours = recorded.find((e) => e.kind === 'mcp_entry');
   const planned = (created?: Container[]) => [withCreated({ kind: 'mcp_entry', value: entry }, union(ours?.created, created))];
-  if (before === undefined) return checked(before, freshText({ mcpServers: { [SERVER_NAME]: entry } }), { mcp: 'inserted', created: ['mcpServers'] }, planned(['mcpServers']));
+  const values = { mcp: entry };
+  if (before === undefined) return checked(before, freshText({ mcpServers: { [SERVER_NAME]: entry } }), true, { mcp: 'inserted', created: ['mcpServers'], values }, planned(['mcpServers']));
 
   const s = scan(before, CLAUDE_ONCE);
   if ('refusal' in s) return s;
@@ -104,16 +146,27 @@ export function mergeClaudeJson(before: string | undefined, entry: Obj, recorded
   const current = isObject(servers) ? own(servers, SERVER_NAME) : undefined;
   if (current !== undefined && !isObject(current)) return wrongType(`mcpServers.${SERVER_NAME}`);
 
-  if (servers === undefined) return checked(before, insertMember(before, s.root, 'mcpServers', { [SERVER_NAME]: entry }).text, { mcp: 'inserted', created: ['mcpServers'] }, planned(['mcpServers']));
+  const edit = new Splices(before);
+  if (servers === undefined) {
+    edit.add(insertMember(before, s.root, 'mcpServers', { [SERVER_NAME]: entry }));
+    return checked(before, edit.text, edit.ok, { mcp: 'inserted', created: ['mcpServers'], values }, planned(['mcpServers']));
+  }
   const box = container(s.root, 'mcpServers');
-  if (current === undefined) return checked(before, insertMember(before, box, SERVER_NAME, entry).text, { mcp: 'inserted', created: [] }, planned());
+  if (current === undefined) {
+    edit.add(insertMember(before, box, SERVER_NAME, entry));
+    return checked(before, edit.text, edit.ok, { mcp: 'inserted', created: [], values }, planned());
+  }
   if (jsonEqual(current, entry)) return { text: undefined, entries: planned() };
-  if (ours && jsonEqual(current, ours.value)) return checked(before, replaceValue(before, member(box, SERVER_NAME)!, entry, box), { mcp: 'replaced', created: [] }, planned());
+  if (ours && jsonEqual(current, ours.value)) {
+    const node = member(box, SERVER_NAME)!;
+    edit.replace(node, replaceValue(before, node, entry, box));
+    return checked(before, edit.text, edit.ok, { mcp: 'replaced', created: [], values }, planned());
+  }
   return { refusal: { code: 'name_taken', name: SERVER_NAME } };
 }
 
 /** `.claude/settings.json`: one group in `hooks.SessionStart` and the allow rules in `permissions.allow`. */
-export function mergeSettingsJson(before: string | undefined, want: { hook: Obj; rules: readonly string[] }, recorded: readonly RecordEntry[]): Merged {
+export function mergeSettingsJson(before: string | undefined, want: { hook: Obj; rules: readonly string[]; id: string }, recorded: readonly RecordEntry[]): Merged {
   const ourHook = recorded.find((e) => e.kind === 'hook_group');
   const ourRules = recorded.filter((e) => e.kind === 'allow_rule' && e.was_there === false);
   const rulesCreated = union(...ourRules.map((e) => e.created));
@@ -133,7 +186,8 @@ export function mergeSettingsJson(before: string | undefined, want: { hook: Obj;
   if (before === undefined) {
     const text = freshText({ hooks: { SessionStart: [want.hook] }, permissions: { allow: want.rules } });
     const created: Container[] = ['hooks', 'hooks.SessionStart', 'permissions', 'permissions.allow'];
-    return checked(before, text, { hook: { index: 0, replaced: false }, rulesAppended: want.rules.length, created }, [hookEntry(['hooks', 'hooks.SessionStart']), ...ruleEntries([], want.rules, ['permissions', 'permissions.allow'])]);
+    const marks: Marks = { hook: { index: 0, replaced: false }, rulesAppended: want.rules.length, created, values: { hook: want.hook, rules: want.rules } };
+    return checked(before, text, true, marks, [hookEntry(['hooks', 'hooks.SessionStart']), ...ruleEntries([], want.rules, ['permissions', 'permissions.allow'])]);
   }
 
   let s = scan(before, SETTINGS_ONCE);
@@ -147,20 +201,25 @@ export function mergeSettingsJson(before: string | undefined, want: { hook: Obj;
   const allow = isObject(permissions) ? own(permissions, 'allow') : undefined;
   if (allow !== undefined && !Array.isArray(allow)) return wrongType('permissions.allow');
 
+  // A group carrying this setup id is setup's: one that's neither this run's nor the recorded one is setup's the person
+  // changed since, so the run is refused (contract §6), as for the MCP entry. No one else's group carries the id.
+  const carriesId = (g: unknown) => JSON.stringify(g).includes(`--setup-id ${want.id}`);
+  if (groups?.some((g) => carriesId(g) && !jsonEqual(g, want.hook) && !(ourHook && jsonEqual(g, ourHook.value)))) return { refusal: { code: 'name_taken', name: SERVER_NAME } };
+
   // The hook group: there → nothing; setup's recorded one → replaced in place; else appended, making what's missing.
-  let text = before;
-  const marks: Marks = { created: [] };
+  const edit = new Splices(before);
+  const marks: Marks = { created: [], values: { hook: want.hook } };
   let hookMade: Container[] | undefined;
   if (groups === undefined) {
     hookMade = hooks === undefined ? ['hooks', 'hooks.SessionStart'] : ['hooks.SessionStart'];
-    text = hooks === undefined ? insertMember(text, s.root, 'hooks', { SessionStart: [want.hook] }).text : insertMember(text, container(s.root, 'hooks'), 'SessionStart', [want.hook]).text;
+    edit.add(hooks === undefined ? insertMember(before, s.root, 'hooks', { SessionStart: [want.hook] }) : insertMember(before, container(s.root, 'hooks'), 'SessionStart', [want.hook]));
     marks.hook = { index: 0, replaced: false };
     marks.created.push(...hookMade);
   } else if (!groups.some((g) => jsonEqual(g, want.hook))) {
     const box = container(container(s.root, 'hooks'), 'SessionStart');
     const at = ourHook ? groups.findIndex((g) => jsonEqual(g, ourHook.value)) : -1;
-    if (at >= 0 && box.kind === 'array') text = replaceValue(text, box.items[at]!, want.hook, box);
-    else text = appendItem(text, box, want.hook).text;
+    if (at >= 0 && box.kind === 'array') edit.replace(box.items[at]!, replaceValue(before, box.items[at]!, want.hook, box));
+    else edit.add(appendItem(before, box, want.hook));
     marks.hook = { index: at >= 0 ? at : groups.length, replaced: at >= 0 };
   }
 
@@ -169,28 +228,29 @@ export function mergeSettingsJson(before: string | undefined, want: { hook: Obj;
   const missing = want.rules.filter((r) => !inFile.includes(r));
   let rulesMade: Container[] | undefined;
   if (missing.length) {
-    if (text !== before) {
-      const again = scan(text, SETTINGS_ONCE);
+    if (edit.text !== before) {
+      const again = scan(edit.text, SETTINGS_ONCE);
       if ('refusal' in again) return { refusal: { code: 'internal_error' } };
       s = again;
     }
     if (permissions === undefined) {
       rulesMade = ['permissions', 'permissions.allow'];
-      text = insertMember(text, s.root, 'permissions', { allow: missing }).text;
+      edit.add(insertMember(edit.text, s.root, 'permissions', { allow: missing }));
     } else if (allow === undefined) {
       rulesMade = ['permissions.allow'];
-      text = insertMember(text, container(s.root, 'permissions'), 'allow', missing).text;
+      edit.add(insertMember(edit.text, container(s.root, 'permissions'), 'allow', missing));
     } else {
       for (const r of missing) {
-        const now = scan(text, SETTINGS_ONCE);
+        const now = scan(edit.text, SETTINGS_ONCE);
         if ('refusal' in now) return { refusal: { code: 'internal_error' } };
-        text = appendItem(text, container(container(now.root, 'permissions'), 'allow'), r).text;
+        edit.add(appendItem(edit.text, container(container(now.root, 'permissions'), 'allow'), r));
       }
     }
     marks.rulesAppended = missing.length;
+    marks.values!.rules = missing;
     marks.created.push(...(rulesMade ?? []));
   }
 
   const entries = [hookEntry(hookMade), ...ruleEntries(inFile, missing, rulesMade)];
-  return text === before ? { text: undefined, entries } : checked(before, text, marks, entries);
+  return edit.text === before ? { text: undefined, entries } : checked(before, edit.text, edit.ok, marks, entries);
 }

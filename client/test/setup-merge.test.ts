@@ -4,13 +4,14 @@
 // it's setup's); missing containers made last in their parent, hooks before permissions; a key twice or a wrong type on
 // setup's path refused; after every splice, the file without setup's entries must equal the file before.
 import { describe, expect, it } from 'vitest';
-import type { RecordEntry } from '../src/machine/setup-record.ts';
-import { keptApartFromSetup, mergeClaudeJson, mergeSettingsJson, type Merged, type PlannedEntry } from '../src/machine/setup-merge.ts';
+import type { Container, RecordEntry } from '../src/machine/setup-record.ts';
+import { keptApartFromSetup, mergeClaudeJson, mergeSettingsJson, onlySpanChanged, type Merged, type PlannedEntry } from '../src/machine/setup-merge.ts';
 import { fileOf, golden, HOOK_GROUP, LINE, MCP_ENTRY, RULES } from './setup-golden.ts';
 
 const CLAUDE = '/a/.claude.json';
 const SETTINGS = '/a/.claude/settings.json';
-const WANT = { hook: HOOK_GROUP, rules: RULES };
+const ID = '0123456789abcdef0123456789abcdef';
+const WANT = { hook: HOOK_GROUP, rules: RULES, id: ID };
 const NODE2 = '/opt/node2/bin/node';
 const MCP_ENTRY2 = { ...MCP_ENTRY, command: NODE2 };
 const LINE2 = 'the hook line, node moved';
@@ -101,9 +102,9 @@ describe('setup\'s merge into settings.json (golden setup.yaml)', () => {
   });
 
   it('missing containers go last in their parent, hooks before permissions (pin 4)', () => {
-    const m = done(mergeSettingsJson('{\n  "model": "opus"\n}\n', { hook: HOOK_GROUP, rules: ['A'] }, []));
+    const m = done(mergeSettingsJson('{\n  "model": "opus"\n}\n', { hook: HOOK_GROUP, rules: ['A'], id: ID }, []));
     expect(m.text).toBe(`{\n  "model": "opus",\n  "hooks": {\n    "SessionStart": [\n      {\n        "hooks": [\n          {\n            "type": "command",\n            "command": "${LINE}",\n            "timeout": 10\n          }\n        ]\n      }\n    ]\n  },\n  "permissions": {\n    "allow": [\n      "A"\n    ]\n  }\n}\n`);
-    const inner = done(mergeSettingsJson('{"hooks": {"x": 1}, "permissions": {"deny": []}}', { hook: HOOK_GROUP, rules: ['A'] }, []));
+    const inner = done(mergeSettingsJson('{"hooks": {"x": 1}, "permissions": {"deny": []}}', { hook: HOOK_GROUP, rules: ['A'], id: ID }, []));
     expect(Object.keys(JSON.parse(inner.text!).hooks)).toEqual(['x', 'SessionStart']);
     expect(Object.keys(JSON.parse(inner.text!).permissions)).toEqual(['deny', 'allow']);
     expect(inner.entries).toEqual([{ kind: 'hook_group', value: HOOK_GROUP, created: ['hooks.SessionStart'] }, rule('A', false, ['permissions.allow'])]);
@@ -126,18 +127,49 @@ describe('setup\'s merge into settings.json (golden setup.yaml)', () => {
 
   it('node moved: the recorded group replaced at the same place', () => {
     const before = fileOf(golden.kept_expected.settings_json);
-    const m = done(mergeSettingsJson(before, { hook: HOOK_GROUP2, rules: RULES }, recorded(SETTINGS, [{ kind: 'hook_group', value: HOOK_GROUP }, ...RULES.map((r) => rule(r) as PlannedEntry)])));
+    const m = done(mergeSettingsJson(before, { hook: HOOK_GROUP2, rules: RULES, id: ID }, recorded(SETTINGS, [{ kind: 'hook_group', value: HOOK_GROUP }, ...RULES.map((r) => rule(r) as PlannedEntry)])));
     expect(m.text).toBe(before.replace(`"command": "${LINE}"`, `"command": "${LINE2}"`));
     expect(m.entries[0]).toEqual({ kind: 'hook_group', value: HOOK_GROUP2 });
   });
 
-  it('setup\'s group the person changed is theirs now: left, and this run\'s appended after it', () => {
-    const fresh = fileOf(golden.fresh.settings_json);
-    const edited = fresh.replace('"timeout": 10', '"timeout": 5');
-    const m = done(mergeSettingsJson(edited, WANT, recorded(SETTINGS, [{ kind: 'hook_group', value: HOOK_GROUP, created: ['hooks', 'hooks.SessionStart'] }, ...RULES.map((r) => rule(r) as PlannedEntry)])));
-    const groups = JSON.parse(m.text!).hooks.SessionStart;
-    expect(groups).toEqual([{ hooks: [{ ...HOOK_GROUP.hooks[0], timeout: 5 }] }, HOOK_GROUP]);
-    expect(m.entries[0]).toEqual({ kind: 'hook_group', value: HOOK_GROUP, created: ['hooks', 'hooks.SessionStart'] });
+  it('setup\'s group the person changed (it carries this setup id, but is neither this run\'s nor the recorded one): name_taken, nothing changed', () => {
+    const ours = { hooks: [{ type: 'command', command: `'/n' '/s' hook session-start --setup-id ${ID} 2>/dev/null || true`, timeout: 10 }] };
+    const want = { hook: ours, rules: RULES, id: ID };
+    const first = done(mergeSettingsJson(undefined, want, []));
+    const edited = first.text!.replace('"timeout": 10', '"timeout": 5');
+    expect(mergeSettingsJson(edited, want, recorded(SETTINGS, first.entries))).toEqual({ refusal: { code: 'name_taken', name: 'skills-catalog' } });
+    // Without a record too: the id is setup's alone.
+    expect(mergeSettingsJson(edited, want, [])).toEqual({ refusal: { code: 'name_taken', name: 'skills-catalog' } });
+    // The person's own group, even one that looks like setup's, never carries this id: left, and this run's added.
+    const theirs = edited.replace(ID, 'fedcba9876543210fedcba9876543210');
+    expect(JSON.parse(done(mergeSettingsJson(theirs, want, [])).text!).hooks.SessionStart).toHaveLength(2);
+  });
+
+  it('a person\'s group after setup\'s: setup\'s is found wherever it sits, so a rerun writes nothing', () => {
+    const first = done(mergeSettingsJson(undefined, WANT, []));
+    const theirs = { matcher: 'startup', hooks: [{ type: 'command', command: 'echo hi' }] };
+    // Setup's group on one line, as the person's editor may have left it: found as it is, never laid out again.
+    const withTheirs = `{"hooks": {"SessionStart": [${JSON.stringify(HOOK_GROUP)}, ${JSON.stringify(theirs)}]}, "permissions": {"allow": ${JSON.stringify(RULES)}}}`;
+    expect(done(mergeSettingsJson(withTheirs, WANT, recorded(SETTINGS, first.entries))).text).toBeUndefined();
+  });
+
+  it('a rule a crash left pending in the record is setup\'s: not "was there", so teardown still takes it out', () => {
+    const first = done(mergeSettingsJson(undefined, WANT, []));
+    const pending = recorded(SETTINGS, first.entries).map((e) => ({ ...e, state: 'pending' as const }));
+    const again = done(mergeSettingsJson(first.text, WANT, pending));
+    expect(again.text).toBeUndefined();
+    expect(again.entries.filter((e) => e.was_there)).toEqual([]);
+  });
+
+  it('what setup made for the rules goes on a rule that\'s setup\'s, never on one that was there', () => {
+    const first = done(mergeSettingsJson(undefined, WANT, []));
+    // The record says the first rule was there before setup (the person had it), and setup made the containers.
+    const made: Container[] = ['permissions', 'permissions.allow'];
+    const entries: PlannedEntry[] = [{ kind: 'hook_group', value: HOOK_GROUP }, rule(RULES[0]!, true) as PlannedEntry, rule(RULES[1]!, false, made) as PlannedEntry, ...RULES.slice(2).map((r) => rule(r) as PlannedEntry)];
+    const again = done(mergeSettingsJson(first.text, WANT, recorded(SETTINGS, entries)));
+    const rules = again.entries.filter((e) => e.kind === 'allow_rule');
+    expect(rules[0]).toEqual(rule(RULES[0]!, true));
+    expect(rules[1]).toEqual(rule(RULES[1]!, false, ['permissions', 'permissions.allow']));
   });
 
   it('allow rules: one already there is "was there" and not added again, unless the record says it\'s setup\'s', () => {
@@ -153,7 +185,7 @@ describe('setup\'s merge into settings.json (golden setup.yaml)', () => {
 
   it('a rule setup added that this run doesn\'t want stays recorded while it\'s in the file, so teardown can take it out', () => {
     const extra = 'Bash(skills-catalog search *)';
-    const first = done(mergeSettingsJson(undefined, { hook: HOOK_GROUP, rules: [...RULES, extra] }, []));
+    const first = done(mergeSettingsJson(undefined, { hook: HOOK_GROUP, rules: [...RULES, extra], id: ID }, []));
     const again = done(mergeSettingsJson(first.text, WANT, recorded(SETTINGS, first.entries)));
     expect(again.text).toBeUndefined();
     expect(again.entries.at(-1)).toEqual(rule(extra));
@@ -177,6 +209,41 @@ describe('setup\'s merge into settings.json (golden setup.yaml)', () => {
       expect(mergeSettingsJson(text, WANT, []), text).toEqual({ refusal: { code: 'assistant_file_unusable', why, key } });
     }
     expect('refusal' in mergeSettingsJson('{"mcpServers": [], "x": 1, "x": 2}', WANT, [])).toBe(false);
+  });
+});
+
+describe('the byte check after every splice: every byte outside setup\'s span is the person\'s, as it was', () => {
+  it('holds for the splice as made, and fails for any change outside the span that parses the same', () => {
+    const before = fileOf(golden.kept_input.claude_json);
+    const after = fileOf(golden.kept_expected.claude_json);
+    // Setup's span in the text after: an insert, from where the texts first differ, as long as what it added.
+    let start = 0;
+    while (before[start] === after[start]) start++;
+    const span = { start, end: start + (after.length - before.length) };
+    expect(onlySpanChanged(before, after, span)).toBe(true);
+    for (const [from, to] of [
+      ['12345678901234567890', '12345678901234567891'],
+      ['"ratio": 1.0', '"ratio": 1'],
+      ['\\u00e9 é', 'é é'],
+      ['\r\n', '\n'],
+      ['"10": "ten",\r\n\t"2": "two"', '"2": "two",\r\n\t"10": "ten"'],
+    ]) {
+      expect(onlySpanChanged(before, after.replace(from!, to!), span), from).toBe(false);
+    }
+    // After the span too.
+    expect(onlySpanChanged(before, `${after.slice(0, -1)}]`, span), 'after the span, same length').toBe(false);
+  });
+
+  it('a run\'s own values must be what it put at setup\'s places', () => {
+    const before = fileOf(golden.kept_input.settings_json);
+    const after = fileOf(golden.kept_expected.settings_json);
+    const marks = { hook: { index: 1, replaced: false }, rulesAppended: RULES.length, created: [], values: { hook: HOOK_GROUP, rules: RULES } };
+    expect(keptApartFromSetup(before, after, marks)).toBe(true);
+    expect(keptApartFromSetup(before, after.replace('"Bash(skills-catalog update)"', '"Bash(skills-catalog *)"'), marks)).toBe(false);
+    expect(keptApartFromSetup(before, after.replace('"timeout": 10', '"timeout": 11'), marks)).toBe(false);
+    const c0 = fileOf(golden.kept_input.claude_json);
+    const c1 = fileOf(golden.kept_expected.claude_json);
+    expect(keptApartFromSetup(c0, c1.replace('"mcp"', '"serve"'), { mcp: 'inserted', created: [], values: { mcp: MCP_ENTRY } })).toBe(false);
   });
 });
 
