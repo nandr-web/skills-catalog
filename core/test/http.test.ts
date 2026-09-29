@@ -211,6 +211,23 @@ describe('dispatch', () => {
     }
   });
 
+  it('every operation whose method acts as someone gets the acting developer as its identity, then the face; the others the face', async () => {
+    // What each method is called with, on a stub catalog that runs hosted (the token and upload operations are hosted only).
+    const got: Record<string, unknown[]> = {};
+    const stub = new Proxy({}, { get: (_, k) => (k === 'where' ? 'hosted' : async (...args: unknown[]) => void (got[String(k)] = args)) }) as unknown as Catalog;
+    const ACTS = ['publish_version', 'request_upload_links', 'list_tokens', 'revoke_token'];
+    expect(Object.values(OPERATIONS).filter((d) => d.acts).map((d) => d.name).sort()).toEqual([...ACTS].sort());
+    for (const def of Object.values(OPERATIONS).filter((d) => d.kind === 'catalog')) {
+      await dispatch(def.name, {}, { catalog: stub, developer: 'dev2', face: 'web' });
+      const args = got[def.run]!;
+      if (ACTS.includes(def.name)) {
+        expect([def.name, await (args[1] as { actor(): Promise<string> }).actor(), args[2]]).toEqual([def.name, 'dev2', 'web']);
+      } else {
+        expect([def.name, args[1]]).toEqual([def.name, 'web']);
+      }
+    }
+  });
+
   it('with no developer, a publish is unauthenticated', async () => {
     const catalog = await seeded();
     try {
