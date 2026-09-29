@@ -6,12 +6,12 @@ import { stringify } from 'yaml';
 import { cursorOffset, type DiffResult, type InlineBudget, type ReadItem, type ReadResult, type SearchInput, type SearchResult, type VersionsResult } from './catalog.ts';
 import { CatalogError } from './errors.ts';
 import type { Ids } from './ports.ts';
-import { INVISIBLE, MANIFEST, oneLine, type RiskFlag } from './skill-tree/index.ts';
+import { MANIFEST, flagText, oneLine, type RiskFlag } from './skill-tree/index.ts';
 import type { Surface } from './surface.ts';
 
 // Words the agent-facing surface doesn't have yet (asked for). A test fails when one of them appears in the surface,
 // so each is wired as soon as it lands.
-export const WORD_GAPS: readonly string[] = [];
+export const WORD_GAPS: readonly string[] = ['errors.why.too_many'];
 
 function asData(code: string, data: Record<string, unknown>): string {
   return `${code}: ` + Object.entries(data).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ');
@@ -21,9 +21,8 @@ const list = (xs: readonly string[]) => xs.join(', ');
 
 // Publisher text shown outside a fence can't forge the product's own lines (contract §5.2): a one-line field (a
 // description, a message, a developer's name) shows a line break or control character as a space, and flag text (a
-// path, a key's old and new values, the detail) shows invisible characters escaped, then is cut to 200 characters.
-const INVISIBLE_ALL = new RegExp(INVISIBLE.source, 'gu');
-export const flagText = (text: string): string => [...text.replace(INVISIBLE_ALL, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`)].slice(0, 200).join('');
+// path, a key's old and new values, the detail) is escaped and cut (skill-tree's flagText, also applied here to
+// anything shown from a flag or a front matter change).
 
 // A timestamp shows as its day (UTC), in the surface's date words; the data keeps the full ISO time.
 const day = (s: Surface, iso: string) => {

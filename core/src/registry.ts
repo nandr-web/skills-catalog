@@ -144,8 +144,9 @@ function check(schema: Schema, value: unknown, field: string): void {
       return;
     case 'array':
       if (!Array.isArray(value)) fail(field, 'not_list');
-      if (schema.maxItems !== undefined && value.length > schema.maxItems) fail(field, 'too_many_items', { limit: schema.maxItems, value: value.length });
-      value.forEach((v, i) => check(schema.items, v, `${field}[${i}]`));
+      if (schema.maxItems !== undefined && value.length > schema.maxItems) fail(field, 'too_many', { limit: schema.maxItems, value: value.length });
+      // A plain item's limit names the list (filters.tags too_long {limit}, contract §9); an object item keeps its index.
+      value.forEach((v, i) => check(schema.items, v, schema.items.type === 'object' ? `${field}[${i}]` : field));
       return;
     case 'object': {
       if (value === null || typeof value !== 'object' || Array.isArray(value)) fail(field || 'request', 'not_object');

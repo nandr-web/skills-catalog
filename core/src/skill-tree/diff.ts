@@ -1,8 +1,20 @@
 // What changed between two versions of a skill, and the update gate's risk flags from that change (contract §2 diff,
 // §5.3). The rules reviewer's own flags (prompt injection, context cost) join these in the reviewer, not here.
 
+import { CatalogError } from './errors.ts';
 import { MANIFEST, parseFrontmatter } from './manifest.ts';
-import { decodeText, isText, type Mode, type TreeFile } from './tree.ts';
+import { INVISIBLE, decodeText, isText, type Mode, type TreeFile } from './tree.ts';
+
+// Flag text (a path, a change's sides, the detail) can carry a publisher's text, so it is plain text in the flag
+// itself (contract §5.3): an invisible character becomes \u{XXXX}, then the text is cut to 200 code points, ending in
+// "…" within the 200. Every face shows the same; applying it twice changes nothing.
+const INVISIBLE_ALL = new RegExp(INVISIBLE.source, 'gu');
+export const FLAG_TEXT_MAX = 200;
+export function flagText(text: string): string {
+  const escaped = [...text.replace(INVISIBLE_ALL, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`)];
+  return escaped.length <= FLAG_TEXT_MAX ? escaped.join('') : escaped.slice(0, FLAG_TEXT_MAX - 1).join('') + '…';
+}
+const flagValue = (v: unknown) => (typeof v === 'string' ? flagText(v) : v);
 
 export type RiskKind = 'runnable_file' | 'non_markdown' | 'capability_frontmatter' | 'new_publisher' | 'prompt_injection' | 'context_cost';
 
@@ -91,15 +103,15 @@ function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   return Buffer.compare(a, b) === 0;
 }
 
+// A side's front matter. Only "no version yet" has none: a SKILL.md that is missing, not text or not parseable is
+// refused, never diffed as if it had no front matter, which would hide every key it grants (contract §5.3).
 function frontmatterOf(files: readonly TreeFile[]): { fm: Record<string, unknown>; lines: string[] } {
+  if (files.length === 0) return { fm: {}, lines: [] };
   const f = files.find((x) => x.path === MANIFEST);
-  if (!f || !isText(f.bytes)) return { fm: {}, lines: [] };
+  if (!f) throw new CatalogError('invalid_manifest', { problem: 'missing', fields: [MANIFEST] });
+  if (!isText(f.bytes)) throw new CatalogError('invalid_manifest', { problem: 'not_utf8', fields: [MANIFEST] });
   const text = decodeText(f.bytes);
-  try {
-    return { fm: parseFrontmatter(text).frontmatter, lines: text.split('\n') };
-  } catch {
-    return { fm: {}, lines: [] };
-  }
+  return { fm: parseFrontmatter(text).frontmatter, lines: text.split('\n') };
 }
 
 function show(v: unknown): string {
@@ -113,7 +125,9 @@ function keyLine(lines: string[], key: string): number | undefined {
   return i >= 0 ? i + 1 : undefined;
 }
 
-export function diffTrees(from: DiffSide | null, to: DiffSide, safeKeys: readonly string[] = DEFAULT_SAFE_FRONTMATTER_KEYS): TreeDiff {
+// `configuredSafeKeys` can only narrow the fixed safe list (contract §5.3): a key not on it always counts.
+export function diffTrees(from: DiffSide | null, to: DiffSide, configuredSafeKeys: readonly string[] = DEFAULT_SAFE_FRONTMATTER_KEYS): TreeDiff {
+  const safeKeys = configuredSafeKeys.filter((k) => DEFAULT_SAFE_FRONTMATTER_KEYS.includes(k));
   const before = new Map((from?.files ?? []).map((f) => [f.path, f]));
   const after = new Map(to.files.map((f) => [f.path, f]));
   const paths = [...new Set([...before.keys(), ...after.keys()])].sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
@@ -154,11 +168,12 @@ export function diffTrees(from: DiffSide | null, to: DiffSide, safeKeys: readonl
     const detail =
       was === undefined ? `${k} added: ${show(now)}` : now === undefined ? `${k} removed` : `${k} changed: ${show(was)} → ${show(now)}`;
     const line = now === undefined ? undefined : keyLine(fb.lines, k);
-    risk.push({ kind: 'capability_frontmatter', path: MANIFEST, ...(line ? { line } : {}), field: k, from: was ?? null, to: now ?? null, detail });
+    risk.push({ kind: 'capability_frontmatter', path: MANIFEST, ...(line ? { line } : {}), field: k, from: flagValue(was ?? null), to: flagValue(now ?? null), detail: flagText(detail) });
   }
   const publisher_changed = from !== null && from.publisher !== to.publisher;
-  if (publisher_changed) risk.push({ kind: 'new_publisher', from: from!.publisher, to: to.publisher, detail: `${from!.publisher} → ${to.publisher}` });
-  return { files, frontmatter_changes, publisher_changed, risk_flags: risk };
+  if (publisher_changed) risk.push({ kind: 'new_publisher', from: flagText(from!.publisher), to: flagText(to.publisher), detail: flagText(`${from!.publisher} → ${to.publisher}`) });
+  // A path is publisher text too (checked at publish, but a flag is shown wherever it goes).
+  return { files, frontmatter_changes, publisher_changed, risk_flags: risk.map((f) => (f.path === undefined ? f : { ...f, path: flagText(f.path) })) };
 }
 
 function modeNote(a?: Mode, b?: Mode): string {

@@ -194,6 +194,19 @@ describe('the read\'s inline budget (golden reads)', () => {
   });
 });
 
+describe('search filter limits (golden search_filters)', () => {
+  it.each((skills.search_filters as any[]).map((c, i) => [String(i), c] as const))('case %s', async (_i, c) => {
+    const { catalog } = await openTest();
+    for (const [name, fx] of Object.entries<any>(skills.valid)) if (!fx.generate) await catalog.publish(request(catalogNameOf(name, fx, filesOf(fx.files)!), filesOf(fx.files)!), ana);
+    if (c.error) {
+      const e = await errorOf(() => catalog.search({ filters: c.filters }));
+      expect([e.code, e.data['field'], e.data['why'], e.data['limit']]).toEqual([c.error, c.field, c.why, c.limit]);
+      return;
+    }
+    expect((await catalog.search({ filters: c.filters })).results.map((r) => r.name)).toEqual(c.expect_names);
+  });
+});
+
 describe('the fence (golden fence)', () => {
   it('planted end markers in several spellings stay inside; one start and one end marker carry the real token', async () => {
     const s = Surface.load();

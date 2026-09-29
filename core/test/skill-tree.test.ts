@@ -18,6 +18,7 @@ import {
   type TreeFile,
   nameProblem,
   foldKey,
+  flagText,
   RESERVED_NAMES_FILE,
 } from '../src/skill-tree/index.ts';
 import { GOLDEN, catalogNameOf, filesOf, generated, historyVersion, loadGolden, rawFilesOf, type RawFile } from './golden.ts';
@@ -275,6 +276,67 @@ describe('names (golden/skills.yaml missing-names, the name rules)', () => {
   });
 });
 
+describe('the gate pairs the core\'s diff decides now (golden/histories.yaml gate; the rest come with the update gate)', () => {
+  // The kinds this diff computes today; pairs that expect runs_at_load, instructions_changed or a command position's
+  // runnable_file are the update gate's (the next slice), in the same shared module.
+  const NOW = new Set(['capability_frontmatter', 'new_publisher']);
+  const side = (key: string | null) => (key === null ? null : { files: tree(historyVersion(histories.versions[key])), publisher: 'ana' });
+  const pairs = (histories.histories.gate.pairs as any[]).filter((p) => p.risk_flags.every((f: any) => NOW.has(f.kind)));
+
+  it.each(pairs.map((p) => [`${p.from} → ${p.to}`, p] as const))('%s', (_label, p) => {
+    const got = diffTrees(side(p.from), side(p.to)!).risk_flags;
+    const project = (flags: any[], keys: (f: any) => string[]) => flags.map((f) => JSON.stringify(Object.fromEntries(keys(f).map((k) => [k, f[k] ?? null])))).sort();
+    expect(project(got, (_f) => ['kind', 'path']), p.note).toEqual(project(p.risk_flags, (_f) => ['kind', 'path']));
+    for (const want of p.risk_flags) {
+      const match = got.find((f) => f.kind === want.kind && f.path === want.path && (want.field === undefined || f.field === want.field))!;
+      for (const k of ['line', 'field', 'from', 'to'] as const) if (k in want) expect(match[k] ?? null, `${p.to} ${k}`).toEqual(want[k]);
+    }
+    if (p.detail_text) {
+      const detail = [...got[0]!.detail];
+      expect(got[0]!.detail.startsWith(p.detail_text.starts_with)).toBe(true);
+      expect(detail).toHaveLength(p.detail_text.code_points);
+      expect(detail.at(-1)).toBe(p.detail_text.ends_with);
+    }
+  });
+
+  it('covers every safe-list pair (the list is at least what these goldens name)', () => {
+    expect(pairs.length).toBeGreaterThanOrEqual(9);
+  });
+});
+
+describe('flag text is plain: invisible characters escaped, then cut to 200 code points ending in … (contract §5.3)', () => {
+  it('escapes, then cuts, and leaves short visible text alone', () => {
+    expect(flagText('allowed-tools added: Bash')).toBe('allowed-tools added: Bash');
+    expect(flagText('a\u{200b}b\u{202e}c')).toBe('a\\u{200b}b\\u{202e}c');
+    const long = flagText(`\u{200b}${'a'.repeat(300)}`);
+    expect([...long]).toHaveLength(200);
+    expect(long.startsWith('\\u{200b}aaa')).toBe(true);
+    expect(long.endsWith('a…')).toBe(true);
+    expect([...flagText('b'.repeat(200))]).toHaveLength(200);
+    expect(flagText('b'.repeat(200)).endsWith('b')).toBe(true);
+    expect(flagText(flagText(`x\u{200b}${'y'.repeat(250)}`))).toBe(flagText(`x\u{200b}${'y'.repeat(250)}`));
+  });
+});
+
+describe('a diff never reads an unparseable SKILL.md as empty front matter (contract §5.3)', () => {
+  it('refuses either side whose SKILL.md is missing, not text or not parseable; no version yet is fine', () => {
+    const ok = { path: 'SKILL.md', mode: '0644' as const, bytes: Buffer.from('---\nname: x\ndescription: y\n---\nz\n') };
+    const bad = [
+      { path: 'SKILL.md', mode: '0644' as const, bytes: Buffer.from('no front matter\n') },
+      { path: 'SKILL.md', mode: '0644' as const, bytes: Buffer.from('---\nname: [x\n---\nz\n') },
+      { path: 'SKILL.md', mode: '0644' as const, bytes: Buffer.from([0xff, 0xfe, 0x00]) },
+      { path: 'notes.md', mode: '0644' as const, bytes: Buffer.from('n\n') },
+    ];
+    for (const b of bad) {
+      const theirs = { files: [b], publisher: 'ana' };
+      const ours = { files: [ok], publisher: 'ana' };
+      expect(errorOf(() => diffTrees(ours, theirs)).code, String(b.bytes)).toBe('invalid_manifest');
+      expect(errorOf(() => diffTrees(theirs, ours)).code, String(b.bytes)).toBe('invalid_manifest');
+    }
+    expect(diffTrees(null, { files: [ok], publisher: 'ana' }).files).toHaveLength(1);
+  });
+});
+
 describe('diffs (golden/histories.yaml diffs, golden/diffs/)', () => {
   const hunks = (text: string) => text.split('\n').filter((l) => !l.startsWith('--- ') && !l.startsWith('+++ ')).join('\n');
   for (const [hid, h] of Object.entries<any>(histories.histories)) {
@@ -322,6 +384,17 @@ describe('diffs (golden/histories.yaml diffs, golden/diffs/)', () => {
     expect(flagged('', 'some-key-claude-code-adds-later: true\n')).toEqual(['some-key-claude-code-adds-later']);
     expect(flagged('shell: bash\n', '')).toEqual(['shell']);
     expect(flagged('version: "1"\nlicense: MIT\n', 'version: "2"\nlicense: Apache-2.0\nwhen_to_use: always\nmetadata: {tags: docs}\n')).toEqual([]);
+  });
+
+  it('lets a config remove keys from the safe list, never add one (contract §5.3: fixed in code)', () => {
+    const md = (extra = '') => ({ path: 'SKILL.md', mode: '0644', bytes: Buffer.from(`---\nname: x\ndescription: y\n${extra}---\nz\n`) });
+    const flagged = (before: string, after: string, keys: readonly string[]) =>
+      diffTrees({ files: tree([md(before)]), publisher: 'a' }, { files: tree([md(after)]), publisher: 'a' }, keys)
+        .risk_flags.map((f) => f.field);
+    const DEFAULTS = ['name', 'description', 'when_to_use', 'argument-hint', 'arguments', 'license', 'compatibility', 'metadata', 'version', 'tags'];
+    expect(flagged('', 'allowed-tools: Bash\nhooks: {Stop: ./x.sh}\n', [...DEFAULTS, 'allowed-tools', 'hooks'])).toEqual(['allowed-tools', 'hooks']);
+    expect(flagged('license: MIT\n', 'license: Apache-2.0\n', DEFAULTS.filter((k) => k !== 'license'))).toEqual(['license']);
+    expect(flagged('license: MIT\n', 'license: Apache-2.0\n', DEFAULTS)).toEqual([]);
   });
 
   it('treats hooks in the front matter as a capability, like a tool grant', () => {
