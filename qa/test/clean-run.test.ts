@@ -100,8 +100,10 @@ describe('teardown', () => {
     const sb = sandbox(m);
     const child = spawn('sh', ['-c', 'sleep 30 & sleep 30'], { detached: true, stdio: 'ignore' });
     const pgid = child.pid!;
-    await teardown(sb, { machine: m, processGroups: [pgid] });
-    expect(alive(pgid)).toBe(false);
+    try {
+      await teardown(sb, { machine: m, processGroups: [pgid] });
+      expect(alive(pgid)).toBe(false);
+    } finally { try { process.kill(-pgid, 'SIGKILL'); } catch { /* gone, as it should be */ } }
   });
 });
 
@@ -165,9 +167,10 @@ describe('before/after check', () => {
     const m = machine();
     const sb = sandbox(m);
     const child = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' });
-    const w = { ...m.watch(sb), processGroups: [child.pid!] };
-    expect(compare(snapshot({ ...w, processGroups: [] }), snapshot(w)).map((d) => d.what)).toEqual([`process group ${child.pid} still running`]);
-    process.kill(-child.pid!, 'SIGKILL');
+    try {
+      const w = { ...m.watch(sb), processGroups: [child.pid!] };
+      expect(compare(snapshot({ ...w, processGroups: [] }), snapshot(w)).map((d) => d.what)).toEqual([`process group ${child.pid} still running`]);
+    } finally { process.kill(-child.pid!, 'SIGKILL'); }
   });
 });
 
