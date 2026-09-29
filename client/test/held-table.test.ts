@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { Surface, actAs } from '@skills-catalog/core';
 import { loadGolden } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
+import { cliSurface } from '../src/cli/words.ts';
 import { contextFor, type Context } from '../src/operations.ts';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
 import { pendingHold } from '../src/machine/installer.ts';
@@ -164,6 +165,32 @@ describe('accepting a hold keeps the policy and records the catalog (golden acce
 
 // The same version number from another catalog is another catalog's skill, not the installed one: installing it over the
 // copy from the catalog it came from is held as other_catalog, whether its files differ or not, and nothing changes.
+// On the CLI a hold's words are the CLI's: the command the person runs to take it, never the assistant's tool.
+describe('a hold over an installed copy, at the CLI', () => {
+  const words = cliSurface(S);
+  const cliCtx = (p: Place): Context => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), words, 'cli').ctx;
+  for (const reason of ['pin', 'notify', 'other_catalog'] as const) {
+    it(`held_${reason} names the command to run, not the tool`, async () => {
+      const p = place();
+      const ctx = cliCtx(p);
+      await publish(p, v1);
+      await install(ctx, { name: NAME });
+      if (reason !== 'other_catalog') await policy(ctx, { name: NAME, policy: reason });
+      else {
+        const lock = JSON.parse(readFileSync(join(p.home, 'lock.json'), 'utf8'));
+        lock.skills[dest(p)].catalog = join(p.dir, 'other-catalog');
+        writeFileSync(join(p.home, 'lock.json'), JSON.stringify(lock, null, 2) + '\n');
+      }
+      await publish(p, v2For([]));
+      const r = await install(ctx, { name: NAME });
+      expect(r.result).toBe(S.doc.log.result.install[`held_${reason}`]);
+      expect(r.text.startsWith(words.word('install')[`held_${reason}`].split('{')[0])).toBe(true);
+      expect(r.text).toContain(`${S.cli} update ${NAME} --accept`);
+      expect(r.text).not.toContain(S.names['accept' as keyof typeof S.names] as string);
+    });
+  }
+});
+
 describe('the same version from another catalog', () => {
   for (const files of ['different', 'the same'] as const) {
     it(`is held as other_catalog when its files are ${files}, and the installed copy and the lock stay as they are`, async () => {
