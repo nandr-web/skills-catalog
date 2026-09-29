@@ -7,6 +7,8 @@
 //   fp#<fingerprint> / <name>#<version>  one per version, so the first by name and version answers a fingerprint
 //   events / <at>#<name>#<version>       event (JSON), delivered (true once handed to the index)
 //   file#<sha256> / <name>#<version>     one per file of a version, written by the indexer after the publish
+//   token#<hash> / token, tokens#<owner> / <id>   a Bearer token by its hash, and under its owner by its public id
+//   login#<login> / github               github_id: GitHub's numeric id, recorded at the login's first sign-in
 // The bucket's objects:
 //   blobs/<sha256>                       a file's bytes, put once (If-None-Match: *); tags `claimed` and `deleting`
 //   search/cards.json                    the search cards, rewritten with If-Match on its ETag

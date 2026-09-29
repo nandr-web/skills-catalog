@@ -79,8 +79,9 @@ const SHA256_HEX = new RegExp(SHA256_PATTERN);
 // the older 40 hex characters. Anything else is refused before GitHub is asked.
 const GITHUB_TOKEN = /^(?:gh[opu]_[A-Za-z0-9]{36,251}|[0-9a-f]{40})$/;
 const TOKEN_ID = new RegExp(TOKEN_ID_PATTERN);
-// One entry of the sign-in list: a login, or login:id to pin the login to GitHub's numeric id from the start.
-const SIGN_IN_ENTRY = /^([^:\s]+)(?::([1-9][0-9]{0,15}))?$/;
+// One entry of the sign-in list: a login, or login:id to pin the login to GitHub's numeric id from the start (at most
+// 15 digits, so the id is always a whole number JavaScript holds exactly).
+const SIGN_IN_ENTRY = /^([^:\s]+)(?::([1-9][0-9]{0,14}))?$/;
 type SignInEntry = { login: string; id?: number };
 
 /** The sign-in list's entries, logins in lowercase (as GitHub compares them); a malformed entry is thrown at open. */

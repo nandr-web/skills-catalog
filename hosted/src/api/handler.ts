@@ -50,7 +50,8 @@ export function createHostedHandler(p: HostedHandlerParts): { handle(req: Hosted
 
     const refused = mayRun(asking.holder, r.op);
     if (refused) return envelope({ error: refused }, s);
-    return operationResponse({ ...s, op: r.op, raw: req.body, catalog: p.catalog, developer: asking.holder.owner });
+    // The holder's scope goes along, for an operation that checks it itself.
+    return operationResponse({ ...s, op: r.op, raw: req.body, catalog: p.catalog, developer: asking.holder.owner, scope: asking.holder.scope });
   }
 
   return {

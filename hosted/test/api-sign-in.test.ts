@@ -79,7 +79,7 @@ describe('sign_in_with_github, hosted', () => {
         clientId: 'Iv1.0123456789abcdef',
         secret: async () => secret,
         clock: { now: () => new Date() },
-        fetch: (async () => (down ? new Response('', { status: 502 }) : new Response(JSON.stringify({ user: { login: 'ana' } }), { status: 200 }))) as unknown as typeof fetch,
+        fetch: (async () => (down ? new Response('', { status: 502 }) : new Response(JSON.stringify({ user: { login: 'ana', id: 7 } }), { status: 200 }))) as unknown as typeof fetch,
       });
       const catalog = { where: 'hosted', signIn: async (input: { github_token: string }) => ((await gh.login(input.github_token)), { token: 'catalog-token-issued', id: 'i', scope: 'read', expires_at: 'x' }) };
       const handler = createHostedHandler({ catalog: catalog as never, tokens: { verify: async () => undefined }, words, origin: { allows: async () => true }, log: (l) => logged.push(l) });

@@ -1,9 +1,9 @@
 // Signing in with GitHub, hosted (contract §1.1): GitHub's check for tokens issued to our OAuth app, the only call the
 // hosted catalog makes outside AWS. POST /applications/{client_id}/token with basic auth (the app's id and secret)
-// answers a token of ours with its user; any other app's token, a revoked one or an unknown one is 404 (422 when it
-// can't be checked). Never GET /user, which takes a token of any app. The secret comes from a parameter, read and kept
-// for five minutes. GitHub unreachable, slow or refusing our own credentials is thrown: the catalog's failure, never
-// the person's. No error's message names a token or the secret.
+// answers a token of ours with its user (login and numeric id); any other app's token, a revoked one or an unknown one
+// is 404. Never GET /user, which takes a token of any app. The secret comes from a parameter, read and kept for five
+// minutes. GitHub unreachable, slow, unable to check (422), redirecting or refusing our own credentials is thrown: the
+// catalog's failure, never the person's. No error's message names a token or the secret.
 
 import type { Clock, GitHubSignIn } from '@skills-catalog/core';
 
@@ -23,7 +23,7 @@ export class HostedGitHubSignIn implements GitHubSignIn {
     this.p = { fetch: globalThis.fetch, timeoutMs: GITHUB_TIMEOUT_MS, ...parts };
   }
 
-  async login(githubToken: string): Promise<string | undefined> {
+  async login(githubToken: string): Promise<{ login: string; id: number } | undefined> {
     const secret = await this.secret();
     const r = await this.p.fetch(`${GITHUB_API}/applications/${encodeURIComponent(this.p.clientId)}/token`, {
       method: 'POST',
@@ -35,13 +35,17 @@ export class HostedGitHubSignIn implements GitHubSignIn {
         'user-agent': 'skills-catalog',
       },
       body: JSON.stringify({ access_token: githubToken }),
+      // The body holds the person's GitHub token: a redirect is never followed (fetch throws on one).
+      redirect: 'error',
       signal: AbortSignal.timeout(this.p.timeoutMs),
     });
-    if (r.status === 404 || r.status === 422) return undefined;
+    // Only 404 means the token isn't one of ours; 422 (the check failed, or was spammed) is GitHub's, not the person's.
+    if (r.status === 404) return undefined;
     if (!r.ok) throw new Error(`GitHub's token check answered ${r.status}`);
-    const login = ((await r.json()) as { user?: { login?: unknown } }).user?.login;
-    if (typeof login !== 'string' || !login) throw new Error("GitHub's token check answered without a login");
-    return login;
+    const user = ((await r.json()) as { user?: { login?: unknown; id?: unknown } }).user;
+    if (typeof user?.login !== 'string' || !user.login) throw new Error("GitHub's token check answered without a login");
+    if (typeof user.id !== 'number' || !Number.isSafeInteger(user.id) || user.id < 1) throw new Error("GitHub's token check answered without the user's id");
+    return { login: user.login, id: user.id };
   }
 
   private async secret(): Promise<string> {

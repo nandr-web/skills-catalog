@@ -3,9 +3,9 @@
 // act as: invalid_request token_only, 400), then no token or one that isn't a single Bearer credential (unauthenticated,
 // 401). A token the store doesn't know (unknown, revoked or expired) is unauthenticated too. A read-scope token reads;
 // an operation whose row changes the catalog takes a publish-scope token (else forbidden read_scope, the operation's
-// answer in the envelope).
+// answer in the envelope), unless it checks the scope itself.
 
-import { CatalogError } from '@skills-catalog/core';
+import { CatalogError, OPERATIONS } from '@skills-catalog/core';
 import { effectOf } from '@skills-catalog/core/http';
 import type { TokenHolder } from '../tokens.ts';
 
@@ -36,11 +36,12 @@ export async function whoIsAsking(
   return holder ? { kind: 'holder', holder } : unauthenticated();
 }
 
-/** Whether this holder may run the operation, by its row's effect; undefined when it may. An operation a hosted
- *  catalog's web face doesn't serve never gets here (the route refuses it): a bug, thrown. */
+/** Whether this holder may run the operation, by its row's effect; undefined when it may. An operation that checks the
+ *  caller's scope itself (its row's checksScope: revoking) runs, and decides. An operation a hosted catalog's web face
+ *  doesn't serve never gets here (the route refuses it): a bug, thrown. */
 export function mayRun(holder: TokenHolder, operation: string): CatalogError | undefined {
   const effect = effectOf(operation, 'hosted');
   if (effect === undefined) throw new Error(`no hosted web operation ${JSON.stringify(operation)}`);
-  if (effect === 'reads') return undefined;
+  if (effect === 'reads' || OPERATIONS[operation]!.checksScope) return undefined;
   return holder.scope === 'publish' ? undefined : new CatalogError('forbidden', { why: 'read_scope' });
 }

@@ -2,10 +2,11 @@
 // signing in with GitHub, or a personal token; each has an owner, a scope (read or publish), an expiry and a public id,
 // and is kept only as its SHA-256 (item token#<hash>), with an item under its owner (tokens#<owner> / <id>) for listing
 // and revoking by id. A token that's unknown, revoked or at its expiry is nobody. The token itself is shown once, at issue.
+// Each login that has signed in keeps GitHub's numeric id (login#<login> / github).
 
 import { createHash, randomBytes } from 'node:crypto';
-import { GetItemCommand, QueryCommand, TransactWriteItemsCommand, type AttributeValue, type DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import type { Clock, TokenHolder, TokenInfo, TokenKind, TokenScope, TokenStore } from '@skills-catalog/core';
+import { GetItemCommand, PutItemCommand, QueryCommand, TransactWriteItemsCommand, type AttributeValue, type DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { TOKEN_ID_PATTERN, type Clock, type TokenHolder, type TokenInfo, type TokenKind, type TokenScope, type TokenStore } from '@skills-catalog/core';
 import type { Place } from './place.ts';
 
 export type { TokenHolder, TokenKind, TokenScope } from '@skills-catalog/core';
@@ -15,6 +16,8 @@ const KINDS: readonly string[] = ['session', 'personal'];
 /** How often a token's last use is written at most. */
 export const LAST_USE_EVERY_MS = 60 * 60_000;
 
+// 12 random bytes in base64url are always 16 of the id's characters: the shape revoke_token checks an id against.
+const TOKEN_ID = new RegExp(TOKEN_ID_PATTERN);
 const hashOf = (token: string) => createHash('sha256').update(token).digest('hex');
 const tokenKey = (hash: string) => ({ pk: { S: `token#${hash}` }, sk: { S: 'token' } });
 const ownerKey = (owner: string, id: string) => ({ pk: { S: `tokens#${owner}` }, sk: { S: id } });
@@ -32,6 +35,7 @@ export class HostedTokenStore implements TokenStore {
     if (!(t.expiresAt.getTime() > this.p.clock.now().getTime())) throw new Error("a token's expiry is in the future");
     const token = randomBytes(32).toString('base64url');
     const id = randomBytes(12).toString('base64url');
+    if (!TOKEN_ID.test(id)) throw new Error("a token id is made in the shape revoke_token takes");
     const hash = hashOf(token);
     const fields = { owner: { S: t.owner }, scope: { S: t.scope }, kind: { S: t.kind }, expires_at: { S: t.expiresAt.toISOString() }, created_at: { S: this.p.clock.now().toISOString() }, id: { S: id } };
     const put = (key: Record<string, AttributeValue>, extra: Record<string, AttributeValue>) => ({
@@ -93,12 +97,40 @@ export class HostedTokenStore implements TokenStore {
     return out.sort((a, b) => (a.created_at === b.created_at ? (a.id < b.id ? -1 : 1) : a.created_at < b.created_at ? -1 : 1));
   }
 
+  /** How many of this owner's tokens still work (not revoked, not expired): one Query on the owner's items. */
+  async liveCount(owner: string): Promise<number> {
+    const now = this.p.clock.now().getTime();
+    return (await this.list(owner)).filter((t) => t.revoked_at === undefined && Date.parse(t.expires_at) > now).length;
+  }
+
+  /** The login's GitHub id, recorded by its first call (item login#<login> / github) in one conditional put, so of two
+   *  first sign-ins at once exactly one id is kept; true when the id is the one kept. */
+  async bindLogin(login: string, githubId: number): Promise<boolean> {
+    try {
+      await this.p.ddb.send(
+        new PutItemCommand({
+          TableName: this.p.place.table,
+          Item: { pk: { S: `login#${login}` }, sk: { S: 'github' }, github_id: { N: String(githubId) }, bound_at: { S: this.p.clock.now().toISOString() } },
+          ConditionExpression: 'attribute_not_exists(pk) OR github_id = :id',
+          ExpressionAttributeValues: { ':id': { N: String(githubId) } },
+        }),
+      );
+      return true;
+    } catch (e) {
+      if ((e as { name?: string }).name === 'ConditionalCheckFailedException') return false;
+      throw e;
+    }
+  }
+
   /** The owner's token with this id no longer works: its records stay, marked with when it was revoked (the API's role
-   *  deletes nothing). Another's id, or one that doesn't exist, changes nothing: false. */
-  async revoke(owner: string, id: string): Promise<boolean> {
+   *  deletes nothing). Another's id, or one that doesn't exist, changes nothing: 'none'; theirs but of a scope above
+   *  upTo changes nothing either: 'above'. A revoke cancelled by the hourly last-use write on the same items tries once
+   *  more. */
+  async revoke(owner: string, id: string, upTo: TokenScope): Promise<'revoked' | 'none' | 'above'> {
     const r = await this.p.ddb.send(new GetItemCommand({ TableName: this.p.place.table, Key: ownerKey(owner, id), ConsistentRead: true }));
     const hash = r.Item?.['hash']?.S;
-    if (!hash) return false;
+    if (!hash) return 'none';
+    if (r.Item!['scope']?.S === 'publish' && upTo !== 'publish') return 'above';
     const mark = (key: Record<string, AttributeValue>) => ({
       Update: {
         TableName: this.p.place.table,
@@ -108,7 +140,13 @@ export class HostedTokenStore implements TokenStore {
         ExpressionAttributeValues: { ':at': { S: this.p.clock.now().toISOString() } },
       },
     });
-    await this.p.ddb.send(new TransactWriteItemsCommand({ TransactItems: [mark(tokenKey(hash)), mark(ownerKey(owner, id))] }));
-    return true;
+    const write = () => this.p.ddb.send(new TransactWriteItemsCommand({ TransactItems: [mark(tokenKey(hash)), mark(ownerKey(owner, id))] }));
+    try {
+      await write();
+    } catch (e) {
+      if ((e as { name?: string }).name !== 'TransactionCanceledException') throw e;
+      await write();
+    }
+    return 'revoked';
   }
 }

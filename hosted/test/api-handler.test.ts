@@ -95,8 +95,8 @@ describe('the operations whose method acts as someone, over HTTP', () => {
       expect(JSON.parse(String(links.body))).toMatchObject({ ok: true, data: { name: 'over-http', files: [{ sha256: sha, kind: 'upload' }] } });
       const listed = await w.handler.handle(req({ method: 'POST', path: '/api/v1/list_tokens', body: '{}' }));
       expect(JSON.parse(String(listed.body))).toMatchObject({ ok: true, data: { tokens: [] } });
-      const revoke = await w.handler.handle(req({ method: 'POST', path: '/api/v1/revoke_token', body: '{"id":"nope"}' }));
-      expect(JSON.parse(String(revoke.body))).toMatchObject({ ok: false, error: { code: 'not_found', id: 'nope' } });
+      const revoke = await w.handler.handle(req({ method: 'POST', path: '/api/v1/revoke_token', body: '{"id":"nopenopenopenope"}' }));
+      expect(JSON.parse(String(revoke.body))).toMatchObject({ ok: false, error: { code: 'not_found', id: 'nopenopenopenope' } });
     } finally {
       w.close();
     }
@@ -142,7 +142,7 @@ describe('a revoked token, from the real token store', () => {
       const search = req({ method: 'POST', path: '/api/v1/search_shared_skills', body: '{"query":"x"}' }, { authorization: `Bearer ${token}` });
       const file = req({ method: 'GET', path: `/api/v1/files/${'a'.repeat(64)}` }, { authorization: `Bearer ${token}` });
       expect((await handler.handle(search)).status).toBe(200);
-      expect(await store.revoke(HTTP_DEVELOPER, id)).toBe(true);
+      expect(await store.revoke(HTTP_DEVELOPER, id, 'publish')).toBe('revoked');
       touched.length = 0;
       expect((await handler.handle(search)).status).toBe(401);
       expect((await handler.handle(file)).status).toBe(401);
@@ -215,8 +215,9 @@ describe('who is asking, hosted', () => {
     try {
       const ok = await w.handler.handle(req(search, { authorization: 'Bearer t-reader' }));
       expect(JSON.parse(String(ok.body))).toMatchObject({ ok: true });
-      // Signing in takes no token, so no token's scope is asked of it (api-sign-in.test.ts).
-      const writes = Object.values(OPERATIONS).filter((o) => o.faces.includes('web') && o.effect === 'writes_catalog' && o.token !== 'none');
+      // Signing in takes no token, so no token's scope is asked of it (api-sign-in.test.ts); revoking checks the scope
+      // itself (api-tokens.test.ts).
+      const writes = Object.values(OPERATIONS).filter((o) => o.faces.includes('web') && o.effect === 'writes_catalog' && o.token !== 'none' && !o.checksScope);
       expect(writes.length).toBeGreaterThan(0);
       for (const o of writes) {
         // A body that would fail the operation's own checks: forbidden comes first, so it never ran.
