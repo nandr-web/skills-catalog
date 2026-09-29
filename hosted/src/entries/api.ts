@@ -1,6 +1,7 @@
 // The API function's entry (contract §1.1): a hosted catalog over the table and the bucket its environment names, behind
 // the origin guard and the GitHub sign-in, both reading their values from Parameter Store at run time. Opened once per
-// container, on its first request; a setting that's missing fails every request, naming the setting in the log.
+// container, on its first request; an open that fails is tried again by the next request (a missing setting fails
+// each one, naming the setting in the log).
 
 import { join } from 'node:path';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -17,6 +18,7 @@ import type { Place } from '../place.ts';
 import { S3SearchIndex } from '../search.ts';
 import { HostedStorage } from '../storage.ts';
 import { HostedTokenStore } from '../tokens.ts';
+import { openOnce } from './once.ts';
 import { parameterReader } from './parameters.ts';
 import { apiSettings } from './settings.ts';
 
@@ -81,16 +83,18 @@ export async function openApi(p: {
   return lambdaAdapter(createHostedHandler({ catalog, tokens, words: p.words, origin, log }));
 }
 
-let api: Promise<(e: HttpApiEvent) => Promise<HttpApiResult>> | undefined;
-
-/** The function's handler. Its words file is beside the bundle (the stack's build copies it there). */
-export async function handler(e: HttpApiEvent): Promise<HttpApiResult> {
-  api ??= openApi({
+// Its words file is beside the bundle (the stack's build copies it there).
+const api = openOnce(async () =>
+  openApi({
     env: process.env,
     ddb: new DynamoDBClient({}),
     s3: new S3Client({}),
     ssm: new SSMClient({}),
     words: Words.load(undefined, join(import.meta.dirname, 'words.yaml')),
-  });
-  return (await api)(e);
+  }),
+);
+
+/** The function's handler. */
+export async function handler(e: HttpApiEvent): Promise<HttpApiResult> {
+  return (await api())(e);
 }
