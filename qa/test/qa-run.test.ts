@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { qaRun } from '../src/run.ts';
-import { compare, snapshot, watchOn } from '../src/check.ts';
+import { compare, PS, snapshot, watchOn } from '../src/check.ts';
 import { sandboxBase } from '../src/sandbox.ts';
 import { cleanup, PROCESS_TEST_MS, machine, qaSpawn } from './machine.ts';
 
@@ -92,13 +92,17 @@ describe('qa run', () => {
     const m = machine();
     // The test stops its own fixture, never through the code under test: if the check it tests fails to see the listener
     // (a sandbox that hides environments), stopEscaped can't either. By its exact pid, and only while that pid is still
-    // this listener; the listener also ends itself after a minute.
+    // this listener; the listener also ends itself after a minute. The pid is kept in memory as soon as the command writes
+    // it: the file goes with the test's folders in afterEach, which runs before this.
+    const file = join(m.tmp, 'escaped.pid');
+    let listener = 0;
+    const read = () => { try { listener ||= Number(readFileSync(file, 'utf8')) || 0; } catch { /* not written yet */ } };
+    const watch = setInterval(read, 20);
     onTestFinished(() => {
-      const file = join(m.tmp, 'escaped.pid');
-      if (!existsSync(file)) return;
-      const pid = Number(readFileSync(file, 'utf8'));
-      const command = spawnSync('/bin/ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' }).stdout ?? '';
-      if (pid > 0 && command.includes('QA-ESCAPED-LISTENER')) try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ }
+      clearInterval(watch);
+      read();
+      const command = listener > 0 ? spawnSync(PS, ['-p', String(listener), '-o', 'command='], { encoding: 'utf8' }).stdout ?? '' : '';
+      if (command.includes('QA-ESCAPED-LISTENER')) try { process.kill(listener, 'SIGKILL'); } catch { /* gone */ }
     });
     // the command starts a listener in a process group of its own, then exits 0 once it listens (it says so on stdout),
     // so the after snapshot sees the port however long the listener took to start
