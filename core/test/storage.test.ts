@@ -11,6 +11,8 @@ import { describe, expect, it } from 'vitest';
 import type { Storage } from '../src/ports.ts';
 import { actAs, openLocalCatalog } from '../src/local/index.ts';
 import { FolderBlobStore } from '../src/local/blobs.ts';
+import { sortFiles } from '../src/local/storage.ts';
+import { expectLinear } from './linear.ts';
 import type { SqliteMetadataStore } from '../src/local/metadata.ts';
 import { ADAPTERS } from './adapters.ts';
 import { historyVersion, loadGolden } from './golden.ts';
@@ -270,5 +272,21 @@ describe('fault injection (histories.fault)', () => {
     utimesSync(join(root, 'blobs', sha(bytes).slice(0, 2), sha(bytes).slice(2)), old, old);
     expect(blobs.put(sha(bytes), bytes)).toBe(false);
     expect(blobs.storedAt(sha(bytes))!.getTime()).toBeGreaterThan(Date.now() - 60_000);
+  });
+});
+
+describe('the local commit sorts its files in one pass', () => {
+  const hex = (i: number) => i.toString(16).padStart(64, '0');
+
+  it('each missing file once, in order; files given with bytes and not stored are to put; stored ones are neither', () => {
+    const stored = new Set([hex(1)]);
+    const bytes = new Uint8Array([1]);
+    const r = sortFiles([{ sha256: hex(2) }, { sha256: hex(1) }, { sha256: hex(3), bytes }, { sha256: hex(2) }, { sha256: hex(4) }, { sha256: hex(3), bytes }], (s) => stored.has(s));
+    expect(r.missing).toEqual([hex(2), hex(4)]);
+    expect(r.toPut.map((f) => f.sha256)).toEqual([hex(3)]);
+  });
+
+  it('is linear in the files of a commit: 10,000 files named by sha256, none stored', () => {
+    expectLinear('10,000 missing files', (scale) => Array.from({ length: Math.max(1, Math.round(10_000 * scale)) }, (_, i) => ({ sha256: hex(i) })), (files) => sortFiles(files, () => false));
   });
 });
