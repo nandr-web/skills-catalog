@@ -66,6 +66,20 @@ describe('the lock file', () => {
     expect(JSON.parse(readFileSync(lockPath(p), 'utf8'))).toEqual({ pid: process.pid, started: startedHere });
   });
 
+  // A holder this user can't signal (another user's process, here root's pid 1) is alive all the same: waited for, never
+  // taken as stale, while its start matches.
+  it.skipIf(process.getuid?.() === 0)('held by another user\'s live process: waited for, then lock_busy', async () => {
+    const etime = spawnSync('ps', ['-o', 'etime=', '-p', '1'], { encoding: 'utf8' }).stdout.trim();
+    const [s = 0, m = 0, h = 0, d = 0] = etime.split(/[-:]/).map(Number).reverse();
+    const started = Date.now() - (((d * 24 + h) * 60 + m) * 60 + s) * 1000;
+    const p = await published('alpha');
+    hold(p, 1, started);
+    let t = Date.parse('2026-09-29T12:00:00Z');
+    const e = await install(ctxFor(p, () => new Date((t += 1000))), { name: 'alpha' }).catch((x: unknown) => x);
+    expect([(e as CatalogError).code, (e as CatalogError).data]).toEqual(['lock_busy', { path: lockPath(p), pid: 1 }]);
+    expect(existsSync(join(p.osHome, '.claude', 'skills', 'alpha'))).toBe(false);
+  });
+
   // The MCP server answers other calls while one waits for the lock: the wait never blocks the event loop.
   it('a run waiting for the lock leaves the event loop free', async () => {
     const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], { stdio: 'ignore' });
