@@ -10,7 +10,7 @@
 
 import { parseArgs } from 'node:util';
 import { CatalogError, Surface, checkActor, renderError, shellQuote } from '@skills-catalog/core';
-import { NAME_RE } from '@skills-catalog/core/skill-tree';
+import { NAME_RE, flagText } from '@skills-catalog/core/skill-tree';
 import { logWords } from '../activity.ts';
 import { actingAs, contextFor, perform } from '../operations.ts';
 import { settingsFrom } from '../settings.ts';
@@ -86,10 +86,11 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
     return 1;
   }
 
-  // A person-only step with no terminal: nothing is done, and the person gets the command to run themselves.
+  // A person-only step with no terminal: nothing is done, and the person gets the command to run themselves, each word
+  // shell-quoted after any control or invisible character in it is shown escaped (it reaches the person's terminal).
   const personOnly = cmd.personOnly?.find((f) => values[f] !== undefined && values[f] !== false);
   if (personOnly && !io.tty) {
-    const command = [s.cli, ...withoutAs(argv).map(shellQuote)].join(' ');
+    const command = [s.cli, ...withoutAs(argv).map((a) => shellQuote(flagText(a)))].join(' ');
     io.stderr(withActing(s.format(s.word('errors.person_only'), { command })) + '\n');
     // The activity log shows the step waiting for the person; its target only when it's a skill's name (the log holds
     // names and versions only, never text someone typed).

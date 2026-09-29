@@ -207,6 +207,15 @@ describe('update --accept on the command line', () => {
     }
   });
 
+  it('the command it gives never carries a control character into the person\'s terminal: each is shown escaped', async () => {
+    const p = place();
+    await seed(p);
+    const r = await cli(p, ['update', 'bad\u001b[2Jname\u0007', '--accept']);
+    expect(r.code).toBe(3);
+    expect(r.err).not.toMatch(/[\u0000-\u0008\u000b-\u001f\u007f]/);
+    expect(r.err).toContain("skills-catalog update 'bad\\u{1b}[2Jname\\u{7}' --accept");
+  });
+
   it('takes exactly one skill: two names are a usage mistake before anything else, so no command that can\'t work is given', async () => {
     const p = place();
     await seed(p);
