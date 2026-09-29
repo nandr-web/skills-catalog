@@ -2,10 +2,11 @@
 // content and the CLI's stdout. Every sentence comes from the surface; a result the surface has no words for yet
 // is listed in WORD_GAPS and rendered as its data, never as hand-written prose.
 
-import type { DiffResult, InlineBudget, ReadItem, ReadResult, SearchResult, VersionsResult } from './catalog.ts';
+import { stringify } from 'yaml';
+import { cursorOffset, type DiffResult, type InlineBudget, type ReadItem, type ReadResult, type SearchInput, type SearchResult, type VersionsResult } from './catalog.ts';
 import { CatalogError } from './errors.ts';
 import type { Ids } from './ports.ts';
-import { MANIFEST, parseFrontmatter, type RiskFlag } from './skill-tree/index.ts';
+import { MANIFEST, type RiskFlag } from './skill-tree/index.ts';
 import type { Surface } from './surface.ts';
 
 // Words the agent-facing surface doesn't have yet (asked for). A test fails when one of them appears in the surface,
@@ -18,8 +19,11 @@ function asData(code: string, data: Record<string, unknown>): string {
 
 const list = (xs: readonly string[]) => xs.join(', ');
 
-export function renderSearch(s: Surface, r: SearchResult, query: string, offset = 0): string {
+// `req` is the search as asked: its words and, for a later page, its cursor (read here, so no face parses one).
+export function renderSearch(s: Surface, r: SearchResult, req: SearchInput): string {
   if (!s.guided) return JSON.stringify(r);
+  const query = req.query ?? '';
+  const offset = cursorOffset(req.cursor);
   const w = s.word('search');
   const ranking = w.ranking[r.ranking];
   if (r.results.length === 0) {
@@ -51,41 +55,44 @@ export function renderSearch(s: Surface, r: SearchResult, query: string, offset 
 const quoted = (path: string) => JSON.stringify(path);
 
 // A skill's text sits between markers that carry a token made for this read (contract §5.2), so text inside can't
-// close the fence by planting a marker in any spelling: it can't know the token. `skillMd` is its SKILL.md as
-// published: shown whole when the read inlined its body; a skill whose body was left out shows no fence at all.
-function renderItem(s: Surface, item: ReadItem, skillMd: string, token: string, budget: InlineBudget): string {
+// close the fence by planting a marker in any spelling: it can't know the token. Everything shown comes from the
+// read's own result, so a face can't show more than the core inlined (§2's budget): the fence holds the front matter
+// and the body when the core inlined it; a skill whose body was left out shows no fence at all.
+function renderItem(s: Surface, item: ReadItem, token: string, budget: InlineBudget): string {
   const w = s.word('get');
   const size = (bytes: number) => s.format(w.size, { kb: Math.ceil(bytes / 1024) });
   const lines = [s.format(w.header, { name: item.name, version: item.version, latest_mark: item.version === item.latest_version ? w.latest_mark.latest : s.format(w.latest_mark.older, { latest: item.latest_version }), publisher: item.publisher, published_at: item.published_at })];
-  const shown = item.manifest.body !== undefined;
-  if (shown) lines.push(s.format(w.data_note, { publisher: item.publisher }), s.format(w.fence[0], { token }), skillMd.trimEnd(), s.format(w.fence[1], { token }));
+  const body = item.manifest.body;
+  const shown = body !== undefined;
+  if (shown) {
+    const skillMd = `---\n${stringify(item.manifest.frontmatter, { lineWidth: 0 })}---\n${body}`;
+    lines.push(s.format(w.data_note, { publisher: item.publisher }), s.format(w.fence[0], { token }), skillMd.trimEnd(), s.format(w.fence[1], { token }));
+  }
   if (item.files) lines.push(s.format(w.files, { files: list(item.files.map((f) => `${quoted(f.path)} (${f.size} B)`)) }));
   for (const f of item.files ?? []) {
     if (f.content !== undefined && f.path !== MANIFEST) {
       lines.push(s.format(w.file_fence[0], { path: quoted(f.path), token }), f.content.trimEnd(), s.format(w.file_fence[1], { path: quoted(f.path), token }));
     }
   }
-  // What was left out: a text bigger than the whole budget can only be read on its own; the rest with paths[].
-  const left = (item.files ?? []).filter((f) => f.content_omitted && !(shown && f.path === MANIFEST)).map((f) => ({ path: f.path, bytes: f.size }));
-  const bodyBytes = item.manifest.body_omitted ? Buffer.byteLength(parseFrontmatter(skillMd).body, 'utf8') : 0;
-  const bodyTooBig = bodyBytes > budget.limit;
-  if (item.manifest.body_omitted && !bodyTooBig) lines.push(s.format(w.body_omitted, { used: size(budget.used), limit: size(budget.limit), name: item.name }));
-  const tooBig = [...new Set([...(bodyTooBig ? [MANIFEST] : []), ...left.filter((f) => f.bytes > budget.limit).map((f) => f.path)])];
-  const omitted = left.filter((f) => f.bytes <= budget.limit).map((f) => f.path);
+  // What was left out. A body is read with paths ["SKILL.md"] (one path is read whole, whatever its size); a file
+  // bigger than the whole budget only on its own; the rest with paths[].
+  if (item.manifest.body_omitted) lines.push(s.format(w.body_omitted, { used: size(budget.used), limit: size(budget.limit), name: item.name }));
+  const left = (item.files ?? []).filter((f) => f.content_omitted && !(shown && f.path === MANIFEST));
+  const tooBig = left.filter((f) => f.size > budget.limit).map((f) => f.path);
+  const omitted = left.filter((f) => f.size <= budget.limit).map((f) => f.path);
   if (omitted.length) lines.push(s.format(w.omitted, { used: size(budget.used), limit: size(budget.limit), files: list(omitted.map(quoted)), name: item.name }));
   if (tooBig.length) lines.push(s.format(w.too_big, { limit: size(budget.limit), files: list(tooBig.map(quoted)), name: item.name }));
   lines.push(s.format(w.next, { name: item.name }));
   return lines.join('\n');
 }
 
-// `skillMd` gives each item's SKILL.md as published; `ids` makes the read's fence token (the injected Ids, so tests
-// can fix it).
-export function renderRead(s: Surface, r: ReadResult, skillMd: (item: ReadItem) => string, ids: Ids): string {
+// `ids` makes the read's fence token (the injected Ids, so tests can fix it).
+export function renderRead(s: Surface, r: ReadResult, ids: Ids): string {
   if (!s.guided) return JSON.stringify(r);
   const token = ids.next();
   return r.skills
     .map((e) => {
-      if (!('error' in e)) return renderItem(s, e, skillMd(e), token, r.inline_budget);
+      if (!('error' in e)) return renderItem(s, e, token, r.inline_budget);
       const { code, ...data } = e.error;
       return renderError(s, new CatalogError(code as CatalogError['code'], data));
     })
