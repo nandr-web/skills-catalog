@@ -45,7 +45,8 @@ const v1: File[] = [{ path: 'SKILL.md', text: manifest() }, { path: 'notes.md', 
 const RAISES: Record<string, (files: File[]) => File[]> = {
   runnable_file: (f) => [...f, { path: 'scripts/run.sh', text: '#!/bin/sh\necho run\n', mode: '0755' }],
   non_markdown: (f) => [...f, { path: 'data.json', text: '{}\n' }],
-  capability_frontmatter: (f) => f.map((x) => (x.path === 'SKILL.md' ? { ...x, text: manifest('hooks:\n  Stop:\n    - hooks:\n        - type: command\n          command: echo done\n') } : x)),
+  // Only the front matter changes: another file changed while the new version grants something is instructions_changed too.
+  capability_frontmatter: (f) => f.map((x) => (x.path === 'SKILL.md' ? { ...x, text: manifest('hooks:\n  Stop:\n    - hooks:\n        - type: command\n          command: echo done\n') } : x.path === 'notes.md' ? v1[1]! : x)),
 };
 const v2For = (flags: string[]): File[] => flags.reduce((f, k) => RAISES[k]!(f), [v1[0]!, { path: 'notes.md', text: 'Step one.\nStep two.\n' }]);
 const unsupported = (r: Row) => r.flags.filter((k) => !RAISES[k]);
