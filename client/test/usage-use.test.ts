@@ -86,9 +86,9 @@ describe('the use event', () => {
       await perform(ctx, 'install_shared_skill', 'install', { name: 'sql-migration-helper' });
       const held = await perform(ctx, 'install_shared_skill', 'install', { name: 'release-notes-kit' });
       await perform(ctx, 'update_installed_skills', 'update', {});
-      const confirm = /confirm "([^"]+)"/.exec(held.text)![1];
+      const [, target, version, confirm] = /target "([^"]+)", version (\d+), confirm "([^"]+)"/.exec(held.text)!;
       const flags = JSON.parse(/flags (\[[^\]]*\])/.exec(held.text)![1]!);
-      await perform(ctx, 'accept_held_update', 'accept', { name: 'release-notes-kit', confirm, flags });
+      await perform(ctx, 'accept_held_update', 'accept', { name: 'release-notes-kit', target, version: Number(version), confirm, flags });
     } finally {
       close();
     }

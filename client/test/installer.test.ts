@@ -5,6 +5,7 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync,
 import { join } from 'node:path';
 import { CatalogError, Surface, actAs, reasons, renderError, type Catalog } from '@skills-catalog/core';
 import { checkTree, diffTrees, fingerprint, sha256Hex, type Mode } from '@skills-catalog/core/skill-tree';
+import { loadGolden } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
 import { contextFor, perform, type Context } from '../src/operations.ts';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
@@ -58,6 +59,11 @@ const refusal = async (fn: () => Promise<unknown>): Promise<CatalogError> => {
 };
 
 const confirmOf = (text: string) => /confirm "([^"]+)"/.exec(text)?.[1];
+// The values an accept takes, as the held line gives them: target, version and confirm, each exactly as shown.
+const heldOf = (text: string) => {
+  const m = /target "([^"]+)", version (\d+), confirm "([^"]+)"/.exec(text);
+  return m ? { target: m[1]!, version: Number(m[2]), confirm: m[3]! } : undefined;
+};
 const tree = (dir: string, rel = ''): Record<string, string> => {
   const out: Record<string, string> = {};
   for (const e of readdirSync(join(dir, rel), { withFileTypes: true })) {
@@ -177,7 +183,7 @@ describe('install (contract §3 install_shared_skill)', () => {
       let r;
       try {
         r = await install(ctxFor(p), { name: 'notes-helper' });
-        if (r.result === S.doc.log.result.install.held) r = await accept(ctxFor(p), { name: 'notes-helper', confirm: confirmOf(r.text), flags: ['runnable_file'] });
+        if (r.result === S.doc.log.result.install.held) r = await accept(ctxFor(p), { name: 'notes-helper', ...heldOf(r.text)!, flags: ['runnable_file'] });
       } finally {
         process.umask(was);
       }
@@ -214,21 +220,21 @@ describe('install (contract §3 install_shared_skill)', () => {
     await publish(p, 'runner', withScript('runner'));
     const ctx = ctxFor(p);
     const held = await install(ctx, { name: 'runner' });
-    const confirm = confirmOf(held.text)!;
-    expect(held.text).toBe(S.format(S.word('install.held'), { name: 'runner', version: 1, reasons: S.format(S.word('update.reason.runnable_file'), { path: 'scripts/run.sh' }), confirm, flags: '["runnable_file"]' }));
+    const { confirm, target, version } = heldOf(held.text)!;
+    expect(held.text).toBe(S.format(S.word('install.held'), { name: 'runner', target: 'user', version: 1, reasons: S.format(S.word('update.reason.runnable_file'), { path: 'scripts/run.sh' }), confirm, flags: '["runnable_file"]' }));
     expect(held.result).toBe(S.doc.log.result.install.held);
     expect(existsSync(join(userSkills(p), 'runner'))).toBe(false);
     expect(lockOf(p)).toEqual({});
 
     // The flags are compared as a set of kinds: one missing or extra is a conflict, and nothing changes.
     for (const flags of [[], ['runnable_file', 'new_publisher']]) {
-      const e = await refusal(() => accept(ctx, { name: 'runner', confirm, flags }));
+      const e = await refusal(() => accept(ctx, { name: 'runner', confirm, target, version, flags }));
       expect(e.code).toBe('conflict');
       expect(renderError(S, e)).toBe(S.format(S.word('errors.accept_conflict'), { name: 'runner' }));
     }
     expect(existsSync(join(userSkills(p), 'runner'))).toBe(false);
 
-    const taken = await accept(ctx, { name: 'runner', confirm, flags: ['runnable_file', 'runnable_file'] });
+    const taken = await accept(ctx, { name: 'runner', confirm, target, version, flags: ['runnable_file', 'runnable_file'] });
     const dest = join(userSkills(p), 'runner');
     expect(taken.text).toBe(S.format(S.word('install.installed_after_yes'), { name: 'runner', version: 1, path: JSON.stringify(dest), policy: AUTO_DEFAULT }));
     expect(taken.result).toBe(S.doc.log.result.accept);
@@ -247,9 +253,9 @@ describe('install (contract §3 install_shared_skill)', () => {
     const p = place();
     await publish(p, 'runner', withScript('runner'));
     const ctx = ctxFor(p);
-    const confirm = confirmOf((await install(ctx, { name: 'runner' })).text)!;
+    const { confirm, target, version } = heldOf((await install(ctx, { name: 'runner' })).text)!;
     await publish(p, 'runner', [...withScript('runner'), { path: 'more.md', text: 'x\n' }]);
-    expect((await refusal(() => accept(ctx, { name: 'runner', confirm, flags: ['runnable_file'] }))).code).toBe('conflict');
+    expect((await refusal(() => accept(ctx, { name: 'runner', confirm, target, version, flags: ['runnable_file'] }))).code).toBe('conflict');
     expect(existsSync(join(userSkills(p), 'runner'))).toBe(false);
   });
 
@@ -370,9 +376,9 @@ describe('the installer decides from bytes it checked (golden/histories.yaml ins
 
     const q = place();
     await publish(q, 'runner', withScript('runner'));
-    const confirm = confirmOf((await install(ctxFor(q), { name: 'runner' })).text)!;
+    const { confirm, target, version } = heldOf((await install(ctxFor(q), { name: 'runner' })).text)!;
     const swapped = serving(() => ({ files: [...withScript('runner'), { path: 'more.md', text: 'x\n' }], fetchOnly: true }));
-    expect((await refusal(() => accept(ctxFor(q, { catalog: swapped }), { name: 'runner', confirm, flags: ['runnable_file'] }))).code).toBe('fingerprint_mismatch');
+    expect((await refusal(() => accept(ctxFor(q, { catalog: swapped }), { name: 'runner', confirm, target, version, flags: ['runnable_file'] }))).code).toBe('fingerprint_mismatch');
     expect(existsSync(join(userSkills(q), 'runner'))).toBe(false);
   });
 
@@ -404,10 +410,10 @@ describe('the installer decides from bytes it checked (golden/histories.yaml ins
     expect(readFileSync(join(userSkills(p), 'stale-rules', 'SKILL.md'), 'utf8')).toBe(skillMd('stale-rules', 'The stale-rules skill.'));
 
     // The yes takes it with the same flags, new_publisher included.
-    const confirm = confirmOf(r.text.split('\n')[2]!)!;
+    const { confirm, target, version } = heldOf(r.text.split('\n')[2]!)!;
     const kinds = [...new Set(flags.map((f) => f.kind))];
-    expect((await refusal(() => accept(ctxFor(p, { catalog }), { name: 'stale-rules', confirm, flags: kinds.filter((k) => k !== 'new_publisher') }))).code).toBe('conflict');
-    await accept(ctxFor(p, { catalog }), { name: 'stale-rules', confirm, flags: kinds });
+    expect((await refusal(() => accept(ctxFor(p, { catalog }), { name: 'stale-rules', confirm, target, version, flags: kinds.filter((k) => k !== 'new_publisher') }))).code).toBe('conflict');
+    await accept(ctxFor(p, { catalog }), { name: 'stale-rules', confirm, target, version, flags: kinds });
     expect(lockOf(p)[join(userSkills(p), 'stale-rules')]).toMatchObject({ version: 2, publisher: 'bob' });
   });
 });
@@ -625,7 +631,7 @@ describe('a project folder replaced by a link to someone else\'s folder (the sec
       const ctx = ctxFor(p);
       await install(ctx, { name: 'alpha', target: 'project' });
       await publish(p, 'alpha', withScript('alpha'));
-      const confirm = confirmOf((await update(ctx, {})).text.split('\n')[2]!)!;
+      const { confirm, target, version } = heldOf((await update(ctx, {})).text.split('\n')[2]!)!;
       const victim = join(p.dir, 'victim');
       const canary = at === 'skills' ? join(victim, 'alpha', 'canary') : join(victim, 'skills', 'alpha', 'canary');
       mkdirSync(join(canary, '..'), { recursive: true });
@@ -635,7 +641,7 @@ describe('a project folder replaced by a link to someone else\'s folder (the sec
       symlinkSync(victim, link);
       const s: Setup = { p, ctx, victim, canary, link, lockBefore: readFileSync(join(p.home, 'lock.json'), 'utf8') };
       const victimTree = tree(victim);
-      const e = await refusal(() => accept(ctx, { name: 'alpha', confirm, flags: ['runnable_file'] }));
+      const e = await refusal(() => accept(ctx, { name: 'alpha', confirm, target, version, flags: ['runnable_file'] }));
       expect([e.code, e.data]).toEqual(['target_symlink', { path: link }]);
       untouched(s, victimTree);
     }
@@ -749,6 +755,39 @@ describe('replacing an installed copy deletes only the copy the lock recorded (c
   });
 });
 
+// Accepting takes the target and the version the held result gave, compared exactly as the confirm is: the permission
+// prompt shows the person what they agree to (golden policy.yaml accept_cases.target_version, run as it is).
+describe('accepting a held update names its target and version (golden accept_cases.target_version)', () => {
+  const g = loadGolden('policy.yaml').accept_cases.target_version as {
+    held: { name: string; target: string; version: number; flags: string[] };
+    cases: { send: { target?: string; version?: number }; outcome: string | { error: string; field: string; why: string }; installed_unchanged?: boolean }[];
+  };
+  for (const c of g.cases) {
+    it(`${JSON.stringify(c.send)} → ${JSON.stringify(c.outcome)}`, async () => {
+      const p = place();
+      await publish(p, g.held.name, plain(g.held.name));
+      const ctx = ctxFor(p);
+      await install(ctx, { name: g.held.name, target: g.held.target });
+      await publish(p, g.held.name, withScript(g.held.name));
+      const held = heldOf((await update(ctx, {})).text)!;
+      expect([held.target, held.version]).toEqual([g.held.target, g.held.version]);
+      const dest = join(g.held.target === 'user' ? userSkills(p) : projectSkills(p), g.held.name);
+      const before = tree(dest);
+      const lockBefore = readFileSync(join(p.home, 'lock.json'), 'utf8');
+      const r = await accept(ctx, { name: g.held.name, confirm: held.confirm, flags: g.held.flags, ...c.send }).catch((e: unknown) => e);
+      const o = c.outcome;
+      if (o === 'updated') expect((r as { outcome?: string }).outcome).toBe('updated');
+      else if (o === 'conflict') expect((r as CatalogError).code).toBe('conflict');
+      else if (typeof o === 'object') expect([(r as CatalogError).code, (r as CatalogError).data]).toEqual([o.error, expect.objectContaining({ field: o.field, why: o.why })]);
+      else throw new Error(`an outcome this test doesn't know: ${o}`);
+      if (c.installed_unchanged) {
+        expect(tree(dest)).toEqual(before);
+        expect(readFileSync(join(p.home, 'lock.json'), 'utf8')).toBe(lockBefore);
+      }
+    });
+  }
+});
+
 describe('update (contract §3 update_installed_skills, §5.3)', () => {
   it('updates a text-only change, holds one that adds a script until the yes, and says what is up to date', async () => {
     const p = place();
@@ -769,15 +808,15 @@ describe('update (contract §3 update_installed_skills, §5.3)', () => {
     expect(lines[0]).toBe(S.format(S.word('update.header'), { checked: 3 }));
     expect(lines[1]).toBe(S.format(S.word('update.updated'), { name: 'notes-helper', from: 1, to: 2, changes: '"SKILL.md" changed' }));
     expect(lines[2]).toBe(S.format(S.word('update.held_flagged'), { name: 'runner', from: 1, to: 2, reasons: S.format(S.word('update.reason.runnable_file'), { path: 'scripts/run.sh' }) }));
-    const confirm = confirmOf(lines[3]!)!;
-    expect(lines[3]).toBe(S.format(S.word('update.held_next'), { name: 'runner', from: 1, confirm, flags: '["runnable_file"]' }));
+    const { confirm, target, version } = heldOf(lines[3]!)!;
+    expect(lines[3]).toBe(S.format(S.word('update.held_next'), { name: 'runner', target: 'user', from: 1, to: 2, confirm, flags: '["runnable_file"]' }));
     expect(lines[4]).toBe(S.format(S.word('update.unchanged'), { n: 1 }));
     expect(r.result).toBe(S.doc.log.result.update.held_flagged);
     expect(readFileSync(join(userSkills(p), 'notes-helper', 'SKILL.md'), 'utf8')).toContain('Second.');
     expect(existsSync(join(userSkills(p), 'runner', 'scripts'))).toBe(false);
 
     const dest = join(userSkills(p), 'runner');
-    const taken = await accept(ctx, { name: 'runner', confirm, flags: ['runnable_file'] });
+    const taken = await accept(ctx, { name: 'runner', confirm, target, version, flags: ['runnable_file'] });
     expect(taken.text).toBe(S.format(S.word('update.accepted'), { name: 'runner', from: 1, to: 2, path: JSON.stringify(dest) }));
     expect(lockOf(p)[dest]).toMatchObject({ version: 2, accepted: [{ version: 2, flags: ['runnable_file'] }] });
     expect(nothingStaged(p)).toBe(true);
@@ -793,11 +832,11 @@ describe('update (contract §3 update_installed_skills, §5.3)', () => {
     for (const name of ['pinned-one', 'ask-first', 'auto-one']) await publish(p, name, plain(name, 'Second.\n'));
     const r = await update(ctx, {});
     const lines = r.text.split('\n');
-    const confirm = confirmOf(lines[2]!)!;
+    const { confirm, target, version } = heldOf(lines[2]!)!;
     expect(lines).toEqual([
       S.format(S.word('update.header'), { checked: 3 }),
       S.format(S.word('update.held_notify'), { name: 'ask-first', from: 1, to: 2 }),
-      S.format(S.word('update.held_notify_next'), { name: 'ask-first', from: 1, confirm, flags: '[]' }),
+      S.format(S.word('update.held_notify_next'), { name: 'ask-first', target: 'user', from: 1, to: 2, confirm, flags: '[]' }),
       S.format(S.word('update.updated'), { name: 'auto-one', from: 1, to: 2, changes: '"SKILL.md" changed' }),
       S.format(S.word('update.held_pin'), { name: 'pinned-one', from: 1, to: 2 }),
     ]);
@@ -808,7 +847,7 @@ describe('update (contract §3 update_installed_skills, §5.3)', () => {
     expect(one.text.split('\n')[0]).toBe(S.format(S.word('update.header'), { checked: 1 }));
     // The tell-me-first hold is taken with flags [] once the person agrees, and keeps its setting.
     const dest = join(userSkills(p), 'ask-first');
-    const taken = await accept(ctx, { name: 'ask-first', confirm, flags: [] });
+    const taken = await accept(ctx, { name: 'ask-first', confirm, target, version, flags: [] });
     expect(taken.text).toBe(S.format(S.word('update.accepted'), { name: 'ask-first', from: 1, to: 2, path: JSON.stringify(dest) }));
     expect(lockOf(p)[dest]).toMatchObject({ version: 2, policy: 'notify', accepted: [{ version: 2, flags: [] }] });
   });
@@ -821,14 +860,14 @@ describe('update (contract §3 update_installed_skills, §5.3)', () => {
     await policy(ctx, { policy: 'notify', name: 'ask-first' });
     await publish(p, 'ask-first', withScript('ask-first'));
     const lines = (await update(ctx, {})).text.split('\n');
-    const confirm = confirmOf(lines[2]!)!;
+    const { confirm, target, version } = heldOf(lines[2]!)!;
     const reasonsText = S.format(S.word('update.reason.runnable_file'), { path: 'scripts/run.sh' });
     expect(lines.slice(1)).toEqual([
       S.format(S.word('update.held_notify_flagged'), { name: 'ask-first', from: 1, to: 2, reasons: reasonsText }),
-      S.format(S.word('update.held_notify_next'), { name: 'ask-first', from: 1, confirm, flags: '["runnable_file"]' }),
+      S.format(S.word('update.held_notify_next'), { name: 'ask-first', target: 'user', from: 1, to: 2, confirm, flags: '["runnable_file"]' }),
     ]);
-    expect((await refusal(() => accept(ctx, { name: 'ask-first', confirm, flags: [] }))).code).toBe('conflict');
-    await accept(ctx, { name: 'ask-first', confirm, flags: ['runnable_file'] });
+    expect((await refusal(() => accept(ctx, { name: 'ask-first', confirm, target, version, flags: [] }))).code).toBe('conflict');
+    await accept(ctx, { name: 'ask-first', confirm, target, version, flags: ['runnable_file'] });
     expect(existsSync(join(userSkills(p), 'ask-first', 'scripts', 'run.sh'))).toBe(true);
     // The CLI face names the person's own command.
     const q = place();
@@ -914,7 +953,7 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
       await publish(p, 'other', withScript('other'));
       const ctx = ctxFor(p);
       await install(ctx, { name: 'runner' });
-      const confirm = confirmOf((await install(ctx, { name: 'other' })).text)!;
+      const { confirm, target, version } = heldOf((await install(ctx, { name: 'other' })).text)!;
       await publish(p, 'runner', plain('runner', 'Second.\n'));
       const file = join(p.home, d.file);
       const bytes = d.bytes(p);
@@ -923,7 +962,7 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
       const calls: [string, () => Promise<unknown>][] = [
         ['install', () => install(ctx, { name: 'other', target: 'project' })],
         ['update', () => update(ctx, {})],
-        ['accept', () => accept(ctx, { name: 'other', confirm, flags: ['runnable_file'] })],
+        ['accept', () => accept(ctx, { name: 'other', confirm, target, version, flags: ['runnable_file'] })],
         ['list', () => list(ctx, {})],
         ['policy', () => policy(ctx, { policy: 'pin', name: 'runner' })],
         ['default policy', () => policy(ctx, { policy: 'notify' })],

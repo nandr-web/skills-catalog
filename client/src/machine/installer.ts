@@ -510,7 +510,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   if (flags.length) {
     const w = s.word('install');
     const confirm = encode({ name: req.name, target, version, fingerprint: to.fingerprint, latest: v.latest });
-    const text = s.format(ctx.face === 'cli' ? w.held_cli : w.held, { name: req.name, version, reasons: reasons(s, flags), confirm, flags: JSON.stringify(kinds(flags)), command: acceptCommand(s, req.name, target) });
+    const text = s.format(ctx.face === 'cli' ? w.held_cli : w.held, { name: req.name, target, version, reasons: reasons(s, flags), confirm, flags: JSON.stringify(kinds(flags)), command: acceptCommand(s, req.name, target) });
     return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held' };
   }
   const written = writeSkill(dest, target, to.files, existing);
@@ -522,10 +522,13 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
 
 /** An update's line for a skill whose folder failed a check: the reason worded per code, else shown as its data. */
 function refusedTarget(s: Surface, at: { name: string; from: number; to: number }, err: CatalogError): string {
-  // A folder that changed mid-write may have left something in staging or elsewhere: its own line, not "nothing was written".
+  // A folder that changed mid-write has its own line, not "nothing was written": the moved-aside copy kept in staging, the
+  // temp folder that changed (nothing installed touched), or the copy back in place; and whether a copy may be elsewhere.
   if (err.code === 'target_changed') {
-    const w = s.word('update.target_changed');
-    return typeof w === 'string' ? s.format(w, { ...at, ...err.data }) : `- ${asData('target_changed', { ...at, ...err.data })}`;
+    const d = err.data;
+    const w = s.word('update')[d['staging'] !== undefined ? 'target_changed_staging' : d['temp'] === true ? 'target_changed_temp' : 'target_changed'];
+    const tail = d['elsewhere'] === true ? s.format(s.word('errors').target_changed_elsewhere) : '';
+    return s.format(w, { ...at, ...d }) + tail;
   }
   const path = String(err.data['path']);
   const reason = s.word('update.target_reason')?.[err.code];
@@ -558,7 +561,7 @@ function record(ctx: Context, lock: Lock, dest: string, at: { name: string; targ
   return entry;
 }
 
-type AcceptInput = { name: string; confirm: string; flags: string[] };
+type AcceptInput = { name: string; target: Target; version: number; confirm: string; flags: string[] };
 
 export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<AcceptInput>('accept_held_update', args, ctx.face);
@@ -566,7 +569,8 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const { lock, config } = readRecords(ctx.settings.home);
   const t = decode(req.confirm);
   const conflict = () => new CatalogError('conflict', { name: req.name, held: true });
-  if (t.name !== req.name) throw conflict();
+  // The name, target and version are in the input so the person's permission prompt shows them: each must be the hold's.
+  if (t.name !== req.name || t.target !== req.target || t.version !== req.version) throw conflict();
   const catalog = await ctx.catalog();
   const v = await allVersions(catalog, req.name);
   if (v.latest !== t.latest) throw conflict();
@@ -677,13 +681,13 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     // the flags it shows, [] when none.
     if (policy === 'notify') {
       lines.push(d.risk_flags.length ? s.format(w.held_notify_flagged, { ...at, reasons: reasons(s, d.risk_flags) }) : s.format(w.held_notify, at));
-      lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, { ...at, confirm, flags: JSON.stringify(kinds(d.risk_flags)) }));
+      lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, { ...at, target: e.target, confirm, flags: JSON.stringify(kinds(d.risk_flags)) }));
       saw('held_notify');
       continue;
     }
     if (d.risk_flags.length) {
       lines.push(s.format(w.held_flagged, { ...at, reasons: reasons(s, d.risk_flags) }));
-      lines.push(s.format(ctx.face === 'cli' ? w.held_next_cli : w.held_next, { ...at, confirm, flags: JSON.stringify(kinds(d.risk_flags)) }));
+      lines.push(s.format(ctx.face === 'cli' ? w.held_next_cli : w.held_next, { ...at, target: e.target, confirm, flags: JSON.stringify(kinds(d.risk_flags)) }));
       saw('held_flagged');
       continue;
     }

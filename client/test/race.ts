@@ -31,8 +31,37 @@ export async function publish(p: Place, name: string, body: string): Promise<voi
 
 export const refused = (e: unknown) => e as { code?: string; data?: Record<string, unknown>; text?: string };
 // A refusal is thrown by install and accept, and is a skill's refused line in update's result: read it from either.
-export const codeOf = (r: unknown) => refused(r).code ?? /(target_changed|target_symlink|exists_untracked)/.exec(refused(r).text ?? '')?.[1];
-export const stagedOf = (r: unknown) => (refused(r).data?.['staging'] as string | undefined) ?? /"staging":"([^"]+)"/.exec(refused(r).text ?? '')?.[1];
+// A sentence's slots read back from a line it made: the surface's own words, never hand-typed ones.
+function unformat(template: string, line: string): Record<string, string> | undefined {
+  const slots: string[] = [];
+  const marked = S.format(template, Object.fromEntries([...template.matchAll(/\{(\w+)\}/g)].map(([, k]) => [k, `\u0001${k}\u0002`])));
+  const pattern = marked.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\u0001(\w+)\u0002/g, (_, k: string) => (slots.push(k), '(.+?)'));
+  const m = new RegExp(`^${pattern}$`).exec(line);
+  return m ? Object.fromEntries(slots.map((k, i) => [k, m[i + 1]!])) : undefined;
+}
+/** The refusal: a thrown error's code and data, or an update's refused line read back through the words it was made from. */
+export function refusalOf(r: unknown): { code?: string; data: Record<string, unknown> } {
+  const e = refused(r);
+  if (e.code) return { code: e.code, data: e.data ?? {} };
+  const u = S.word('update');
+  const tail = S.format(S.word('errors').target_changed_elsewhere);
+  for (const line of (e.text ?? '').split('\n')) {
+    const elsewhere = line.endsWith(tail);
+    const body = elsewhere ? line.slice(0, -tail.length) : line;
+    for (const [key, extra] of [['target_changed_staging', {}], ['target_changed_temp', { temp: true }], ['target_changed', {}]] as const) {
+      const m = unformat(u[key], body);
+      if (m) return { code: 'target_changed', data: { ...m, ...extra, ...(elsewhere ? { elsewhere: true } : {}) } };
+    }
+    const m = unformat(u.refused_target, body);
+    if (m) for (const [code, w] of Object.entries(u.target_reason as Record<string, string>)) {
+      const why = unformat(w, m['reason']!);
+      if (why) return { code, data: why };
+    }
+  }
+  return { data: {} };
+}
+export const codeOf = (r: unknown) => refusalOf(r).code;
+export const stagedOf = (r: unknown) => refusalOf(r).data['staging'] as string | undefined;
 export const stagingDir = (p: Place) => join(p.dir, 'project', '.claude', '.skills-catalog-staging');
 // What's in staging besides its .gitignore.
 export const stagingEntries = (p: Place) => (race.fs.existsSync(stagingDir(p)) ? race.fs.readdirSync(stagingDir(p)).filter((e) => e !== '.gitignore').map((e) => join(stagingDir(p), e)) : []);
@@ -177,7 +206,7 @@ export function sweeps(K: number): void {
             const label = `${holds} ${op} ${side} k=${k}`;
             const landed = race.fs.existsSync(join(pl.victim, 'alpha', 'SKILL.md'));
             const text = refused(r).text ?? '';
-            const saidElsewhere = refused(r).data?.['elsewhere'] === true || text.includes('"elsewhere":true');
+            const saidElsewhere = refusalOf(r).data['elsewhere'] === true;
             if (landed) landings++;
             if (landed) expect(saidElsewhere, label).toBe(true);
             if (landed) expect(text, label).not.toMatch(/^Installed|Updated/m);

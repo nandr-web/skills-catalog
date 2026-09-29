@@ -40,7 +40,9 @@ describe('the installer over MCP', () => {
     // release-notes-kit v2 adds scripts/collect.sh (0755): a first install from nothing holds on it.
     const held = await s.text(N.install, { name: 'release-notes-kit' });
     expect(existsSync(join(skills(p), 'release-notes-kit'))).toBe(false);
-    const taken = await s.call(N.accept, { name: 'release-notes-kit', confirm: confirmOf(held)!, flags: ['runnable_file'] });
+    // The four values as the held line gives them, as an assistant copies them.
+    const [, target, version] = /target "([^"]+)", version (\d+)/.exec(held)!;
+    const taken = await s.call(N.accept, { name: 'release-notes-kit', target, version: Number(version), confirm: confirmOf(held)!, flags: ['runnable_file'] });
     expect(taken.isError).toBeUndefined();
     expect(readFileSync(join(skills(p), 'release-notes-kit', 'scripts', 'collect.sh'), 'utf8')).toBe('#!/bin/sh\necho collecting\n');
 

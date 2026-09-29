@@ -7,7 +7,7 @@ import { actAs } from '@skills-catalog/core';
 import { describe, expect, it, vi } from 'vitest';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
 import { race } from './race-fs.ts';
-import { S, accept, clearHooks, codeOf, ctxFor, install, publish, refused, stagedOf, stagingDir, stagingEntries, sweeps, update } from './race.ts';
+import { S, accept, clearHooks, codeOf, refusalOf, ctxFor, install, publish, refused, stagedOf, stagingDir, stagingEntries, sweeps, update } from './race.ts';
 import { open, request, skillMd } from './seed.ts';
 import { place, type Place } from './server.ts';
 
@@ -208,7 +208,7 @@ describe('the review\'s probes (B, B2, C, D)', () => {
       race.fs.renameSync(`${s.skills}.real`, s.skills);
     };
     const { text, staged } = await run(s);
-    expect(text).toContain('"elsewhere":true');
+    expect(refusalOf({ text }).data['elsewhere']).toBe(true);
     // The new copy went where the link pointed; the person's copy is back in place, since the path leads home again.
     expect(race.fs.readFileSync(join(v, 'alpha', 'SKILL.md'), 'utf8')).toContain('Second, markdown only.');
     expect(staged).toBeUndefined();
@@ -232,7 +232,7 @@ describe('the review\'s probes (B, B2, C, D)', () => {
       } finally {
         clearHooks();
       }
-      expect([which, codeOf({ text }), JSON.parse(/"path":("[^"]+")/.exec(text)![1]!)]).toEqual([which, 'target_changed', swapped]);
+      expect([which, refusalOf({ text })]).toEqual([which, { code: 'target_changed', data: expect.objectContaining({ path: swapped }) }]);
     }
   });
 });
@@ -355,7 +355,7 @@ describe('folders another user could control are refused (target_not_private)', 
       c.close();
     }
     const held = await install(ctxFor(p), { name: 'beta' });
-    const confirm = /confirm "([^"]+)"/.exec(held.text)![1]!;
+    const [, target, version, confirm] = /target "([^"]+)", version (\d+), confirm "([^"]+)"/.exec(held.text)!;
     await publish(p, 'alpha', 'Second.\n');
     const skills = join(p.osHome, '.claude', 'skills');
     const lock = race.fs.readFileSync(join(p.home, 'lock.json'), 'utf8');
@@ -364,11 +364,11 @@ describe('folders another user could control are refused (target_not_private)', 
     let accepted: unknown;
     try {
       updated = await update(ctxFor(p), {});
-      accepted = await accept(ctxFor(p), { name: 'beta', confirm, flags: ['runnable_file'] }).catch((e: unknown) => e);
+      accepted = await accept(ctxFor(p), { name: 'beta', target, version: Number(version), confirm, flags: ['runnable_file'] }).catch((e: unknown) => e);
     } finally {
       clearHooks();
     }
-    expect(updated!.text).toContain('target_not_private');
+    expect(codeOf(updated)).toBe('target_not_private');
     expect([codeOf(accepted), refused(accepted).data]).toEqual(['target_not_private', { path: p.osHome, target: 'user', home: true, own: true }]);
     expect(race.fs.readFileSync(join(skills, 'alpha', 'SKILL.md'), 'utf8')).toContain('First.');
     expect(race.fs.existsSync(join(skills, 'beta'))).toBe(false);
