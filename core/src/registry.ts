@@ -191,8 +191,8 @@ export const OPERATIONS: Record<string, OperationDef> = {
     mcp: true,
     input: {
       type: 'object',
-      properties: { name, confirm: { type: 'string', maxLength: 2000 }, flags: { type: 'array', items: { type: 'string', maxLength: 40 }, maxItems: 20 } },
-      required: ['name', 'confirm', 'flags'],
+      properties: { name, target: { type: 'string', enum: TARGETS }, version, confirm: { type: 'string', maxLength: 2000 }, flags: { type: 'array', items: { type: 'string', maxLength: 40 }, maxItems: 20 } },
+      required: ['name', 'target', 'version', 'confirm', 'flags'],
     },
   },
   list_installed_skills: {
