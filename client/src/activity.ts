@@ -3,7 +3,7 @@
 // of them, so the target, which can be long (skill names run to 64 characters), comes last and never shifts a column.
 // The caller builds the target from the result (skill names and versions, a match count), so nothing an assistant
 // typed, and no skill text, ever reaches it. Writing it never fails or stalls a tool call: the log is for watching.
-import { closeSync, constants, fchmodSync, fstatSync, lstatSync, chmodSync, mkdirSync, openSync, writeSync } from 'node:fs';
+import { closeSync, constants, fchmodSync, fstatSync, mkdirSync, openSync, writeSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Surface } from '@skills-catalog/core';
 
@@ -45,14 +45,27 @@ export function activityLine(a: Activity, resultWidth: number): string {
  *  the file is 0600, tightened if it was looser. Only a regular file is written: a link in the log's place is never
  *  followed (O_NOFOLLOW), and a FIFO or other special file never blocks the server (O_NONBLOCK, then fstat); the line
  *  is dropped instead. One write per line, with O_APPEND, so two servers appending at once never tear a line. */
+// The client's own folder tightened to 0700 when looser: checked and changed through a handle opened without following
+// a link (a link in its place is left alone, and so is its target), and only when this user owns it. Never by path, so
+// nothing swapped in between a check and the change is ever changed.
+function tightenOwnFolder(dir: string): void {
+  let fd: number | undefined;
+  try {
+    fd = openSync(dir, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    const st = fstatSync(fd);
+    if (st.isDirectory() && st.uid === process.getuid?.() && (st.mode & 0o077) !== 0) fchmodSync(fd, 0o700);
+  } catch {
+    // a link or something else in its place: left as it is
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
 export function appendActivity(path: string, a: Activity, o: { ownFolder?: boolean; resultWidth: number }): void {
   try {
     const dir = dirname(path);
     mkdirSync(dir, { recursive: true, mode: 0o700 });
-    if (o.ownFolder) {
-      const st = lstatSync(dir);
-      if (st.isDirectory() && !st.isSymbolicLink() && (st.mode & 0o077) !== 0) chmodSync(dir, 0o700);
-    }
+    if (o.ownFolder) tightenOwnFolder(dir);
     const fd = openSync(path, constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o600);
     try {
       const st = fstatSync(fd);

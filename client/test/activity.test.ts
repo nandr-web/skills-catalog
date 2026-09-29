@@ -140,6 +140,19 @@ describe('the activity log', () => {
     expect(statSync(join(p.home, 'activity.log')).mode & 0o777).toBe(0o600);
   });
 
+  it('a SKILLS_HOME that is a link is never tightened through: the folder it points at keeps its mode', async () => {
+    const p = place();
+    await seed(p);
+    const elsewhere = join(p.dir, 'elsewhere');
+    mkdirSync(elsewhere);
+    chmodSync(elsewhere, 0o755);
+    symlinkSync(elsewhere, p.home);
+    const s = start(p);
+    await s.initialize();
+    await s.call(N.search, { query: 'release' });
+    expect(statSync(elsewhere).mode & 0o777).toBe(0o755);
+  });
+
   it('a folder the person named with SKILLS_ACTIVITY_LOG is theirs: its mode is left as it is', async () => {
     const p = place();
     await seed(p);
