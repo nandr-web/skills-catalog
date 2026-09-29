@@ -6,7 +6,7 @@
 // token refused whatever changes the catalog, before it runs. No pairing route.
 
 import { CatalogError, type Catalog, type Words } from '@skills-catalog/core';
-import { STATUS, envelope, fileResponse, operationResponse, refuse, route, type FileAnswer, type HttpResponse } from '@skills-catalog/core/http';
+import { API_HEADERS, STATUS, envelope, fileResponse, operationResponse, refuse, route, type FileAnswer, type HttpResponse } from '@skills-catalog/core/http';
 import type { TokenHolder } from '../tokens.ts';
 import { ORIGIN_HEADER, type OriginGuard } from './origin.ts';
 import { mayRun, whoIsAsking } from './who.ts';
@@ -52,16 +52,22 @@ export function createHostedHandler(p: HostedHandlerParts): { handle(req: Hosted
 
   return {
     async handle(req) {
-      try {
-        return await answer(req);
-      } catch (e) {
-        // A bug: the function's log gets its kind and where it happened (the stack's frames), never its message, which
-        // could carry skill text; the caller gets internal_error.
-        log(`internal_error: ${e instanceof Error ? `${e.name}\n${frames(e)}` : typeof e}`);
-        return envelope({ error: new CatalogError('internal_error', {}) }, s);
-      }
+      // Everything served here is the API, so every answer is never stored (the core's 404 leaves that to the transport).
+      const r = await guarded(req);
+      return { ...r, headers: { ...r.headers, ...API_HEADERS } };
     },
   };
+
+  async function guarded(req: HostedRequest): Promise<HttpResponse> {
+    try {
+      return await answer(req);
+    } catch (e) {
+      // A bug: the function's log gets its kind and where it happened (the stack's frames), never its message, which
+      // could carry skill text; the caller gets internal_error.
+      log(`internal_error: ${e instanceof Error ? `${e.name}\n${frames(e)}` : typeof e}`);
+      return envelope({ error: new CatalogError('internal_error', {}) }, s);
+    }
+  }
 }
 
 /** A stack's frames only (its "    at …" lines), without the message above them. */
