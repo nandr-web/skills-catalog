@@ -66,15 +66,17 @@ export const batch = (commands: string[][]) => commands.flatMap((c, i) => (i ? [
 
 const shq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
-/** No status bar (it shows the host name and a clock); each pane's title on its top border; a pane whose program ended
- *  stays on screen. No key reaches tmux itself (no detaching, splitting or copy mode): every key goes to the focused
+/** No status bar (it shows the host name and a clock); each pane's title on its top border, from the demo's own @title
+ *  option, never tmux's pane title (which starts as the host name, so a border drawn before the titles are set would
+ *  show it); a pane whose program ended stays on screen. No key reaches tmux itself (no detaching, splitting or copy mode): every key goes to the focused
  *  pane, the steps view, except Ctrl-C, which always asks the conductor to quit, whatever state the steps view is in.
  *  Nothing passes between the panes and the person's terminal: no environment from the client that attaches, no
- *  clipboard, no escape sequence passed through, no title set from a pane. */
+ *  clipboard, no escape sequence passed through, no title set from a pane, no title set on the terminal (set-titles'
+ *  default string is the pane title, so the host name). */
 export function configure(t: Tmux, o: { control: string }): void {
   const options = {
-    status: 'off', 'pane-border-status': 'top', 'pane-border-format': ' #{pane_title} ', 'remain-on-exit': 'on', 'history-limit': '10000', 'default-shell': '/bin/sh',
-    prefix: 'None', prefix2: 'None', mouse: 'off', 'update-environment': '', 'set-clipboard': 'off',
+    status: 'off', 'pane-border-status': 'top', 'pane-border-format': ' #{@title} ', 'remain-on-exit': 'on', 'history-limit': '10000', 'default-shell': '/bin/sh',
+    prefix: 'None', prefix2: 'None', mouse: 'off', 'update-environment': '', 'set-clipboard': 'off', 'set-titles': 'off',
   };
   t(...batch([
     ...Object.entries(options).map(([k, v]) => ['set-option', '-g', k, v]),
@@ -104,10 +106,12 @@ export function buildLayout(t: Tmux, o: { developers: { id: string; title: strin
     panes[d.id] = pane('split-window', '-t', panes[last], '-h', '-l', `${Math.round((100 * left) / (left + 1))}%`);
     last = d.id;
   });
-  // select-pane -T expands tmux formats (#(command) would run one): "##" is a plain "#", so a title shows as written
+  // A pane option's value is never expanded as a format (no #(command) runs). Drawing the border still reads #[…] as a
+  // style and "##" as "#", so every "#" is doubled: the title is drawn exactly as written.
+  const title = (pane: string, text: string) => ['set-option', '-p', '-t', pane, '@title', literal(text.replace(/#/g, '##'))];
   t(...batch([
-    ...o.developers.map((d) => ['select-pane', '-t', panes[d.id], '-T', literal(d.title.replace(/#/g, '##'))]),
-    ['select-pane', '-t', panes.steps, '-T', 'Steps'], ['select-pane', '-t', panes.log, '-T', 'Catalog server log'], ['select-pane', '-t', panes.steps],
+    ...o.developers.map((d) => title(panes[d.id], d.title)),
+    title(panes.steps, 'Steps'), title(panes.log, 'Catalog server log'), ['select-pane', '-t', panes.steps],
   ]));
   const share = Math.floor(76 / o.developers.length);
   const sizes = [`resize-pane -t ${panes.log} -y 10`, `resize-pane -t ${panes.steps} -x 24%`, ...o.developers.slice(0, -1).map((d) => `resize-pane -t ${panes[d.id]} -x ${share}%`)].join(' ; ');
@@ -147,10 +151,16 @@ export async function waitForClient(t: Tmux, timeoutMs = 30_000): Promise<boolea
   return false;
 }
 
-/** The qa process's side: wait for the session (never starting a server), then a client on this terminal. */
-export async function waitForSession(root: string, env: NodeJS.ProcessEnv, timeoutMs = 30_000): Promise<boolean> {
-  for (let waited = 0; waited < timeoutMs; waited += 50) {
-    if (spawnSync(BIN, [...BASE, '-N', 'has-session', '-t', SESSION], { cwd: root, env, stdio: 'ignore' }).status === 0) return true;
+/** The director's word that the window is whole: the layout, its titles and each pane's own program (no placeholder
+ *  left to show "Pane is dead"). Only then does the qa process attach a client, so its first frame is the demo's. */
+export const markReady = (t: Tmux) => { t('set-option', '-t', SESSION, '@ready', '1'); };
+
+/** The qa process's side: wait until the director marks the session ready (never starting a server), then a client on
+ *  this terminal. Stops at once when the run has ended (`alive` false): a director that failed never marks it. */
+export async function waitForSession(root: string, env: NodeJS.ProcessEnv, timeoutMs = 30_000, alive: () => boolean = () => true): Promise<boolean> {
+  for (let waited = 0; waited < timeoutMs && alive(); waited += 50) {
+    const r = spawnSync(BIN, [...BASE, '-N', 'show-options', '-v', '-t', SESSION, '@ready'], { cwd: root, env, encoding: 'utf8' });
+    if (r.status === 0 && r.stdout.trim() === '1') return true;
     await sleep(50);
   }
   return false;

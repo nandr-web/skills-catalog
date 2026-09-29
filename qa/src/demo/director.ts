@@ -13,7 +13,7 @@ import { PS, runProcesses } from '../check.ts';
 import type { RunResult } from '../run.ts';
 import { conduct, initialSteps, type ConductorIo, type StepsFile, type Turn } from './conductor.ts';
 import { loadScenes, type Scenes } from './scenes.ts';
-import { attachClient, buildLayout, capturePane, configure, respawn, SESSION, startServer, tmuxAt, typeInto, useTmux, versionOk, waitForClient, waitForServer, waitForSession, type Panes, type Tmux } from './tmux.ts';
+import { attachClient, buildLayout, capturePane, configure, markReady, respawn, SESSION, startServer, tmuxAt, typeInto, useTmux, versionOk, waitForClient, waitForServer, waitForSession, type Panes, type Tmux } from './tmux.ts';
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 export const DIRECTOR = here('director.ts');
@@ -105,7 +105,7 @@ export function serverCommand(line: string): string[] {
  *  It's the qa process's own child, not the run's (no QA_RUN_ID), and ends when the director stops the server. If it
  *  ends while the run goes on (the client was killed), the run is stopped: nobody could press q any more. */
 export async function showWindow(root: string, env: NodeJS.ProcessEnv, stop: () => void, running: () => boolean): Promise<void> {
-  if (!(await waitForSession(root, env))) return;
+  if (!(await waitForSession(root, env, 30_000, running))) return;
   const client = attachClient(root, env);
   await new Promise((ok) => client.on('exit', ok).on('error', ok));
   if (running()) setTimeout(() => { if (running()) stop(); }, 5000).unref();
@@ -230,6 +230,7 @@ async function main(argv: string[]): Promise<number> {
   else respawn(t, panes.log, demo, ['/usr/bin/tail', '-n', '+1', '-F', files.activity]);
   panePids = t('list-panes', '-t', SESSION, '-F', '#{pane_pid}').trim().split('\n').map(Number);
   mark('programs');
+  markReady(t);   // the window is whole: only now may a client attach and draw it
   // attached, the steps start once the window shows (a person, or a loaded machine, may take a while to open it)
   if (!v.headless && !(await waitForClient(t))) throw new Error('no window opened on the demo within 30 s');
   mark('client');
@@ -260,7 +261,7 @@ async function main(argv: string[]): Promise<number> {
   mark('drawn');
   const save = (name: string, text: string) => writeNew(join(v.out!, name), text);
   for (const [name, id] of Object.entries(panes)) save(`${name}.txt`, capturePane(t, id, name !== 'steps'));
-  save('layout.txt', t('list-panes', '-t', SESSION, '-F', '#{pane_title} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'));
+  save('layout.txt', t('list-panes', '-t', SESSION, '-F', '#{@title} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'));
   save('steps.json', readFileSync(files.steps, 'utf8'));
   save('activity.log', readFileSync(files.activity, 'utf8'));
   save('summary.json', JSON.stringify({

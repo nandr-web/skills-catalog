@@ -3,6 +3,7 @@
 // missing), fake machines always, a tiny scene file and a fake pane program (test/fixtures/demo/).
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { hostname } from 'node:os';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, onTestFinished } from 'vitest';
@@ -11,7 +12,7 @@ import { conduct, joined, stoppedLine, type ConductorIo, type StepsFile, type Tu
 import { loadScenes, type Scenes } from '../src/demo/scenes.ts';
 import { copySkills, DEFAULTS, demoEnding, demoPaths, demoTimeoutMs, leftoverGroups, LOG_NOTE, nodeOk, preflight, repoServer, running, serverCommand } from '../src/demo/director.ts';
 import type { RunResult } from '../src/run.ts';
-import { batch, buildLayout, configure, literal, startServer, tmuxAt, tmuxVersion, versionOk, waitForServer } from '../src/demo/tmux.ts';
+import { batch, buildLayout, configure, literal, markReady, startServer, tmuxAt, tmuxVersion, versionOk, waitForServer, waitForSession, type Tmux } from '../src/demo/tmux.ts';
 import { sandboxBase } from '../src/sandbox.ts';
 import { cleanup, machine, qaBareSync, qaSpawn, qaSpawnInTerminal, qaSync, scratch, type TestMachine } from './machine.ts';
 
@@ -87,7 +88,34 @@ async function attached(m: TestMachine, flags: string[], when: (s: StepsFile) =>
   const code = await new Promise<number | null>((ok) => p.on('exit', ok));
   clearInterval(poll);
   await close();
-  return { code, sent, sandbox, out, tail: text.slice(-3000) };
+  return { code, sent, sandbox, out, text, tail: text.slice(-3000) };
+}
+
+/** A tmux server of the demo's own kind in a scratch folder, configured as the demo configures it; killed after the test. */
+async function tmuxServer() {
+  const dir = scratch('qa-demo-tmux-');
+  const server = startServer(dir, { PATH: process.env.PATH ?? '' });
+  servers.push({ kill: () => { spawnSync('tmux', ['-S', 't', '-f', '/dev/null', 'kill-server'], { cwd: dir }); server.kill('SIGKILL'); } });
+  const t = tmuxAt(dir);
+  await waitForServer(t);
+  configure(t, { control: join(dir, 'control') });
+  return { t, dir };
+}
+/** A pane's border format, expanded (before tmux reads #[…] styles and "##" while drawing it). */
+const border = (t: Tmux, pane: string) => t('display-message', '-p', '-t', pane, '#{T:pane-border-format}').replace(/\n$/, '');
+/** What a client of the demo's server really draws: a second tmux server (socket `o`) runs a client in a 200x50 pane,
+ *  and its screen is read back as plain text, rows joined by newlines. Killed after the test. */
+async function drawn(dir: string): Promise<string> {
+  const o = (...args: string[]) => spawnSync('tmux', ['-S', 'o', '-f', '/dev/null', '-u', ...args], { cwd: dir, encoding: 'utf8' });
+  servers.push({ kill: () => { o('kill-server'); } });
+  // inside the outer server $TMUX is set, and tmux refuses to nest a client unless it's unset
+  o('new-session', '-d', '-s', 'outer', '-x', '200', '-y', '50', 'unset TMUX; exec tmux -S t -f /dev/null -u -N attach-session -t demo');
+  for (let i = 0; i < 50; i++) {
+    const screen = o('capture-pane', '-p', '-t', 'outer').stdout;
+    if (screen.split('\n')[0].trim()) return screen;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error('the client drew nothing within 2.5 s');
 }
 
 describe.skipIf(!!noTmux)(`qa demo with real tmux${noTmux ? ` (skipped: ${noTmux})` : ''}`, () => {
@@ -355,6 +383,7 @@ describe.skipIf(!!noTmux)(`qa demo with real tmux${noTmux ? ` (skipped: ${noTmux
     configure(t, { control: join(dir, 'control') });
     expect(t('show-options', '-gv', 'update-environment').trim()).toBe('');
     expect(t('show-options', '-sv', 'set-clipboard').trim()).toBe('off');
+    expect(t('show-options', '-gv', 'set-titles').trim()).toBe('off');   // its default string holds #T: the host name
     // newer tmux only (3.3, 3.4): on an older one these options don't exist, and configure goes on without them
     for (const o of ['allow-passthrough', 'allow-set-title']) {
       let v: string | undefined;
@@ -396,20 +425,45 @@ describe.skipIf(!!noTmux)(`qa demo with real tmux${noTmux ? ` (skipped: ${noTmux
     expect(r.stdout.replace(/\s+/g, ' ')).toContain('with --fake-machine only: DEMO_SCENES, DEMO_ASSISTANT, DEMO_STEPS_VIEW, DEMO_CORE, DEMO_CLIENT');
   });
 
-  it('a pane title is shown as written: a tmux format in it (#(command) runs a command) is never expanded', async () => {
-    const dir = scratch('qa-demo-tmux-');
-    const server = startServer(dir, { PATH: process.env.PATH ?? '' });
-    servers.push({ kill: () => { spawnSync('tmux', ['-S', 't', '-f', '/dev/null', 'kill-server'], { cwd: dir }); server.kill('SIGKILL'); } });
-    const t = tmuxAt(dir);
-    await waitForServer(t);
-    configure(t, { control: join(dir, 'control') });
-    const marker = join(dir, 'ran');
-    const titles = { ana: `#(touch ${marker})`, bob: 'odd ## #{pane_id};' };
-    const panes = buildLayout(t, { developers: [{ id: 'ana', title: titles.ana }, { id: 'bob', title: titles.bob }], size: { cols: 200, rows: 50 }, cwd: dir });
+  it('a pane title is drawn as written: a tmux format (#(command) runs a command), a style (#[…]) or "##" in it is never read', async () => {
+    const { t, dir } = await tmuxServer();
+    // #(…) runs in the server's folder (dir): a short relative marker keeps the title inside its border
+    const titles = { ana: '#(touch ran) #{host}', bob: 'odd ## #[fg=red]x #{pane_id};' };
+    buildLayout(t, { developers: [{ id: 'ana', title: titles.ana }, { id: 'bob', title: titles.bob }], size: { cols: 200, rows: 50 }, cwd: dir });
+    const top = (await drawn(dir)).split('\n')[0];
     await new Promise((r) => setTimeout(r, 1000));   // a #() job runs in the background: give it time to
-    expect(existsSync(marker)).toBe(false);
-    for (const who of ['ana', 'bob'] as const) expect(t('display-message', '-p', '-t', panes[who], '#{pane_title}').trim(), who).toBe(titles[who]);
+    expect(existsSync(join(dir, 'ran'))).toBe(false);
+    for (const who of ['ana', 'bob'] as const) expect(top, who).toContain(` ${titles[who]} `);
   }, 60_000);
+
+  it('a pane without a title has a blank border: tmux\'s own pane title (the host name) is never drawn', async () => {
+    const { t, dir } = await tmuxServer();
+    const pane = t('new-session', '-d', '-s', 'demo', '-x', '120', '-y', '30', '-c', dir, '-P', '-F', '#{pane_id}', '--', 'true').trim();
+    expect(t('display-message', '-p', '-t', pane, '#{pane_title}').trim()).toBe(hostname());   // tmux's default
+    expect(border(t, pane).trim()).toBe('');
+    expect(await drawn(dir)).not.toContain(hostname());
+  }, 60_000);
+
+  it('the window opens only when the demo says it\'s ready: the layout alone (titles, placeholder panes) isn\'t enough', async () => {
+    const { t, dir } = await tmuxServer();
+    buildLayout(t, { developers: [{ id: 'ana', title: 'Developer 1 · ana' }, { id: 'bob', title: 'Developer 2 · bob' }], size: { cols: 200, rows: 50 }, cwd: dir });
+    const env = { PATH: process.env.PATH ?? '' };
+    expect(await waitForSession(dir, env, 300)).toBe(false);
+    const started = Date.now();   // a run that has already ended stops the wait at once, not after its timeout
+    expect(await waitForSession(dir, env, 10_000, () => false)).toBe(false);
+    expect(Date.now() - started).toBeLessThan(1000);
+    markReady(t);
+    expect(await waitForSession(dir, env, 300)).toBe(true);
+  }, 60_000);
+
+  it('an attached window never draws the host name or a "Pane is dead" placeholder, from its first frame', async () => {
+    const m = machine();
+    const r = await attached(m, ['--pace', '0'], (s) => s.message.startsWith('Done:'), '\x03');
+    expect(r.sent, r.tail).toBe(true);
+    expect(r.code, r.tail).toBe(0);
+    expect(r.text.includes(hostname()), 'the host name was drawn').toBe(false);   // a boolean: no screen dump on failure
+    expect(r.text.includes('Pane is dead'), 'a placeholder pane was drawn').toBe(false);
+  }, RUN_MS);
 
   it('--server: a first word that isn\'t an absolute path, or isn\'t there, is refused before anything starts; its command goes to each developer pane as DEMO_MCP', async () => {
     const m = machine();
