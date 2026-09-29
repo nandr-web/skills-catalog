@@ -632,7 +632,6 @@ histories:
 
   under_lock:
     name: stale-rules
-    pending: "install and update decide again under the lock (contract §4.5)"
     note: >-
       Decisions are taken under the lock (contract §4.5, 66c901c8, ef8bd8c4): an install or update decides again from
       lock.json as read under the lock, using only the version it already fetched and checked. The seam `before_lock`
