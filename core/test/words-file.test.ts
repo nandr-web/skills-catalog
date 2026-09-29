@@ -443,6 +443,21 @@ describe('the words file (vendored, recommended variant)', () => {
     expect(unusable).not.toMatch(/[{}]/);
   });
 
+  it('a config.json refusal of one key names the key, never its value; an install folder that isn\'t absolute has its own sentence', () => {
+    const s = Words.load();
+    const w = s.word('errors');
+    const effect = w.local_file_effect['config.json'];
+    const path = '/h/config.json';
+    for (const key of ['update_polcy', 'hooks', 'cooldown']) {
+      expect(renderError(s, new CatalogError('invalid_local_file', { file: 'config.json', why: 'wrong_shape', path, key }))).toBe(s.format(w.invalid_local_file_key, { path, key, effect }));
+    }
+    // Without a key, or with a why of its own (a policy, a budget), the sentence says why as before.
+    const why = renderError(s, new CatalogError('invalid_local_file', { file: 'config.json', why: 'unknown_policy', path, key: 'update_policy' }));
+    expect(why).toBe(s.format(w.invalid_local_file, { file: 'config.json', why: w.why.unknown_policy, path, key: 'update_policy', effect }));
+    expect(renderError(s, new CatalogError('invalid_request', { field: 'SKILLS_INSTALL_DIR', why: 'not_absolute' }))).toBe(s.format(w.invalid_request_install_dir));
+    expect(renderError(s, new CatalogError('invalid_request', { field: 'name', why: 'not_absolute' }))).not.toBe(s.format(w.invalid_request_install_dir));
+  });
+
   it('a damaged lock or config file names the file by its path, says why, and what removing it would do', () => {
     const s = Words.load();
     const w = s.word('errors');

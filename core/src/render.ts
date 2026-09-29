@@ -230,6 +230,8 @@ export function renderError(s: Words, e: CatalogError): string {
     case 'invalid_request':
       // A confirm that didn't come from a preview on this machine has its own sentence: preview again.
       if (e.data['why'] === 'not_a_confirm') return fill(w.invalid_confirm, d);
+      // The install folder setting isn't a call's field: its sentence says what to tell the person.
+      if (e.data['field'] === 'SKILLS_INSTALL_DIR') return fill(w.invalid_request_install_dir, d);
       return fill(d['limit'] !== undefined ? w.invalid_request_limit : w.invalid_request, d);
     case 'invalid_path':
       // A link, a hard link or a special file in a folder being published: its own sentence proposes a plain copy.
@@ -261,7 +263,9 @@ export function renderError(s: Words, e: CatalogError): string {
     case 'invalid_local_file': {
       // A damaged lock or config file: what removing it would do depends on which file it is.
       const effect = w.local_file_effect?.[String(d['file'])];
-      return effect === undefined ? asData(e.code, d) : fill(w.invalid_local_file, { ...d, effect });
+      // A config key that can't be used (unknown, added to a key list, or of the wrong type) is named, never its value.
+      const keyed = e.data['why'] === 'wrong_shape' && d['key'] !== undefined && typeof w.invalid_local_file_key === 'string';
+      return effect === undefined ? asData(e.code, d) : fill(keyed ? w.invalid_local_file_key : w.invalid_local_file, { ...d, effect });
     }
     case 'target_changed': {
       // Whether the folder moved aside is back or sits in staging (named, whatever changed), whether what changed was the
