@@ -14,7 +14,31 @@
 - **Find it by asking.** An assistant searches the catalog in plain words, and says so when nothing really fits.
 - **Stay current, safely.** One update brings every installed skill to its newest version; anything that could run something new waits for your yes.
 
+## The demo up close
+
+**ana publishes.** Her assistant shows what it would send before anything is published. Version 2 adds a script, so the review says so, in orange, and waits for her yes.
+
+<p align="center"><img alt="Close up on ana's assistant: she publishes two skills, each shown as a preview before anything is published, then version 2 of release-note-draft, whose review says in orange that it includes something that can run (scripts/collect.sh); she says yes and it is published" src="docs/pictures/one-click-demo-closeup-left.gif"></p>
+
+**bob finds, compares and updates.** He installs ana's skill, sees what version 2 changes, is refused publishing over her skill, and takes the update that could run something new only with his own yes. The steps on the right tick as the demo sees each one.
+
+<p align="center"><img alt="Close up on bob's assistant and the steps: bob finds ana's skill and installs it, compares versions 1 and 2 (the new script in orange), is refused publishing over ana's skill, gets only a close match for a graphql schema, and takes the held update with his own yes; each step is ticked on the right when the demo sees it" src="docs/pictures/one-click-demo-closeup.gif" width="100%"></p>
+
 ## Try it
+
+Watch two developers' assistants share a skill in one terminal window, on your machine, in about two minutes. Needs git, Node.js 24.15 or later, tmux 3.2 or later (macOS: `brew install tmux`; Linux: `sudo apt install tmux` on Debian 12, Ubuntu 22.04 or later), and a full-size terminal, about 200 by 50.
+
+```sh
+git clone https://github.com/nandr-web/skills-catalog.git
+cd skills-catalog/core && npm ci --ignore-scripts
+cd ../client && npm ci --ignore-scripts
+cd ../qa && npm ci --ignore-scripts
+npm run demo
+```
+
+You should see **the window above, playing**, and the Steps pane ending with **Done: 7 seen, 1 planned, 0 missed**. Enter moves to the next step, p pauses, q stops; everything the demo made is removed when it ends. What each pane shows: [the one-click demo](qa/README.md#the-one-click-demo).
+
+<details><summary><b>Step by step</b>: check Node, install, run the tests, two developers in a script, check the speed (about two minutes)</summary>
 
 Five steps from a clone of this repository, in about two minutes. Needs git, Node.js 24.15 or later (npm comes with it), and macOS or Linux; WSL2 behaves as Linux, and Windows isn't supported today. The test, perf and try-it commands refuse an older Node. Nothing is installed outside this folder, except npm's usual cache.
 
@@ -161,6 +185,8 @@ p95 means 95 in 100 calls were this fast or faster.
 </details>
 
 Nothing to clean up: every step deletes its temporary folders. To remove everything, delete this folder.
+
+</details>
 
 ## Where it stands
 
