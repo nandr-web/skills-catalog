@@ -7,7 +7,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./skill-tree": "./src/skill-tree/index.ts",
+    "./http": "./src/http/index.ts",
     "./testing": "./test/sandbox.ts",
+    "./testing/http": "./test/http-cases.ts",
     "./testing/fail-safe": "./test/fail-safe.ts"
   },
   "engines": {
