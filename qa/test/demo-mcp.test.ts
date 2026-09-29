@@ -110,6 +110,13 @@ describe("each developer's server settings", () => {
     expect(() => serverEnv({ ...ok, activityLog: '/tmp/activity.log' })).toThrow(/log .* sandbox/);
     for (const who of ['../mallory', '', 'a/b', '.']) expect(() => serverEnv({ ...ok, who }), who).toThrow(/developer/);
   });
+
+  // The same check a run's processes get (sandbox.ts): no server starts unless Claude Code's managed settings point inside
+  // the sandbox. A relative root passes the catalog's and the log's checks, but would leave them relative, so the server
+  // would look for them from its own folder.
+  it('refuses a root that would leave the managed settings outside it, or relative', () => {
+    expect(() => serverEnv(settings(relative(process.cwd(), root), 'ana'))).toThrow(/SKILLS_MANAGED_SETTINGS/);
+  });
 });
 
 describe('the stand-in on an MCP server (a fake one)', () => {

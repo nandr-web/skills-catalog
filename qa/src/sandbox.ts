@@ -46,18 +46,18 @@ export const ENV_ALLOW = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 
 export const PLANTED_NAMES = ['AWS_SECRET_ACCESS_KEY', 'AWS_ACCESS_KEY_ID', 'GITHUB_TOKEN', 'GH_TOKEN', 'ANTHROPIC_API_KEY', 'NPM_TOKEN', 'SSH_AUTH_SOCK', 'MY_NOTES'];
 const allowedName = (k: string) => ENV_ALLOW.some((a) => (a.endsWith('*') ? k.startsWith(a.slice(0, -1)) : k === a));
 export function childEnv(sb: { env: Record<string, string> }, parent: NodeJS.ProcessEnv = process.env): Record<string, string> {
-  managedInside(sb.env);
+  managedInside(sb.env.SKILLS_MANAGED_SETTINGS, sb.env.QA_SANDBOX);
   const kept = Object.entries(parent).filter((e): e is [string, string] => typeof e[1] === 'string' && allowedName(e[0]));
   return { ...Object.fromEntries(kept), ...sb.env };
 }
 
 /** The product reads Claude Code's managed settings (the machine's policy) unless SKILLS_MANAGED_SETTINGS points elsewhere
- *  (the contract §8), so no process of a run starts unless it points to a folder inside the run's sandbox (QA_SANDBOX). */
-function managedInside(env: Record<string, string>): void {
-  const managed = env.SKILLS_MANAGED_SETTINGS, root = env.QA_SANDBOX;
+ *  (the contract §8), so no process starts unless it points to a folder inside the sandbox: a run's (QA_SANDBOX, through
+ *  childEnv) or the demo's (its servers, demo/assistant.ts). */
+export function managedInside(managed: string | undefined, root: string | undefined): void {
   const inside = (m: string, r: string) => !within(r, m) && within(m, r);
   if (managed && root && isAbsolute(managed) && isAbsolute(root) && inside(canonical(resolve(managed)), canonical(resolve(root)))) return;
-  throw new UnsafeError(`SKILLS_MANAGED_SETTINGS ${JSON.stringify(managed ?? null)} is not a folder inside the run's sandbox ${JSON.stringify(root ?? null)}: refusing to start a process that could read this machine's managed settings`);
+  throw new UnsafeError(`SKILLS_MANAGED_SETTINGS ${JSON.stringify(managed ?? null)} is not a folder inside the sandbox ${JSON.stringify(root ?? null)}: refusing to start a process that could read this machine's managed settings`);
 }
 
 /** run.json is written whole: a temp file, then a rename. */

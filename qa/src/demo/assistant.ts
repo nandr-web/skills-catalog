@@ -19,6 +19,7 @@ import type { Ids } from '../../../core/src/ports.ts';
 import { renderDiff, renderError, renderRead, renderSearch, renderVersions } from '../../../core/src/render.ts';
 import { flagText } from '../../../core/src/skill-tree/diff.ts';
 import { Surface } from '../../../core/src/surface.ts';
+import { managedInside } from '../sandbox.ts';
 import { PANE_PATH, serverCommand } from './director.ts';
 import { CLI_OPS, findAsk, loadScenes, SCENES_FILE, ScenesError, type Call, type Scenes } from './scenes.ts';
 
@@ -199,7 +200,7 @@ export function serverEnv(o: { root: string; who: string; catalog: string; activ
   if (!inside(o.activityLog)) throw new Error(`the activity log ${o.activityLog} is not in the sandbox (${o.root})`);
   // The assistant's home is the root its own folders are under (.claude, .claude/skills: contract §8), as HOME is.
   const home = join(o.root, 'home', o.who);
-  return {
+  const env: Record<string, string> = {
     PATH: PANE_PATH,
     HOME: home,
     SKILLS_HOME: join(home, '.skills-catalog'),
@@ -213,6 +214,8 @@ export function serverEnv(o: { root: string; who: string; catalog: string; activ
     // the run's id, so qa run's check after the run finds a server that outlived it
     ...(o.runId && /^\d{8}T\d{6}Z-[0-9a-f]{8}$/.test(o.runId) ? { QA_RUN_ID: o.runId } : {}),
   };
+  managedInside(env.SKILLS_MANAGED_SETTINGS, o.root);   // the check a run's processes get: every server of the demo starts with this env
+  return env;
 }
 
 /** The catalog's command line, from its MCP server's command: the same words less the trailing `mcp`, and node started
