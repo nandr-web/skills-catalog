@@ -247,6 +247,21 @@ versions:
   gate.g0-bang-nbspclose-edit:
     SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n```\u00a0\nStep two.\n"
     reference.md: "Step one.\n"
+  gate.g0-bang-pull:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n```\necho QA-MARKER-2\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-pull-in:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\necho QA-MARKER-2\n```\n"
+    reference.md: "Step one.\n"
+  gate.g0-swap-old:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n~~~\ncode\nmore\n~~~\n```!\necho QA-MARKER\n```\n"
+    reference.md: "Step one.\n"
+  gate.g0-swap-new:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n```\n~~~\ncode\nmore\n~~~\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-block-prose:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md carefully.\n```!\necho QA-MARKER\n```\n"
+    reference.md: "Step one.\n"
   gate.g0-bang-target:
     SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n!`python3 tools/x.txt`\n"
     reference.md: "Step one.\n"
@@ -450,18 +465,21 @@ histories:
       - {from: gate.g0-bang-indent3, to: gate.g0-bang-indent3-edit, risk_flags: [{kind: instructions_changed, path: SKILL.md}], note: "a ``` indented 3 spaces closes it: the edit is outside the block"}
       - {from: gate.g0-fence-before, to: gate.g0-fence-before-removed, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a fence line removed in a file with a ! block, flagged at the line now standing where it was; the ! block's text is unchanged"}
       - {from: gate.g0-fence-end, to: gate.g0-fence-end-removed, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 9}], note: "a fence line removed at the end: flagged at the new last line"}
-      - {from: gate.g0-bang-block, to: gate.g0-bang-block-plus-code, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 9}, {kind: runs_at_load, path: SKILL.md, line: 11}], note: "fence lines added in a file with a ! block, one flag each"}
-      - {from: gate.g0-bang-plus-code, to: gate.g0-bang-plus-tilde, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 9}, {kind: runs_at_load, path: SKILL.md, line: 11}], note: "fence lines changed (``` to ~~~), outside the ! block"}
+      - {from: gate.g0-bang-block, to: gate.g0-bang-block-plus-code, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 9}], note: "a new plain block in a file with a ! block: one flag, at its opener (its closer closes a flagged block; 41305783)"}
+      - {from: gate.g0-bang-plus-code, to: gate.g0-bang-plus-tilde, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 9}], note: "a plain block's fences changed (``` to ~~~): one flag, at its opener (41305783)"}
       - {from: gate.g0-bang-block, to: gate.g0-bang-block-4close, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "the changed closer closes the flagged block: a line is flagged at most once"}
       - {from: gate.g0-bang-4tick, to: gate.g0-bang-4tick-inner, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: runs_at_load, path: SKILL.md, line: 8}], note: "a fence line added inside a flagged ```` block is content, not its opener or closer: flagged too"}
-      - {from: gate.g0-bang-4tick-inner, to: gate.g0-bang-4tick, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: runs_at_load, path: SKILL.md, line: 8}], note: "a content fence line removed from a flagged block: flagged at the line now standing where it was"}
-      - {from: gate.g0-fence-two, to: gate.g0-fence-two-removed, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: runs_at_load, path: SKILL.md, line: 11}], note: "two fence lines removed apart: each flagged where it was"}
+      - {from: gate.g0-bang-4tick-inner, to: gate.g0-bang-4tick, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a content fence line removed from a flagged block: it stands where the block's closer now is, which adds nothing (41305783)"}
+      - {from: gate.g0-fence-two, to: gate.g0-fence-two-removed, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: runs_at_load, path: SKILL.md, line: 11}], note: "two fence lines removed apart, each where it was; the order comparison leaves out the removed ones, so the rest match (a1503c97)"}
       - {from: gate.g0-fence-pair, to: gate.g0-bang-block, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "two adjacent fence lines removed stand at one line: flagged once"}
       - {from: gate.g0-bang-indent4, to: gate.g0-bang-indent4-edit, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a ``` indented 4 spaces isn't a closer: the edit is inside the block"}
       - {from: gate.g0-bang-tabindent, to: gate.g0-bang-tabindent-edit, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a tab before ``` isn't a space of indent: content"}
       - {from: gate.g0-bang-4tick-short, to: gate.g0-bang-4tick-short-edit, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a ``` can't close a ```` block: the edit is inside it"}
       - {from: gate.g0-bang-tabclose, to: gate.g0-bang-tabclose-edit, risk_flags: [{kind: instructions_changed, path: SKILL.md}], note: "a closer may end in a tab: the edit is outside the block"}
       - {from: gate.g0-bang-nbspclose, to: gate.g0-bang-nbspclose-edit, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a closer's blanks are space and tab only: ``` then a no-break space is content, so the block runs on"}
+      - {from: gate.g0-bang-pull, to: gate.g0-bang-pull-in, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a ! block compared whole: its closer moved past a line, which now runs; flagged at its opener only (d0894bc9)"}
+      - {from: gate.g0-swap-old, to: gate.g0-swap-new, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: runs_at_load, path: SKILL.md, line: 12}], note: "a ! block moved above a plain block, same texts (sizes and fences differ, so the shortest diff has one alignment): the diff keeps the plain block, the ! block's fences are new (one flag, 6) and its removed ones stand at the end (12) (d0894bc9, a1503c97)"}
+      - {from: gate.g0-bang-block, to: gate.g0-bang-block-prose, risk_flags: [{kind: instructions_changed, path: SKILL.md}], note: "must not fire: prose outside any block edited, the ! block unchanged"}
       - {from: gate.g0-bang-block, to: gate.g0-bang-unbanged, risk_flags: [], note: "only the old version had a ! block: removing it doesn't fire"}
       - {from: gate.g0-bang-block, to: gate.g0-bang-block-edit, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "an edit inside an unchanged ! block: one flag per block, at its opening line"}
       - {from: gate.g0, to: gate.g0-bang-target, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: runnable_file, path: tools/x.txt}], note: "an injected command's target is a command position: its file gets runnable_file"}
