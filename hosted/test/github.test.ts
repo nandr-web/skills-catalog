@@ -6,20 +6,20 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
-import { GITHUB_API, HostedGitHubSignIn } from '../src/github.ts';
+import { describe, expect, it, vi } from 'vitest';
+import { GITHUB_API, GITHUB_TIMEOUT_MS, HostedGitHubSignIn } from '../src/github.ts';
 
 const TOKEN = `gho_${'t'.repeat(36)}`;
 const CLIENT_ID = 'Iv1.0123456789abcdef';
 const SECRET = 's'.repeat(40);
 
-type Call = { url: string; method: string; headers: Record<string, string>; body: string };
+type Call = { url: string; method: string; headers: Record<string, string>; body: string; redirect: RequestRedirect | undefined };
 
 /** GitHub as it answers the check: our app's token → 200 with the user's login; another's → 404. */
 function github(answer: (call: Call) => Response | Promise<Response> | 'hang') {
   const calls: Call[] = [];
   const fetch = (async (url: string, init: RequestInit) => {
-    const call = { url: String(url), method: String(init.method), headers: Object.fromEntries(new Headers(init.headers).entries()), body: String(init.body) };
+    const call = { url: String(url), method: String(init.method), headers: Object.fromEntries(new Headers(init.headers).entries()), body: String(init.body), redirect: init.redirect };
     calls.push(call);
     const a = answer(call);
     if (a === 'hang') {
@@ -30,7 +30,7 @@ function github(answer: (call: Call) => Response | Promise<Response> | 'hang') {
   return { fetch, calls };
 }
 
-const ours = () => new Response(JSON.stringify({ token: TOKEN, user: { login: 'Ana-Dev' }, app: { client_id: CLIENT_ID } }), { status: 200 });
+const ours = () => new Response(JSON.stringify({ token: TOKEN, user: { login: 'Ana-Dev', id: 583231 }, app: { client_id: CLIENT_ID } }), { status: 200 });
 
 function signIn(fetch: typeof globalThis.fetch, secret: () => Promise<string> = async () => SECRET, timeoutMs = 5000) {
   let t = Date.parse('2026-09-29T12:00:00Z');
@@ -41,25 +41,32 @@ function signIn(fetch: typeof globalThis.fetch, secret: () => Promise<string> = 
 describe('the GitHub check', () => {
   it('a token of our app: its login, from one POST to GitHub\'s check for our app, with our app\'s id and secret', async () => {
     const g = github(ours);
-    expect(await signIn(g.fetch).s.login(TOKEN)).toBe('Ana-Dev');
+    expect(await signIn(g.fetch).s.login(TOKEN)).toEqual({ login: 'Ana-Dev', id: 583231 });
     expect(g.calls).toHaveLength(1);
     const [c] = g.calls;
     expect(c!.url).toBe(`https://api.github.com/applications/${CLIENT_ID}/token`);
     expect(c!.method).toBe('POST');
+    // Its body holds the person's GitHub token, so a redirect is never followed (fetch throws on one).
+    expect(c!.redirect).toBe('error');
     expect(c!.headers['authorization']).toBe(`Basic ${Buffer.from(`${CLIENT_ID}:${SECRET}`).toString('base64')}`);
     expect(JSON.parse(c!.body)).toEqual({ access_token: TOKEN });
     expect(GITHUB_API).toBe('https://api.github.com');
   });
 
-  it('GitHub saying it isn\'t our app\'s token (404), or can\'t check it (422): undefined', async () => {
-    for (const status of [404, 422]) expect([status, await signIn(github(() => new Response('{}', { status })).fetch).s.login(TOKEN)]).toEqual([status, undefined]);
+  it("GitHub saying it isn't our app's token (404): undefined, and only that", async () => {
+    expect(await signIn(github(() => new Response('{}', { status: 404 })).fetch).s.login(TOKEN)).toBeUndefined();
   });
 
-  it('GitHub unreachable, failing, slow, or refusing our app\'s own credentials: thrown, never undefined, never naming a token or the secret', async () => {
+  it("GitHub unreachable, failing, slow, refusing our app's own credentials, unable to check (422) or redirecting: thrown, never undefined, never naming a token or the secret", async () => {
     const cases: [string, (c: Call) => Response | 'hang'][] = [
       ['5xx', () => new Response('', { status: 502 })],
       ['our credentials refused', () => new Response('', { status: 401 })],
-      ['no login in the answer', () => new Response('{"user":{}}', { status: 200 })],
+      ["can't check it (validation failed, or the endpoint spammed)", () => new Response('{}', { status: 422 })],
+      ['a redirect', () => new Response('', { status: 302, headers: { location: 'https://elsewhere.test/' } })],
+      ['no login in the answer', () => new Response('{"user":{"id":1}}', { status: 200 })],
+      ['no id in the answer', () => new Response('{"user":{"login":"ana"}}', { status: 200 })],
+      ['an id that is no whole number', () => new Response('{"user":{"login":"ana","id":"1"}}', { status: 200 })],
+      ['an id of 0', () => new Response('{"user":{"login":"ana","id":0}}', { status: 200 })],
       ['network', () => { throw new TypeError('fetch failed'); }],
       ['slow', () => 'hang'],
     ];
@@ -68,6 +75,18 @@ describe('the GitHub check', () => {
       expect([what, e instanceof Error]).toEqual([what, true]);
       expect([what, String((e as Error).message)]).not.toEqual([what, expect.stringContaining(TOKEN)]);
       expect(String((e as Error).message)).not.toContain(SECRET);
+    }
+  });
+
+  it('GitHub gets 5 seconds, when no other time is given', async () => {
+    expect(GITHUB_TIMEOUT_MS).toBe(5000);
+    const spy = vi.spyOn(AbortSignal, 'timeout');
+    try {
+      const g = github(ours);
+      await new HostedGitHubSignIn({ clientId: CLIENT_ID, secret: async () => SECRET, fetch: g.fetch, clock: { now: () => new Date() } }).login(TOKEN);
+      expect(spy.mock.calls).toEqual([[5000]]);
+    } finally {
+      spy.mockRestore();
     }
   });
 

@@ -65,15 +65,20 @@ describe('what a holder may run', () => {
     for (const o of webRows) expect(['reads', 'writes_catalog'], o.name).toContain(o.effect);
   });
 
-  it('a read-scope token may run what reads, and is forbidden (read_scope) what changes the catalog', () => {
+  it('a read-scope token may run what reads, and what checks the scope itself (revoking); it is forbidden (read_scope) every other change to the catalog', () => {
+    const refused: string[] = [];
     for (const o of webRows) {
       const e = mayRun(BO, o.name);
-      if (o.effect === 'reads') expect(e, o.name).toBeUndefined();
+      if (o.effect === 'reads' || o.checksScope) expect(e, o.name).toBeUndefined();
       else {
         expect(isCatalogError(e, 'forbidden'), o.name).toBe(true);
         expect(e!.toJSON()).toEqual({ code: 'forbidden', why: 'read_scope' });
+        refused.push(o.name);
       }
     }
+    expect(webRows.filter((o) => o.checksScope).map((o) => o.name)).toEqual(['revoke_token']);
+    expect(refused).toContain('publish_version');
+    expect(refused).toContain('request_upload_links');
   });
 
   it('a publish-scope token may run all of them', () => {
