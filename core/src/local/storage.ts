@@ -9,6 +9,26 @@ import type { SqliteMetadataStore } from './metadata.ts';
 const COMMIT_TRIES = 5;
 export const ORPHAN_AGE_MS = 60 * 60 * 1000;
 
+/** A commit's files in one pass (linear: a publish can name 10,000): each file not stored and given by its sha256 alone is
+ *  missing, once, in order (presence only: the ages a stored file must be under are the hosted adapter's, contract
+ *  §1.1); each not stored and given with its bytes is to put. */
+export function sortFiles(
+  files: readonly { sha256: string; bytes?: Uint8Array | undefined }[],
+  has: (sha256: string) => boolean,
+): { missing: string[]; toPut: { sha256: string; bytes: Uint8Array }[] } {
+  const missing: string[] = [];
+  const toPut: { sha256: string; bytes: Uint8Array }[] = [];
+  const seen = new Set<string>();
+  for (const f of files) {
+    if (seen.has(f.sha256)) continue;
+    seen.add(f.sha256);
+    if (has(f.sha256)) continue;
+    if (f.bytes) toPut.push({ sha256: f.sha256, bytes: f.bytes });
+    else missing.push(f.sha256);
+  }
+  return { missing, toPut };
+}
+
 export class LocalStorage implements Storage {
   private readonly meta: SqliteMetadataStore;
   private readonly blobs: FolderBlobStore;
@@ -92,16 +112,9 @@ export class LocalStorage implements Storage {
         // and is as rare as the stalled publish before it. A file named by its sha256 alone must already be stored; any
         // that isn't is not_uploaded, and no version is stored.
         r = this.meta.withWriteLock((): CommitResult => {
-          const missing: string[] = [];
-          for (const f of files) {
-            if (this.blobs.has(f.sha256)) continue;
-            // Presence only: the ages a stored file must be under are the hosted adapter's (contract §1.1). Each
-            // missing file is named once, however many files share its bytes.
-            if (!f.bytes) {
-              if (!missing.includes(f.sha256)) missing.push(f.sha256);
-            } else if (this.blobs.put(f.sha256, f.bytes)) added.add(f.sha256);
-          }
+          const { missing, toPut } = sortFiles(files, (sha) => this.blobs.has(sha));
           if (missing.length) return { kind: 'not_uploaded', missing };
+          for (const f of toPut) if (this.blobs.put(f.sha256, f.bytes)) added.add(f.sha256);
           const out = this.meta.append(v, cond, event);
           if (out.kind === 'created') this.meta.clearPending(files.map((f) => f.sha256));
           return out;
