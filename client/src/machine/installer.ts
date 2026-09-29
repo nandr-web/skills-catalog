@@ -456,10 +456,24 @@ function refusalReason(s: Surface, e: CatalogError): string {
 
 /** The change waiting for the person's yes for `name`, as the installer would hold it now: an update of the copy
  *  installed here (either target), else a first install into `target`. `installed` is the installed version (none for
- *  a first install); null when nothing would be held (up to date, or nothing to flag). A "tell me first" skill's update
- *  is held with or without flags (`notify`). `path` is where it goes. Its confirm and flags are what accept_held_update
- *  takes. */
-export type Pending = { name: string; target: Target; path: string; installed?: number; notify: boolean; version: number; reasons: string; confirm: string; flags: string[] };
+ *  a first install); null when nothing would be held (up to date, or nothing to flag). `reason` is why it waits, in
+ *  §5.3's order: a copy from another catalog (`was`, where it came from; `now`, the catalog in use), pinned, "tell me
+ *  first" (`notify`; held with or without flags), else its flags. `path` is where it goes. Its confirm and flags are
+ *  what accept_held_update takes. */
+export type Pending = {
+  name: string;
+  target: Target;
+  path: string;
+  installed?: number;
+  reason: 'other_catalog' | 'pin' | 'notify' | 'flagged';
+  notify: boolean;
+  was?: string;
+  now?: string;
+  version: number;
+  reasons: string;
+  confirm: string;
+  flags: string[];
+};
 
 export async function pendingHold(ctx: Context, name: string, target: Target = 'user'): Promise<Pending | { installed: number } | null> {
   const { lock, config } = readRecords(ctx.settings.home);
@@ -471,14 +485,16 @@ export async function pendingHold(ctx: Context, name: string, target: Target = '
   const path = checkTarget(ctx, at, name, lock);
   const to = await fetchListed(catalog, name, v, v.latest);
   const flags = gate(e ? await installedSide(catalog, e) : null, to).risk_flags;
-  const notify = e !== undefined && policyOf(e, config).policy === 'notify';
-  if (!flags.length && !notify) return e ? { installed: e.version } : null;
+  const why = e ? holdOf(ctx, e, config) : undefined;
+  if (!flags.length && !why) return e ? { installed: e.version } : null;
   return {
     name,
     target: at,
     path,
     ...(e ? { installed: e.version } : {}),
-    notify,
+    reason: why ?? 'flagged',
+    notify: why === 'notify',
+    ...(e && why === 'other_catalog' ? { was: e.catalog, now: ctx.settings.catalog } : {}),
     version: to.version,
     reasons: flags.length ? reasons(ctx.surface, flags) : '',
     confirm: encode({ name, target: at, version: to.version, fingerprint: to.fingerprint, latest: v.latest }),

@@ -8,6 +8,7 @@ import { loadGolden } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
 import { contextFor, type Context } from '../src/operations.ts';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
+import { pendingHold } from '../src/machine/installer.ts';
 import { readLock } from '../src/machine/lock.ts';
 import { settingsFrom } from '../src/settings.ts';
 import { open, request, skillMd } from './seed.ts';
@@ -158,6 +159,40 @@ describe('accepting a hold keeps the policy and records the catalog (golden acce
       const entry = readLock(p.home).skills[dest(p)]!;
       expect([entry.version, entry.catalog, entry.policy]).toEqual([c.lock_version_after, now, before.policy]);
     });
+  });
+});
+
+// What the CLI's update <name> --accept shows comes from pendingHold: why the hold waits (§5.3's order), and for a copy
+// from another catalog, where it came from and where this version comes from.
+describe('the hold waiting for the person says why', () => {
+  it('pin, notify, another catalog or the flags, in that order, with the flags it lists', async () => {
+    const cases: { setup: 'pin' | 'notify' | 'other' | 'none'; flags: string[]; reason: string }[] = [
+      { setup: 'pin', flags: [], reason: 'pin' },
+      { setup: 'pin', flags: ['runnable_file'], reason: 'pin' },
+      { setup: 'notify', flags: [], reason: 'notify' },
+      { setup: 'other', flags: ['non_markdown'], reason: 'other_catalog' },
+      { setup: 'none', flags: ['runnable_file'], reason: 'flagged' },
+    ];
+    for (const c of cases) {
+      const p = place();
+      const ctx = ctxFor(p);
+      await publish(p, v1);
+      await install(ctx, { name: NAME });
+      const now = readLock(p.home).skills[dest(p)]!.catalog;
+      const other = join(p.dir, 'other-catalog');
+      if (c.setup === 'pin' || c.setup === 'notify') await policy(ctx, { name: NAME, policy: c.setup });
+      if (c.setup === 'other') {
+        const lock = JSON.parse(readFileSync(join(p.home, 'lock.json'), 'utf8'));
+        lock.skills[dest(p)].catalog = other;
+        writeFileSync(join(p.home, 'lock.json'), JSON.stringify(lock, null, 2) + '\n');
+      }
+      await publish(p, v2For(c.flags));
+      const h = await pendingHold(ctx, NAME);
+      expect([c.setup, h]).toEqual([
+        c.setup,
+        expect.objectContaining({ reason: c.reason, installed: 1, version: 2, target: 'user', flags: c.flags, ...(c.reason === 'other_catalog' ? { was: other, now } : {}) }),
+      ]);
+    }
   });
 });
 
