@@ -15,6 +15,7 @@ import {
   DEFAULT_SAFE_FRONTMATTER_KEYS,
   DEFAULT_LIMITS,
   MANIFEST,
+  checkContextCostBudget,
   checkManifest,
   checkName,
   checkTree,
@@ -358,6 +359,7 @@ export class Catalog {
   private constructor(ports: CatalogPorts) {
     this.p = ports;
     this.config = { ...DEFAULT_CONFIG, ...ports.config };
+    checkContextCostBudget(this.config.contextCostBudget);
     this.signInList = signInEntries(this.config.signInLogins);
     // The search index is the first listener on version_published (§5.1 step 4).
     ports.events.subscribe((e) => indexSkill(ports, e.name));

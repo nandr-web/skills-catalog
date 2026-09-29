@@ -151,6 +151,11 @@ describe('dry run (contract §2)', () => {
     const plain = (await openTest()).catalog;
     expect((await plain.publish(request('long', skill, { dry_run: true }), actAs('ana'))).risk_flags.filter((f) => f.kind === 'context_cost')).toEqual([]);
   });
+  it('refuses a length budget that isn\'t a positive whole number, so it can\'t turn the flag off', async () => {
+    for (const [contextCostBudget, why] of [[0, 'too_low'], [0.5, 'not_integer'], [Infinity, 'not_integer']] as const) {
+      expect((await errorOf(() => openTest({ config: { contextCostBudget } }))).toJSON(), String(contextCostBudget)).toEqual({ code: 'invalid_request', field: 'context_cost_budget', why });
+    }
+  });
 });
 
 describe('not found (golden/skills.yaml missing-names)', () => {
