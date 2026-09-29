@@ -14,7 +14,7 @@ import { appendActivity, logWords } from '../activity.ts';
 import { actingAs, contextFor, perform, type Context } from '../operations.ts';
 import { pendingHold } from '../machine/installer.ts';
 import type { Target } from '../machine/lock.ts';
-import { settingsFrom } from '../settings.ts';
+import { settingsFrom, type Settings } from '../settings.ts';
 import { cliSurface } from './words.ts';
 
 export type Io = {
@@ -125,9 +125,8 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
     io.stderr(withActing(s.format(s.word('errors.person_only'), { command })) + '\n');
     // The activity log shows the step waiting for the person; its target only when it's a skill's name (the log holds
     // names and versions only, never text someone typed).
-    const log = logWords(s);
     const name = positionals.length === 1 && NAME_RE.test(positionals[0]!) ? positionals[0]! : '-';
-    appendActivity(settings.activityLog, { at: new Date(), who: settings.developer, tool: 'update --accept', target: name, result: log.error('person_only') }, { ownFolder: settings.activityLogInHome, resultWidth: log.width });
+    logAccept(settings, s, name, logWords(s).error('person_only'));
     return 3;
   }
 
@@ -140,6 +139,13 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
   } finally {
     close();
   }
+}
+
+// The activity-log line for the parts of update --accept that no operation logs: refused without a terminal, and the
+// person's no. The target is a skill's name (and version), never other text.
+function logAccept(settings: Settings, s: Surface, target: string, result: string): void {
+  const log = logWords(s);
+  appendActivity(settings.activityLog, { at: new Date(), who: settings.developer, tool: 'update --accept', target, result }, { ownFolder: settings.activityLogInHome, resultWidth: log.width });
 }
 
 // Words the CLI waits for from the surface (the --accept words); until they're vendored each shows as its data.
@@ -176,6 +182,7 @@ async function acceptHeld(ctx: Context, s: Surface, io: Io, positionals: readonl
   const answer = await io.ask(said(s, 'update.accept_ask', {}));
   if (!/^y(es)?$/i.test(answer.trim())) {
     io.stdout(withActing(said(s, first ? 'update.accept_declined_install' : 'update.accept_declined', at)) + '\n');
+    logAccept(ctx.settings, s, `${name} v${hold.version}`, logWords(s).result('accept_declined'));
     return 0;
   }
   const a = await perform(ctx, 'accept_held_update', 'update --accept', { name, confirm: hold.confirm, flags: hold.flags });

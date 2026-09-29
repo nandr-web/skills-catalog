@@ -101,6 +101,9 @@ describe('the CLI face', () => {
     expect(no.asked).toHaveLength(1);
     expect(no.out).toContain('scripts/collect.sh');
     expect(existsSync(join(skills(p), 'release-notes-kit'))).toBe(false);
+    // The activity log shows the no, beside the yes it would have been.
+    const last = readFileSync(join(p.home, 'activity.log'), 'utf8').trimEnd().split('\n').at(-1)!;
+    expect(last.split(/\s{2,}/).slice(1)).toEqual(['-', 'update --accept', S.doc.log.result.accept_declined, 'release-notes-kit v2']);
 
     const yes = await cli(p, ['update', 'release-notes-kit', '--accept'], { tty: true, answers: ['y'] });
     expect(yes.code).toBe(0);
