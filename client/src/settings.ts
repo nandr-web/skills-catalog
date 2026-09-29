@@ -26,6 +26,9 @@ export type Settings = {
   projectDir: string;
   /** SKILLS_TOKEN: a hosted catalog's Bearer token; else the one skills-catalog login saved ($SKILLS_HOME/token). */
   token?: string;
+  /** SKILLS_MANAGED_SETTINGS (default: Claude Code's managed-settings folder for this system): read, never written, to
+   *  tell a permissive mode (contract §5.3). Tests always point it into their sandbox. */
+  managedSettings: string;
 };
 
 /** The file skills-catalog login saves a hosted catalog's token in (0600, in the client's own folder). */
@@ -42,6 +45,9 @@ export function catalogToken(s: Settings): string | undefined {
   }
 }
 
+/** Claude Code's managed-settings folder: macOS, else Linux and WSL (its managed-settings page). */
+const MANAGED_SETTINGS = process.platform === 'darwin' ? '/Library/Application Support/ClaudeCode' : '/etc/claude-code';
+
 export function settingsFrom(env: Record<string, string | undefined>, cwd: string = process.cwd()): Settings {
   const home = resolve(env['SKILLS_HOME'] || join(homedir(), '.skills-catalog'));
   const as = env['SKILLS_AS'] || undefined;
@@ -57,5 +63,6 @@ export function settingsFrom(env: Record<string, string | undefined>, cwd: strin
     assistantHome: resolve(env['SKILLS_ASSISTANT_HOME'] || homedir()),
     projectDir: resolve(cwd),
     ...(env['SKILLS_TOKEN'] ? { token: env['SKILLS_TOKEN'] } : {}),
+    managedSettings: resolve(env['SKILLS_MANAGED_SETTINGS'] || MANAGED_SETTINGS),
   };
 }
