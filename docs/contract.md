@@ -447,7 +447,8 @@ Reproducible with coreutils, so tests compute it independently and never trust t
     suggests `chmod go-w` on it; a folder they don't own (a home owned by root in a container, `HOME=/tmp` in CI) gets another
     way on instead: `SKILLS_ASSISTANT_HOME` pointing at a folder of theirs, or a project install. The folder above
     `.claude` is checked too, since whoever can write it can rename `.claude` and put their own in its place: for a `user`
-    install, the assistant's home must pass the same test; for a `project` install, the project folder (whoever owns it) must
+    install, the assistant's home must pass the same test; for a `project` install, the project folder must be owned by the
+    person or by root (a folder's owner can always rename entries in it, sticky bit or not; otherwise `own: false`), and
     not be writable by others either, unless it has the sticky bit: group-writable only for the person's private group
     (the same test), since a group member who can rename `.claude` could put in its place a tree whose staging folder links
     to another of the person's folders, and the installer would then write a publisher's file there as the person (on
