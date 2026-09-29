@@ -57,9 +57,20 @@ export function fingerprint(entries: readonly { path: string; mode: Mode; sha256
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f]/;
-// Anything that reads as one thing and is another (contract §4.2): any \p{C} code point (format, private-use, unassigned), a
-// line or paragraph separator, a default-ignorable code point, U+2800 Braille blank, or a space other than the plain one.
-export const INVISIBLE = /[\p{C}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u2800]|(?! )\p{Zs}/u;
+// Anything that reads as one thing and is another (contract §4.2): any code point of category C (format, control, private
+// use, unassigned), a line or paragraph separator, a space other than the plain one, a default-ignorable code point, or
+// U+2800 Braille blank, as of the case-folding table's Unicode version. The set is config/invisible-characters.txt (made
+// by scripts/invisible-characters.py), never the runtime's Unicode properties: which code points are assigned depends on
+// the runtime's Unicode version, so a new letter would be refused on one machine and accepted on another.
+export const INVISIBLE_FILE = join(import.meta.dirname, '..', '..', 'config', 'invisible-characters.txt');
+function readInvisible(file = INVISIBLE_FILE): RegExp {
+  const ranges = readFileSync(file, 'utf8')
+    .split('\n')
+    .filter((line) => line !== '' && !line.startsWith('#'))
+    .map((line) => line.split('..').map((hex) => `\\u{${hex}}`).join('-'));
+  return new RegExp(`[${ranges.join('')}]`, 'u');
+}
+export const INVISIBLE = readInvisible();
 // Not portable to Windows (Microsoft's file-naming rules): these characters, a trailing dot or space, a device name.
 const WINDOWS_CHARS = /[<>:"|?*]/;
 const WINDOWS_DEVICE = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(\.|$)/i;
