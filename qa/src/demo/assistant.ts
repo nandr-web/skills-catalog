@@ -249,7 +249,7 @@ function diffAlert(s: Surface, lines: string[]): number[] {
  *  server's own words (its result's text). Publish is two: the preview, then, once the person says yes, the confirm with
  *  the values the preview gives for it (a refused preview is never confirmed). The server writes activity.log. A server
  *  that won't start, or stops, is each call's error; close() stops it, at any moment. */
-export function mcpBackend(o: { command: string[]; root: string; who: string; catalog: string; activityLog: string; surface: Surface; cli?: string[]; terminal?: Terminal }): Backend & { close(): void; pid(): number | undefined } {
+export function mcpBackend(o: { command: string[]; root: string; who: string; catalog: string; activityLog: string; surface: Surface; cli?: string[]; terminal?: Terminal }): Backend & { close(): void; kill(signal: NodeJS.Signals): void; pid(): number | undefined } {
   const s = o.surface;
   let child: ChildProcess | undefined, stopped = false;
   // The tools the server serves, each with the inputs it takes (its inputSchema's properties).
@@ -338,6 +338,10 @@ export function mcpBackend(o: { command: string[]; root: string; who: string; ca
     close() {
       stopped = true;
       if (child && child.exitCode === null && child.signalCode === null) { child.stdin?.end(); child.kill(); }
+    },
+    /** A signal to the server through its own handle, only while it hasn't exited: never a pid that may have been reused. */
+    kill(signal) {
+      if (child && child.exitCode === null && child.signalCode === null) child.kill(signal);
     },
     pid: () => child?.pid,
   };

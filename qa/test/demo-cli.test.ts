@@ -19,15 +19,24 @@ const FAKE_CLI = [process.execPath, here('fixtures/demo/fake-cli.mjs')];
 const plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
 const OS_ADDED = ['__CF_USER_TEXT_ENCODING'];
 const surface = Surface.load();
-const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+// only a whole number above 0 ever reaches process.kill (0 or a negative one would mean a process group)
+const alive = (pid: number | undefined) => { if (!(Number.isSafeInteger(pid) && pid! > 0)) return false; try { process.kill(pid!, 0); return true; } catch { return false; } };
 const until = async (f: () => boolean, ms = 5000) => { for (let i = 0; i < ms / 25 && !f(); i++) await new Promise((r) => setTimeout(r, 25)); return f(); };
 // Each server a test started is stopped, and has exited, before the test's folders are removed: close() only signals it,
 // and a server still starting writes into the developer's folder (its SKILLS_HOME) while cleanup deletes it. (vitest runs
-// afterEach before onTestFinished, so the stop has to be here, not in a hook of the test's own.)
+// afterEach before onTestFinished, so the stop has to be here, not in a hook of the test's own.) One that hasn't exited
+// `ms` after close() is killed (SIGKILL) and still fails the test: a hang fails fast and leaves nothing running.
 const servers: ReturnType<typeof mcpBackend>[] = [];
-const stop = async (b: ReturnType<typeof mcpBackend>) => { b.close(); const pid = b.pid(); return pid === undefined || until(() => !alive(pid)); };
+const stop = async (b: ReturnType<typeof mcpBackend>, ms = 5000) => {
+  b.close();
+  const pid = b.pid();
+  if (!(Number.isSafeInteger(pid) && pid! > 0) || (await until(() => !alive(pid), ms))) return true;
+  b.kill('SIGKILL');   // through the server's own handle, which skips a child already seen to exit: never a reused pid
+  await until(() => !alive(pid), ms);
+  return false;
+};
 afterEach(async () => {
-  const stopped = await Promise.all(servers.splice(0).map(stop));
+  const stopped = await Promise.all(servers.splice(0).map((b) => stop(b)));
   cleanup();
   expect(stopped, 'every server the test started has exited').not.toContain(false);
 });
@@ -159,6 +168,7 @@ describe("a test's server is gone before its folder is removed", () => {
 
   it('after it, that server has exited and its folder is removed, nothing left behind', () => {
     expect(last).toBeDefined();
+    expect(Number.isSafeInteger(last!.pid) && last!.pid > 0, 'a real pid, never 0 or undefined').toBe(true);
     let err: unknown;
     try {
       process.kill(last!.pid, 0);
@@ -167,6 +177,19 @@ describe("a test's server is gone before its folder is removed", () => {
     }
     expect((err as NodeJS.ErrnoException | undefined)?.code).toBe('ESRCH');
     expect(existsSync(last!.root)).toBe(false);
+  });
+
+  it('a server that outlives close() is killed (SIGKILL) and fails the test: nothing is left running', async () => {
+    const root = sandbox();
+    // a server that ignores the SIGTERM close() sends, and says so (in its own folder, SKILLS_HOME) once it does
+    const deaf = "const fs = require('node:fs'); process.on('SIGTERM', () => {}); fs.mkdirSync(process.env.SKILLS_HOME, { recursive: true }); fs.writeFileSync(process.env.SKILLS_HOME + '/deaf', ''); setInterval(() => {}, 1000);";
+    const backend = mcpBackend({ command: [process.execPath, '-e', deaf], cli: FAKE_CLI, ...settings(root, 'bob'), surface });
+    servers.push(backend);   // stopped by afterEach too, should this test fail before its own stop
+    const pid = backend.pid();
+    expect(alive(pid), 'the server started').toBe(true);
+    expect(await until(() => existsSync(join(serverEnv(settings(root, 'bob')).SKILLS_HOME, 'deaf')), 3000), 'the server ignores SIGTERM').toBe(true);
+    expect(await stop(backend, 200)).toBe(false);
+    expect(alive(pid)).toBe(false);
   });
 });
 
