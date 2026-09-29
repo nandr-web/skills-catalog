@@ -8,6 +8,10 @@ import { QueryCommand, UpdateItemCommand, type DynamoDBClient } from '@aws-sdk/c
 import type { Events, VersionPublished } from '@skills-catalog/core';
 import type { Place } from './place.ts';
 
+/** Events as deployed: the table's stream carries each event item to the indexer's queue, so the API function delivers
+ *  nothing itself (its subscribers never run there; the indexer function runs the same steps on each queued event). */
+export const deliveredByTheStream: Events = { subscribe: () => {}, deliver: async () => 0 };
+
 export class HostedEvents implements Events {
   private readonly p: { ddb: DynamoDBClient; place: Place };
   private readonly handlers: ((e: VersionPublished) => Promise<void>)[] = [];

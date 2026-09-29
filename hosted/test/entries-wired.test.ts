@@ -104,6 +104,27 @@ describe('the API entry', () => {
     expect(logged.join('\n')).not.toContain(GITHUB);
   });
 
+  it('never reads the events itself, opening or publishing (the stream carries them to the indexer)', async () => {
+    const w = await place();
+    const asked: string[] = [];
+    const send = w.ddb.send.bind(w.ddb);
+    w.ddb.send = ((cmd: { input?: { ExpressionAttributeValues?: Record<string, { S?: string }> } }, ...rest: unknown[]) => {
+      if (cmd instanceof QueryCommand && cmd.input.ExpressionAttributeValues?.[':pk']?.S === 'events') asked.push('events');
+      return (send as (...a: unknown[]) => unknown)(cmd, ...rest);
+    }) as typeof w.ddb.send;
+    const api = await openApi({ env: w.env, ddb: w.ddb, s3: w.s3, ssm: ssm(), words, fetch: github, log: () => {} });
+    const token = answer(await api(event('sign_in_with_github', { github_token: GITHUB, scope: 'publish' }))).data.token;
+    const auth = { authorization: `Bearer ${token}` };
+    const md = Buffer.from('---\nname: via-api\ndescription: Published through the entry.\n---\nBody.\n');
+    const sha = (await import('node:crypto')).createHash('sha256').update(md).digest('hex');
+    const links = answer(await api(event('request_upload_links', { name: 'via-api', files: [{ sha256: sha, size: md.length }] }, auth)));
+    const link = links.data.files[0];
+    expect((await fetch(link.url, { method: 'PUT', body: md, headers: link.headers })).ok).toBe(true);
+    const r = answer(await api(event('publish_version', { name: 'via-api', files: [{ path: 'SKILL.md', mode: '0644', sha256: sha }] }, auth)));
+    expect(r.data.version).toBe(1);
+    expect(asked).toEqual([]);
+  });
+
   it('a missing setting fails the entry at open, naming it', async () => {
     const w = await place();
     const { GITHUB_CLIENT_ID: _, ...env } = w.env;
