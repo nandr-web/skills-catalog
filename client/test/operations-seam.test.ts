@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { MACHINE } from '../src/machine/index.ts';
 import { contextFor, perform, type Face } from '../src/operations.ts';
 import { settingsFrom } from '../src/settings.ts';
-import { open, seed } from './seed.ts';
+import { open, request, seed, skillMd } from './seed.ts';
 import { place, type Place } from './server.ts';
 
 const ctxFor = (p: Place, face: Face) => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, p.dir), Words.load(), face);
@@ -69,6 +69,41 @@ describe('perform', () => {
     const { ctx, close } = ctxFor(p, 'web');
     try {
       await expect(perform(ctx, 'install_shared_skill', 'install_shared_skill', { name: 'release-notes-kit' })).rejects.toThrow(/not served on the web face/);
+    } finally {
+      close();
+    }
+  });
+
+  // The web face shares one catalog opened with no identity: each call acts as the developer its settings name, and each
+  // Catalog method gets the caller's face in its own slot (publish's second argument is the identity, the others' the face).
+  const asWeb = (p: Place) => {
+    const { ctx, close } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_AS: 'ana' }, p.dir), Words.load(), 'web');
+    const shared = open(p);
+    return { ctx: { ...ctx, catalog: () => shared }, close: () => { close(); void shared.then((c) => c.close()); } };
+  };
+  const newSkill = (extra: Record<string, unknown> = {}) => ({ ...request('web-published', [{ path: 'SKILL.md', text: skillMd('web-published', 'Published from the web face.') }]), ...extra });
+
+  it('publishes as the acting developer, on a catalog opened with no identity', async () => {
+    const p = place();
+    await seed(p);
+    const { ctx, close } = asWeb(p);
+    try {
+      const a = await perform(ctx, 'publish_version', 'publish_version', newSkill());
+      expect(a.error?.toJSON()).toBeUndefined();
+      expect(a.data).toMatchObject({ name: 'web-published', version: 1, created: true, publisher: 'ana' });
+    } finally {
+      close();
+    }
+  });
+
+  it('as the web face, refuses the person-only secret override as an unknown field', async () => {
+    const p = place();
+    await seed(p);
+    const { ctx, close } = asWeb(p);
+    try {
+      const a = await perform(ctx, 'publish_version', 'publish_version', newSkill({ allow_suspected_secrets: true }));
+      expect(a.isError).toBe(true);
+      expect(a.error?.toJSON()).toMatchObject({ code: 'invalid_request', field: 'allow_suspected_secrets', why: 'unknown_field' });
     } finally {
       close();
     }
