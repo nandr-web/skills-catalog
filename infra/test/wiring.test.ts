@@ -1,10 +1,11 @@
-// How the stack's parts connect (the AWS build brief, slice 3): an HTTP API whose every route goes to the API
-// function, throttled; publish events from the table's stream through Pipes into an SQS FIFO queue with one message
-// group, so the one indexer takes them in order; the sweep on a schedule; the GitHub sign-in secret only as a parameter
-// store name (the owner creates it; never in the template).
+// How the stack's parts connect: an HTTP API whose every route goes to the API function, throttled, signing in the more
+// so; publish events from the table's stream through Pipes into an SQS FIFO queue with one message group, so the one
+// indexer takes them in order; the sweep on a schedule; the GitHub sign-in secret only as a parameter store name (the
+// owner creates it; never in the template), its app's client id and the sign-in list as the deploy's parameters.
 
 import { Match } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
+import { SIGN_IN_ROUTE, SIGN_IN_THROTTLE } from '../src/constructs/functions.ts';
 import { synth } from './synth.ts';
 
 const t = synth('throwaway');
@@ -31,6 +32,30 @@ describe('the HTTP API', () => {
       AccessLogSettings: { DestinationArn: Match.anyValue() },
     });
   });
+
+  it("signing in has its own route to the same function, throttled in total below GitHub's hourly allowance for our app (contract §1.1)", () => {
+    const routes = Object.values(t.findResources('AWS::ApiGatewayV2::Route')).map((r: any) => r.Properties.RouteKey).sort();
+    expect(routes).toEqual(['$default', SIGN_IN_ROUTE]);
+    const targets = new Set(Object.values(t.findResources('AWS::ApiGatewayV2::Route')).map((r: any) => JSON.stringify(r.Properties.Target)));
+    expect(targets.size).toBe(1);
+    const stage = Object.values(t.findResources('AWS::ApiGatewayV2::Stage'))[0] as any;
+    expect(stage.Properties.RouteSettings[SIGN_IN_ROUTE]).toEqual({ ThrottlingRateLimit: SIGN_IN_THROTTLE.rate, ThrottlingBurstLimit: SIGN_IN_THROTTLE.burst });
+    // An hour at the rate, and one burst, stay under GitHub's 5,000 requests an hour for an OAuth app.
+    expect(SIGN_IN_THROTTLE.rate * 3600 + SIGN_IN_THROTTLE.burst).toBeLessThan(5000);
+  });
+});
+
+describe("the API's sign-in settings are the deploy's, never in code", () => {
+  it("the GitHub app's client id and the sign-in list are stack parameters, given to the API function by reference", () => {
+    const params = t.toJSON().Parameters as Record<string, { Type: string; Default?: string; MinLength?: number }>;
+    expect(params['GitHubClientId']).toMatchObject({ Type: 'String', MinLength: 1 });
+    expect(params['GitHubClientId']!.Default).toBeUndefined();
+    // Empty is nobody: a deploy that names no one lets no one sign in.
+    expect(params['SignInLogins']).toMatchObject({ Type: 'String', Default: '' });
+    t.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: { Variables: Match.objectLike({ GITHUB_CLIENT_ID: { Ref: 'GitHubClientId' }, SIGN_IN_LOGINS: { Ref: 'SignInLogins' } }) },
+    });
+  });
 });
 
 describe('publish events to the indexer', () => {
@@ -50,8 +75,8 @@ describe('publish events to the indexer', () => {
     });
   });
 
-  it('the indexer takes the queue one message at a time', () => {
-    t.hasResourceProperties('AWS::Lambda::EventSourceMapping', { FunctionName: { Ref: ref('IndexerHandler') }, BatchSize: 1 });
+  it('the indexer takes the queue one message at a time, reporting the messages that failed so only those come again', () => {
+    t.hasResourceProperties('AWS::Lambda::EventSourceMapping', { FunctionName: { Ref: ref('IndexerHandler') }, BatchSize: 1, FunctionResponseTypes: ['ReportBatchItemFailures'] });
   });
 });
 

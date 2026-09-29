@@ -7,7 +7,9 @@
 
 import { Match, type Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
+import { SECURITY_HEADERS } from '../../core/src/http/index.ts';
 import { PRESETS, REGION } from '../src/config.ts';
+import { SIGN_IN_PATH } from '../src/constructs/site.ts';
 import { synth } from './synth.ts';
 
 type Res = Record<string, { Type: string; Properties?: Record<string, any> }>;
@@ -30,6 +32,33 @@ for (const preset of ['throwaway', 'demo'] as const) {
       expect(acl.Rules.length).toBeLessThanOrEqual(5);
       for (const r of acl.Rules) expect(Object.keys(r.Statement), r.Name).toEqual([expect.stringMatching(/^(ManagedRuleGroupStatement|RateBasedStatement)$/)]);
       t.resourceCountIs('AWS::WAFv2::RuleGroup', 0);
+    });
+
+    it('signing in, the one route with no token, has its own rate per address: 10 a minute on its exact path', () => {
+      const acl = Object.values(t.findResources('AWS::WAFv2::WebACL'))[0]!.Properties;
+      const rule = acl.Rules.find((r: { Name: string }) => r.Name === 'SignInPerAddress');
+      expect(rule.Action).toEqual({ Block: {} });
+      expect(rule.Statement.RateBasedStatement).toEqual({
+        Limit: 10,
+        EvaluationWindowSec: 60,
+        AggregateKeyType: 'IP',
+        ScopeDownStatement: {
+          ByteMatchStatement: { SearchString: SIGN_IN_PATH, FieldToMatch: { UriPath: {} }, PositionalConstraint: 'EXACTLY', TextTransformations: [{ Priority: 0, Type: 'NONE' }] },
+        },
+      });
+      expect(SIGN_IN_PATH).toBe('/api/v1/sign_in_with_github');
+    });
+
+    it("the page is served with the local page's own security headers (its CSP among them), by a CloudFront function on its behavior's viewer response", () => {
+      const d = distribution(t);
+      const onResponse = (d.DefaultCacheBehavior.FunctionAssociations ?? []).filter((a: { EventType: string }) => a.EventType === 'viewer-response');
+      expect(onResponse.length).toBe(1);
+      const fns = Object.values(t.findResources('AWS::CloudFront::Function')) as { Properties: { FunctionCode: string } }[];
+      const code = fns.map((f) => f.Properties.FunctionCode).find((c) => c.includes('content-security-policy'))!;
+      const handler = new Function(`${code}; return handler;`)() as (e: unknown) => { headers: Record<string, { value: string }> };
+      const r = handler({ response: { statusCode: 200, headers: { 'content-type': { value: 'text/html' } } } });
+      const want = Object.fromEntries(Object.entries(SECURITY_HEADERS).map(([k, v]) => [k, { value: v }]));
+      expect(r.headers).toEqual({ 'content-type': { value: 'text/html' }, ...want });
     });
 
     it('at most 5 cache behaviors; /api/* goes to the HTTP API, all methods, never cached', () => {
@@ -74,9 +103,17 @@ for (const preset of ['throwaway', 'demo'] as const) {
 describe('the edge is the only way in', () => {
   const t = synth('throwaway');
 
-  it("CloudFront sends the origin secret to the API as a header, its value a parameter reference, never a literal", () => {
+  it("CloudFront sends the origin secret to the API as a header, its value a reference to the parameter's version, never a literal", () => {
     const api = distribution(t).Origins.find((o: { CustomOriginConfig?: unknown }) => o.CustomOriginConfig);
-    expect(api.OriginCustomHeaders).toEqual([{ HeaderName: 'x-skills-catalog-origin', HeaderValue: expect.stringMatching(/^\{\{resolve:ssm:\/skills-catalog\/throwaway\/origin-secret\}\}$/) }]);
+    expect(api.OriginCustomHeaders).toEqual([{ HeaderName: 'x-skills-catalog-origin', HeaderValue: `{{resolve:ssm:/skills-catalog/throwaway/origin-secret:${PRESETS.throwaway.originSecretVersion}}}` }]);
+  });
+
+  it("a rotation's new version changes the distribution, and only it, so the deploy sends CloudFront the new value", () => {
+    const before = t.toJSON().Resources as Res;
+    const after = synth('throwaway', { originSecretVersion: PRESETS.throwaway.originSecretVersion + 1 }).toJSON().Resources as Res;
+    const changed = Object.keys(before).filter((id) => JSON.stringify(before[id]) !== JSON.stringify(after[id]));
+    expect(changed.map((id) => before[id]!.Type)).toEqual(['AWS::CloudFront::Distribution']);
+    expect(JSON.stringify(after)).toContain(`origin-secret:${PRESETS.throwaway.originSecretVersion + 1}}}`);
   });
 
   it('the API function is told which parameters hold it (current and previous, for rotation) and may read exactly those and the GitHub one', () => {
