@@ -10,6 +10,8 @@ import { openapi } from '../src/openapi.ts';
 import { errorOf, openTest } from './helpers.ts';
 import { openHostedStandIn, sha256Of, type StandIn } from './hosted-stand-in.ts';
 
+// Not a sha256: uppercase, one short, one long, not hex, empty.
+const MALFORMED = ['A'.repeat(64), 'a'.repeat(63), 'a'.repeat(65), 'g'.repeat(64), ''];
 const skillMd = (name: string, body = 'Body.\n') => `---\nname: ${name}\ndescription: A skill for tests.\n---\n${body}`;
 const b64 = (s: string) => Buffer.from(s).toString('base64');
 
@@ -72,16 +74,18 @@ describe('publish_version, hosted: files named by sha256', () => {
     expect((await errorOf(() => s.local.fetch({ name: 'half', version: 1 }))).code).toBe('not_found');
   });
 
-  it('a sha256 that is not 64 lowercase hex characters can never have been uploaded: not_uploaded', async () => {
+  it('a sha256 that is not 64 lowercase hex characters is not_sha256, every file checked before anything is looked up', async () => {
     const s = await standIn();
-    for (const bad of ['A'.repeat(64), 'a'.repeat(63), 'g'.repeat(64)]) {
-      const e = await errorOf(() => s.catalog.publish({ name: 'odd', files: [{ path: 'SKILL.md', mode: '0644', sha256: bad }] }));
-      expect([bad, e.code, e.data]).toEqual([bad, 'invalid_request', { field: 'files[0].sha256', why: 'not_uploaded' }]);
+    const good = s.upload(skillMd('odd'));
+    for (const bad of MALFORMED) {
+      const e = await errorOf(() => s.catalog.publish({ name: 'odd', files: [{ path: 'SKILL.md', mode: '0644', sha256: good }, { path: 'x.md', mode: '0644', sha256: bad }] }));
+      expect([bad, e.code, e.data]).toEqual([bad, 'invalid_request', { field: 'files[1].sha256', why: 'not_sha256' }]);
     }
-    // Not a sha256 is unknown before any lookup: the storage is never asked.
+    // Not a sha256 is known before any lookup: the storage is never asked, not even for the well-formed file before it.
     expect(s.blobReads).toEqual([]);
-    const long = await errorOf(() => s.catalog.publish({ name: 'odd', files: [{ path: 'SKILL.md', mode: '0644', sha256: 'a'.repeat(65) }] }));
-    expect([long.code, (long.data as { field: string }).field]).toEqual(['invalid_request', 'files[0].sha256']);
+    // A well-formed one that isn't stored is still not_uploaded.
+    const e = await errorOf(() => s.catalog.publish({ name: 'odd', files: [{ path: 'SKILL.md', mode: '0644', sha256: 'b'.repeat(64) }] }));
+    expect([e.code, e.data]).toEqual(['invalid_request', { field: 'files[0].sha256', why: 'not_uploaded' }]);
   });
 
   it('a stored file whose bytes don\'t hash to its name was never uploaded: not_uploaded, and nothing is committed', async () => {
@@ -191,8 +195,10 @@ describe('request_upload_links, hosted only', () => {
     expect([total.code, total.data]).toMatchObject(['too_large', { limit: 'skill_bytes', max: 150, value: 151 }]);
     const many = await errorOf(() => s.catalog.uploadLinks(ask(Array.from({ length: 101 }, (_, i) => ({ sha256: sha256Of(String(i)), size: 1 })))));
     expect([many.code, many.data]).toMatchObject(['invalid_request', { field: 'files', why: 'too_many', limit: 100 }]);
-    const odd = await errorOf(() => s.catalog.uploadLinks(ask([{ sha256: 'A'.repeat(64), size: 1 }])));
-    expect([odd.code, (odd.data as { field: string }).field]).toEqual(['invalid_request', 'files[0].sha256']);
+    for (const bad of MALFORMED) {
+      const odd = await errorOf(() => s.catalog.uploadLinks(ask([{ sha256: sha256Of('fine'), size: 1 }, { sha256: bad, size: 1 }])));
+      expect([bad, odd.code, odd.data]).toEqual([bad, 'invalid_request', { field: 'files[1].sha256', why: 'not_sha256' }]);
+    }
     expect(s.linkCalls).toEqual([]);
   });
 
@@ -226,6 +232,19 @@ describe('fetch_version, hosted: links from the version it reads', () => {
       files: files.map((f) => ({ path: f.path, mode: f.mode ?? '0644', sha256: sha256Of(f.text), size: Buffer.byteLength(f.text), url: `https://files.test/${sha256Of(f.text)}` })),
     });
     expect(s.blobReads).toEqual([]);
+  });
+
+  it('the hosted schema says what a sha256 is, and the catalog refuses exactly what that pattern refuses', async () => {
+    const hosted = openapi('hosted') as any;
+    const upload = hosted.components.schemas.request_upload_links_input.properties.files.items.properties.sha256;
+    const publish = hosted.components.schemas.publish_version_input.properties.files.items.properties.sha256;
+    expect([upload.pattern, publish.pattern]).toEqual(['^[0-9a-f]{64}$', '^[0-9a-f]{64}$']);
+    const s = await standIn();
+    for (const x of [...MALFORMED, 'a'.repeat(64), sha256Of('x')]) {
+      const e = await errorOf(() => s.catalog.uploadLinks({ name: 'pat', files: [{ sha256: x, size: 1 }] })).catch(() => undefined);
+      const refused = (e?.data as { why?: string } | undefined)?.why === 'not_sha256';
+      expect([x, refused]).toEqual([x, !new RegExp(upload.pattern).test(x)]);
+    }
   });
 
   it('the hosted schema describes the hosted answer, and the local one the inline answer', () => {
