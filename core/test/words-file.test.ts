@@ -310,9 +310,9 @@ describe('the words file (vendored, recommended variant)', () => {
     const files = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(join(dir, e.name)) : e.name.endsWith('.ts') ? [join(dir, e.name)] : []));
     const text = files(src).map((f) => readFileSync(f, 'utf8')).join('\n');
     const whys = new Set<string>(['not_regular_file', 'not_a_confirm']);
-    for (const m of text.matchAll(/why: '([a-z_]+)'|refuse\([\w.!]+, '([a-z_]+)'/g)) whys.add((m[1] ?? m[2])!);
+    for (const m of text.matchAll(/why: '([a-z0-9_]+)'|refuse\([\w.!]+, '([a-z0-9_]+)'/g)) whys.add((m[1] ?? m[2])!);
     const pathWhy = /export type PathWhy =([^;]+);/.exec(text)![1]!;
-    for (const m of pathWhy.matchAll(/'([a-z_]+)'/g)) whys.add(m[1]!);
+    for (const m of pathWhy.matchAll(/'([a-z0-9_]+)'/g)) whys.add(m[1]!);
     expect(whys.size).toBeGreaterThan(25);
     // hosted_not_available is worded by its own sentence (errors.forbidden_hosted), not as a reason.
     const missing = [...whys].filter((w) => w !== 'hosted_not_available' && !WORD_GAPS.includes(`errors.why.${w}`) && s.word(`errors.why.${w}`) === undefined);

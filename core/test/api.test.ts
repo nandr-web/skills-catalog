@@ -187,7 +187,7 @@ function contractCodes(): string[] {
   const s9 = text.slice(text.indexOf('## 9. Error codes'), text.indexOf('## 10.'));
   let list = s9.slice(s9.indexOf('`internal_error` {log}'), s9.indexOf('Each error carries'));
   for (let prev = ''; prev !== list; ) [prev, list] = [list, list.replace(/\{[^{}]*\}/g, '').replace(/\([^()]*\)/g, '')];
-  return [...list.matchAll(/`([a-z_]+)`/g)].map((m) => m[1]!);
+  return [...list.matchAll(/`([a-z0-9_]+)`/g)].map((m) => m[1]!);
 }
 
 describe('the error list at run time (contract §9)', () => {
@@ -211,12 +211,15 @@ describe('the error list at run time (contract §9)', () => {
     limit: 'a search input, and a field of invalid_request',
     me: 'a setup config key',
     serve: 'a CLI command, whose server a refusal names',
+    // Seen since the check reads names with digits (not_sha256 was missed before):
+    '200': 'an HTTP status (an answer in the envelope)',
+    content_base64: 'a publish_version input (a file inline)',
   };
   it('names no code outside its list: every other word it marks as code is a why with a sentence, or a named field or outcome', () => {
     const text = readFileSync(join(import.meta.dirname, '..', '..', 'docs', 'contract.md'), 'utf8');
     let s9 = text.slice(text.indexOf('## 9. Error codes'), text.indexOf('## 10.'));
     for (let prev = ''; prev !== s9; ) [prev, s9] = [s9, s9.replace(/\{[^{}]*\}/g, '')];
-    const marked = new Set([...s9.matchAll(/`([a-z_]+)`/g)].map((m) => m[1]!));
+    const marked = new Set([...s9.matchAll(/`([a-z0-9_]+)`/g)].map((m) => m[1]!));
     const gaps = WORD_GAPS.filter((k) => k.startsWith('errors.why.')).map((k) => k.slice('errors.why.'.length));
     const whys = [...Object.keys(Words.load().word('errors.why') as Record<string, string>), ...gaps];
     const known = new Set<string>([...ERROR_CODES, ...whys, ...Object.keys(NOT_CODES)]);
