@@ -7,7 +7,7 @@ import { DynamoDBClient, ScanCommand, TransactWriteItemsCommand } from '@aws-sdk
 import { GetObjectCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3';
 import { Catalog, actAs, type Storage } from '@skills-catalog/core';
 import { counterIds, fixedClock, type StoreOptions, type TestAdapter, type TestStore } from '@skills-catalog/core/testing/suites';
-import { createStores, HostedBlobLinks, HostedEvents, HostedStorage, S3SearchIndex, BLOB_PREFIX, type Place } from '../src/index.ts';
+import { createStores, HostedBlobLinks, HostedEvents, HostedFileNames, HostedStorage, S3SearchIndex, BLOB_PREFIX, type Place } from '../src/index.ts';
 import { FAKE } from './emulator.ts';
 
 let stores = 0;
@@ -28,6 +28,18 @@ function uploading(storage: Storage, links: HostedBlobLinks): Storage {
         if (!r.ok && r.status !== 412) throw new Error(`upload of ${a.sha256} answered ${r.status}`);
       }
       return storage.commit(v, files.map((f) => ({ sha256: f.sha256 })), cond, event);
+    },
+  });
+}
+
+/** The names indexer, run as soon as a commit creates a version (in AWS it trails the publish by seconds), so a file a
+ *  stored version names is named, as the shared suites expect; on its way is hosted's own tests' to drive. */
+function naming(storage: Storage, names: HostedFileNames): Storage {
+  return Object.assign(Object.create(storage), {
+    commit: async (...args: Parameters<Storage['commit']>) => {
+      const r = await storage.commit(...args);
+      if (r.kind === 'created') await names.record(r.record);
+      return r;
     },
   });
 }
@@ -70,7 +82,7 @@ export function hostedAdapter(endpoint: () => string): TestAdapter {
           return Catalog.open({
             where: 'hosted',
             links,
-            storage: uploading(wrapStorage ? wrapStorage(storage) : storage, links),
+            storage: uploading(naming(wrapStorage ? wrapStorage(storage) : storage, new HostedFileNames({ ddb, place })), links),
             index: new S3SearchIndex({ s3, place }),
             events: new HostedEvents({ ddb, place }),
             identity: opts.identity ?? actAs(undefined),
