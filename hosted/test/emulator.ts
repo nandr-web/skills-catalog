@@ -1,14 +1,24 @@
 // The AWS stand-in for the hosted adapters' tests: moto in server mode from emulator/.venv, on 127.0.0.1 only, in its own
 // process group, stopped after each test file (SIGTERM to the group, SIGKILL after 5 s). It prints its pid so a run's
-// after-check can find a leftover. SDK clients get fake static credentials and this endpoint, never the person's.
+// after-check can find a leftover. SDK clients get fake static credentials and this endpoint, never the person's, and a
+// no-wait agent (no-wait-agent.ts).
 
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
+import { noWaitAgent } from './no-wait-agent.ts';
 
 const MOTO = fileURLToPath(new URL('../emulator/.venv/bin/moto_server', import.meta.url));
 
-export const FAKE = { region: 'us-east-1', credentials: { accessKeyId: 'test', secretAccessKey: 'test' } } as const;
+// Each client spread from this gets its own handler on a no-wait agent (the getter runs at each spread, so one client's
+// destroy() never takes down another's).
+export const FAKE = {
+  region: 'us-east-1',
+  credentials: { accessKeyId: 'test', secretAccessKey: 'test' },
+  get requestHandler() {
+    return { httpAgent: noWaitAgent() };
+  },
+} as const;
 
 export type Emulator = { endpoint: string; stop(): Promise<void> };
 
