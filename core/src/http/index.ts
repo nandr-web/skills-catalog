@@ -156,7 +156,12 @@ export async function fileResponse(catalog: { file(sha256: string): Promise<File
   const api = { ...SECURITY_HEADERS, ...API_HEADERS };
   switch (answer.kind) {
     case 'bytes':
-      return { status: 200, headers: { ...api, 'content-type': 'application/octet-stream' }, body: answer.bytes };
+      // A download, never a page: even opened directly, it runs nothing (the policy's sandbox).
+      return {
+        status: 200,
+        headers: { ...api, 'content-type': 'application/octet-stream', 'content-disposition': 'attachment', 'content-security-policy': `${SECURITY_HEADERS['content-security-policy']}; sandbox` },
+        body: answer.bytes,
+      };
     case 'link':
       return { status: STATUS.link, headers: { ...api, location: answer.url }, body: '' };
     case 'on_its_way':

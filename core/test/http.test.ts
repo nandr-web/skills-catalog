@@ -6,10 +6,12 @@ import { describe, expect, it } from 'vitest';
 import type { Catalog } from '../src/catalog.ts';
 import { CatalogError } from '../src/errors.ts';
 import { dispatch, effectOf, fileResponse, operationResponse, refuse, route, STATUS, type FileAnswer, type HttpResponse } from '../src/http/index.ts';
-import { OPERATIONS, webRow } from '../src/api.ts';
+import { OPERATIONS, webRow, type OutputSchema } from '../src/api.ts';
 import { renderError } from '../src/render.ts';
 import { Words } from '../src/words-file.ts';
-import { checkHttpCase, HTTP_DEVELOPER, HTTP_SEED, httpCases, skillMd, type HttpCase } from './http-cases.ts';
+import { ERROR_CODES } from '../src/errors.ts';
+import { conforms } from './conforms.ts';
+import { checkHttpCase, FILE_CSP, HTTP_DEVELOPER, HTTP_SEED, httpCases, skillMd, type HttpCase } from './http-cases.ts';
 import { openTest } from './helpers.ts';
 
 const W = Words.load();
@@ -90,6 +92,27 @@ describe('the published schemas (docs/api/openapi.local.json, openapi.hosted.jso
     }
   });
 
+  // The published <op>_envelope is generated from the operation's output schema and the error codes: each answer is
+  // checked against those, with the repo's own schema checker.
+  it('each envelope\'s data fits its operation\'s output schema, and each error\'s code is a published one', async () => {
+    const catalog = await seeded();
+    try {
+      let checked = 0;
+      for (const c of routed) {
+        const r = await answer(c, catalog);
+        if (!String(r.headers['content-type']).startsWith('application/json')) continue;
+        const body = JSON.parse(String(r.body)) as { ok: boolean; data?: unknown; error?: { code: string } };
+        const op = c.request!.path.slice('/api/v1/'.length);
+        if (body.ok) expect(conforms(OPERATIONS[op]!.output as OutputSchema, body.data), c.name).toEqual([]);
+        else expect(ERROR_CODES, c.name).toContain(body.error!.code);
+        checked++;
+      }
+      expect(checked).toBeGreaterThan(4);
+    } finally {
+      catalog.close();
+    }
+  });
+
   it('each envelope has only the published keys, and words only the published words', async () => {
     const catalog = await seeded();
     try {
@@ -131,7 +154,8 @@ describe('every response', () => {
     try {
       for (const c of httpCases) {
         const r = await answer(c, catalog);
-        for (const [k, v] of Object.entries(FIXED_HEADERS)) expect(r.headers[k], `${c.name} ${k}`).toBe(v);
+        const expected = c.file?.kind === 'bytes' ? { ...FIXED_HEADERS, 'content-security-policy': FILE_CSP } : FIXED_HEADERS;
+        for (const [k, v] of Object.entries(expected)) expect(r.headers[k], `${c.name} ${k}`).toBe(v);
         expect(Object.keys(r.headers).filter((k) => k.startsWith('access-control-')), c.name).toEqual([]);
       }
     } finally {
