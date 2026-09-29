@@ -10,6 +10,7 @@ import { DEFAULT_SEARCH_LIMIT, VERSIONS_PAGE, validateInput } from './registry.t
 // ever gets such an input it's refused here (the CLI's override test goes red), never let through.
 const CATALOG_FACE = 'mcp';
 import {
+  DEFAULT_NON_GRANTING_KEYS,
   DEFAULT_SAFE_FRONTMATTER_KEYS,
   DEFAULT_LIMITS,
   MANIFEST,
@@ -36,6 +37,7 @@ import { COMMON_WORDS, contentWords, spelledLike } from './words.ts';
 export interface CatalogConfig {
   limits: Limits;
   safeFrontmatterKeys: readonly string[]; // keys that can't grant anything; a change to any other key is a risk flag
+  nonGrantingKeys: readonly string[]; // keys known to grant nothing: with only these, a changed file is no reason to ask
   commonWords: readonly string[];
   readInlineBudget: number; // bytes of text one read inlines (contract §2: 24 KB keeps a result under 8,000 tokens)
 }
@@ -43,6 +45,7 @@ export interface CatalogConfig {
 export const DEFAULT_CONFIG: CatalogConfig = {
   limits: DEFAULT_LIMITS,
   safeFrontmatterKeys: DEFAULT_SAFE_FRONTMATTER_KEYS,
+  nonGrantingKeys: DEFAULT_NON_GRANTING_KEYS,
   commonWords: COMMON_WORDS,
   readInlineBudget: 24 * 1024,
 };
@@ -450,7 +453,7 @@ export class Catalog {
     const req = validateInput<{ name: string; from: number; to: number }>('diff_shared_skill_versions', input, CATALOG_FACE);
     const a = (await this.versionOf(req.name, req.from)).record;
     const b = (await this.versionOf(req.name, req.to)).record;
-    const d = diffTrees({ files: await this.tree(a), publisher: a.publisher }, { files: await this.tree(b), publisher: b.publisher }, this.config.safeFrontmatterKeys);
+    const d = diffTrees({ files: await this.tree(a), publisher: a.publisher }, { files: await this.tree(b), publisher: b.publisher }, this.config.safeFrontmatterKeys, this.config.nonGrantingKeys);
     return { name: req.name, from: a.version, to: b.version, ...d };
   }
 
@@ -481,7 +484,7 @@ export class Catalog {
     const entries = tree.map(entryOf);
     const fingerprint = fingerprintOf(entries);
     const latest = skill ? await this.p.storage.version(name, latestNo) : undefined;
-    const diff = diffTrees(latest ? { files: await this.tree(latest), publisher: latest.publisher } : null, { files: tree, publisher }, this.config.safeFrontmatterKeys);
+    const diff = diffTrees(latest ? { files: await this.tree(latest), publisher: latest.publisher } : null, { files: tree, publisher }, this.config.safeFrontmatterKeys, this.config.nonGrantingKeys);
     const result = (version: number, created: boolean): PublishResult => ({
       name,
       version,

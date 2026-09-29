@@ -372,6 +372,15 @@ describe('dry run (contract §2)', () => {
     expect(snapshot(dir)).toBe(before);
     expect((await errorOf(async () => (await catalog.publish(request('pr-review-checklist', historyVersion(histories.versions['h1.malformed']), { dry_run: true }), actAs('ana'))))).code).toBe('invalid_manifest');
   });
+  it('takes the keys known to grant nothing from its config: a key taken off the list makes a body edit ask', async () => {
+    const skill = (body: string) => [{ path: 'SKILL.md', mode: '0644' as const, bytes: Buffer.from(`---\nname: tuned\ndescription: Tuned.\nmodel: opus\n---\n${body}`) }];
+    for (const [nonGrantingKeys, kinds] of [[undefined, []], [[], ['instructions_changed']]] as const) {
+      const { catalog } = await openTest(nonGrantingKeys ? { config: { nonGrantingKeys } } : {});
+      await catalog.publish(request('tuned', skill('Old.\n')), actAs('ana'));
+      const r = await catalog.publish(request('tuned', skill('New.\n'), { dry_run: true }), actAs('ana'));
+      expect(r.risk_flags.map((f) => f.kind), JSON.stringify(nonGrantingKeys)).toEqual(kinds);
+    }
+  });
 });
 
 describe('not found (golden/skills.yaml missing-names)', () => {
