@@ -12,14 +12,24 @@ import { versionSk, type Place } from './place.ts';
 export const NAMES_PUTS_AT_ONCE = 8;
 const NAMES_MAX_ATTEMPTS = 6;
 
+declare const SIX_ATTEMPTS: unique symbol;
+/** A DynamoDB client only namesClient makes, so the names are never written through one that gives up sooner. */
+export type NamesClient = DynamoDBClient & { readonly [SIX_ATTEMPTS]: true };
+
 /** The indexer's DynamoDB client: the given settings, with each call tried NAMES_MAX_ATTEMPTS times. */
-export function namesClient(config: DynamoDBClientConfig): DynamoDBClient {
-  return new DynamoDBClient({ ...config, maxAttempts: NAMES_MAX_ATTEMPTS });
+export function namesClient(config: DynamoDBClientConfig): NamesClient {
+  return new DynamoDBClient({ ...config, maxAttempts: NAMES_MAX_ATTEMPTS }) as NamesClient;
 }
 
 export const fileNamePk = (sha256: string) => `file#${sha256}`;
 
-export type NamesParts = { ddb: DynamoDBClient; place: Place };
+/** Whether any version the indexer has recorded names this file (a read: any client). */
+export async function isNamed(ddb: DynamoDBClient, place: Place, sha256: string): Promise<boolean> {
+  const r = await ddb.send(new QueryCommand({ TableName: place.table, KeyConditionExpression: 'pk = :pk', ExpressionAttributeValues: { ':pk': { S: fileNamePk(sha256) } }, Limit: 1 }));
+  return (r.Items?.length ?? 0) > 0;
+}
+
+export type NamesParts = { ddb: NamesClient; place: Place };
 
 export class HostedFileNames {
   private readonly p: NamesParts;
@@ -40,14 +50,6 @@ export class HostedFileNames {
       }
     };
     await Promise.all(Array.from({ length: Math.min(NAMES_PUTS_AT_ONCE, shas.length) }, worker));
-  }
-
-  /** Whether any version the indexer has recorded names this file. */
-  async named(sha256: string): Promise<boolean> {
-    const r = await this.p.ddb.send(
-      new QueryCommand({ TableName: this.p.place.table, KeyConditionExpression: 'pk = :pk', ExpressionAttributeValues: { ':pk': { S: fileNamePk(sha256) } }, Limit: 1 }),
-    );
-    return (r.Items?.length ?? 0) > 0;
   }
 }
 

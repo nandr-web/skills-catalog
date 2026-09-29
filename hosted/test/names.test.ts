@@ -8,7 +8,7 @@ import { DynamoDBClient, TransactWriteItemsCommand } from '@aws-sdk/client-dynam
 import { S3Client } from '@aws-sdk/client-s3';
 import type { NewVersion, VersionPublished } from '@skills-catalog/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createStores, HostedBlobLinks, HostedEvents, HostedFileNames, HostedStorage, namesIndexer, type Place } from '../src/index.ts';
+import { createStores, HostedBlobLinks, HostedEvents, HostedFileNames, HostedStorage, namesClient, namesIndexer, type Place } from '../src/index.ts';
 import { FAKE, startEmulator, type Emulator } from './emulator.ts';
 
 const HOUR = 3_600_000;
@@ -30,7 +30,7 @@ async function world() {
   await createStores(ddb, s3, place);
   let t = Date.now();
   const clock = { now: () => new Date(t), advance: (ms: number) => void (t += ms) };
-  const names = new HostedFileNames({ ddb, place });
+  const names = new HostedFileNames({ ddb: namesClient({ ...FAKE, endpoint: emu!.endpoint }), place });
   const storage = new HostedStorage({ ddb, s3, place, clock });
   const links = new HostedBlobLinks({ s3, place, clock });
   const sha = (text: string) => createHash('sha256').update(text).digest('hex');

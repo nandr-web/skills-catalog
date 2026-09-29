@@ -7,7 +7,7 @@ import { DynamoDBClient, ScanCommand, TransactWriteItemsCommand } from '@aws-sdk
 import { GetObjectCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3';
 import { Catalog, actAs, type Storage } from '@skills-catalog/core';
 import { counterIds, fixedClock, type StoreOptions, type TestAdapter, type TestStore } from '@skills-catalog/core/testing/suites';
-import { createStores, HostedBlobLinks, HostedEvents, HostedFileNames, HostedStorage, S3SearchIndex, BLOB_PREFIX, type Place } from '../src/index.ts';
+import { createStores, HostedBlobLinks, HostedEvents, HostedFileNames, HostedStorage, S3SearchIndex, BLOB_PREFIX, namesClient, type Place } from '../src/index.ts';
 import { FAKE } from './emulator.ts';
 
 let stores = 0;
@@ -79,10 +79,11 @@ export function hostedAdapter(endpoint: () => string): TestAdapter {
           const clock = opts.clock ?? fixedClock();
           const storage = new HostedStorage({ ddb, s3, place, clock });
           const links = new HostedBlobLinks({ s3, place, clock });
+          const indexer = namesClient({ ...FAKE, endpoint: endpoint() });
           return Catalog.open({
             where: 'hosted',
             links,
-            storage: uploading(naming(wrapStorage ? wrapStorage(storage) : storage, new HostedFileNames({ ddb, place })), links),
+            storage: uploading(naming(wrapStorage ? wrapStorage(storage) : storage, new HostedFileNames({ ddb: indexer, place })), links),
             index: new S3SearchIndex({ s3, place }),
             events: new HostedEvents({ ddb, place }),
             identity: opts.identity ?? actAs(undefined),
@@ -91,6 +92,7 @@ export function hostedAdapter(endpoint: () => string): TestAdapter {
             ...(opts.config ? { config: opts.config } : {}),
             close: () => {
               ddb.destroy();
+              indexer.destroy();
               s3.destroy();
             },
           });
