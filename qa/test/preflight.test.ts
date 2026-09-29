@@ -17,7 +17,7 @@ const machines = new Map<string, TestMachine>();
 const dir = () => { const m = machine(); const d = scratch('qa-pre-'); machines.set(d, m); return d; };
 
 let written = 0;
-const TOOLS = ['search_shared_skills', 'read_shared_skill', 'list_shared_skill_versions', 'diff_shared_skill_versions', 'install_shared_skill', 'list_installed_skills'];
+const TOOLS = ['search_shared_skills', 'read_shared_skill', 'list_shared_skill_versions', 'diff_shared_skill_versions', 'install_shared_skill', 'list_installed_skills', 'update_installed_skills'];
 function scenarios(d: string, over: (doc: any) => void = () => {}) {
   const doc = parse(readFileSync(here('../golden/agent-scenarios.yaml'), 'utf8'));
   doc.setups['skill+cli'].allowed = ['Bash(${cli} *)', 'Skill'];

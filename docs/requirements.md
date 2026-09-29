@@ -1,6 +1,8 @@
 # Requirements
 
-Every requirement, in the PRD's or the owner's words, confirmed by the owner; where it lives in the design; and the
+**39 requirements:** 5 built, 23 being built, 3 in phase 2, 3 for AWS, 4 later, 1 plan.
+
+Every requirement, in the PRD's or the owner's words, confirmed by the owner (1 still awaiting the owner's confirmation, marked below); where it lives in the design; and the
 automated checks that hold it. Generated from the requirement list and the QA plan's traceability file, so it can't drift.
 Contract sections (§) are in [contract.md](contract.md); the test layers are in [the QA plan](../qa/qa-plan.md).
 
@@ -29,9 +31,17 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - interface: dry_run stores nothing and returns the diff
   - agent: A7 relays the reason and proposes the fix; never edits the person's files unasked (being built)
   - interface: an error whose fix is a change to the person's files tells the agent to propose it and wait (contract §9) (being built)
+  - unit: frontmatter is a safe YAML subset: a merge key, anchor, alias, explicit tag, duplicate key or second document is invalid_manifest {problem: yaml_feature, feature}; a top-level key outside ^[a-z][a-z0-9_-]*$ (zero-width space, BOM, bidi override, capitals) is {problem: key_format, fields: [the key]}; each problem code as listed
+  - unit: path rules in the pinned order: invisible characters (no-break, en and ideographic spaces, line and paragraph separators, Hangul filler, Braille blank, variation selectors, private-use, unassigned), not_portable (reserved characters, trailing dot or space, Windows device names, the Windows spellings of .git), full case folding (ß, ẞ, ss clash); the plain space and é pass
+  - storage: a .claude or .claude-plugin folder at any depth, compared by NFKC and case (.Claude, .CLAUDE-PLUGIN, a fullwidth full stop), is invalid_path {path, why: claude_folder or plugin_folder} and storage is unchanged; .claude-x and claude are allowed
+  - unit: one-line fields: a description with a line break (\r, \n, U+2028, U+2029) or a control character (a tab, DEL, C1) is invalid_manifest {problem: control_character, fields: [description]}, checked after too long and before angle brackets; a message with one is invalid_request {field: message, why: control_character}; storage unchanged
+  - interface: one-line fields stay one line when shown: a description stored before the rule shows its line feed as a space on a search card, so no face prints a forged 'Next:' line; a diff's changed lines sit inside the fence under the data note
+  - storage: a memory file (CLAUDE.md, CLAUDE.local.md, AGENTS.md) as any segment, after the same fold, is invalid_path {why: memory_file} and storage is unchanged; CLAUDE.md.bak and my-CLAUDE.md are allowed; a trailing dot is not_portable
+  - unit: a reserved name (a bundled skill, a built-in command, shared-skills the companion skill, skills-catalog the command) is invalid_name {why: reserved}; a near name is allowed; the list the core uses is the repo's dated file of 136 names, not a copy (a name added to a test copy of the file is refused, one removed is allowed)
   - interface: secret_suspected with path and line; the ignore list skipped and reported; the MCP schema has no override (being built)
   - interface: secret_suspected's text never repeats the secret's value (nor the sentinel) (being built)
   - agent: A7s no tool call carries the override (being built)
+  - storage: the core's publish_version runs the same secret scan: a planted secret gives secret_suspected {path, line, kind} and stores nothing, its value never echoed; allow_suspected_secrets: true publishes; no MCP schema carries that field
 
 ### Version a skill
 
@@ -79,6 +89,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - interface: tags filter: [docs] returns exactly tagged, tags-deduped, tags-at-limit; [docs, release] only the skills with both; a top-level tags list is never a tag
   - unit: metadata.tags parsing: trimmed, deduplicated in order, ≤10 of 1-32 [a-z0-9-]; each bad form is invalid_manifest {fields: [metadata.tags]}
   - interface: read_shared_skill with 20 names works; 21 gives invalid_request {field: names, limit: 20}; search limit 51 gives invalid_request {field: limit, limit: 50}; each with a why
+  - interface: search's tags filter: 11 tags gives invalid_request {field: filters.tags, why: too_many, limit: 10}; a 33-character tag gives {why: too_long, limit: 32}; 10 tags with one of 32 characters is accepted; never clamped
   - interface: cursor paging returns every skill once while publishes happen (being built)
 
 ### Only a skill's owners can publish it
@@ -133,7 +144,10 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Checked by:**
   - interface: read_shared_skill include: contents equals the fixture's text files
   - interface: include: files types each file by its bytes (only logo.png is binary); include: contents gives content for every text file, SKILL.md included, encoding back to the exact bytes; never for a binary
+  - interface: a read inlines at most the 24,576-byte budget in every mode: every named skill's body first, then with contents each skill's files (SKILL.md first, then by path); each body or file whole or left out (body_omitted, content_omitted), a later smaller one still fits, inline_budget {limit, used, omitted}; a file over the whole budget is named in the too_big sentence, which points to reading it alone; 20 median-sized names in manifest mode stay under 8,000 tokens; paths[] reads just those files in the order asked, the body just before SKILL.md's content when SKILL.md is asked, both counted; one path is inlined whatever its size (limit stays 24,576, used exceeds it); a missing one is not_found {path}, 21 paths or paths with names is invalid_request
   - interface: install_shared_skill writes the same tree and a lock entry
+  - interface: the fence: a read's skill text sits between one start and one end marker carrying the injected token; markers planted in SKILL.md in any spelling never close it; paths and names outside it are JSON-quoted
+  - interface: install refuses to overwrite: a hand-made folder of that name in the target gives exists_untracked {path}, untouched; an untracked same-named skill in the other target gives name_in_use {path}, and so does a command file .claude/commands/<name>.md in either target; a tampered lock path never redirects an update (the path is target + name)
   - agent: A4 installs the skill intact
   - interface: not_found per name on every face, with suggestions by spelling only
   - agent: A5 says not found, installs nothing, invents nothing, offers no search-based closest
@@ -193,8 +207,9 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - agent: access matrix (MCP / MCP + skill / skill + CLI) per scenario
   - interface: every phase-1 operation marked MCP is in tools/list; the server sends its instructions; the companion skill names only real tools
   - interface: an internal error gives internal_error {log}: no traceback in CLI or MCP output; the traceback is in a log under $SKILLS_HOME
-  - interface: the name is skills-catalog everywhere: CLI, package, MCP server
+  - interface: the name is skills-catalog everywhere: CLI, package, MCP server; the companion skill is shared-skills
   - agent: the assistant asks run before every merge: Claude Haiku on all of them, Claude Opus on the core asks
+  - interface: the MCP activity log (SKILLS_ACTIVITY_LOG, mode 0600): one line per tool call, HH:MM:SS in UTC from the injected clock, who, tool, target, result, split on double spaces, no colour codes; the target is skill names and versions only, a search logs '<n> of <total> match'; results are the words file's fixed words; a sentinel planted in a search's words and in a publish message never appears in it
 
 ### Constant QA on the agent-level experience
 
@@ -207,8 +222,9 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - agent: access matrix (MCP / MCP + skill / skill + CLI) per scenario
   - interface: every phase-1 operation marked MCP is in tools/list; the server sends its instructions; the companion skill names only real tools
   - interface: an internal error gives internal_error {log}: no traceback in CLI or MCP output; the traceback is in a log under $SKILLS_HOME
-  - interface: the name is skills-catalog everywhere: CLI, package, MCP server
+  - interface: the name is skills-catalog everywhere: CLI, package, MCP server; the companion skill is shared-skills
   - agent: the assistant asks run before every merge: Claude Haiku on all of them, Claude Opus on the core asks
+  - interface: the MCP activity log (SKILLS_ACTIVITY_LOG, mode 0600): one line per tool call, HH:MM:SS in UTC from the injected clock, who, tool, target, result, split on double spaces, no colour codes; the target is skill names and versions only, a search logs '<n> of <total> match'; results are the words file's fixed words; a sentinel planted in a search's words and in a publish message never appears in it
 
 ### Auto-updates: global and per skill
 
@@ -219,6 +235,12 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Where it lives:** the installer; contract §3, §5.3
 - **Checked by:**
   - unit: update gate table
+  - unit: the diff's risk_flags for each gate pair: runs_at_load by the wide detector (any ! right before a backtick, anywhere: a tab, a no-break space, KEY=, an HTML comment, a code block, the frontmatter; a fence of 3+ backticks or tildes then !; one per block at its opening line, an edit inside an unchanged block included), capability_frontmatter per key off the safe list (hooks, context, agent, allowed-tools widened, disable-model-invocation removed, an unknown key), instructions_changed only when the new version grants (a key neither safe nor non-granting, or an injected command) for a file added, changed (bytes or mode) or removed and for SKILL.md when its body or any safe key changed, runnable_file for an executable, a script or a command position (python, uv run, bun, deno, '. x', ${CLAUDE_SKILL_DIR}/x, an injected command's target), and {path: SKILL.md, line, to, detail: runs a file outside the skill} for a target outside it, with or without a grant; one reason per file, field/from/to/line carried; the safe list raises nothing without a grant
+  - unit: the review matrix: six changes × a skill that grants something or nothing × update or first install; every cell held, except new body steps without a grant (applied or installed: Claude Code's own prompts stay the gate)
+  - unit: flag text (path, from, to, detail) is plain text: invisible characters escaped as \u{XXXX}, then cut to 200 code points ending in …; never rendered as markdown on any face
+  - interface: the installer decides from bytes it checked: each fetched version re-validated with today's rules; the newest failing one is refused {version, error} with the lock and installed copy unchanged and no fallback to an older version; an unparseable SKILL.md is refused, never diffed as empty; a name reserved since is invalid_name at install and every sync; a catalog row that claims no flags still gives the installer's own flags
+  - unit: safe_frontmatter_keys and non_granting_keys are fixed in code: a config can remove keys, and a config that adds one is refused by setup (invalid_request {field}, nothing written, exit 1)
+  - interface: a first install goes through the gate whatever the policy: a flagged skill gives held: flagged with a confirm, accept_held_update installs it; an unflagged one installs
   - interface: update_installed_skills replaces a hand-edited copy and records version and fingerprint in the lock (phase 1: the owner's decision)
   - agent: A10 update my skills
   - agent: A10u an unattended update holds a flagged change
@@ -230,8 +252,12 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - manual: how the interactive terminal shows the session-start message, looked at once (manual)
   - agent: A10g a held update is relayed to the person and never accepted by the assistant
   - interface: accept_held_update with the held result's confirm installs that version, and the lock records the flags it let through
+  - interface: accept_held_update's flags[] is compared with the held flags as a set (order and repeats ignored); a missing or extra kind is conflict and changes nothing (the accept_cases)
+  - interface: MCP schemas: install_shared_skill has no policy input (the CLI's --policy only), update_installed_skills has no latest, accept_held_update requires flags
+  - unit: accept_flagged_updates never applies to a first install (the first-install row with accept: true stays held: flagged)
   - interface: a newer version published between hold and accept gives conflict and changes nothing; a confirm for another name or version is refused
-  - setup: setup's allowed tools never include accept_held_update or publish_skill_to_catalog
+  - setup: setup's allowed tools never include accept_held_update, publish_skill_to_catalog or set_skill_update_policy; update_installed_skills is pre-allowed for MCP only (the CLI's update still asks)
+  - setup: accept_flagged_updates is set only by the terminal wizard: true from --config, --yes or the no-terminal mode is refused (invalid_request {field: accept_flagged_updates}, nothing written, exit 1); while it's on, the session-start notice says so
 
 ### Contracts not coupled to a backend
 
@@ -243,6 +269,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Checked by:**
   - storage: one suite unchanged on every adapter (SQLite + folder now; others plug in later)
   - agent: A11 finds a skill in a 10,000-skill catalog within the tool-result budget
+  - interface: request fields are the operation's own: constructor, __proto__, toString and hasOwnProperty as request fields give invalid_request {field} on every operation, through the core and each face, and change nothing
 
 ### A simple demo login: act as another developer
 
@@ -253,7 +280,9 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Where it lives:** the core, the CLI, the MCP server; contract §6, §7
 - **Checked by:**
   - interface: --as, SKILLS_AS and the MCP server's config each set acting_as; every result carries it
-  - interface: the CLI prints exactly one 'for demo purposes' line per command, and none in --json output
+  - interface: the CLI prints exactly one line '(Acting as <developer>, for demo purposes.)', last, after every result and every error, and none in --json output
+  - interface: locally with no acting identity, a publish is unauthenticated and its sentence points to setup's me or --as
+  - interface: a developer name follows the skill-name rule: --as with a space or a line feed is invalid_request {field: as, why: not_a_developer_name}; a bad SKILLS_AS, MCP config name or setup me is invalid_developer_setting {setting}, saying to fix the setting; nothing runs
 
 ### Everything local by default; AWS is an option, off
 
@@ -356,6 +385,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Checked by:**
   - storage: one suite unchanged on every adapter (SQLite + folder now; others plug in later)
   - agent: A11 finds a skill in a 10,000-skill catalog within the tool-result budget
+  - interface: request fields are the operation's own: constructor, __proto__, toString and hasOwnProperty as request fields give invalid_request {field} on every operation, through the core and each face, and change nothing
 
 ### Measure and improve search over time
 
@@ -389,6 +419,10 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - agent: A14 teardown puts things back
   - setup: teardown leaves the assistant home byte-identical to before setup
   - setup: setup's result leads with the remaining step and 'N skills to search; none installed yet'
+  - setup: the written settings allow exactly the contract §6 MCP tools and shell prefixes, no more, and the CLI allow list equals the registry's read-only commands (search, read, versions, diff, list); the hook and the MCP entry start node by process.execPath, never a shim, npx or a bare name
+  - setup: the pre-allowed read-only commands never write: pointed with --catalog and --home at an empty folder they fail or read, and the folder stays empty (no catalog created, no sweep, no index rebuilt)
+  - setup: --accept or --allow-suspected-secrets with no terminal exits 3 and changes nothing
+  - setup: the session-start notice never contains a publisher-chosen string: a sentinel planted in a skill's path and description is absent from it
   - manual: the owner watches a recording of the wizard (manual)
 
 ### Unattended setup from flags or a file
@@ -422,6 +456,10 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - agent: A14 teardown puts things back
   - setup: teardown leaves the assistant home byte-identical to before setup
   - setup: setup's result leads with the remaining step and 'N skills to search; none installed yet'
+  - setup: the written settings allow exactly the contract §6 MCP tools and shell prefixes, no more, and the CLI allow list equals the registry's read-only commands (search, read, versions, diff, list); the hook and the MCP entry start node by process.execPath, never a shim, npx or a bare name
+  - setup: the pre-allowed read-only commands never write: pointed with --catalog and --home at an empty folder they fail or read, and the folder stays empty (no catalog created, no sweep, no index rebuilt)
+  - setup: --accept or --allow-suspected-secrets with no terminal exits 3 and changes nothing
+  - setup: the session-start notice never contains a publisher-chosen string: a sentinel planted in a skill's path and description is absent from it
   - manual: the owner watches a recording of the wizard (manual)
 
 ## Phase 2: designed, local, not built yet
@@ -468,6 +506,19 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Where it lives:** the AWS stack, the web UI; contract §7
 - **Checked by:**
   - web: no or revoked token gives 401; a signed-in read works (the web plan)
+
+### New versions wait before auto-update applies them
+
+> As a developer on a shared catalog, I want new versions to wait before auto-update applies them, with a way for auditors and security checkers to get the latest at once, so that a bad version is caught before it reaches me.
+
+- **Status:** this wording awaits the owner's confirmation
+- **Source:** the owner's decision (`docs/decisions.md`)
+- **Done when:** On a shared or hosted catalog a new version waits (about 3 days by default) before auto-update applies it, and a first install of a version that new is held the same way; a watcher policy or a one-off request gets the latest at once, through the person's permission prompt and still through the update gate; a version flagged by a review or withdrawn during the wait is never auto-applied; a local catalog doesn't wait.
+- **Where it lives:** the installer, the core, the AWS stack; contract §10, §3, §5.3, §7
+- **Checked by:**
+  - unit: with an injected clock: a version younger than the cooldown gives held: cooldown with its until and applies at until; a first install of a version that young is held the same way unless the person names the version; the default is 0 for a local catalog (never held: cooldown) and about 3 days for a shared or hosted one
+  - interface: the latest on request: a watcher policy (cooldown 0), update --latest and accepting a held: cooldown update each take the new version at once and still stop on a flag; update_installed_skills has no latest input over MCP; setup pre-allows none of the three
+  - interface: a version flagged by a review or withdrawn during its wait is never auto-applied, at the end of the wait or on any sync
 
 ### Web UI: stack, security and deployment into my AWS account
 

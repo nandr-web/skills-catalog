@@ -56,3 +56,22 @@ cases:
   - {first_install: true, policy: notify, override: none, flags: [],                       local: same, accept: false, mode: interactive, outcome: installed}
   - {first_install: true, policy: notify, override: none, flags: [runs_at_load],           local: same, accept: false, mode: interactive, outcome: held:flagged}
   - {first_install: true, policy: auto,   override: none, flags: [runnable_file],          local: same, accept: false, mode: interactive, outcome: held:flagged}
+  - {first_install: true, policy: auto,   override: none, flags: [runnable_file],          local: same, accept: true,  mode: unattended,  outcome: held:flagged, note: "accept_flagged_updates never applies to a first install (contract §5.3, 1803115)"}
+
+# accept_held_update (contract §3, 6532eba): its flags[] is compared with the held flags as a set of kinds (order and repeats
+# ignored); a missing or extra kind is conflict and changes nothing. Here the held update is prc v2 -> v3 in an MCP setup,
+# held: flagged with [runnable_file] (histories.prc), and each case sends the held result's confirm.
+accept_cases:
+  held_flags: [runnable_file]
+  cases:
+    - {flags: [runnable_file], outcome: updated}
+    - {flags: [runnable_file, runnable_file], outcome: updated, note: "repeats ignored"}
+    - {flags: [], outcome: conflict, installed_unchanged: true}
+    - {flags: [runnable_file, runs_at_load], outcome: conflict, installed_unchanged: true, note: "an extra kind"}
+    - {flags: [instructions_changed], outcome: conflict, installed_unchanged: true}
+  two_kinds:
+    held_flags: [capability_frontmatter, instructions_changed]
+    note: "a first install of gate.g1 (histories.gate: null -> gate.g1), held: flagged"
+    cases:
+      - {flags: [instructions_changed, capability_frontmatter], outcome: installed, note: "order ignored"}
+      - {flags: [capability_frontmatter], outcome: conflict, no_new_skill_dirs: true}
