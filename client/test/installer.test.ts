@@ -1,7 +1,7 @@
 // The installer (contract §3, §4.5, §5.3; golden/histories.yaml installer and gate). It installs from bytes it checked,
 // computes every flag itself (a first install is an update from nothing), holds a flagged change until the person's
 // yes, never overwrites or shadows what it didn't install, and records what it did in the lock.
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CatalogError, Surface, actAs, reasons, renderError, type Catalog } from '@skills-catalog/core';
 import { checkTree, diffTrees, fingerprint, sha256Hex, type Mode } from '@skills-catalog/core/skill-tree';
@@ -576,6 +576,80 @@ describe('a project folder replaced by a link to someone else\'s folder (the sec
       }
       untouched(s, victimTree);
     }
+  });
+});
+
+// §4.5 "Replacing an installed copy, safely": the lock records the installed folder's identity, and a replaced folder is
+// deleted only when it is that copy. The races are in installer-race.test.ts.
+describe('replacing an installed copy deletes only the copy the lock recorded (contract §4.5)', () => {
+  const idOf = (path: string) => {
+    const s = lstatSync(path);
+    return { dev: s.dev, ino: s.ino };
+  };
+  const kept = (text: string) => /"staging":"([^"]+)"|was kept at (\S+?):/.exec(text);
+
+  it('the lock records the installed folder\'s identity, and each replace records the new one', async () => {
+    const p = place();
+    await publish(p, 'alpha', plain('alpha'));
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha' });
+    const dest = join(userSkills(p), 'alpha');
+    expect(lockOf(p)[dest]!.copy).toEqual(idOf(dest));
+    await publish(p, 'alpha', plain('alpha', 'Second.\n'));
+    await update(ctx, {});
+    expect(lockOf(p)[dest]!.copy).toEqual(idOf(dest));
+    expect(nothingStaged(p)).toBe(true);
+  });
+
+  it('a folder at the skill\'s path that is not the recorded copy is never deleted: target_changed, and it is back in place', async () => {
+    const p = place();
+    await publish(p, 'alpha', plain('alpha'));
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha' });
+    await publish(p, 'alpha', plain('alpha', 'Second.\n'));
+    const dest = join(userSkills(p), 'alpha');
+    // Someone else's folder now stands where the installed copy was.
+    rmSync(dest, { recursive: true });
+    mkdirSync(dest);
+    writeFileSync(join(dest, 'canary'), 'keep me\n');
+    const lockBefore = readFileSync(join(p.home, 'lock.json'), 'utf8');
+    const r = await update(ctx, {});
+    // That skill's refused line (its reason shown as data until the words are vendored), and no success line.
+    expect(r.text.split('\n')[1]).toBe(
+      S.format(S.word('update.refused_target'), { name: 'alpha', from: 1, to: 2, path: dest, reason: `target_changed: ${JSON.stringify({ path: dest })}` }),
+    );
+    expect(readdirSync(dest)).toEqual(['canary']);
+    expect(readFileSync(join(p.home, 'lock.json'), 'utf8')).toBe(lockBefore);
+    expect(nothingStaged(p)).toBe(true);
+  });
+
+  it('an entry recorded before identities were kept: the new copy goes in, the replaced one is kept in staging and named', async () => {
+    const p = place();
+    await publish(p, 'alpha', plain('alpha'));
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha' });
+    const dest = join(userSkills(p), 'alpha');
+    const lock = JSON.parse(readFileSync(join(p.home, 'lock.json'), 'utf8'));
+    delete lock.skills[dest].copy;
+    writeFileSync(join(p.home, 'lock.json'), JSON.stringify(lock));
+    await publish(p, 'alpha', plain('alpha', 'Second.\n'));
+    const r = await update(ctx, {});
+    const at = kept(r.text);
+    const staging = (at?.[1] ?? at?.[2])!;
+    expect(readFileSync(join(staging, 'SKILL.md'), 'utf8')).toBe(skillMd('alpha', 'The alpha skill.'));
+    expect(readFileSync(join(dest, 'SKILL.md'), 'utf8')).toContain('Second.');
+    expect(lockOf(p)[dest]).toMatchObject({ version: 2, copy: idOf(dest) });
+  });
+
+  it('a first install never moves what it finds at the skill\'s path', async () => {
+    const p = place();
+    await publish(p, 'alpha', plain('alpha'));
+    const dest = join(userSkills(p), 'alpha');
+    mkdirSync(dest, { recursive: true });
+    writeFileSync(join(dest, 'canary'), 'keep me\n');
+    const e = await refusal(() => install(ctxFor(p), { name: 'alpha' }));
+    expect([e.code, e.data]).toEqual(['exists_untracked', { path: dest }]);
+    expect(readdirSync(dest)).toEqual(['canary']);
   });
 });
 

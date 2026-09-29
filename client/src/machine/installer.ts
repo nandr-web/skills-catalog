@@ -8,17 +8,19 @@
 // version's fingerprint, until accept_held_update. Files are written to a temp folder in SKILLS_HOME (outside every
 // skills folder, which the assistant watches) and renamed in. Where a skill goes is computed from its target and name,
 // never read from the lock. It never overwrites or shadows a skill it didn't install. A link present when the call starts
-// is refused. A link swapped in while the call runs, by another program running as the same person, isn't reliably
-// caught yet; the next change closes that.
+// is refused. Every move is checked afterwards against the folders' identities taken when they were checked, and a
+// failed check takes the copy back out and refuses (target_changed), never reporting success. The limit, said plainly:
+// Node has no directory-relative file operations, so another program running as the same person can still race these
+// checks; the installer narrows the window.
 
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, renameSync, rmSync, statSync, writeFileSync, type Stats } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CatalogError, shellQuote, validateInput, type Catalog, type Surface, type VersionsResult } from '@skills-catalog/core';
 import { checkFetched, checkName, diffTrees, flagText, type RiskFlag, type TreeDiff, type TreeFile } from '@skills-catalog/core/skill-tree';
 import { reasons } from '@skills-catalog/core';
 import { logWords } from '../activity.ts';
 import type { Context, Done } from '../operations.ts';
-import { policyOf, readRecords, writeConfig, writeLock, type Lock, type LockEntry, type Policy, type Target } from './lock.ts';
+import { policyOf, readRecords, writeConfig, writeLock, type FolderId, type Lock, type LockEntry, type Policy, type Target } from './lock.ts';
 
 const quoted = (p: string) => JSON.stringify(p);
 const TARGETS: readonly Target[] = ['user', 'project'];
@@ -56,42 +58,66 @@ function checkTarget(ctx: Context, target: Target, name: string, lock: Lock): st
   return dest;
 }
 
-// The skills folder under the target's root, made one folder at a time, each checked for a link: a link that appeared
-// since checkTarget is refused, not followed. The skill's own folder is checked last. writeSkill's identity checks
-// catch some links swapped in after these checks, not all (see the top of this file).
-function skillsFolderFor(dest: string): Id {
+// .claude and .claude/skills under the target's root, made one folder at a time. Each is checked and its identity taken
+// from the same lstat, so the identity is always a real folder's, never a link's own: a link that appeared since
+// checkTarget is refused, not followed. writeSkill checks these identities again after every move.
+type Anchor = { path: string; id: Id };
+function skillsFolderFor(dest: string): Anchor[] {
   const skills = dirname(dest);
   const claude = dirname(skills);
   mkdirSync(dirname(claude), { recursive: true });
-  for (const p of [claude, skills]) {
+  return [claude, skills].map((path) => {
     try {
-      mkdirSync(p);
+      mkdirSync(path);
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
     }
-    if (isLink(p)) throw new CatalogError('target_symlink', { path: p });
-  }
-  if (isLink(dest)) throw new CatalogError('target_symlink', { path: dest });
-  return idOf(skills)!;
+    const s = lstatOf(path);
+    if (!s || s.isSymbolicLink()) throw new CatalogError('target_symlink', { path });
+    if (!s.isDirectory()) throw new CatalogError('exists_untracked', { path });
+    return { path, id: { dev: s.dev, ino: s.ino } };
+  });
 }
 
-// A folder's identity on disk, to tell whether a path still names the folder that was checked.
-type Id = { dev: number; ino: number };
-function idOf(path: string): Id | undefined {
+// A folder's identity on disk, to tell whether a path still names the folder that was checked or installed.
+type Id = FolderId;
+function lstatOf(path: string): Stats | undefined {
   try {
-    const s = lstatSync(path);
-    return { dev: s.dev, ino: s.ino };
+    return lstatSync(path);
   } catch {
     return undefined;
   }
 }
+function idOf(path: string): Id | undefined {
+  const s = lstatOf(path);
+  return s && { dev: s.dev, ino: s.ino };
+}
 const same = (a: Id | undefined, b: Id | undefined) => a !== undefined && b !== undefined && a.dev === b.dev && a.ino === b.ino;
+/** A real folder (not a link) with this identity. */
+const isCopy = (s: Stats | undefined, id: Id | undefined) => s !== undefined && s.isDirectory() && !s.isSymbolicLink() && same({ dev: s.dev, ino: s.ino }, id);
 
-// The files into a temp folder in SKILLS_HOME, then renamed into place; an installed copy is moved out first and
-// removed once the new one is in (an update replaces local edits: the owner's call). A folder swapped for a link after
-// the checks is never deleted or written through knowingly: the copy moved out is deleted only if it's still the one
-// checked, in the skills folder that was checked; otherwise it's put back and the call refused with target_symlink.
-function writeSkill(ctx: Context, dest: string, files: readonly TreeFile[]): void {
+// A rename that failed because something else is at (or gone from) one of its paths: a change under us, not a fault.
+const RACED = new Set(['ENOENT', 'EEXIST', 'ENOTEMPTY', 'ENOTDIR', 'EISDIR']);
+function moved(from: string, to: string): boolean {
+  try {
+    renameSync(from, to);
+    return true;
+  } catch (e) {
+    if (RACED.has((e as NodeJS.ErrnoException).code ?? '')) return false;
+    throw e;
+  }
+}
+
+// The files into a temp folder in SKILLS_HOME, then renamed into place (contract §4.5, "Replacing an installed copy,
+// safely"). `entry` is the lock's entry for this path, if any.
+// - A first install finds nothing at the skill's path, or refuses without moving anything.
+// - A replace moves the installed folder aside and deletes it only when it's a real folder with the identity the lock
+//   recorded. An entry recorded before identities were kept never has its folder deleted: it's kept in staging, named.
+// - After every move, .claude and .claude/skills must still be the real folders checked, and the moved folder where it
+//   should be. Otherwise the move is undone as far as it safely can be, and the call refuses with target_changed, naming
+//   the staging path of any folder that couldn't be put back. It never reports success after a failed check.
+// Returns the new copy's identity, for the lock, and where a replaced copy was kept, if it was.
+function writeSkill(ctx: Context, dest: string, files: readonly TreeFile[], entry: LockEntry | undefined): { copy: Id; kept?: string } {
   const staging = join(ctx.settings.home, 'staging');
   mkdirSync(staging, { recursive: true, mode: 0o700 });
   const tmp = mkdtempSync(join(staging, 'install-'));
@@ -101,30 +127,55 @@ function writeSkill(ctx: Context, dest: string, files: readonly TreeFile[]): voi
       mkdirSync(dirname(full), { recursive: true });
       writeFileSync(full, f.bytes, { mode: f.mode === '0755' ? 0o755 : 0o644 });
     }
-    const skills = dirname(dest);
-    const checked = skillsFolderFor(dest);
-    const installed = idOf(dest);
-    const changed = () => new CatalogError('target_symlink', { path: skills });
-    const old = installed ? `${tmp}-replaced` : undefined;
-    if (old) {
-      renameSync(dest, old);
-      if (!same(idOf(old), installed) || !same(idOf(skills), checked)) {
-        renameSync(old, dest);
-        throw changed();
+    const copy = idOf(tmp)!;
+    const anchors = skillsFolderFor(dest);
+    const anchored = () => anchors.every((a) => isCopy(lstatOf(a.path), a.id));
+    const refuse = (staged?: string): never => {
+      throw new CatalogError('target_changed', staged === undefined ? { path: dest } : { path: dest, staging: staged });
+    };
+    // The folder the skill's path is in right now, through any link: where a folder moved aside came from.
+    const parentNow = () => {
+      try {
+        const s = statSync(dirname(dest));
+        return { dev: s.dev, ino: s.ino };
+      } catch {
+        return undefined;
       }
+    };
+    // Put back a folder moved aside from the skill's path, into the folder it came from. If it landed anywhere else (the
+    // path now leads elsewhere), take it out again: it stays in staging, named.
+    const putBack = (aside: string, id: Id | undefined, from: Id | undefined): never => {
+      if (!moved(aside, dest)) return refuse(aside);
+      if (anchored() || same(parentNow(), from)) return refuse();
+      return isCopy(lstatOf(dest), id) && moved(dest, aside) ? refuse(aside) : refuse();
+    };
+
+    const there = lstatOf(dest);
+    if (there?.isSymbolicLink()) throw new CatalogError('target_symlink', { path: dest });
+    let old: { path: string; id: Id | undefined; from: Id | undefined } | undefined;
+    if (!entry) {
+      if (there) throw new CatalogError('exists_untracked', { path: dest });
+    } else if (there) {
+      old = { path: `${tmp}-replaced`, id: undefined, from: parentNow() };
+      if (!moved(dest, old.path)) refuse();
+      const s = lstatOf(old.path);
+      old.id = s && { dev: s.dev, ino: s.ino };
+      const real = s !== undefined && s.isDirectory() && !s.isSymbolicLink();
+      const ours = real && (entry.copy === undefined || same(old.id, entry.copy));
+      if (!ours || !anchored()) putBack(old.path, old.id, old.from);
     }
-    try {
-      renameSync(tmp, dest);
-    } catch (e) {
-      if (old) renameSync(old, dest);
-      throw e;
+    if (!moved(tmp, dest)) return old ? putBack(old.path, old.id, old.from) : refuse();
+    // The new copy must be where it was meant to go. If not, take it back out; a replaced copy can't be put back safely
+    // then, so it stays in staging, named.
+    if (!anchored() || !isCopy(lstatOf(dest), copy)) {
+      if (isCopy(lstatOf(dest), copy)) moved(dest, tmp);
+      return refuse(old?.path);
     }
-    // Swapped between the two moves: the new copy went elsewhere, so take it back out; the old one stays in staging.
-    if (!same(idOf(skills), checked)) {
-      renameSync(dest, tmp);
-      throw changed();
-    }
-    if (old) rmSync(old, { recursive: true, force: true });
+    if (!old) return { copy };
+    // Deleted only when it's still the recorded copy; otherwise it's kept, and named.
+    if (entry?.copy === undefined || !isCopy(lstatOf(old.path), entry.copy)) return { copy, kept: old.path };
+    rmSync(old.path, { recursive: true, force: true });
+    return { copy };
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -289,14 +340,28 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
     const text = s.format(ctx.face === 'cli' ? w.held_cli : w.held, { name: req.name, version, reasons: reasons(s, flags), confirm, flags: JSON.stringify(kinds(flags)), command: acceptCommand(s, req.name, target) });
     return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held' };
   }
-  writeSkill(ctx, dest, to.files);
-  const entry = record(ctx, lock, dest, { name: req.name, target }, to, req.policy ?? existing?.policy, existing?.accepted ?? []);
+  const written = writeSkill(ctx, dest, to.files, existing);
+  const entry = record(ctx, lock, dest, { name: req.name, target }, to, req.policy ?? existing?.policy, existing?.accepted ?? [], written.copy);
   const w = s.word('install');
-  const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + '\n' + s.format(w.live, { name: req.name });
+  const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + keptLine(s, req.name, written.kept) + '\n' + s.format(w.live, { name: req.name });
   return { text, target: `${req.name} v${version}`, result: log.result('install', 'installed'), outcome: 'installed' };
 }
 
-function record(ctx: Context, lock: Lock, dest: string, at: { name: string; target: Target }, to: Side, policy: Policy | undefined, accepted: LockEntry['accepted']): LockEntry {
+/** An update's line for a skill whose folder failed a check: the reason worded per code, else shown as its data. */
+function refusedTarget(s: Surface, at: { name: string; from: number; to: number }, err: CatalogError): string {
+  const path = String(err.data['path']);
+  const reason = s.word('update.target_reason')?.[err.code];
+  return s.format(s.word('update.refused_target'), { ...at, path, reason: typeof reason === 'string' ? s.format(reason, { path }) : asData(err.code, err.data) });
+}
+
+/** The line naming where a replaced copy was kept (an entry recorded before identities were kept), or nothing. */
+function keptLine(s: Surface, name: string, kept: string | undefined): string {
+  if (kept === undefined) return '';
+  const w = s.word('update.kept_in_staging');
+  return '\n' + (typeof w === 'string' ? s.format(w, { name, staging: kept }) : asData('kept_in_staging', { name, staging: kept }));
+}
+
+function record(ctx: Context, lock: Lock, dest: string, at: { name: string; target: Target }, to: Side, policy: Policy | undefined, accepted: LockEntry['accepted'], copy: FolderId): LockEntry {
   const entry: LockEntry = {
     name: at.name,
     target: at.target,
@@ -308,6 +373,7 @@ function record(ctx: Context, lock: Lock, dest: string, at: { name: string; targ
     installed_at: ctx.now().toISOString(),
     catalog: ctx.settings.catalog,
     accepted,
+    copy,
   };
   lock.skills[dest] = entry;
   writeLock(ctx.settings.home, lock);
@@ -332,11 +398,12 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   if (to.fingerprint !== t.fingerprint) throw conflict();
   const flags = gate(existing ? await installedSide(catalog, existing) : null, to).risk_flags;
   if (!sameSet(req.flags, kinds(flags))) throw conflict();
-  writeSkill(ctx, dest, to.files);
-  const entry = record(ctx, lock, dest, { name: req.name, target: t.target }, to, existing?.policy, [...(existing?.accepted ?? []), { version: to.version, flags: kinds(flags) }]);
-  const text = existing
-    ? s.format(s.word('update.accepted'), { name: req.name, from: existing.version, to: to.version, path: quoted(dest) })
-    : s.format(s.word('install.installed_after_yes'), { name: req.name, version: to.version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) });
+  const written = writeSkill(ctx, dest, to.files, existing);
+  const entry = record(ctx, lock, dest, { name: req.name, target: t.target }, to, existing?.policy, [...(existing?.accepted ?? []), { version: to.version, flags: kinds(flags) }], written.copy);
+  const text =
+    (existing
+      ? s.format(s.word('update.accepted'), { name: req.name, from: existing.version, to: to.version, path: quoted(dest) })
+      : s.format(s.word('install.installed_after_yes'), { name: req.name, version: to.version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) })) + keptLine(s, req.name, written.kept);
   return { text, target: `${req.name} v${to.version}`, result: logWords(s).result('accept'), outcome: existing ? 'updated' : 'installed' };
 }
 
@@ -401,8 +468,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
       dest = checkTarget(ctx, e.target, e.name, lock);
     } catch (err) {
       if (!(err instanceof CatalogError)) throw err;
-      const path = String(err.data['path']);
-      lines.push(s.format(w.refused_target, { ...at, path, reason: s.format(w.target_reason[err.code], { path }) }));
+      lines.push(refusedTarget(s, at, err));
       continue;
     }
     let to: Side;
@@ -438,9 +504,17 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
       lines.push(s.format(w.would_update, { ...at, changes: changesOf(s, d) }));
       continue;
     }
-    writeSkill(ctx, dest, to.files);
-    record(ctx, lock, dest, e, to, e.policy, e.accepted);
-    lines.push(s.format(w.updated, { ...at, changes: changesOf(s, d) }));
+    // A folder that changed while it was being written is that skill's refused line; the other skills go on.
+    let written: ReturnType<typeof writeSkill>;
+    try {
+      written = writeSkill(ctx, dest, to.files, e);
+    } catch (err) {
+      if (!(err instanceof CatalogError)) throw err;
+      lines.push(refusedTarget(s, at, err));
+      continue;
+    }
+    record(ctx, lock, dest, e, to, e.policy, e.accepted, written.copy);
+    lines.push(s.format(w.updated, { ...at, changes: changesOf(s, d) }) + keptLine(s, e.name, written.kept));
     saw('updated');
   }
   if (unchanged) lines.push(s.format(w.unchanged, { n: unchanged }));
