@@ -1,5 +1,5 @@
-// The published schema (contract §1.1): docs/api/openapi.json is generated from the operations' definitions, checked in,
-// and fails here when it's out of date. No OpenAPI tooling is used: the structure is checked by hand below, and real
+// The published schemas (contract §1.1): docs/api/openapi.local.json (what serve runs) and openapi.hosted.json, both
+// generated from the operations' definitions, checked in, and failing here when out of date. No OpenAPI tooling is used: the structure is checked by hand below, and real
 // results, wrapped in the envelope, are checked against it with a small JSON Schema reader.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -12,36 +12,44 @@ import { historyVersion, loadGolden } from './golden.ts';
 import { errorOf, openTest, request } from './helpers.ts';
 
 const histories = loadGolden('histories.yaml');
-const FILE = join(import.meta.dirname, '..', '..', 'docs', 'api', 'openapi.json');
-const webRows = Object.values(OPERATIONS).filter((d) => d.faces.includes('web'));
+const WHERE = ['local', 'hosted'] as const;
+const FILE = (where: string) => join(import.meta.dirname, '..', '..', 'docs', 'api', `openapi.${where}.json`);
+const webRows = Object.values(OPERATIONS).filter((d) => d.faces.includes('web') && d.where === undefined);
 
 type Json = Record<string, any>;
-const doc = openapi() as Json;
+const doc = openapi('local') as Json;
+const hostedDoc = openapi('hosted') as Json;
 
-function resolve(ref: string): Json {
+function resolve(ref: string, d: Json = doc): Json {
   expect(ref.startsWith('#/')).toBe(true);
-  let node: any = doc;
+  let node: any = d;
   for (const part of ref.slice(2).split('/')) node = node?.[part];
   expect(node, `${ref} resolves`).toBeTypeOf('object');
   return node;
 }
-const deref = (s: Json): Json => (s.$ref ? resolve(s.$ref) : s);
+const deref = (s: Json, d: Json = doc): Json => (s.$ref ? resolve(s.$ref, d) : s);
 
 describe('the published schema is the definitions\' (contract §1.1)', () => {
-  it('the checked-in file is what `npm run schema` writes now', () => {
-    const onDisk = readFileSync(FILE, 'utf8');
-    expect(onDisk === openapiJson(), 'docs/api/openapi.json is out of date: run `npm run schema` in core/').toBe(true);
-    expect(JSON.parse(onDisk)).toEqual(doc);
+  it('the checked-in files are what `npm run schema` writes now', () => {
+    for (const where of WHERE) {
+      const onDisk = readFileSync(FILE(where), 'utf8');
+      expect(onDisk === openapiJson(where), `docs/api/openapi.${where}.json is out of date: run \`npm run schema\` in core/`).toBe(true);
+      expect(JSON.parse(onDisk)).toEqual(openapi(where));
+    }
   });
 
-  it('is OpenAPI 3.1, version 1.0.0, with the error list as data', () => {
-    expect(doc.openapi).toBe('3.1.0');
+  it('each is OpenAPI 3.1, version 1.0.0, with the error list as data', () => {
     expect(API_VERSION).toBe('1.0.0');
-    expect(doc.info.version).toBe(API_VERSION);
-    expect(doc.info.title).toBe('skills-catalog');
-    expect(doc.components.schemas.ErrorCode).toEqual({ type: 'string', enum: [...ERROR_CODES] });
-    expect(doc['x-error-codes']).toEqual([...ERROR_CODES]);
-    expect(doc['x-common-errors']).toEqual([...COMMON_ERRORS]);
+    for (const d of [doc, hostedDoc]) {
+      expect(d.openapi).toBe('3.1.0');
+      expect(d.info.version).toBe(API_VERSION);
+      expect(d.info.title).toBe('skills-catalog');
+      expect(d.components.schemas.ErrorCode).toEqual({ type: 'string', enum: [...ERROR_CODES] });
+      expect(d['x-error-codes']).toEqual([...ERROR_CODES]);
+      expect(d['x-common-errors']).toEqual([...COMMON_ERRORS]);
+    }
+    expect(doc['x-where']).toBe('local');
+    expect(hostedDoc['x-where']).toBe('hosted');
   });
 
   it('has one POST /api/v1/<name> per web-faced operation, and the files route; nothing else', () => {
@@ -57,21 +65,32 @@ describe('the published schema is the definitions\' (contract §1.1)', () => {
       const op = doc.paths[`/api/v1/${d.name}`].post;
       expect([d.name, op.operationId, op['x-effect'], op['x-faces'], op['x-errors']]).toEqual([d.name, d.name, d.effect, [...d.faces], [...d.errors]]);
       expect(op.security).toEqual([{ localToken: [] }]);
-      expect(op.parameters.map(deref).map((p: Json) => [p.in, p.name, p.required])).toEqual([['header', 'X-Skills-Catalog-As', false]]);
+      expect(op.parameters.map((s: Json) => deref(s)).map((p: Json) => [p.in, p.name, p.required])).toEqual([['header', 'X-Skills-Catalog-As', false]]);
       expect(op.requestBody.required).toBe(true);
       expect(Object.keys(op.requestBody.content)).toEqual(['application/json']);
       const input = deref(op.requestBody.content['application/json'].schema);
-      expect(input).toEqual(strict(inputSchema(d, 'web')));
+      expect(input).toEqual(strict(inputSchema(d, 'web', 'local')));
       for (const k of d.cliOnly ?? []) expect([d.name, k in input.properties]).toEqual([d.name, false]);
       expect(Object.keys(op.responses).sort()).toEqual(['200', '401', '403', '404', '415']);
     }
-    expect(doc.components.securitySchemes.localToken).toMatchObject({ type: 'apiKey', in: 'header', name: 'X-Skills-Catalog-Token' });
+    expect(doc.components.securitySchemes).toEqual({ localToken: expect.objectContaining({ type: 'apiKey', in: 'header', name: 'X-Skills-Catalog-Token' }) });
+  });
+
+  it('hosted, each operation takes a bearer token and no acting header, as the hosted form of its input sees it', () => {
+    for (const d of Object.values(OPERATIONS).filter((o) => o.faces.includes('web'))) {
+      const op = hostedDoc.paths[`/api/v1/${d.name}`].post;
+      expect([d.name, op.security, op.parameters]).toEqual([d.name, [{ bearer: [] }], undefined]);
+      expect(deref(op.requestBody.content['application/json'].schema, hostedDoc)).toEqual(strict(inputSchema(d, 'web', 'hosted')));
+      expect([d.name, Object.keys(op.responses).sort()]).toEqual([d.name, ['200', '401', '404', '415']]);
+    }
+    expect(hostedDoc.components.securitySchemes).toEqual({ bearer: expect.objectContaining({ type: 'http', scheme: 'bearer' }) });
+    expect(hostedDoc.components.parameters).toBeUndefined();
   });
 
   it('each answer is the envelope: {ok: true, data} with the output schema, or {ok: false, error} with its codes, and words beside', () => {
     for (const d of webRows) {
       const env = deref(doc.paths[`/api/v1/${d.name}`].post.responses['200'].content['application/json'].schema);
-      const [ok, err] = env.oneOf.map(deref);
+      const [ok, err] = env.oneOf.map((s: Json) => deref(s));
       expect(ok.properties.ok).toEqual({ const: true });
       expect(deref(ok.properties.data)).toEqual(d.output);
       expect(ok.required).toEqual(['ok', 'data']);
@@ -86,19 +105,26 @@ describe('the published schema is the definitions\' (contract §1.1)', () => {
     expect(doc.components.schemas.Words.additionalProperties).toBe(false);
   });
 
-  it('the files route: a 64-hex sha256; the bytes, a link, on its way or a 404, behind the same security', () => {
-    const get = doc.paths['/api/v1/files/{sha256}'].get;
-    expect(Object.keys(doc.paths['/api/v1/files/{sha256}'])).toEqual(['get']);
-    expect(get.parameters.map(deref)).toContainEqual({ name: 'sha256', in: 'path', required: true, schema: { type: 'string', pattern: '^[0-9a-f]{64}$' } });
-    expect(Object.keys(get.responses['200'].content)).toEqual(['application/octet-stream']);
-    expect(Object.keys(get.responses).sort()).toEqual(['200', '302', '401', '403', '404', '503']);
-    expect(Object.keys(get.responses['302'].headers).sort()).toEqual(['Cache-Control', 'Location']);
-    expect(Object.keys(get.responses['503'].headers)).toEqual(['Retry-After']);
-    expect(get.security).toEqual([{ localToken: [] }]);
-    expect([get['x-effect'], get['x-faces']]).toEqual(['reads', ['web']]);
+  it('the files route: a 64-hex sha256; locally the bytes, hosted a link or on its way; else a 404; behind each one\'s security', () => {
+    for (const d of [doc, hostedDoc]) {
+      const get = d.paths['/api/v1/files/{sha256}'].get;
+      expect(Object.keys(d.paths['/api/v1/files/{sha256}'])).toEqual(['get']);
+      expect(get.parameters).toEqual([{ name: 'sha256', in: 'path', required: true, schema: { type: 'string', pattern: '^[0-9a-f]{64}$' } }]);
+      expect([get['x-effect'], get['x-faces']]).toEqual(['reads', ['web']]);
+    }
+    const local = doc.paths['/api/v1/files/{sha256}'].get;
+    expect(Object.keys(local.responses).sort()).toEqual(['200', '401', '403', '404']);
+    expect(Object.keys(local.responses['200'].content)).toEqual(['application/octet-stream']);
+    expect(local.security).toEqual([{ localToken: [] }]);
+    const hosted = hostedDoc.paths['/api/v1/files/{sha256}'].get;
+    expect(Object.keys(hosted.responses).sort()).toEqual(['302', '401', '404', '503']);
+    expect(Object.keys(hosted.responses['302'].headers).sort()).toEqual(['Cache-Control', 'Location']);
+    expect(Object.keys(hosted.responses['503'].headers)).toEqual(['Retry-After']);
+    expect(hosted.security).toEqual([{ bearer: [] }]);
   });
 
-  it('is well formed: every $ref resolves, every component is used, every schema uses known words only and every object says whether it takes other fields', () => {
+  it.each(WHERE)('%s is well formed: every $ref resolves, every component is used, every schema uses known words only and every object says whether it takes other fields', (where) => {
+    const d = where === 'local' ? doc : hostedDoc;
     const used = new Set<string>();
     const problems: string[] = [];
     const walk = (node: unknown, at: string, inSchema: boolean): void => {
@@ -107,7 +133,7 @@ describe('the published schema is the definitions\' (contract §1.1)', () => {
       const n = node as Json;
       if (typeof n.$ref === 'string') {
         used.add(n.$ref);
-        resolve(n.$ref);
+        resolve(n.$ref, d);
         if (Object.keys(n).length !== 1) problems.push(`${at}: $ref with siblings`);
         return;
       }
@@ -119,12 +145,12 @@ describe('the published schema is the definitions\' (contract §1.1)', () => {
         else walk(v, `${at}.${k}`, childIsSchema);
       }
     };
-    walk(doc, '$', false);
+    walk(d, '$', false);
     expect(problems).toEqual([]);
     // ErrorCode is the whole list (§9) for a client to take as a type; each operation's own codes are narrower.
     const unused = ['#/components/schemas/ErrorCode'];
     for (const kind of ['schemas', 'parameters', 'responses'] as const) {
-      for (const key of Object.keys(doc.components[kind] ?? {})) {
+      for (const key of Object.keys(d.components[kind] ?? {})) {
         const at = `#/components/${kind}/${key}`;
         expect([at, used.has(at)]).toEqual([at, !unused.includes(at)]);
       }
