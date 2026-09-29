@@ -328,6 +328,46 @@ describe('folders another user could control are refused (target_not_private)', 
     expect(race.fs.existsSync(join(claude, 'skills', 'alpha', 'SKILL.md'))).toBe(true);
   });
 
+  // Homes the installer meets outside a desktop: root in a container (/root, 0700, uid 0: a uid that's 0 must still be
+  // compared, never read as "no uid") and a CI job's home made by mktemp (0700 inside a sticky, world-writable /tmp: only
+  // the home itself is held to the rule). Each installs when private and is refused when others can write it.
+  it('root\'s home in a container and a CI home made by mktemp: installed when private, refused when others can write them', async () => {
+    const homes: { what: string; as: number; mode: number; parent?: number }[] = [
+      { what: 'root in a container', as: 0, mode: 0o040700 },
+      { what: 'a CI home made by mktemp', as: uid, mode: 0o040700, parent: 0o041777 },
+    ];
+    const realUid = process.getuid!.bind(process);
+    const getuid = vi.spyOn(process, 'getuid');
+    try {
+      for (const h of homes) {
+        for (const open of [false, true]) {
+          const p = place();
+          await publish(p, 'alpha', 'Body.\n');
+          race.fs.mkdirSync(p.osHome, { recursive: true });
+          getuid.mockReturnValue(h.as);
+          // Everything in the sandbox is the acting user's, as it would be; the home and its parent have the modes above.
+          race.stats = (at) => {
+            if (!at.startsWith(p.dir)) return undefined;
+            const mode = at === p.osHome ? (open ? h.mode | 0o002 : h.mode) : at === join(p.osHome, '..') ? h.parent : undefined;
+            return { uid: h.as, ...(mode === undefined ? {} : { mode }) };
+          };
+          let r: unknown;
+          try {
+            r = await install(ctxFor(p), { name: 'alpha' }).catch((e: unknown) => e);
+          } finally {
+            clearHooks();
+            getuid.mockImplementation(realUid);
+          }
+          const label = `${h.what}${open ? ', world-writable' : ''}`;
+          if (open) expect([label, codeOf(r), refused(r).data]).toEqual([label, 'target_not_private', { path: p.osHome, target: 'user', home: true, own: true }]);
+          else expect([label, race.fs.existsSync(join(p.osHome, '.claude', 'skills', 'alpha', 'SKILL.md'))]).toEqual([label, true]);
+        }
+      }
+    } finally {
+      getuid.mockRestore();
+    }
+  });
+
   it('an assistant home reached through a link: the folder it leads to is the one checked', async () => {
     for (const mode of [0o777, 0o755]) {
       const p = place();
