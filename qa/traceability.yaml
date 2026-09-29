@@ -350,7 +350,7 @@ requirements:
       - {layer: interface, name: "--as, SKILLS_AS and the MCP server's config each set acting_as; every result carries it", auto: true}
       - {layer: interface, name: "the CLI prints exactly one line '(Acting as <developer>, for demo purposes.)', last, after every result and every error, and none in --json output", auto: true}
       - {layer: interface, name: "locally with no acting identity, a publish is unauthenticated and its sentence points to setup's me or --as", auto: true}
-      - {layer: interface, name: "a developer name follows the skill-name rule: --as with a space or a line feed is invalid_request {field: as, why: not_a_developer_name}; a bad SKILLS_AS, MCP config name or setup me is invalid_developer_setting {setting}, saying to fix the setting; nothing runs", golden: skills.one_line_fields, auto: true}
+      - {layer: interface, name: "a developer name follows the skill-name rule: --as with a space or a line feed is invalid_request {field: --as, why: not_a_developer_name} (a request field names itself); a bad SKILLS_AS, MCP config name or setup me is invalid_developer_setting {setting}, saying to fix the setting; nothing runs", golden: skills.one_line_fields, auto: true}
 
   - id: runs-from-readme
     source: {doc: prd, ref: "Constraints: self-contained, short README; the owner's answer on scope and delivery"}
