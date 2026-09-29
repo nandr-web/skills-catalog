@@ -1,0 +1,112 @@
+# The one-click demo's steps. Each ask is typed into a developer's pane; the stand-in assistant makes its calls on the
+# real catalog and prints the product's own words. `see` is what the person looks for (the steps pane); `expect` is the
+# text each pane must show for the step to count as seen (a developer id, steps or log). A planned call is a part that
+# isn't built yet: it prints why, dimmed, and changes nothing. Tool names come from the surface, never from here.
+# One file for both catalogs the stand-in can call (the catalog's MCP server, or the core in its own process with
+# qa demo --core): each expected text is a phrase both print, and the log's are the surface's log words, which both
+# write, so a step means the same whichever answers.
+developers:
+  - {id: ana, title: "Developer 1 · ana", skills: [release-note-draft-v1, release-note-draft-v2, sql-migrations]}
+  - {id: bob, title: "Developer 2 · bob", skills: [release-note-draft-bob]}
+steps:
+  - id: 1
+    title: both install the skill manager
+    see: "not in this demo: it wires each assistant to the catalog itself"
+    asks:
+      - who: ana
+        say: install the skill manager
+        calls: [{planned: setup, why: "not in this demo: it wires each assistant to the catalog itself"}]
+      - who: bob
+        say: install the skill manager
+        calls: [{planned: setup, why: "not in this demo: it wires each assistant to the catalog itself"}]
+
+  - id: 2
+    title: ana publishes release-note-draft and sql-migrations
+    see: '"Published release-note-draft v1 to the shared catalog", in ana''s pane'
+    asks:
+      - who: ana
+        say: publish my skills, release-note-draft and sql-migrations
+        calls:
+          - {op: publish, name: release-note-draft, folder: release-note-draft-v1, message: first version}
+          - {op: publish, name: sql-migrations, folder: sql-migrations, message: first version}
+    expect:
+      ana: [Published release-note-draft v1 to the shared catalog, Published sql-migrations v1 to the shared catalog]
+      log: [published, release-note-draft v1, sql-migrations v1]
+
+  - id: 3
+    title: bob finds it and installs it
+    see: '"1 of 2 skills match", then (on the catalog''s server) "Installed release-note-draft v1", in bob''s pane'
+    asks:
+      - who: bob
+        say: find me a skill for release changelogs
+        calls: [{op: search, query: changelog for a release}]
+      - who: bob
+        say: install it
+        calls: [{op: install, name: release-note-draft}]
+    expect:
+      bob: ['Shared catalog: 1 of 2 skills match "changelog for a release"', '- release-note-draft (v1, ana; tags: release, docs)']
+      log: [found, 1 of 2 match]
+    expect_server:
+      bob: [Installed release-note-draft v1]
+      log: [installed]
+
+  - id: 4
+    title: ana publishes v2, which adds a script
+    see: '"Review: includes something that can run (scripts/collect.sh)", in orange, in ana''s pane'
+    asks:
+      - who: ana
+        say: publish v2 of release-note-draft, it adds a script
+        calls: [{op: publish, name: release-note-draft, folder: release-note-draft-v2, message: add a script that lists merged PRs}]
+    expect:
+      ana: [Published release-note-draft v2 to the shared catalog, 'Review: includes something that can run (scripts/collect.sh).']
+      log: [published, release-note-draft v2]
+
+  - id: 5
+    title: bob compares v1 and v2
+    see: '"Can run something new on this machine: yes", in orange, in bob''s pane'
+    asks:
+      - who: bob
+        say: what changed in release-note-draft v2?
+        calls:
+          - {op: versions, name: release-note-draft}
+          - {op: diff, name: release-note-draft, from: 1, to: 2}
+    expect:
+      bob: ['release-note-draft: 2 version(s), latest v2', 'Can run something new on this machine: yes', '- added: scripts/collect.sh (can run)']
+      log: [listed, adds something that can run, release-note-draft v1 → v2]
+
+  - id: 6
+    title: bob publishes his fix over ana's skill
+    see: '"not_owner: release-note-draft belongs to ana", in bob''s pane'
+    asks:
+      - who: bob
+        say: publish my fix to release-note-draft
+        calls: [{op: publish, name: release-note-draft, folder: release-note-draft-bob, message: group by author too}]
+    expect:
+      bob: ['not_owner: release-note-draft belongs to ana', so nothing was published]
+      log: ['refused: not the owner']
+
+  - id: 7
+    title: bob searches for a graphql schema skill
+    see: 'nothing matches exactly; the closest only shares "schema"'
+    asks:
+      - who: bob
+        say: find a skill for a graphql schema
+        calls: [{op: search, query: graphql schema}]
+    expect:
+      bob: ['no skill matches every word of "graphql schema"', '- sql-migrations (v1, ana; shares only: schema)']
+      log: [closest only, 1 of 2 match]
+
+  - id: 8
+    title: an update that can run something new waits for bob
+    see: 'on the catalog''s server: bob''s update is held; he says y at "Take it? (y/N)" in his own pane'
+    asks:
+      - who: bob
+        say: update my skills
+        calls: [{op: update}]
+      - who: bob
+        say: skills-catalog update release-note-draft --accept
+        calls: [{op: accept, name: release-note-draft}]
+        then: [{type: y, after: Take it? (y/N)}]
+    expect_server:
+      bob: [was NOT installed, Take it? (y/N), Took the held update]
+      log: ['held: needs an OK', 'taken, with an OK']

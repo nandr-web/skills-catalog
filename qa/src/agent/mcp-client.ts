@@ -4,10 +4,12 @@ import { spawn, type ChildProcess } from 'node:child_process';
 
 export type McpClient = { request: (method: string, params?: unknown) => Promise<any>; close: () => void; init: any };
 
-/** `env` is the server's whole environment (nothing is added from this process), as the runs give it. */
-export async function connect(command: string[], env: Record<string, string>, o: { cwd?: string; timeoutMs?: number } = {}): Promise<McpClient> {
+/** `env` is the server's whole environment (nothing is added from this process), as the runs give it. `spawned` gets the
+ *  server's process as soon as it starts, before it answers: a caller that must stop it at any moment (on exit) can. */
+export async function connect(command: string[], env: Record<string, string>, o: { cwd?: string; timeoutMs?: number; spawned?: (p: ChildProcess) => void } = {}): Promise<McpClient> {
   const timeoutMs = o.timeoutMs ?? 30_000;
   const p: ChildProcess = spawn(command[0], command.slice(1), { env, cwd: o.cwd, stdio: ['pipe', 'pipe', 'pipe'] });
+  o.spawned?.(p);
   const waiting = new Map<number, { ok: (v: any) => void; no: (e: Error) => void }>();
   let buf = '', err = '', next = 1, dead: Error | undefined;
   const fail = (e: Error) => { dead ??= e; for (const w of waiting.values()) w.no(e); waiting.clear(); };
@@ -25,6 +27,7 @@ export async function connect(command: string[], env: Record<string, string>, o:
   });
   p.on('exit', (code) => fail(new Error(`the server exited (${code})${err ? `: ${err.trim().split('\n').slice(-3).join(' ')}` : ''}`)));
   p.on('error', (e) => fail(e));
+  p.stdin!.on('error', (e) => fail(e));   // a server that ended: writing to it fails (EPIPE), as every call's error
   const request = (method: string, params?: unknown) => new Promise<any>((ok, no) => {
     if (dead) return no(dead);
     const id = next++;

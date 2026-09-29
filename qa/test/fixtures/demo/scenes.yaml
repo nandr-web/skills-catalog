@@ -1,0 +1,26 @@
+# A tiny scene file for qa demo's tests (the real one is qa/demo/scenes.yaml); test/fixtures/demo/pane.mjs answers it.
+developers:
+  - {id: ana, title: "Developer 1 · ana", skills: [hello]}
+  - {id: bob, title: "Developer 2 · bob", skills: []}
+steps:
+  - id: 1
+    title: both set up
+    see: the setup, which arrives with the installer
+    asks:
+      - {who: ana, say: set me up, calls: [{planned: setup, why: arrives with the installer}]}
+      - {who: bob, say: set me up, calls: [{planned: setup, why: arrives with the installer}]}
+  - id: 2
+    title: ana publishes hello
+    see: '"published hello as ana"'
+    asks:
+      - who: ana
+        say: publish my skill, hello
+        calls:
+          - {op: publish, name: hello, folder: hello, message: first version}
+    expect: {ana: ["published hello as ana"], log: ["publish"]}
+  - id: 3
+    title: bob looks for it
+    see: the search, in bob's pane
+    asks:
+      - {who: bob, say: find a skill that says hello, calls: [{op: search, query: hello}]}
+    expect: {bob: ["search done"], steps: ["▶ 3  bob looks for it"]}

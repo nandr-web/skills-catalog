@@ -1,0 +1,14 @@
+# A scene that promises a line the product never prints: the step must be missed.
+developers:
+  - {id: ana, title: "Developer 1 · ana", skills: [hello]}
+  - {id: bob, title: "Developer 2 · bob", skills: []}
+steps:
+  - id: 1
+    title: ana publishes hello
+    see: a line the product never prints
+    asks:
+      - who: ana
+        say: publish my skill, hello
+        calls:
+          - {op: publish, name: hello, folder: hello, message: first version}
+    expect: {ana: ["published hello as ana", "a line the product never prints"]}

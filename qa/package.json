@@ -12,6 +12,7 @@
   },
   "scripts": {
     "qa": "node src/cli.ts",
+    "demo": "node src/cli.ts demo",
     "test": "vitest run --project fast",
     "test:slow": "vitest run --project slow --passWithNoTests",
     "test:all": "vitest run",

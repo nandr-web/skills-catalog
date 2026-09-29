@@ -33,6 +33,28 @@ describe('the QA tools\' own guards', () => {
   });
 
 
+  it('only src/demo/tmux.ts starts tmux, every server call on the demo\'s own socket with no config; the pane programs start only the catalog\'s own', () => {
+    // a PATH can't keep tmux from the panes (on Linux /usr/bin/tmux is on theirs): the demo's code is what never calls it
+    expect(using(src, /spawn(Sync)?\(\s*(BIN|bin|'tmux'|"tmux")\b/)).toEqual(['src/demo/tmux.ts']);
+    const tmux = readFileSync(dir('../src/demo/tmux.ts'), 'utf8');
+    expect(tmux).toContain("const BASE = ['-S', SOCKET, '-f', '/dev/null', '-u'];");
+    const calls = [...tmux.matchAll(/\bspawn(?:Sync)?\(\s*(\w+),\s*\[([^\]]*)\]/g)];
+    expect(calls.length).toBeGreaterThanOrEqual(5);
+    for (const [call, bin, args] of calls) {
+      if (bin === 'bin') expect(args, call).toBe("'-V'");   // the version check, which starts no server
+      else expect(`${bin} ${args}`, call).toMatch(/^BIN \.\.\.BASE\b/);
+    }
+    const panes = src.filter((f) => /src\/demo\/(assistant|steps-view)\.ts$/.test(f));
+    expect(panes.map(rel).sort()).toEqual(['src/demo/assistant.ts', 'src/demo/steps-view.ts']);
+    // the steps view starts nothing; a stand-in starts only the catalog's own programs, by the command the demo gives it
+    // (DEMO_MCP): its MCP server (through the MCP client) and its command line
+    expect(using(panes.filter((f) => f.endsWith('steps-view.ts')), /child_process/)).toEqual([]);
+    const standIn = readFileSync(dir('../src/demo/assistant.ts'), 'utf8');
+    expect(standIn).not.toMatch(/(?<![.\w])(exec|execSync|execFile|execFileSync|fork|spawnSync)\(/);   // a RegExp's .exec is no process
+    for (const [call] of standIn.matchAll(/\bspawn\([^,]*,/g)) expect(call).toBe('spawn(cli[0]!,');
+    expect([...standIn.matchAll(/\bconnect\(([^,]*),/g)].map((m) => m[1])).toEqual(['o.command']);
+  });
+
   it('only the live scripts, run by those helpers in a child process, use the real machine outside src/', () => {
     // safe-delete.test.ts only checks that it refuses in a test process
     expect(using(tests.filter((f) => !f.endsWith('meta.test.ts')), /realMachine\(\)/)).toEqual(['test/live/person-check.ts', 'test/safe-delete.test.ts']);

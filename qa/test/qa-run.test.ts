@@ -134,7 +134,7 @@ describe('qa run on the command line', () => {
     expect(code, err).toBe(0);
     expect(existsSync(err.match(/sandbox (\S+)/)![1])).toBe(false);
     expect(compare(before, snapshot(every))).toEqual([]);
-    expect(err).toMatch(/nothing left behind/);
+    expect(err).toMatch(process.platform === 'darwin' ? /nothing left behind/ : /processes not checked on this system yet/);
   });
 
 });
