@@ -244,7 +244,8 @@ accept_cases:
 # config.json holding {"update_policy": "auto"}, then `damage` rewrites one of them. `entry.<field>` changes that field of
 # the one lock entry and nothing else. Then every command in `commands` refuses with the expected error, and afterwards:
 # the damaged file is byte-identical (never repaired or replaced), no skill folder changed, no other file in $SKILLS_HOME
-# changed, and no output (sentence, JSON, log line) contains QA-SENTINEL-$RUN_ID, planted inside each damaged file where
+# changed but the day's usage file and the activity log, which gain the call's line (a refused call is counted: `use` with
+# its error code, §3), and no output (sentence, JSON, log line) contains QA-SENTINEL-$RUN_ID, planted inside each damaged file where
 # JSON allows it. path = the file's full path. teardown still runs (exit 0); the session-start hook exits 0 and prints
 # exactly one line, fixed words naming the file. `ok_cases` are not damage: the commands work as usual.
 # config.json's keys are exactly §6's (contract 80fc7a14): any other key is wrong_shape with `key` naming the first one in
