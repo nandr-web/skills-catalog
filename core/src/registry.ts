@@ -24,6 +24,7 @@ export const MAX_SEARCH_LIMIT = 50;
 export const DEFAULT_SEARCH_LIMIT = 10;
 export const MAX_READ_NAMES = 20;
 export const VERSIONS_PAGE = 50;
+export const MAX_READ_PATHS = 20;
 
 const name = { type: 'string', maxLength: 200 } as const;
 const version = { type: 'integer', minimum: 1 } as const;
@@ -65,6 +66,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
         names: { type: 'array', items: name, maxItems: MAX_READ_NAMES },
         version,
         include: { type: 'string', enum: ['manifest', 'files', 'contents'] },
+        paths: { type: 'array', items: { type: 'string', maxLength: 4096 }, maxItems: MAX_READ_PATHS },
       },
     },
   },

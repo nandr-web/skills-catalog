@@ -2,7 +2,7 @@
 // content and the CLI's stdout. Every sentence comes from the surface; a result the surface has no words for yet
 // is listed in WORD_GAPS and rendered as its data, never as hand-written prose.
 
-import type { DiffResult, ReadEntry, ReadItem, SearchResult, VersionsResult } from './catalog.ts';
+import type { DiffResult, InlineBudget, ReadItem, ReadResult, SearchResult, VersionsResult } from './catalog.ts';
 import { CatalogError } from './errors.ts';
 import type { RiskFlag } from './skill-tree/index.ts';
 import type { Surface } from './surface.ts';
@@ -54,28 +54,38 @@ function fenced(open: string, close: string, text: string): string[] {
   return [open, ...body, close];
 }
 
-function renderItem(s: Surface, item: ReadItem, body: string): string {
+// A path shown outside a fence is JSON-quoted, so a publisher's file name reads as a name and nothing else.
+const quoted = (path: string) => JSON.stringify(path);
+const kb = (bytes: number) => `${Math.ceil(bytes / 1024)} KB`;
+
+function renderItem(s: Surface, item: ReadItem, body: string, budget?: InlineBudget): string {
   const w = s.word('get');
   const lines = [
     s.format(w.header, { name: item.name, version: item.version, latest_mark: item.version === item.latest_version ? w.latest_mark.latest : s.format(w.latest_mark.older, { latest: item.latest_version }), publisher: item.publisher, published_at: item.published_at }),
     s.format(w.data_note, { publisher: item.publisher }),
     ...fenced(w.fence[0], w.fence[1], body),
   ];
-  if (item.files) lines.push(s.format(w.files, { files: list(item.files.map((f) => `${f.path} (${f.size} B)`)) }));
-  // Other text files get the same fence as SKILL.md, with their own path.
+  if (item.files) lines.push(s.format(w.files, { files: list(item.files.map((f) => `${quoted(f.path)} (${f.size} B)`)) }));
+  // Other text files get the same fence as SKILL.md, with their own path (a replacer, so `$` in a path stays literal).
   for (const f of item.files ?? []) {
-    if (f.content !== undefined && f.path !== 'SKILL.md') lines.push(...fenced(w.fence[0].replace('SKILL.md', f.path), w.fence[1].replace('SKILL.md', f.path), f.content));
+    if (f.content !== undefined && f.path !== 'SKILL.md') {
+      lines.push(...fenced(w.fence[0].replace('SKILL.md', () => quoted(f.path)), w.fence[1].replace('SKILL.md', () => quoted(f.path)), f.content));
+    }
+  }
+  const omitted = (item.files ?? []).filter((f) => f.content_omitted);
+  if (omitted.length && budget) {
+    lines.push(s.format(w.omitted, { used: kb(budget.used), limit: kb(budget.limit), files: list(omitted.map((f) => quoted(f.path))), name: item.name }));
   }
   lines.push(s.format(w.next, { name: item.name }));
   return lines.join('\n');
 }
 
 // `skillMd` gives each item's SKILL.md as published.
-export function renderRead(s: Surface, r: { skills: ReadEntry[] }, skillMd: (item: ReadItem) => string): string {
+export function renderRead(s: Surface, r: ReadResult, skillMd: (item: ReadItem) => string): string {
   if (!s.guided) return JSON.stringify(r);
   return r.skills
     .map((e) => {
-      if (!('error' in e)) return renderItem(s, e, skillMd(e));
+      if (!('error' in e)) return renderItem(s, e, skillMd(e), r.inline_budget);
       const { code, ...data } = e.error;
       return renderError(s, new CatalogError(code as CatalogError['code'], data));
     })

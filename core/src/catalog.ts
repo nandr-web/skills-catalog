@@ -30,9 +30,15 @@ export interface CatalogConfig {
   limits: Limits;
   capabilityKeys: readonly string[];
   commonWords: readonly string[];
+  readInlineBudget: number; // bytes of text one read inlines (contract §2: 24 KB keeps a result under 8,000 tokens)
 }
 
-export const DEFAULT_CONFIG: CatalogConfig = { limits: DEFAULT_LIMITS, capabilityKeys: DEFAULT_CAPABILITY_KEYS, commonWords: COMMON_WORDS };
+export const DEFAULT_CONFIG: CatalogConfig = {
+  limits: DEFAULT_LIMITS,
+  capabilityKeys: DEFAULT_CAPABILITY_KEYS,
+  commonWords: COMMON_WORDS,
+  readInlineBudget: 24 * 1024,
+};
 
 export interface CatalogPorts {
   storage: Storage;
@@ -77,6 +83,7 @@ export interface ReadInput {
   names?: string[];
   version?: number;
   include?: 'manifest' | 'files' | 'contents';
+  paths?: string[];
 }
 
 export interface ReadFile {
@@ -86,6 +93,13 @@ export interface ReadFile {
   sha256: string;
   type: 'text' | 'binary';
   content?: string;
+  content_omitted?: boolean;
+}
+
+export interface InlineBudget {
+  limit: number;
+  used: number;
+  omitted: number;
 }
 
 export interface ReadItem {
@@ -101,6 +115,11 @@ export interface ReadItem {
 }
 
 export type ReadEntry = ReadItem | { name: string; error: Record<string, unknown> & { code: string } };
+
+export interface ReadResult {
+  skills: ReadEntry[];
+  inline_budget?: InlineBudget; // with include: contents
+}
 
 export interface VersionsResult {
   name: string;
@@ -285,12 +304,15 @@ export class Catalog {
   }
 
   // read_shared_skill
-  async read(input: unknown): Promise<{ skills: ReadEntry[] }> {
+  async read(input: unknown): Promise<ReadResult> {
     const req = validateInput<ReadInput>('read_shared_skill', input);
     if (req.name !== undefined && req.names !== undefined) throw new CatalogError('invalid_request', { field: 'names', why: 'name_and_names' });
+    if (req.paths !== undefined && req.name === undefined) throw new CatalogError('invalid_request', { field: 'paths', why: 'paths_need_one_name' });
     const wanted = req.names ?? (req.name !== undefined ? [req.name] : []);
     if (wanted.length === 0) throw new CatalogError('invalid_request', { field: 'name', why: 'required' });
-    const include = req.include ?? 'manifest';
+    // Asking for particular files means reading them.
+    const include = req.include ?? (req.paths !== undefined ? 'contents' : 'manifest');
+    const texts = new Map<ReadFile, Uint8Array>();
     const one = async (name: string): Promise<ReadItem> => {
       const { record, latest } = await this.versionOf(name, req.version);
       const tree = await this.tree(record);
@@ -305,27 +327,64 @@ export class Catalog {
         manifest: { frontmatter: md.frontmatter, body: md.body },
         reviews: [],
       };
+      let shown = tree;
+      if (req.paths !== undefined) {
+        const byPath = new Map(tree.map((f) => [f.path, f]));
+        shown = req.paths.map((p) => {
+          const f = byPath.get(p.normalize('NFC'));
+          if (!f) throw new CatalogError('not_found', { name, version: record.version, path: p, suggestions: [] });
+          return f;
+        });
+      }
       if (include !== 'manifest') {
-        item.files = tree.map((f) => {
+        item.files = shown.map((f) => {
           const text = isText(f.bytes);
           const file: ReadFile = { path: f.path, mode: f.mode, size: f.bytes.byteLength, sha256: sha256Hex(f.bytes), type: text ? 'text' : 'binary' };
-          if (include === 'contents' && text) file.content = decodeText(f.bytes);
+          if (include === 'contents' && text) texts.set(file, f.bytes);
           return file;
         });
       }
       return item;
     };
-    if (req.names === undefined) return { skills: [await one(wanted[0]!)] };
     const skills: ReadEntry[] = [];
-    for (const name of wanted) {
-      try {
-        skills.push(await one(name));
-      } catch (e) {
-        if (!(e instanceof CatalogError)) throw e;
-        skills.push({ name, error: e.toJSON() as Record<string, unknown> & { code: string } });
+    if (req.names === undefined) skills.push(await one(wanted[0]!));
+    else {
+      for (const name of wanted) {
+        try {
+          skills.push(await one(name));
+        } catch (e) {
+          if (!(e instanceof CatalogError)) throw e;
+          skills.push({ name, error: e.toJSON() as Record<string, unknown> & { code: string } });
+        }
       }
     }
-    return { skills };
+    if (include !== 'contents') return { skills };
+    return { skills, inline_budget: this.inline(skills, texts) };
+  }
+
+  // A read inlines at most the configured budget of text (contract §2), each file whole or not at all: first every
+  // skill's SKILL.md in the order asked, then the other text files by path. A file that doesn't fit is marked
+  // content_omitted, and later smaller files may still fit.
+  private inline(skills: ReadEntry[], texts: Map<ReadFile, Uint8Array>): InlineBudget {
+    const limit = this.config.readInlineBudget;
+    const items = skills.filter((e): e is ReadItem => !('error' in e));
+    const order = [
+      ...items.flatMap((i) => (i.files ?? []).filter((f) => f.path === MANIFEST)),
+      ...items.flatMap((i) => (i.files ?? []).filter((f) => f.path !== MANIFEST)),
+    ].filter((f) => texts.has(f));
+    let used = 0;
+    let omitted = 0;
+    for (const f of order) {
+      const bytes = texts.get(f)!;
+      if (used + bytes.byteLength <= limit) {
+        f.content = decodeText(bytes);
+        used += bytes.byteLength;
+      } else {
+        f.content_omitted = true;
+        omitted++;
+      }
+    }
+    return { limit, used, omitted };
   }
 
   // list_shared_skill_versions

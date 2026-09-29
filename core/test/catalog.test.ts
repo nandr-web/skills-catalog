@@ -61,12 +61,52 @@ describe('round trip: fetch and read give back exactly what was published', () =
       const read = (await catalog.read({ name, include: 'contents' })).skills[0] as ReadItem;
       for (const f of read.files!) {
         const src = files.find((x) => x.path.normalize('NFC') === f.path)!;
-        if (f.type === 'text') expect(Buffer.from(f.content!, 'utf8').equals(Buffer.from(src.bytes)), `${key} ${f.path}`).toBe(true);
+        // Text past the read's inline budget is left out whole (fetch above already checked every byte).
+        if (f.type === 'text' && !f.content_omitted) expect(Buffer.from(f.content!, 'utf8').equals(Buffer.from(src.bytes)), `${key} ${f.path}`).toBe(true);
         else expect(f.content).toBeUndefined();
       }
     }
     const bin = (await catalog.read({ name: 'binary-file', include: 'contents' })).skills[0] as ReadItem;
     expect(bin.files!.find((f) => f.path === 'logo.png')!.type).toBe('binary');
+  });
+
+  it('a read inlines at most 24 KB: each file whole or omitted, SKILL.md first, and paths[] reads the rest', async () => {
+    const { catalog } = await openTest();
+    const kb = (n: number, c: string) => c.repeat(n * 1024);
+    const md = (name: string, body: string) => `---\nname: ${name}\ndescription: A skill with big files.\n---\n${body}\n`;
+    const files = (name: string, body: string, extra: Record<string, string>) =>
+      [{ path: 'SKILL.md', bytes: md(name, body) }, ...Object.entries(extra).map(([path, bytes]) => ({ path, bytes }))].map((f) => ({
+        path: f.path,
+        mode: '0644',
+        content_base64: Buffer.from(f.bytes).toString('base64'),
+      }));
+    await catalog.publish({ name: 'big-one', files: files('big-one', kb(10, 'a'), { 'a.md': kb(12, 'b'), 'b.md': kb(4, 'c'), 'c.md': kb(1, 'd') }) }, actAs('ana'));
+    await catalog.publish({ name: 'big-two', files: files('big-two', kb(8, 'e'), {}) }, actAs('ana'));
+
+    // One skill: SKILL.md (10 KB) first, then by path: a.md (12 KB) fits (22), b.md (4 KB) doesn't, c.md (1 KB) still does.
+    const r = await catalog.read({ name: 'big-one', include: 'contents' });
+    const byPath = Object.fromEntries((r.skills[0] as ReadItem).files!.map((f) => [f.path, f]));
+    expect(byPath['SKILL.md']!.content).toBeDefined();
+    expect(byPath['a.md']!.content).toBeDefined();
+    expect(byPath['b.md']).toMatchObject({ content_omitted: true });
+    expect(byPath['b.md']!.content).toBeUndefined();
+    expect(byPath['c.md']!.content).toBeDefined();
+    expect(r.inline_budget).toEqual({ limit: 24 * 1024, used: (r.inline_budget!.used), omitted: 1 });
+    expect(r.inline_budget!.used).toBeLessThanOrEqual(24 * 1024);
+
+    // Several skills: every SKILL.md first, in the order asked, before any other file.
+    const both = await catalog.read({ names: ['big-two', 'big-one'], include: 'contents' });
+    const [two, one] = both.skills as ReadItem[];
+    expect(two!.files!.find((f) => f.path === 'SKILL.md')!.content).toBeDefined();
+    expect(one!.files!.find((f) => f.path === 'SKILL.md')!.content).toBeDefined();
+    expect(one!.files!.find((f) => f.path === 'a.md')!.content_omitted).toBe(true);
+
+    // paths[]: only those files, read whole; with names, or a path the version doesn't have, it's refused.
+    const rest = await catalog.read({ name: 'big-one', paths: ['b.md'] });
+    expect((rest.skills[0] as ReadItem).files!.map((f) => [f.path, f.content?.length])).toEqual([['b.md', 4 * 1024]]);
+    expect((await errorOf(() => catalog.read({ names: ['big-one'], paths: ['b.md'] }))).data).toMatchObject({ field: 'paths' });
+    expect((await errorOf(() => catalog.read({ name: 'big-one', paths: ['nope.md'] }))).data).toMatchObject({ path: 'nope.md' });
+    expect((await errorOf(() => catalog.read({ name: 'big-one', paths: Array.from({ length: 21 }, (_, i) => `f${i}`) }))).data).toMatchObject({ field: 'paths', limit: 20 });
   });
 
   it('read with a version gives that version and the latest; catalog_size counts names, not versions', async () => {
