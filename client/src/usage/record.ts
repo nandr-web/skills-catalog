@@ -33,9 +33,9 @@ export type UsageEvent =
   | { event: 'look'; skill: string; version: number; face: 'cli' | 'assistant' | 'web' }
   | { event: 'answer'; skill: string; version: number; answer: 'yes' | 'no' | 'pin' | 'superseded'; together: number }
   | { event: 'policy'; from: Policy; to: Policy; scope: 'catalog' | 'skill'; near_hold: boolean }
-  // At each sync, so it doubles as the count of syncs (a hook's sync is a session). The mode comes once the installer
-  // detects permissive modes (contract §5.3); until then the event has only its face.
-  | { event: 'mode'; mode?: 'default' | 'auto' | 'bypass' | 'sandbox_auto_allow' | 'broad_bash_rule'; face: 'hook' | 'mcp' | 'update' }
+  // At each sync, so it doubles as the count of syncs (a hook's sync is a session), with the permissive mode Claude Code's
+  // settings turn on (contract §5.3): `unknown` when a settings file couldn't be used.
+  | { event: 'mode'; mode?: 'default' | 'auto' | 'bypass' | 'sandbox_auto_allow' | 'broad_bash_rule' | 'unknown'; face: 'hook' | 'mcp' | 'update' }
   // One per operation: the API's name and a result code ("ok", an outcome such as a search's "none", or an error
   // code). Never the query, a name or a path.
   | { event: 'use'; op: string; result: string };
@@ -59,7 +59,7 @@ const FIELDS: Record<UsageEvent['event'], Record<string, Check>> = {
   look: { skill, version, face: oneOf('cli', 'assistant', 'web') },
   answer: { skill, version, answer: oneOf('yes', 'no', 'pin', 'superseded'), together: (v) => count(v) && (v as number) >= 1 },
   policy: { from: oneOf(...POLICIES), to: oneOf(...POLICIES), scope: oneOf('catalog', 'skill'), near_hold: (v) => typeof v === 'boolean' },
-  mode: { face: oneOf('hook', 'mcp', 'update'), mode: optional(oneOf('default', 'auto', 'bypass', 'sandbox_auto_allow', 'broad_bash_rule')) },
+  mode: { face: oneOf('hook', 'mcp', 'update'), mode: optional(oneOf('default', 'auto', 'bypass', 'sandbox_auto_allow', 'broad_bash_rule', 'unknown')) },
   use: { op: oneOf(...Object.keys(OPERATIONS)), result: code },
 };
 

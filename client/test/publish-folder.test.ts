@@ -30,7 +30,7 @@ function folder(p: Place, name: string, files: Record<string, string | { text: s
 }
 
 function ctxFor(p: Place, as: string | undefined, face: 'mcp' | 'cli' = 'mcp'): Context {
-  const settings = settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, ...(as ? { SKILLS_AS: as } : {}) });
+  const settings = settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_MANAGED_SETTINGS: p.managed, ...(as ? { SKILLS_AS: as } : {}) });
   return contextFor(settings, S, face).ctx;
 }
 

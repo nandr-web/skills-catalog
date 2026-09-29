@@ -51,7 +51,7 @@ const RAISES: Record<string, (files: File[]) => File[]> = {
 const v2For = (flags: string[]): File[] => flags.reduce((f, k) => RAISES[k]!(f), [v1[0]!, { path: 'notes.md', text: 'Step one.\nStep two.\n' }]);
 const unsupported = (r: Row) => r.flags.filter((k) => !RAISES[k]);
 
-const ctxFor = (p: Place): Context => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), S, 'mcp').ctx;
+const ctxFor = (p: Place): Context => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project')), S, 'mcp').ctx;
 const dest = (p: Place) => join(p.osHome, '.claude', 'skills', NAME);
 
 async function publish(p: Place, files: File[]): Promise<void> {

@@ -14,13 +14,14 @@ const CLI = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
  *  server, so a plain unit test keeps the default and still fails fast if it hangs. */
 export const PROCESS_TEST_MS = 30_000;
 
-/** A place for one test: the server's SKILLS_HOME, the local catalog's folder and an OS home, all in one sandbox. */
-export type Place = { dir: string; home: string; catalogDir: string; catalogUrl: string; osHome: string };
+/** A place for one test: the server's SKILLS_HOME, the local catalog's folder, an OS home and a folder standing in for
+ *  Claude Code's managed settings (never the machine's own), all in one sandbox. */
+export type Place = { dir: string; home: string; catalogDir: string; catalogUrl: string; osHome: string; managed: string };
 
 export function place(): Place {
   const dir = sandbox();
   const catalogDir = join(dir, 'catalog');
-  return { dir, home: join(dir, 'skills-home'), catalogDir, catalogUrl: pathToFileURL(catalogDir).href, osHome: join(dir, 'os-home') };
+  return { dir, home: join(dir, 'skills-home'), catalogDir, catalogUrl: pathToFileURL(catalogDir).href, osHome: join(dir, 'os-home'), managed: join(dir, 'managed-settings') };
 }
 
 export type ToolResult = { content: { type: string; text: string }[]; isError?: boolean };
@@ -56,11 +57,12 @@ export function startServer(p: Place, env: Record<string, string> = {}): Server 
     HOME: p.osHome,
     SKILLS_HOME: p.home,
     SKILLS_CATALOG: p.catalogUrl,
+    SKILLS_MANAGED_SETTINGS: p.managed,
     // Not UTC, so a local time anywhere (the activity log's clock) differs from UTC even on a machine set to UTC.
     TZ: 'Asia/Kolkata',
     ...env,
   };
-  for (const k of ['HOME', 'SKILLS_HOME', 'SKILLS_ACTIVITY_LOG', 'SKILLS_ASSISTANT_HOME'] as const) if (full[k] !== undefined) refuseRealPlaces(full[k]);
+  for (const k of ['HOME', 'SKILLS_HOME', 'SKILLS_ACTIVITY_LOG', 'SKILLS_ASSISTANT_HOME', 'SKILLS_MANAGED_SETTINGS'] as const) if (full[k] !== undefined) refuseRealPlaces(full[k]);
   if (full['SKILLS_CATALOG']!.startsWith('file:')) refuseRealPlaces(fileURLToPath(full['SKILLS_CATALOG']!));
 
   const child = spawn(process.execPath, [CLI, 'mcp'], { env: full, cwd: p.dir, stdio: ['pipe', 'pipe', 'pipe'] });

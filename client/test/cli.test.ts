@@ -267,7 +267,7 @@ describe('the CLI face', () => {
   it('the real command: results on stdout with exit 0, a person-only step with no terminal on stderr with exit 3', async () => {
     const p = place();
     await seed(p);
-    const env = { PATH: process.env['PATH'] ?? '/usr/bin:/bin', HOME: p.osHome, SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl };
+    const env = { PATH: process.env['PATH'] ?? '/usr/bin:/bin', HOME: p.osHome, SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_MANAGED_SETTINGS: p.managed };
     for (const v of [env.HOME, env.SKILLS_HOME]) refuseRealPlaces(v);
     const bin = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
     // As the installed command starts it: node:sqlite's experimental warning is off, so stderr carries only our words.

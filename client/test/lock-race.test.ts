@@ -19,7 +19,7 @@ describe('the lock file', () => {
   const S = Words.load();
   const install = MACHINE_RUNS['install_shared_skill']!;
   const ctxFor = (p: Place, now?: () => Date): Context => {
-    const { ctx } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), S, 'mcp');
+    const { ctx } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project')), S, 'mcp');
     return now ? { ...ctx, now } : ctx;
   };
   const lockPath = (p: Place) => join(p.home, 'lock.json.lock');

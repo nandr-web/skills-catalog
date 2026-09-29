@@ -54,7 +54,7 @@ function plant(dir: string, files: Record<string, any>, p: Place): void {
   }
 }
 
-const ctxFor = (p: Place, home = p.home) => contextFor(settingsFrom({ SKILLS_HOME: home, SKILLS_CATALOG: p.catalogUrl, SKILLS_AS: AS }), S, 'mcp').ctx;
+const ctxFor = (p: Place, home = p.home) => contextFor(settingsFrom({ SKILLS_HOME: home, SKILLS_CATALOG: p.catalogUrl, SKILLS_MANAGED_SETTINGS: p.managed, SKILLS_AS: AS }), S, 'mcp').ctx;
 
 // The values a preview gives for step 2, read from its words.
 function step2Of(text: string) {

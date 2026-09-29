@@ -16,7 +16,7 @@ export const update = MACHINE_RUNS['update_installed_skills']!;
 export const accept = MACHINE_RUNS['accept_held_update']!;
 
 export const ctxFor = (p: Place, wrap?: (c: Catalog) => Catalog) => {
-  const { ctx } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), S, 'mcp');
+  const { ctx } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project')), S, 'mcp');
   return wrap ? { ...ctx, catalog: async () => wrap(await ctx.catalog()) } : ctx;
 };
 

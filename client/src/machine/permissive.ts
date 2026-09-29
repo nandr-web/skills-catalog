@@ -27,25 +27,26 @@ const isString = (v: unknown) => typeof v === 'string';
 const isBoolean = (v: unknown) => typeof v === 'boolean';
 // Each setting this check reads, by its dotted name, and the type it must have when it's set.
 const isStrings = (a: unknown) => Array.isArray(a) && a.every(isString);
-const BLOCKS: Record<string, Record<string, (x: unknown) => boolean>> = {
-  permissions: { defaultMode: isString, allow: isStrings, disableBypassPermissionsMode: isString, disableAutoMode: isString },
+// The narrowing keys are read from managed settings only; anywhere else they're ignored, as any other key is.
+const BLOCKS = (managed: boolean): Record<string, Record<string, (x: unknown) => boolean>> => ({
+  permissions: { defaultMode: isString, allow: isStrings, ...(managed ? { disableBypassPermissionsMode: isString, disableAutoMode: isString } : {}) },
   sandbox: { enabled: isBoolean, autoAllowBashIfSandboxed: isBoolean },
-};
-const TOP: Record<string, (x: unknown) => boolean> = { allowManagedPermissionRulesOnly: isBoolean };
+});
+const TOP = (managed: boolean): Record<string, (x: unknown) => boolean> => (managed ? { allowManagedPermissionRulesOnly: isBoolean } : {});
 /** The name of the first setting read with the wrong type (a block that isn't one included), or undefined. */
-function wrongType(v: Record<string, unknown>): string | undefined {
-  for (const [block, keys] of Object.entries(BLOCKS)) {
+function wrongType(v: Record<string, unknown>, managed: boolean): string | undefined {
+  for (const [block, keys] of Object.entries(BLOCKS(managed))) {
     const b = v[block];
     if (b === undefined) continue;
     if (!isObject(b)) return block;
     for (const [k, ok] of Object.entries(keys)) if (!optional(b[k], ok)) return `${block}.${k}`;
   }
-  for (const [k, ok] of Object.entries(TOP)) if (!optional(v[k], ok)) return k;
+  for (const [k, ok] of Object.entries(TOP(managed))) if (!optional(v[k], ok)) return k;
   return undefined;
 }
 
 /** A settings file as found: absent (undefined), its values, or why it can't be used. */
-function readSettings(path: string): { values: Read } | { unusable: Unusable } | undefined {
+function readSettings(path: string, managed: boolean): { values: Read } | { unusable: Unusable } | undefined {
   const cant = (why: 'unreadable' | 'too_big' | 'not_json' | 'link') => ({ unusable: { path, why } as Unusable });
   let st;
   try {
@@ -75,7 +76,7 @@ function readSettings(path: string): { values: Read } | { unusable: Unusable } |
     }
     // Valid JSON that isn't an object of settings can't be settings at all.
     if (!isObject(v)) return cant('not_json');
-    const key = wrongType(v);
+    const key = wrongType(v, managed);
     return key === undefined ? { values: v as Read } : { unusable: { path, why: 'wrong_type', key } };
   } catch {
     return cant('unreadable');
@@ -115,8 +116,8 @@ export function broadBashRule(rule: string, runners: ReadonlySet<string> = RUNNE
  *  broad_bash_rule, then unknown when a file that's there couldn't be used. */
 export function permissiveMode(settings: Settings, extraRunners: readonly string[] = []): Permissive {
   const unusable: Unusable[] = [];
-  const read = (path: string): Read => {
-    const r = readSettings(path);
+  const read = (path: string, managed = false): Read => {
+    const r = readSettings(path, managed);
     if (r === undefined) return {};
     if ('unusable' in r) {
       unusable.push(r.unusable);
@@ -127,11 +128,14 @@ export function permissiveMode(settings: Settings, extraRunners: readonly string
   const dir = settings.managedSettings;
   let dropIns: string[] = [];
   try {
-    dropIns = readdirSync(join(dir, 'managed-settings.d')).filter((f) => f.endsWith('.json')).sort();
+    // .json files only, no dotfiles, in byte order of their names.
+    dropIns = readdirSync(join(dir, 'managed-settings.d'))
+      .filter((f) => f.endsWith('.json') && !f.startsWith('.'))
+      .sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
   } catch {
     // no drop-in folder
   }
-  const managed = [join(dir, 'managed-settings.json'), ...dropIns.map((f) => join(dir, 'managed-settings.d', f))].map(read).reduce(merge, {});
+  const managed = [join(dir, 'managed-settings.json'), ...dropIns.map((f) => join(dir, 'managed-settings.d', f))].map((f) => read(f, true)).reduce(merge, {});
   const local = read(join(settings.projectDir, '.claude', 'settings.local.json'));
   const project = read(join(settings.projectDir, '.claude', 'settings.json'));
   const user = read(join(settings.assistantHome, '.claude', 'settings.json'));

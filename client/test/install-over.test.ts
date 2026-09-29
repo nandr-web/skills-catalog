@@ -57,7 +57,7 @@ type AcceptExpect = { installed_equals?: string; lock?: { version?: number; cata
 const rows = (table.cases as Row[]).map((c, i) => [i, c] as const).filter(([, c]) => typeof c.installed === 'object' && (c.install !== undefined || c.installed.catalog === 'other'));
 
 function ctxFor(p: Place): Context {
-  return contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), S, 'mcp').ctx;
+  return contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project')), S, 'mcp').ctx;
 }
 const filesOf = (key: string): Files => histories.versions[key] as Files;
 const dest = (p: Place) => join(p.osHome, '.claude', 'skills', NAME);

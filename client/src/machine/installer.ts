@@ -19,6 +19,7 @@ import { CatalogError, inlineFiles, shellQuote, validateInput, type Catalog, typ
 import { DEFAULT_LIMITS, checkFetched, checkName, diffTrees, fingerprint, flagText, sha256Hex, type RiskFlag, type TreeDiff, type TreeFile } from '@skills-catalog/core/skill-tree';
 import { reasons } from '@skills-catalog/core';
 import { logWords } from '../activity.ts';
+import { permissiveMode } from './permissive.ts';
 import { holdWithinADay, recordUsage, type HoldReason, type UsageEvent } from '../usage/record.ts';
 import type { Context, Done } from '../operations.ts';
 import { holdLock, policyOf, readRecords, withLock, writeConfig, type FolderId, type Lock, type LockEntry, type Policy, type Target } from './lock.ts';
@@ -770,8 +771,8 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
   const { lock, config } = readRecords(ctx.settings.home);
   const here = installedHere(ctx, lock);
   for (const name of req.names ?? []) if (!here.some((e) => e.name === name)) throw new CatalogError('not_installed', { name });
-  // Each sync counts (the mode itself once permissive modes are detected, §5.3).
-  recordUsage(ctx.settings.home, { event: 'mode', face: 'update' }, ctx.now());
+  // Each sync counts, with the permissive mode Claude Code's settings turn on, if any (§5.3).
+  recordUsage(ctx.settings.home, { event: 'mode', mode: permissiveMode(ctx.settings).mode ?? 'default', face: 'update' }, ctx.now());
   const chosen = req.names ? here.filter((e) => req.names!.includes(e.name)) : here;
   if (!chosen.length) {
     const none = s.word('update.none_installed');

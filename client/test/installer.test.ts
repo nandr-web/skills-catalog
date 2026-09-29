@@ -26,7 +26,7 @@ const policy = run('set_skill_update_policy');
 type File = { path: string; text: string; mode?: string };
 
 function ctxFor(p: Place, o: { face?: 'mcp' | 'cli'; catalog?: (c: Catalog) => Catalog } = {}): Context {
-  const settings = settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project'));
+  const settings = settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project'));
   const { ctx } = contextFor(settings, S, o.face ?? 'mcp');
   if (!o.catalog) return ctx;
   const wrap = o.catalog;

@@ -23,7 +23,7 @@ describe('two installer processes at once', () => {
     } finally {
       c.close();
     }
-    const env = { PATH: process.env['PATH'] ?? '/usr/bin:/bin', HOME: p.osHome, SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome };
+    const env = { PATH: process.env['PATH'] ?? '/usr/bin:/bin', HOME: p.osHome, SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed };
     for (const v of [env.HOME, env.SKILLS_HOME]) refuseRealPlaces(v);
     const run = (name: string) =>
       new Promise<{ code: number | null; err: string }>((resolve) => {

@@ -53,6 +53,20 @@ describe('the permissive mode, from the settings files', () => {
     expect(modeOf({ managed: { permissions: { allow: ['Read'] } }, managed_d_20: { permissions: { allow: ['Bash(*)'] } } })).toEqual({ mode: 'broad_bash_rule' });
   });
 
+  it('managed-settings.d/: only .json files, no dotfiles, in byte order of their names', () => {
+    const p = place();
+    const t = tree(p, {});
+    const d = join(p.dir, 'managed', 'managed-settings.d');
+    mkdirSync(d, { recursive: true });
+    // Read, the dotfile would add a broad rule and the .txt would be unusable.
+    writeFileSync(join(d, '.hidden.json'), JSON.stringify({ permissions: { allow: ['Bash'] } }));
+    writeFileSync(join(d, 'notes.txt'), '{');
+    writeFileSync(join(d, 'Z.json'), JSON.stringify({ permissions: { defaultMode: 'bypassPermissions' } }));
+    writeFileSync(join(d, 'a.json'), JSON.stringify({ permissions: { defaultMode: 'default' } }));
+    // 'Z' sorts before 'a' by bytes, so a.json is read last and its value wins: not permissive.
+    expect(permissiveMode(t.settings)).toEqual({});
+  });
+
   it('managed settings narrow the rest: a mode turned off there isn\'t counted, and managed-only rules leave the others out', () => {
     expect(modeOf({ managed: { permissions: { disableBypassPermissionsMode: 'disable' } }, user: { permissions: { defaultMode: 'bypassPermissions' } } })).toEqual({});
     expect(modeOf({ managed: { permissions: { disableAutoMode: 'disable' } }, user: { permissions: { defaultMode: 'auto' } } })).toEqual({});
@@ -71,6 +85,8 @@ describe('the permissive mode, from the settings files', () => {
   it('broad_bash_rule: an allow rule from any file, the lists merged', () => {
     expect(modeOf({ project: { permissions: { allow: ['Read', 'Bash(git *)'] } }, user: { permissions: { allow: ['Bash(python3 *)'] } } })).toEqual({ mode: 'broad_bash_rule' });
     expect(modeOf({ project: { permissions: { allow: ['Bash(git *)', 'Bash(python3 scripts/check.py)'] } } })).toEqual({});
+    // The managed-only keys are ignored anywhere else, whatever their type.
+    expect(modeOf({ user: { allowManagedPermissionRulesOnly: 'yes', permissions: { disableAutoMode: 7, defaultMode: 'auto' } } })).toEqual({ mode: 'auto' });
     // Keys this check doesn't read are left alone, whatever they're called.
     expect(modeOf({ user: { path: '/x', why: 'not_json', model: 'opus', permissions: { deny: ['Bash(rm *)'] } } })).toEqual({});
   });

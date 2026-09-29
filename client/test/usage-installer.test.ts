@@ -2,7 +2,7 @@
 // update, the person's yes where a held update is taken, a pin set on a skill whose update is waiting (an answer too),
 // every policy change, and the mode at each sync (only its face until permissive modes are detected). Skill names are
 // stored hashed.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Words, actAs } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
@@ -19,7 +19,7 @@ const update = MACHINE_RUNS['update_installed_skills']!;
 const accept = MACHINE_RUNS['accept_held_update']!;
 const policy = MACHINE_RUNS['set_skill_update_policy']!;
 
-const ctxFor = (p: Place): Context => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), S, 'mcp').ctx;
+const ctxFor = (p: Place): Context => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project')), S, 'mcp').ctx;
 const events = (p: Place, kind: string) => readUsage(p.home).filter((e) => e.event === kind).map(({ v, at, ...e }) => e);
 const heldOf = (text: string) => {
   const m = /target "([^"]+)", version (\d+), confirm "([^"]+)" and flags (\[[^\]]*\])/.exec(text);
@@ -70,7 +70,26 @@ describe('the installer records its holds, the person\'s yes and pins, policy ch
       { event: 'hold', skill: h('flagged'), version: 3, reason: 'flagged', flags: ['runnable_file'], behind: 2 },
       { event: 'hold', skill: h('pinned'), version: 2, reason: 'pin', flags: [], behind: 1 },
     ]);
-    expect(events(p, 'mode')).toEqual([{ event: 'mode', face: 'update' }]);
+    expect(events(p, 'mode')).toEqual([{ event: 'mode', mode: 'default', face: 'update' }]);
+  });
+
+  it('each sync records the permissive mode Claude Code\'s settings turn on, unknown when a settings file can\'t be used', async () => {
+    const cases: [string, string, Record<string, unknown>][] = [
+      ['.claude/settings.json', JSON.stringify({ permissions: { defaultMode: 'auto' } }), { mode: 'auto' }],
+      ['.claude/settings.json', JSON.stringify({ permissions: { allow: ['Bash(python3 *)'] } }), { mode: 'broad_bash_rule' }],
+      ['.claude/settings.json', '{"permissions": ', { mode: 'unknown' }],
+      ['.claude/settings.json', JSON.stringify({ permissions: { defaultMode: 'acceptEdits' } }), { mode: 'default' }],
+    ];
+    for (const [file, text, mode] of cases) {
+      const p = place();
+      const ctx = ctxFor(p);
+      await publish(p, 'plain', plain('plain'));
+      await install(ctx, { name: 'plain' });
+      mkdirSync(join(p.osHome, '.claude'), { recursive: true });
+      writeFileSync(join(p.osHome, file), text);
+      await update(ctx, {});
+      expect([text, events(p, 'mode')]).toEqual([text, [{ event: 'mode', ...mode, face: 'update' }]]);
+    }
   });
 
   it('an install over a pinned copy is a hold; a pin set while an update waits is the person\'s answer, and a policy change', async () => {
