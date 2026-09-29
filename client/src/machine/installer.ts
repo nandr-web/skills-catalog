@@ -788,8 +788,9 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     lines.push(...said);
     items.push({ kind, ...at, flags: [...flags], lines: said });
   };
-  // The log's one word for the call: the outcome that most needs the person, else updated, else up to date.
-  const RANK = ['unchanged', 'updated', 'refused', 'held_pin', 'held_notify', 'held_flagged', 'held_other_catalog'];
+  // The log's one word for the call: the outcome that most needs the person (a refusal first, then a hold), else updated,
+  // else up to date.
+  const RANK = ['unchanged', 'updated', 'held_pin', 'held_notify', 'held_flagged', 'held_other_catalog', 'refused'];
   let outcome = 'unchanged';
   const saw = (o: string) => {
     if (RANK.indexOf(o) > RANK.indexOf(outcome)) outcome = o;

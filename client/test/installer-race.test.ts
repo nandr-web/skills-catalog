@@ -427,6 +427,35 @@ describe('folders another user could control are refused (target_not_private)', 
     }
   });
 
+  // An update's one word (its log result, its outcome, the `use` event's result) is the one that most needs the person:
+  // a refused skill outranks a held one, so a CLI update with any refusal exits 1.
+  it('an update with a refused skill and a held one has the refusal as its outcome', async () => {
+    const p = place();
+    const ctx = ctxFor(p);
+    await publish(p, 'alpha', 'First.\n');
+    await install(ctx, { name: 'alpha', target: 'project' });
+    await publish(p, 'alpha', 'Second.\n');
+    await publish(p, 'beta', 'First.\n');
+    await install(ctx, { name: 'beta' });
+    const c = await open(p);
+    try {
+      await c.publish(request('beta', [{ path: 'SKILL.md', text: skillMd('beta', 'The beta skill.') }, { path: 'run.sh', text: '#!/bin/sh\n', mode: '0755' }]), actAs('ana'));
+    } finally {
+      c.close();
+    }
+    const project = join(p.dir, 'project');
+    race.stats = (at) => (at === project ? { mode: 0o040777 } : undefined);
+    let r: { text: string; result: string; outcome?: string };
+    try {
+      r = await update(ctx, {});
+    } finally {
+      clearHooks();
+    }
+    expect(codeOf(r)).toBe('target_not_private');
+    expect(r.text).toContain(S.format(S.word('update').held_flagged.split('{')[0]!));
+    expect([r.outcome, r.result]).toEqual(['refused', S.fill(S.doc.log).error.target_not_private]);
+  });
+
   it('update and accept refuse the same way when the assistant home stopped being private, and change nothing', async () => {
     const p = place();
     await publish(p, 'alpha', 'First.\n');
