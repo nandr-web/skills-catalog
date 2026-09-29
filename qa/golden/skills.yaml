@@ -569,12 +569,14 @@ publish_steps:
   request_checks_note: "confirm: step1 = a confirm from a real step 1 on the same folder; every case changes nothing"
 
 # A path in a command the person is told to run (contract §5.2, pinned 309ecca): bare when only letters, digits and
-# @ % + = : , . / _ - ; otherwise POSIX single quotes, a ' inside written '\''. Today: secret_suspected's
-# --allow-suspected-secrets command, and every command naming a skill (update <name> --accept / --latest), where names
-# stay bare. Oracle: split the command with POSIX shell rules (Python's shlex.split): the folder argument is exactly one
-# word and equals the folder's path; the planted marker is never created (nothing here runs the command).
+# @ % + = : , . / _ - ; otherwise POSIX single quotes, a ' inside written '\''. Today no command the person is told to
+# run carries a folder (64a021b took the CLI publish out of secret_suspected's sentence until the CLI has a publish), so
+# the folder cases test the renderer's quoting itself; the skill-name case is every command naming a skill (update <name>
+# --accept / --latest), where names stay bare. Oracle: the quoted path, given to a real /bin/sh in the sandbox (printf
+# '%s\n' <quoted>), prints back exactly the path as one word; the planted marker is never created. When a command
+# carries a folder again, the same cases run through that command's sentence too.
 command_quoting:
-  fixture: skills.hostile.secret-in-body
+  via: the renderer's shell quoting (a folder); the update sentence (a skill name)
   cases:
     - {id: bare, folder: "$RUN/work/plain-skill", expect: {quoted: false, one_word: true}, note: "only when $RUN itself is made of allowed characters; otherwise the case expects the quoted form"}
     - {id: space-semicolon, folder: "$RUN/work/my skills;touch QA-MARKER", expect: {quoted: true, one_word: true, ends_with: "/my skills;touch QA-MARKER'", marker_never_created: "$RUN/work/QA-MARKER"}}
