@@ -716,22 +716,24 @@ describe('the temp folder is checked before every use', () => {
 // Inode numbers past 2^53 (overlay and some network file systems): compared exactly, and left out of the lock rather than
 // written as numbers its own reader would refuse (every command would then stop with invalid_local_file).
 describe('identities past 2^53', () => {
-  it('install and update work, the lock stays readable, and a copy without a stored identity is kept, never deleted', async () => {
+  it('are stored as decimal strings, read back exactly, and the replaced copy is deleted as usual, never piling up in staging', async () => {
     const p = place();
     await publish(p, 'alpha', 'Body.\n');
     const claude = join(p.dir, 'project', '.claude');
-    race.stats = (at, s) => (at.startsWith(claude) ? ({ ino: BigInt(s.ino) + 2n ** 60n } as unknown as Partial<import('node:fs').Stats>) : undefined);
+    const big = 2n ** 60n;
+    race.stats = (at, s) => (at.startsWith(claude) ? ({ ino: BigInt(s.ino) + big } as unknown as Partial<import('node:fs').Stats>) : undefined);
     try {
       const ctx = ctxFor(p);
       await install(ctx, { name: 'alpha', target: 'project' });
-      const lock = JSON.parse(race.fs.readFileSync(join(p.home, 'lock.json'), 'utf8'));
-      const entry = lock.skills[join(claude, 'skills', 'alpha')];
-      expect(entry.copy).toBeUndefined();
+      const dest = join(claude, 'skills', 'alpha');
+      const copy = JSON.parse(race.fs.readFileSync(join(p.home, 'lock.json'), 'utf8')).skills[dest].copy;
+      expect(copy.ino).toBe((BigInt(race.fs.lstatSync(dest).ino) + big).toString());
+      expect(typeof copy.dev).toBe('number');
       await publish(p, 'alpha', 'Second, markdown only.\n');
       const r = await update(ctx, {});
       expect(r.text).toContain(S.format(S.word('update.updated'), { name: 'alpha', from: 1, to: 2, changes: '"SKILL.md" changed' }));
-      const kept = /"staging":"([^"]+)"/.exec(r.text)?.[1];
-      expect(kept && race.fs.readFileSync(join(kept, 'SKILL.md'), 'utf8')).toBe(skillMd('alpha', 'The alpha skill.', 'Body.\n'));
+      expect(r.text).not.toContain('staging');
+      expect(stagingEntries(p)).toEqual([]);
       expect((await MACHINE_RUNS['list_installed_skills']!(ctx, {})).text).toContain('alpha');
     } finally {
       clearHooks();

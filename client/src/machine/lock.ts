@@ -32,7 +32,8 @@ export type LockEntry = {
   copy?: FolderId;
 };
 
-export type FolderId = { dev: number; ino: number; birth?: number };
+/** Each part is a number while it's a safe integer, and past 2^53 a decimal string of digits, so it's kept exactly. */
+export type FolderId = { dev: number | string; ino: number | string; birth?: number | string };
 
 export type Lock = { skills: Record<string, LockEntry> };
 export type Config = { update_policy?: Policy; [key: string]: unknown };
@@ -53,12 +54,15 @@ const isStrings = (x: unknown) => Array.isArray(x) && x.every((y) => typeof y ==
 /** Why a policy field is refused, if it is: absent is fine; a string that isn't a policy is unknown; anything else is the wrong shape. */
 const policyWhy = (x: unknown): Why | undefined => (x === undefined ? undefined : typeof x !== 'string' ? 'wrong_shape' : POLICIES.includes(x) ? undefined : 'unknown_policy');
 
+// A part of a folder's identity: a non-negative safe integer, or a decimal string of digits (no sign, no leading zeros).
+const isIdPart = (n: unknown) => (typeof n === 'number' && Number.isSafeInteger(n) && n >= 0) || (typeof n === 'string' && /^(0|[1-9][0-9]*)$/.test(n));
+
 function entryWhy(e: unknown): Why | undefined {
   if (!isObject(e)) return 'wrong_shape';
   const strings = ['name', 'fingerprint', 'publisher', 'path', 'installed_at', 'catalog'].every((k) => typeof e[k] === 'string');
   const accepted = Array.isArray(e['accepted']) && e['accepted'].every((a) => isObject(a) && isCount(a['version']) && isStrings(a['flags']));
   const c = e['copy'];
-  const copy = c === undefined || (isObject(c) && [c['dev'], c['ino']].every((n) => Number.isSafeInteger(n) && (n as number) >= 0) && (c['birth'] === undefined || (typeof c['birth'] === 'number' && Number.isFinite(c['birth']) && c['birth'] > 0)));
+  const copy = c === undefined || (isObject(c) && [c['dev'], c['ino']].every(isIdPart) && (c['birth'] === undefined || isIdPart(c['birth']) || (typeof c['birth'] === 'number' && Number.isFinite(c['birth']) && c['birth'] > 0)));
   if (!strings || !TARGETS.includes(e['target'] as string) || !isCount(e['version']) || !accepted || !copy) return 'wrong_shape';
   return policyWhy(e['policy']);
 }

@@ -143,8 +143,7 @@ function isPrivate(s: Stats): boolean {
 // inode and birth time (left out where the file system reads it as 0). Entries recorded without a birth time compare on
 // the other two.
 // Stats are read as bigints, so identities compare exactly even where inode numbers pass 2^53 (overlay and network file
-// systems); the lock stores them as numbers, and leaves `copy` out when they don't fit (such a copy is then kept, never
-// deleted, like an entry from before identities were recorded).
+// systems); the lock stores each part as a number while it's a safe integer, and past that as its decimal string.
 type Stats = BigIntStats;
 type Id = { dev: bigint; ino: bigint; birth?: bigint };
 function lstatOf(path: string): Stats | undefined {
@@ -161,14 +160,15 @@ function idOf(path: string): Id | undefined {
 }
 const same = (a: Id | undefined, b: Id | undefined) =>
   a !== undefined && b !== undefined && a.dev === b.dev && a.ino === b.ino && (a.birth === undefined || b.birth === undefined || a.birth === b.birth);
-/** An identity as the lock stores it, or nothing when it doesn't fit a safe integer. */
-function toLock(id: Id): FolderId | undefined {
-  const [dev, ino, birth] = [Number(id.dev), Number(id.ino), id.birth === undefined ? undefined : Number(id.birth)];
-  if (![dev, ino, ...(birth === undefined ? [] : [birth])].every(Number.isSafeInteger)) return undefined;
-  return birth === undefined ? { dev, ino } : { dev, ino, birth };
+/** An identity as the lock stores it: each part a number while it's a safe integer, otherwise its decimal string. */
+const toPart = (n: bigint): number | string => (n <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(n) : n.toString());
+function toLock(id: Id): FolderId {
+  return { dev: toPart(id.dev), ino: toPart(id.ino), ...(id.birth === undefined ? {} : { birth: toPart(id.birth) }) };
 }
+/** Read back exactly, whichever form each part was stored in; a birth time is whole milliseconds. */
+const fromPart = (n: number | string): bigint => (typeof n === 'number' ? BigInt(Math.floor(n)) : BigInt(n));
 const fromLock = (c: FolderId | undefined): Id | undefined =>
-  c && { dev: BigInt(c.dev), ino: BigInt(c.ino), ...(c.birth === undefined ? {} : { birth: BigInt(Math.trunc(c.birth)) }) };
+  c && { dev: fromPart(c.dev), ino: fromPart(c.ino), ...(c.birth === undefined ? {} : { birth: fromPart(c.birth) }) };
 /** A real folder (not a link) with this identity. */
 const isCopy = (s: Stats | undefined, id: Id | undefined) => s !== undefined && s.isDirectory() && !s.isSymbolicLink() && same(idFrom(s), id);
 /** Removes a folder only while it's a real folder with an identity the installer recorded; never by path alone. */

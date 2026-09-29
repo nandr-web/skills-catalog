@@ -894,6 +894,8 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
     { file: 'lock.json', why: 'wrong_shape', bytes: (p) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), version: '1' } } }) },
     { file: 'lock.json', why: 'wrong_shape', bytes: (p) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), accepted: [{ version: 1, flags: 'runnable_file' }] } } }) },
     { file: 'lock.json', why: 'wrong_shape', bytes: (p) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), policy: true } } }) },
+    // A folder identity is a number, or a decimal string of digits past 2^53 (no sign, no leading zeros).
+    ...['-1', '01', '1.5', '1e3', 'x', '', ' 1'].map((ino) => ({ file: 'lock.json' as const, why: 'wrong_shape', bytes: (p: Place) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), copy: { ...entry(p, 'runner').copy!, ino } } } }) })),
     { file: 'lock.json', why: 'unknown_policy', bytes: (p) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), policy: 'pinn' } } }) },
     { file: 'config.json', why: 'not_json', bytes: () => 'update_policy: pin\n' },
     { file: 'config.json', why: 'wrong_shape', bytes: () => '"pin"' },
