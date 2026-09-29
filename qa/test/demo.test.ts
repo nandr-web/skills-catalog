@@ -8,6 +8,7 @@ import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, onTestFinished } from 'vitest';
 import { runProcesses } from '../src/check.ts';
+import { firstPid, pidFrom } from '../src/pids.ts';
 import { conduct, joined, stoppedLine, type ConductorIo, type StepsFile, type Turn } from '../src/demo/conductor.ts';
 import { loadScenes, type Scenes } from '../src/demo/scenes.ts';
 import { copySkills, DEFAULTS, demoEnding, demoPaths, demoTimeoutMs, leftoverGroups, LOG_NOTE, nodeOk, preflight, repoServer, running, serverCommand } from '../src/demo/director.ts';
@@ -282,8 +283,9 @@ describe.skipIf(!!noTmux)(`qa demo with real tmux${noTmux ? ` (skipped: ${noTmux
     const m = machine();
     let killed = 0;
     const r = await attached(m, ['--pace', '30'], (s) => s.steps[0].state === 'planned', (sandbox) => {
-      killed = Number(spawnSync('tmux', ['-S', 't', '-N', 'list-clients', '-F', '#{client_pid}'], { cwd: sandbox, encoding: 'utf8' }).stdout.trim().split('\n')[0]);
-      process.kill(killed, 'SIGKILL');
+      // No client attached (or gone): no pid, and nothing is signalled (a 0 would reach this test's own process group).
+      killed = firstPid(spawnSync('tmux', ['-S', 't', '-N', 'list-clients', '-F', '#{client_pid}'], { cwd: sandbox, encoding: 'utf8' }).stdout ?? '') ?? 0;
+      if (killed > 0) process.kill(killed, 'SIGKILL');
     });
     expect(killed, r.tail).toBeGreaterThan(0);
     expect(r.code, r.tail).toBe(130);
@@ -846,16 +848,17 @@ describe('the director kills only its own leftovers', () => {
     // as the stand-in and its catalog server are
     const script = `const c = require('node:child_process').spawn(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], { env: { PATH: '/usr/bin:/bin', QA_RUN_ID: ${JSON.stringify(id)} }, stdio: 'ignore' }); console.log(c.pid); c.unref();`;
     const leader = spawn(process.execPath, ['-e', script], { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
-    const child = Number(await new Promise<string>((ok) => leader.stdout!.once('data', (b) => ok(String(b).trim()))));
-    onTestFinished(() => { try { process.kill(child, 'SIGKILL'); } catch { /* gone */ } });
+    const child = pidFrom(await new Promise<string>((ok) => leader.stdout!.once('data', (b) => ok(String(b)))));
+    onTestFinished(() => { if (child) try { process.kill(child, 'SIGKILL'); } catch { /* gone */ } });
+    expect(child).toBeGreaterThan(0);
     await new Promise((ok) => leader.on('exit', ok));
     const other = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], { detached: true, stdio: 'ignore', env: { PATH: '/usr/bin:/bin' } });
     onTestFinished(() => { other.kill('SIGKILL'); });
     await new Promise((r) => setTimeout(r, 300));   // both are sleeping by now
     expect(leftoverGroups([leader.pid!, other.pid!], id)).toEqual([leader.pid]);
     process.kill(-leader.pid!, 'SIGKILL');   // as the director does: the child goes with its group
-    for (let i = 0; i < 40 && running(child); i++) await new Promise((r) => setTimeout(r, 50));
-    expect(running(child)).toBe(false);
+    for (let i = 0; i < 40 && running(child!); i++) await new Promise((r) => setTimeout(r, 50));
+    expect(running(child!)).toBe(false);
   }, 30_000);
 });
 

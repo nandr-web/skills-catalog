@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { slug } from './leftovers.ts';
+import { pidFrom } from './pids.ts';
 import type { Machine, Roots } from './machine.ts';
 
 export type Watch = Roots & {
@@ -81,7 +82,7 @@ export const PS = ['/bin/ps', '/usr/bin/ps'].find((p) => existsSync(p)) ?? '/bin
 export function runProcesses(runId: string): { pid: number; command: string }[] {
   const lines = (withEnv: boolean) => {
     const r = spawnSync(PS, [...(withEnv ? ['-E'] : []), '-x', '-o', 'pid=,command='], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-    return new Map((r.stdout ?? '').split('\n').flatMap((line) => { const m = line.match(/^\s*(\d+) (.*)$/); return m ? [[Number(m[1]), m[2]] as [number, string]] : []; }));
+    return new Map((r.stdout ?? '').split('\n').flatMap((line) => { const m = line.match(/^\s*(\d+) (.*)$/); const pid = m ? pidFrom(m[1]) : undefined; return pid ? [[pid, m![2]] as [number, string]] : []; }));
   };
   const plain = lines(false), full = lines(true);
   const mark = new RegExp(`(^|\\s)QA_RUN_ID=${runId}(\\s|$)`);

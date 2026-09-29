@@ -10,6 +10,7 @@ import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { PS, runProcesses } from '../check.ts';
+import { pidFrom } from '../pids.ts';
 import type { RunResult } from '../run.ts';
 import { conduct, initialSteps, type ConductorIo, type StepsFile, type Turn } from './conductor.ts';
 import { loadScenes, type Scenes } from './scenes.ts';
@@ -228,7 +229,7 @@ async function main(argv: string[]): Promise<number> {
   // arguments: nothing is put into its script). With --server, the catalog's servers write it, as its title says.
   if (v.server === undefined) respawn(t, panes.log, demo, ['/bin/sh', '-c', 'printf "\\033[2m%s\\033[0m\\n" "$1"; exec /usr/bin/tail -n +1 -F "$2"', 'log', LOG_NOTE, files.activity]);
   else respawn(t, panes.log, demo, ['/usr/bin/tail', '-n', '+1', '-F', files.activity]);
-  panePids = t('list-panes', '-t', SESSION, '-F', '#{pane_pid}').trim().split('\n').map(Number);
+  panePids = t('list-panes', '-t', SESSION, '-F', '#{pane_pid}').split('\n').flatMap((l) => pidFrom(l) ?? []);   // never a 0 from an empty list
   mark('programs');
   markReady(t);   // the window is whole: only now may a client attach and draw it
   // attached, the steps start once the window shows (a person, or a loaded machine, may take a while to open it)
