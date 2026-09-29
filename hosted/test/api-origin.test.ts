@@ -7,7 +7,7 @@
 import { Words } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
 import { createHostedHandler, type HostedRequest } from '../src/api/handler.ts';
-import { ORIGIN_HEADER, ORIGIN_KEEP_MS, ORIGIN_VALUES_MS, originGuard } from '../src/api/origin.ts';
+import { ORIGIN_HEADER, ORIGIN_KEEP_MS, ORIGIN_MIN_LENGTH, ORIGIN_RETRY_MS, ORIGIN_VALUES_MS, originGuard } from '../src/api/origin.ts';
 import type { TokenHolder } from '../src/index.ts';
 
 const CURRENT = 'c'.repeat(43);
@@ -38,8 +38,17 @@ describe('the origin guard', () => {
     for (const values of [{}, { [NAMES.current]: '', [NAMES.previous]: '' }]) {
       const p = parameters(values);
       const g = originGuard({ names: NAMES, read: p.read, clock: p.clock });
-      expect(await g.allows('')).toBe(false);
-      expect(await g.allows(undefined)).toBe(false);
+      for (const v of ['', undefined, CURRENT, 'x']) expect(await g.allows(v), String(v)).toBe(false);
+    }
+  });
+
+  it(`a value under ${ORIGIN_MIN_LENGTH} characters (a blank or a stand-in) is no value`, async () => {
+    expect(ORIGIN_MIN_LENGTH).toBe(32);
+    for (const short of [' '.repeat(40).trim() || ' ', 'short', 's'.repeat(31)]) {
+      const p = parameters({ [NAMES.current]: short, [NAMES.previous]: PREVIOUS });
+      const g = originGuard({ names: NAMES, read: p.read, clock: p.clock });
+      expect(await g.allows(short), JSON.stringify(short)).toBe(false);
+      expect(await g.allows(PREVIOUS)).toBe(true);
     }
   });
 
@@ -73,19 +82,38 @@ describe('the origin guard', () => {
     expect(p.reads.length).toBe(4);
   });
 
-  it('a read that fails refuses (fail closed) and is tried again on the next request', async () => {
+  it('a cold start whose read fails refuses; a burst meanwhile costs no read; it reads again after a back-off that doubles; only the error\'s name is logged', async () => {
     let fail = true;
+    let t = 0;
+    let attempts = 0;
+    const logged: string[] = [];
     const g = originGuard({
       names: NAMES,
       read: async (n) => {
-        if (fail) throw new Error('ParameterNotFound');
+        if (n === NAMES.current) attempts++;
+        if (fail) throw Object.assign(new Error(`denied reading ${CURRENT}`), { name: 'AccessDeniedException' });
         return n === NAMES.current ? CURRENT : undefined;
       },
-      clock: { now: () => new Date(0) },
+      clock: { now: () => new Date(t) },
+      log: (l) => logged.push(l),
     });
+    expect(await Promise.all([g.allows(CURRENT), g.allows(CURRENT), g.allows(CURRENT)])).toEqual([false, false, false]);
+    expect(attempts).toBe(1);
+    t = ORIGIN_RETRY_MS - 1;
     expect(await g.allows(CURRENT)).toBe(false);
+    expect(attempts).toBe(1);
+    t = ORIGIN_RETRY_MS;
+    expect(await g.allows(CURRENT)).toBe(false);
+    expect(attempts).toBe(2);
+    t += ORIGIN_RETRY_MS; // the wait has doubled
+    expect(await g.allows(CURRENT)).toBe(false);
+    expect(attempts).toBe(2);
+    t += ORIGIN_RETRY_MS;
     fail = false;
     expect(await g.allows(CURRENT)).toBe(true);
+    expect(attempts).toBe(3);
+    expect(logged).toEqual(['origin values: read failed (AccessDeniedException)', 'origin values: read failed (AccessDeniedException)']);
+    expect(logged.join('\n')).not.toContain(CURRENT);
   });
 
   it('a refresh that fails keeps the last good values for up to an hour (a blip in reading them never takes the API down), then refuses', async () => {
@@ -110,8 +138,92 @@ describe('the origin guard', () => {
     t = ORIGIN_KEEP_MS;
     expect(await g.allows(CURRENT)).toBe(false);
     fail = false;
+    t += ORIGIN_VALUES_MS; // past any back-off
     expect(await g.allows(CURRENT)).toBe(true);
     expect(ORIGIN_KEEP_MS).toBe(60 * 60_000);
+  });
+
+  it('the cap: one good read, then every read fails from minute 0; the current value passes at 59 minutes and is refused at 61', async () => {
+    let t = 0;
+    let fail = false;
+    const g = originGuard({
+      names: NAMES,
+      read: async (n) => {
+        if (fail) throw Object.assign(new Error('x'), { name: 'AccessDeniedException' });
+        return n === NAMES.current ? CURRENT : undefined;
+      },
+      clock: { now: () => new Date(t) },
+    });
+    expect(await g.allows(CURRENT)).toBe(true);
+    fail = true;
+    for (let m = 1; m <= 59; m++) {
+      t = m * 60_000;
+      expect(await g.allows(CURRENT), `${m} min`).toBe(true);
+    }
+    t = 61 * 60_000;
+    expect(await g.allows(CURRENT)).toBe(false);
+  });
+
+  // A container idle through a rotation holds {old, older} while CloudFront already sends the new value.
+  function rotated() {
+    const OLD = 'o'.repeat(43);
+    const OLDER = 'r'.repeat(43);
+    const NEW = 'n'.repeat(43);
+    const values: Record<string, string> = { [NAMES.current]: OLD, [NAMES.previous]: OLDER };
+    let t = 0;
+    let fail = false;
+    let attempts = 0;
+    const g = originGuard({
+      names: NAMES,
+      read: async (n) => {
+        if (n === NAMES.current) attempts++;
+        if (fail) throw Object.assign(new Error('x'), { name: 'ThrottlingException' });
+        return values[n];
+      },
+      clock: { now: () => new Date(t) },
+    });
+    return {
+      g,
+      OLD,
+      NEW,
+      rotate: () => Object.assign(values, { [NAMES.current]: NEW, [NAMES.previous]: OLD }),
+      at: (ms: number) => void (t = ms),
+      failing: (f: boolean) => void (fail = f),
+      attempts: () => attempts,
+    };
+  }
+
+  it('a value that matches nothing while the values in hand are stale gets one fresh read before the 403: an idle container passes the new value at once', async () => {
+    const r = rotated();
+    expect(await r.g.allows(r.OLD)).toBe(true);
+    r.rotate();
+    r.at(ORIGIN_VALUES_MS + 60_000);
+    expect(await r.g.allows(r.NEW)).toBe(true);
+    expect(r.attempts()).toBe(2);
+  });
+
+  it('a burst of wrong values against stale values costs exactly one read; against fresh values, none', async () => {
+    const r = rotated();
+    expect(await r.g.allows(r.OLD)).toBe(true);
+    for (let i = 0; i < 5; i++) expect(await r.g.allows(`w${i}`.repeat(20))).toBe(false);
+    expect(r.attempts()).toBe(1);
+    r.at(ORIGIN_VALUES_MS);
+    expect(await Promise.all(Array.from({ length: 5 }, (_, i) => r.g.allows(`w${i}`.repeat(20))))).toEqual([false, false, false, false, false]);
+    expect(await r.g.allows(`z`.repeat(40))).toBe(false);
+    expect(r.attempts()).toBe(2);
+  });
+
+  it('while backing off after a failed read, a wrong value forces no read either: refused, and the old values still stand', async () => {
+    const r = rotated();
+    expect(await r.g.allows(r.OLD)).toBe(true);
+    r.failing(true);
+    r.at(ORIGIN_VALUES_MS);
+    expect(await r.g.allows(r.NEW)).toBe(false); // the forced read fails: refused
+    expect(r.attempts()).toBe(2);
+    for (let i = 0; i < 5; i++) expect(await r.g.allows(`w${i}`.repeat(20))).toBe(false);
+    expect(r.attempts()).toBe(2);
+    expect(await r.g.allows(r.OLD)).toBe(true);
+    expect(r.attempts()).toBe(2);
   });
 
   it('with good values in hand, a slow refresh never delays a request: it reads in the background and the answer uses what it has', async () => {
