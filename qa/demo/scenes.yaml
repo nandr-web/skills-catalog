@@ -3,11 +3,12 @@
 # text each pane must show for the step to count as seen (a developer id, steps or log). A planned call is a part that
 # isn't built yet: it prints why, dimmed, and changes nothing. Tool names come from the surface, never from here.
 # One file for both catalogs the stand-in can call (the catalog's MCP server, or the core in its own process with
-# qa demo --core): each expected text is a phrase both print, and the log's are the surface's log words, which both
-# write, so a step means the same whichever answers.
+# qa demo --core): `expect` holds only phrases both print (and, for the log, the surface's log words, which both write),
+# so a step means the same whichever answers; `expect_server` holds the phrases only the server's run prints (the
+# command line's install and update, which the core shows as planned).
 developers:
-  - {id: ana, title: "Developer 1 · ana", skills: [release-note-draft-v1, release-note-draft-v2, sql-migrations]}
-  - {id: bob, title: "Developer 2 · bob", skills: [release-note-draft-bob]}
+  - {id: ana, title: "Developer 1 · ana (scripted)", skills: [release-note-draft-v1, release-note-draft-v2, sql-migrations]}
+  - {id: bob, title: "Developer 2 · bob (scripted)", skills: [release-note-draft-bob]}
 steps:
   - id: 1
     title: both install the skill manager

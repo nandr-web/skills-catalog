@@ -42,6 +42,13 @@ describe('qa run', () => {
     expect(existsSync(r.sandbox)).toBe(false);
   });
 
+  it('with no time limit (timeoutMs Infinity: an attached demo), a run lasts as long as its command', async () => {
+    const m = machine();
+    const r = await qaRun({ machine: m, command: node('setTimeout(() => {}, 300)'), timeoutMs: Infinity });
+    expect(r).toMatchObject({ status: 'pass', exitCode: 0 });
+    expect(existsSync(r.sandbox)).toBe(false);
+  });
+
   it('[3] tears down when interrupted', async () => {
     const m = machine();
     const stop = new AbortController();

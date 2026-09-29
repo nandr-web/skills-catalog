@@ -5,11 +5,12 @@
 // SIGINT). It deletes nothing: the run's teardown does.
 // Also here, for the qa process: the pre-flight, and the window of an attached run.
 import { spawnSync, type ChildProcess } from 'node:child_process';
-import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { runProcesses } from '../check.ts';
+import { PS, runProcesses } from '../check.ts';
+import type { RunResult } from '../run.ts';
 import { conduct, initialSteps, type ConductorIo, type StepsFile, type Turn } from './conductor.ts';
 import { loadScenes, type Scenes } from './scenes.ts';
 import { attachClient, buildLayout, capturePane, configure, respawn, SESSION, startServer, tmuxAt, typeInto, useTmux, versionOk, waitForClient, waitForServer, waitForSession, type Panes, type Tmux } from './tmux.ts';
@@ -18,12 +19,13 @@ const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 export const DIRECTOR = here('director.ts');
 export const PANE_PATH = '/usr/bin:/bin';
 export const DEFAULTS = { scenes: here('../../demo/scenes.yaml'), assistant: here('assistant.ts'), stepsView: here('steps-view.ts'), core: here('../../../core'), client: here('../../../client') };
-/** The programs the panes run, the core the pre-flight checks and the client whose server is the default: the tests' own
- *  (DEMO_ASSISTANT, DEMO_STEPS_VIEW, DEMO_CORE, DEMO_CLIENT) only on a fake machine, so a setting left in a shell never
- *  swaps a real run's programs. */
-export function demoPaths(env: NodeJS.ProcessEnv, fakeMachine: boolean): { assistant: string; stepsView: string; core: string; client: string } {
+/** The scene file, the programs the panes run, the core the pre-flight checks and the client whose server is the
+ *  default: the tests' own (DEMO_SCENES, DEMO_ASSISTANT, DEMO_STEPS_VIEW, DEMO_CORE, DEMO_CLIENT) only on a fake
+ *  machine, so a setting left in a shell never swaps a real run's scenes or programs. */
+export function demoPaths(env: NodeJS.ProcessEnv, fakeMachine: boolean): { scenes: string; assistant: string; stepsView: string; core: string; client: string } {
   const pick = (k: string, fallback: string) => resolve((fakeMachine && env[k]) || fallback);
   return {
+    scenes: pick('DEMO_SCENES', DEFAULTS.scenes),
     assistant: pick('DEMO_ASSISTANT', DEFAULTS.assistant), stepsView: pick('DEMO_STEPS_VIEW', DEFAULTS.stepsView), core: pick('DEMO_CORE', DEFAULTS.core),
     client: pick('DEMO_CLIENT', DEFAULTS.client),
   };
@@ -36,8 +38,6 @@ export function repoServer(client = DEFAULTS.client): string | undefined {
 /** The log pane's first line, dimmed, with the core in the stand-ins (--core): they write the log, not a server. */
 export const LOG_NOTE = "The stand-in assistants write this log (--core); by default the catalog's server does.";
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-/** The system's ps, by path: never one a PATH puts first. */
-const PS = ['/bin/ps', '/usr/bin/ps'].find((p) => existsSync(p)) ?? '/bin/ps';
 /** A process that exists and hasn't ended. A zombie (ended, not yet reaped: a container without an init leaves them)
  *  counts as gone; if ps can't say, it counts as running. */
 export function running(pid: number): boolean {
@@ -46,15 +46,37 @@ export function running(pid: number): boolean {
   return !!r.error || !r.stdout.trim().startsWith('Z');
 }
 
-export type Preflight = { tmux: string | null; coreDir: string; tty: boolean; headless: boolean; live: boolean };
+/** Node 24.15 or later, as package.json's engines say (the demo's programs need what it added). */
+export function nodeOk(v: string): boolean {
+  const m = v.match(/^v?(\d+)\.(\d+)/);
+  return !!m && (+m[1] > 24 || (+m[1] === 24 && +m[2] >= 15));
+}
+
+export type Preflight = { tmux: string | null; coreDir: string; tty: boolean; headless: boolean; live: boolean; node?: string };
 /** What stops the demo before anything starts, one plain line each (the qa process prints them and exits 3). */
 export function preflight(o: Preflight): string[] {
+  const node = o.node ?? process.versions.node;
   return [
+    ...(nodeOk(node) ? [] : [`needs Node 24.15 or later (this is Node ${node})`]),
     ...(versionOk(o.tmux) ? [] : ['needs tmux 3.2 or later']),
-    ...(existsSync(join(o.coreDir, 'node_modules')) ? [] : ['run npm ci in ../core first']),
+    ...(existsSync(join(o.coreDir, 'node_modules')) ? [] : ['run npm ci --ignore-scripts in ../core first']),
     ...(o.tty || o.headless ? [] : ['needs a terminal: run it in one, or add --headless']),
-    ...(o.live ? ["not yet: live assistants need the catalog's MCP server"] : []),
+    ...(o.live ? ['not yet: real assistants in the panes come later'] : []),
   ];
+}
+
+/** An attached run has no time limit (the person has q and Ctrl-C); a headless one keeps qa run's. */
+export const demoTimeoutMs = (headless: boolean): number | undefined => (headless ? undefined : Infinity);
+
+/** A demo run's ending, from qa run's and what the director left in <out>. A director that wrote no summary failed
+ *  (exit 1), whatever its exit code (a pass without one is impossible to trust), and `note` says so when it wrote no
+ *  error.txt either; a timeout, a stop or something left behind keeps its own ending. With a summary that says the
+ *  person stopped it (q or Ctrl-C before the last step), the run was interrupted (130), neither a pass nor a fail. */
+export function demoEnding(r: RunResult, o: { summary: boolean; stopped: boolean; error?: boolean }): { ended: RunResult; note?: string } {
+  if (!o.summary && (r.status === 'pass' || r.status === 'fail')) {
+    return { ended: { ...r, status: 'fail', exitCode: 1 }, ...(o.error ? {} : { note: 'the director wrote no summary' }) };
+  }
+  return { ended: o.stopped && r.status === 'fail' ? { ...r, status: 'interrupted' } : r };
 }
 
 /** `<columns>x<rows>`, at least 80x24. */
@@ -101,8 +123,19 @@ function writeWhole(file: string, text: string): void {
 /** A file's complete lines (a line still being written has no newline yet). */
 const lines = (file: string) => { const t = readFileSync(file, 'utf8'); return t.slice(0, t.lastIndexOf('\n') + 1).split('\n').filter(Boolean); };
 
+/** Refuses a symbolic link (or anything but a file or a folder) anywhere in a skill folder, by lstat, naming it. */
+function realFilesOnly(dir: string): void {
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name), st = lstatSync(p);
+    if (st.isSymbolicLink()) throw new Error(`${p}: a symbolic link; skill folders are copied with real files and folders only`);
+    if (st.isDirectory()) realFilesOnly(p);
+    else if (!st.isFile()) throw new Error(`${p}: not a file or a folder; skill folders are copied with real files and folders only`);
+  }
+}
+
 /** Each developer's skill folders, from the scene's skills/ folder into the folder their assistant runs in, and only
- *  there: a destination outside `work`, or a skill folder that is a link, is refused before anything is copied for it. */
+ *  there: a destination outside `work`, a skill folder that is a link, or one with a link inside, is refused before
+ *  anything is copied for it. */
 export function copySkills(scenes: Scenes, from: string, work: string): void {
   const inside = (p: string) => p.startsWith(resolve(work) + sep);
   for (const d of scenes.developers) {
@@ -113,6 +146,7 @@ export function copySkills(scenes: Scenes, from: string, work: string): void {
       const to = resolve(skills, f);
       if (!inside(to) || dirname(to) !== skills) throw new Error(`${d.id}: ${f} would be copied outside ${skills}`);
       if (!lstatSync(join(from, f), { throwIfNoEntry: false })?.isDirectory()) throw new Error(`${join(from, f)}: no skill folder there (a link isn't one)`);
+      realFilesOnly(join(from, f));
       cpSync(join(from, f), to, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true });
     }
   }

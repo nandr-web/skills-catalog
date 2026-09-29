@@ -44,8 +44,9 @@ login, no cost), on the real catalog: its MCP server (this repository's own, one
 and updating, its command line. With `--core` they call the catalog's core in their own process instead, and the
 installing and updating steps show as planned.
 
-Needs Node 24.15 or later, tmux 3.2 or later (`brew install tmux` on macOS, `sudo apt install tmux` on Debian or
-Ubuntu), and macOS or Linux. It's laid out for a terminal of about 200 columns by 50 rows (a laptop screen, full size);
+Needs Node 24.15 or later, tmux 3.2 or later, and macOS or Linux. On macOS, tmux from Homebrew (`brew install tmux`);
+on Linux, from a distribution whose tmux is 3.2 or later, e.g. Debian 12 or Ubuntu 22.04 and later
+(`sudo apt install tmux`). It's laid out for a terminal of about 200 columns by 50 rows (a laptop screen, full size);
 it plays down to 80 by 24, with more lines wrapped. Once, from this folder:
 `(cd ../core && npm ci --ignore-scripts) && (cd ../client && npm ci --ignore-scripts) && npm ci --ignore-scripts`
 (without `../client` installed, the demo runs as with `--core`, and says so). Then:
@@ -55,7 +56,7 @@ npm run demo
 ```
 
 ```
-┌ Developer 1 · ana ────────────┬ Developer 2 · bob ────────────┬ Steps ──────────────────────┐
+┌ Developer 1 · ana (scripted) ─┬ Developer 2 · bob (scripted) ─┬ Steps ──────────────────────┐
 │ › publish v2 of release-note… │ › what changed in release-no… │ ✓ 4  ana publishes v2, which│
 │ ● publish_skill_to_catalog    │ ● diff_shared_skill_versions  │      adds a script          │
 │   │ Published release-note-d… │   │ … Can run something new o…│ ▶ 5  bob compares v1 and v2 │
@@ -67,7 +68,7 @@ npm run demo
 
 | Pane | What it shows |
 |---|---|
-| Developer 1 · ana, Developer 2 · bob | Each developer's assistant, with what they ask it. For now a stand-in: it makes the calls an assistant would, on the real catalog, and shows the catalog's own words. A publish is the catalog's preview, then the person's yes (dimmed), then the publish. No model, no cost |
+| Developer 1 · ana (scripted), Developer 2 · bob (scripted) | Each developer's assistant, with what they ask it. For now a scripted stand-in: it makes the calls an assistant would, on the real catalog, and shows the catalog's own words. A publish is the catalog's preview, then the person's yes (dimmed), then the publish. No model, no cost |
 | Steps | Each step and what to look for; ✓ once the demo saw it too, ◌ for a step whose part isn't in this demo |
 | Catalog server log | One line per call: when, who, which tool or command, what happened. Never what anyone typed. The catalog's servers and command line write it; with `--core` the stand-ins do, in the same words (its first line says so) |
 
@@ -86,20 +87,25 @@ It plays on its own, a few seconds per step. **Enter**: the next step now. **p**
 remove everything and say whether anything was left behind (before the last step, it also says after which step it
 stopped and how many weren't played).
 
-Exit codes, with or without a window: 0 every step seen or planned, 1 a step missed (it says what didn't show), 2
-something was left behind, 3 a pre-flight check refused to start (it says why), 130 stopped with q or Ctrl-C before
-the last step. Each run keeps each pane's text, the log and its last line (`status.txt`) in `out/demo/<run-id>/`.
+Exit codes: 0 every step seen or planned; 1 a step missed (it says what didn't show), a flag refused (it says which) or
+the director failed (it says why); 2 something was left behind; 3 a pre-flight check refused to start (it says why);
+124 timed out (headless only: a run with a window has no time limit, a headless one stops after 30 minutes); 130
+stopped with q or Ctrl-C before the last step. Each run keeps each pane's text, the log and its last line
+(`status.txt`) in `out/demo/<run-id>/`.
+
+Options go after `--`, so npm passes them on:
 
 | Option | What it does |
 |---|---|
-| `--step` | Waits for Enter before each step |
-| `--only 5,6` | Only those steps (the steps before them run first, at once) |
-| `--pace <seconds>` | The pause after each step (default 3) |
-| `--close-after <seconds>` | Closes the window by itself that long after the last step, as q would then (for a recording); without it, it waits for q |
-| `--headless` | No window: plays straight through; the panes' text is in `out/demo/<run-id>/` |
-| `--size <columns>x<rows>` | The window's size (default: this terminal's; headless, 200x50) |
-| `--core` | The stand-ins call the catalog's core in their own process, not its MCP server |
-| `--server "<command>"` | Another catalog MCP server (its words split at spaces, the first an absolute path) |
+| `npm run demo -- --step` | Waits for Enter before each step |
+| `npm run demo -- --only 5,6` | Only those steps (the steps before them run first, at once) |
+| `npm run demo -- --pace <seconds>` | The pause after each step (default 3) |
+| `npm run demo -- --close-after <seconds>` | Closes the window by itself that long after the last step, as q would then (for a recording); without it, it waits for q |
+| `npm run demo -- --headless` | No window: plays straight through; the panes' text is in `out/demo/<run-id>/` |
+| `npm run demo -- --out <folder>` | Where each pane's text, the log and `status.txt` go, instead of `out/demo/<run-id>/`; a new or empty folder |
+| `npm run demo -- --size <columns>x<rows>` | The window's size (default: this terminal's; headless, 200x50) |
+| `npm run demo -- --core` | The stand-ins call the catalog's core in their own process, not its MCP server |
+| `npm run demo -- --server "<command>"` | Another catalog MCP server (its words split at spaces, the first an absolute path) |
 
 The demo runs inside `qa run`: its own tmux server (never yours) in a fresh sandbox, panes whose `PATH` is only
 `/usr/bin` and `/bin` and whose home is inside the sandbox, and at the end the check that nothing outside the sandbox changed. On Linux, the

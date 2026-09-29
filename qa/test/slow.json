@@ -4,16 +4,32 @@
     {
       "file": "test/agent-runner-tries.test.ts",
       "covers": "the agent runner gives Haiku five tries on the discovery asks and other models three: eight tries, each with its before/after check",
-      "seconds": { "alone": 4.6, "full_run": 10.9 },
+      "seconds": {
+        "alone": 4.6,
+        "full_run": 10.9
+      },
       "load": 8,
       "measured": "2026-09-28"
+    },
+    {
+      "file": "test/demo.test.ts",
+      "covers": "the one-click demo in real tmux on fake machines: layout, each ending's teardown (pass, missed, q, Ctrl-C, SIGTERM, SIGHUP, a killed client, a crash), the attached window, the real scene file on both backends",
+      "seconds": {
+        "alone": 51,
+        "full_run": null
+      },
+      "load": 5,
+      "measured": "2026-09-29"
     }
   ],
   "kept_fast": [
     {
       "file": "test/qa-run.test.ts",
       "why": "safety: the sandbox, teardown on every ending, the leak canaries and never deleting a folder a command names",
-      "seconds": { "alone": 7.4, "full_run": 18.1 },
+      "seconds": {
+        "alone": 7.4,
+        "full_run": 18.1
+      },
       "load": 8,
       "measured": "2026-09-28"
     }

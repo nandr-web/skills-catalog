@@ -53,10 +53,32 @@ const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 
 const text = (x: unknown) => typeof x === 'string' && x.trim() !== '';
 const stray = (o: Record<string, unknown>, keys: string[]) => Object.keys(o).filter((k) => !keys.includes(k));
 
+/** C0 (no exceptions: tab and line break too), DEL and C1. */
+const CONTROL = /[\x00-\x1f\x7f-\x9f]/;
+const PLAIN = 'scene text must be plain text: it is shown in the panes and typed into them';
+/** Every text and key with a control character, by where it is (`steps #2, asks #1, say`), never the text itself: a
+ *  reason goes to the person's terminal. A key with one is reported without looking inside it. */
+function controlCharacters(x: unknown, at: string, out: string[]): string[] {
+  const code = (s: string) => { const c = CONTROL.exec(s)?.[0]; return c && `U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}`; };
+  if (typeof x === 'string') { const c = code(x); if (c) out.push(`${at}: a control character (${c}); ${PLAIN}`); }
+  else if (Array.isArray(x)) x.forEach((v, i) => controlCharacters(v, `${at} #${i + 1}`, out));
+  else if (isObj(x)) {
+    for (const [k, v] of Object.entries(x)) {
+      const c = code(k);
+      if (c) out.push(`${at || 'the file'}: a key with a control character (${c}); ${PLAIN}`);
+      else controlCharacters(v, at ? `${at}, ${k}` : k, out);
+    }
+  }
+  return out;
+}
+
 /** Check a parsed scene file; throws ScenesError with every problem, one per line. */
 export function parseScenes(doc: unknown, skillsDir = SKILLS_DIR): Scenes {
   const bad: string[] = [];
   if (!isObj(doc)) throw new ScenesError('not a mapping with developers and steps');
+  // first, and alone: the other reasons quote the file's text
+  const control = controlCharacters(doc, '', []);
+  if (control.length) throw new ScenesError(control.join('\n'));
   for (const k of stray(doc, ['developers', 'steps'])) bad.push(`unknown key ${k}`);
   const devs = Array.isArray(doc.developers) ? doc.developers : [];
   if (!devs.length) bad.push('no developers');

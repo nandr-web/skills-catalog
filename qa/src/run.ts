@@ -69,7 +69,9 @@ export async function qaRun(o: RunOptions): Promise<RunResult> {
     pgid = child.pid!;
     recordProcessGroup(sb, pgid);
     o.onStart?.(sb, pgid);
-    timer = setTimeout(() => stopGroup('timeout'), o.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    // Infinity: no time limit (an attached demo, which the person stops); setTimeout would read it as 1 ms
+    const limit = o.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    if (limit !== Infinity) timer = setTimeout(() => stopGroup('timeout'), limit);
     o.signal?.addEventListener('abort', onAbort, { once: true });
     if (o.signal?.aborted) onAbort();
     exitCode = await new Promise<number | null>((ok) => {

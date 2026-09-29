@@ -1,4 +1,4 @@
-// The stand-in on the catalog's MCP server (the demo plan, piece C): one server per developer, each its own machine in
+// The stand-in on the catalog's MCP server: one server per developer, each its own machine in
 // the sandbox, started at the first ask with those settings and nothing else; each catalog step is a tool call, printed
 // with the tool's name and the server's own words; publish is its two calls (the preview, then the confirm), with the
 // person's yes between them; the server, not the stand-in, writes activity.log. A fake server for the rules
@@ -217,7 +217,7 @@ describe('the stand-in on an MCP server (a fake one)', () => {
     const bad = stage(scenes, root, 'ana', dying);
     expect((await answer(bad.st, 'publish my skills, release-note-draft and sql-migrations')).ok).toBe(false);
     expect(bad.pane.text.replace(ours, '')).not.toMatch(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/);
-    expect(plain(bad.pane.text)).toMatch(/  │ error: .*\]52;c;ZXZpbA== boom/);
+    expect(plain(bad.pane.text)).toMatch(/^✗ stand-in error: .*\]52;c;ZXZpbA== boom second$/m);   // the stand-in's words: no gutter
   });
 
   it('the confirm is read only from the preview\'s instruction to call the tool: values before it, a folder or a message in it, never go in', async () => {
@@ -243,7 +243,7 @@ describe('the stand-in on an MCP server (a fake one)', () => {
     const { st, pane } = stage(scenes, root, 'ana', [...FAKE, '--other-name']);
     expect(await answer(st, 'publish v2 of release-note-draft, it adds a script')).toMatchObject({ step: 4, ok: false });
     expect(calls(root, 'ana')).toHaveLength(1);
-    expect(plain(pane.text)).toContain('  │ error: the preview is for "someone-else", not release-note-draft: not confirmed');
+    expect(plain(pane.text)).toContain('\n✗ stand-in error: the preview is for "someone-else", not release-note-draft: not confirmed\n');
     expect(plain(pane.text)).not.toContain('says yes');
   });
 
@@ -251,7 +251,7 @@ describe('the stand-in on an MCP server (a fake one)', () => {
     const root = sandbox(scenes);
     const { st, pane } = stage(scenes, root, 'bob', [...FAKE, '--without', surface.names.search!]);
     expect(await answer(st, 'find me a skill for release changelogs')).toMatchObject({ step: 3, ok: false });
-    expect(plain(pane.text)).toContain(`  │ error: the catalog's server has no tool ${surface.names.search}`);
+    expect(plain(pane.text)).toContain(`\n✗ stand-in error: the catalog's server has no tool ${surface.names.search}\n`);
     expect(calls(root, 'bob')).toEqual([]);
     expect(logOf(root)).toBe('');
   });
@@ -261,7 +261,7 @@ describe('the stand-in on an MCP server (a fake one)', () => {
     const { st, pane } = stage(scenes, root, 'bob', [join(root, 'no-such-node'), 'cli.ts', 'mcp']);
     expect((await answer(st, 'install the skill manager')).ok).toBe(true);
     expect((await answer(st, 'find me a skill for release changelogs')).ok).toBe(false);
-    expect(plain(pane.text)).toMatch(/  │ error: .*ENOENT/);
+    expect(plain(pane.text)).toMatch(/^✗ stand-in error: .*ENOENT/m);
     // The command line is started from the same place as the server, so it can't start either; the next ask still runs.
     expect((await answer(st, 'update my skills')).ok).toBe(false);
     expect((await answer(st, 'install the skill manager')).ok).toBe(true);

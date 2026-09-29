@@ -1,4 +1,4 @@
-// The one-click demo's scenes and pane programs (the demo plan, piece B): the scene file validates; the stand-in assistant,
+// The one-click demo's scenes and pane programs: the scene file validates; the stand-in assistant,
 // driven through every step on a real catalog, prints every string the scene file expects (so the file can't promise
 // words the product doesn't say); activity.log's columns and what never goes in it; the steps view's render and keys.
 import { spawn } from 'node:child_process';
@@ -108,6 +108,40 @@ describe('scenes.yaml', () => {
     unlinkSync(join(skills, 'release-note-draft-v1'));
     cpSync(join(SKILLS_DIR, 'release-note-draft-v1'), join(skills, 'release-note-draft-v1'), { recursive: true });
     expect(parseScenes(doc(), skills).developers).toHaveLength(2);
+  });
+
+  it('refuses a control character (C0, DEL or C1) in any text or key, saying where, and never echoing it', () => {
+    const d = doc();
+    d.developers[0].title = 'Developer 1\x1b]0;owned\x07';              // an escape sequence, in a pane title
+    d.steps[1].see = 'look\there';                                    // a tab: C0 has no exceptions
+    d.steps[1].asks[0].say = 'publish\x7f';                           // DEL, typed into a pane
+    d.steps[1].asks[0].calls[0].folder = 'release-note-draft-v1\n';   // a line break, in a folder name
+    d.steps[1].expect.ana[0] = 'Published\x9b2J';                     // C1 (CSI)
+    d.steps[0].asks[0].calls[0].why = 'soon\x00';
+    d.steps[1].expect['bo\x1bb'] = ['x'];                              // a key
+    const lines = refused(d).split('\n');
+    const why = 'scene text must be plain text: it is shown in the panes and typed into them';
+    expect(lines).toEqual([
+      `developers #1, title: a control character (U+001B); ${why}`,
+      `steps #1, asks #1, calls #1, why: a control character (U+0000); ${why}`,
+      `steps #2, see: a control character (U+0009); ${why}`,
+      `steps #2, asks #1, say: a control character (U+007F); ${why}`,
+      `steps #2, asks #1, calls #1, folder: a control character (U+000A); ${why}`,
+      `steps #2, expect, ana #1: a control character (U+009B); ${why}`,
+      `steps #2, expect: a key with a control character (U+001B); ${why}`,
+    ]);
+    // the reasons never carry the characters themselves (they'd reach the person's terminal)
+    expect(refused(d)).not.toMatch(/[\x00-\x09\x0b-\x1f\x7f-\x9f]/);
+    // and a scene file read from disk the same way, named
+    const f = join(scratch(), 'scenes.yaml');
+    const clean = doc();
+    clean.developers[1].title = 'Developer 2\x1b[2J';
+    writeFileSync(f, stringify(clean));
+    expect(() => loadScenes(f, SKILLS_DIR)).toThrow(`${f}: developers #2, title: a control character (U+001B); ${why}`);
+  });
+
+  it('the developers\' pane titles say their assistants are scripted (a label in the pane scrolls away)', () => {
+    expect(loadScenes(SCENES_FILE).developers.map((d) => d.title)).toEqual(['Developer 1 · ana (scripted)', 'Developer 2 · bob (scripted)']);
   });
 
   it('loads another file by path (a test scene file), and names the file when it is refused', () => {
@@ -356,7 +390,10 @@ describe('the stand-in assistant', () => {
     const broken = { ...st.ana!, backend: coreBackend({ catalog: catalogs.ana!, surface, skillsDir: join(root, 'nowhere') }) };
     const t = await answer(broken, 'publish my skills, release-note-draft and sql-migrations');
     expect(t).toMatchObject({ step: 2, ok: false });
-    expect(plain(panes.ana!)).toMatch(/  │ error: /);
+    // the stand-in's own error: orange, from the line's start, never behind the gutter the catalog's words have
+    const said = panes.ana!.split('\n').find((l) => plain(l).startsWith('✗ stand-in error: '));
+    expect(said).toMatch(/^\x1b\[38;5;208m✗ stand-in error: .+\x1b\[0m$/);
+    expect(productWords(panes.ana!)).not.toContain('error');
     // it isn't the catalog's answer: no log line (the server logs only its own calls, too)
     expect(existsSync(join(root, 'demo', 'activity.log'))).toBe(false);
     expect((await answer(st.ana!, 'publish my skills, release-note-draft and sql-migrations')).ok).toBe(true);
@@ -371,7 +408,18 @@ describe('the stand-in assistant', () => {
     const ana = { ...st.ana!, backend: coreBackend({ catalog: failing, surface, skillsDir: join(root, 'work', 'ana', 'skills') }) };
     expect((await answer(ana, 'install the skill manager')).ok).toBe(true);
     expect((await answer(ana, 'publish my skills, release-note-draft and sql-migrations')).ok).toBe(false);
-    expect(plain(panes.ana!)).toContain('  │ error: database is locked');
+    expect(plain(panes.ana!)).toContain('\n✗ stand-in error: database is locked\n');
+    expect(plain(panes.ana!)).not.toContain('│ error');
+  });
+
+  it('the stand-in\'s own error of several lines: every line orange, the first after ✗, the rest indented, none behind the gutter or with its control characters', async () => {
+    const scenes = loadScenes(SCENES_FILE);
+    const root = sandbox(scenes);
+    const { stages: st, panes } = await stages(scenes, root);
+    const failing: Backend = { call: async () => { throw new Error('first\x1b[2J line\nsecond line'); } };
+    expect((await answer({ ...st.bob!, backend: failing }, 'find me a skill for release changelogs')).ok).toBe(false);
+    expect(panes.bob).toContain('\x1b[38;5;208m✗ stand-in error: first [2J line\x1b[0m\n\x1b[38;5;208m  second line\x1b[0m\n');
+    expect(productWords(panes.bob!)).toBe('');
   });
 
   it('the catalog is behind a Backend: another one (later, the MCP server) changes nothing else, and may log for itself', async () => {

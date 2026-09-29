@@ -58,9 +58,10 @@ const USAGE = `qa: the skills catalog's QA tools
       this command (its words split at spaces, or a JSON array of them; no shell; the first an absolute path) and the
       sandbox's settings only; by default this repository's own (../client, once npm ci has run there); --core: they call
       the core in their own process instead (the default while ../client isn't installed); --live (real assistants) isn't
-      built yet. Exit: 0 every step seen or planned, 1 a step missed, 2 something was left behind, 3 a pre-flight check
-      refused to start, 130 stopped (q or Ctrl-C before the last step).
-      Tests point it at other files with DEMO_SCENES, and (with --fake-machine only) DEMO_ASSISTANT, DEMO_STEPS_VIEW, DEMO_CORE.
+      built yet. An attached run has no time limit; a headless one, qa run's 30 minutes. Exit: 0 every step seen or
+      planned, 1 a step missed, a flag refused or the director failed, 2 something was left behind, 3 a pre-flight check
+      refused to start, 124 timed out (headless only), 130 stopped (q or Ctrl-C before the last step).
+      Tests point it at other files, with --fake-machine only: DEMO_SCENES, DEMO_ASSISTANT, DEMO_STEPS_VIEW, DEMO_CORE, DEMO_CLIENT.
 
   Every command that touches a machine also takes --fake-machine <dir> (tests: tmp, home and Claude's folders under <dir>).`;
 
@@ -171,7 +172,7 @@ async function main(argv: string[]): Promise<number> {
     }
     case 'demo': {
       // the demo's modules load for this command only: every other command starts without them
-      const [{ doneLine, stoppedLine }, { loadScenes }, { DEFAULTS, DIRECTOR, demoPaths, parseSize, preflight: demoPreflight, repoServer, serverCommand, showWindow }, { findTmux, tmuxVersion, useTmux }] =
+      const [{ doneLine, stoppedLine }, { loadScenes }, { DIRECTOR, demoEnding, demoPaths, demoTimeoutMs, parseSize, preflight: demoPreflight, repoServer, serverCommand, showWindow }, { findTmux, tmuxVersion, useTmux }] =
         await Promise.all([import('./demo/conductor.ts'), import('./demo/scenes.ts'), import('./demo/director.ts'), import('./demo/tmux.ts')]);
       const d = opts({
         step: { type: 'boolean' }, only: { type: 'string' }, pace: { type: 'string', default: '3' }, 'close-after': { type: 'string' }, headless: { type: 'boolean' }, size: { type: 'string' },
@@ -181,12 +182,12 @@ async function main(argv: string[]): Promise<number> {
       const tty = !!(process.stdin.isTTY && process.stdout.isTTY);
       const tmuxBin = findTmux();
       const paths = demoPaths(process.env, !!d['fake-machine']);
-      const refused = demoPreflight({ tmux: tmuxVersion(tmuxBin), coreDir: paths.core, tty, headless, live: !!d.live });
+      const refused = demoPreflight({ node: process.versions.node, tmux: tmuxVersion(tmuxBin), coreDir: paths.core, tty, headless, live: !!d.live });
       if (refused.length) { for (const p of refused) console.error(`qa demo: ${p}`); return 3; }
       // attached, the window starts at this terminal's size (80x24 when it says none, as tmux then assumes), so the
       // layout isn't squeezed when the window attaches
       const size: string = d.size ?? (headless ? '200x50' : `${Math.max(process.stdout.columns || 80, 80)}x${Math.max(process.stdout.rows || 24, 24)}`);
-      const scenesFile = resolve(process.env.DEMO_SCENES ?? DEFAULTS.scenes);
+      const scenesFile = paths.scenes;
       const only = d.only?.split(',').map((x: string) => x.trim()).filter(Boolean) as string[] | undefined;
       const bad: string[] = [];
       if (!/^\d+(\.\d+)?$/.test(d.pace)) bad.push(`--pace ${d.pace}: a number of seconds`);
@@ -222,7 +223,7 @@ async function main(argv: string[]): Promise<number> {
       for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) process.on(sig, () => stop.abort());
       let window: Promise<void> | undefined, running = true;
       const r = await qaRun({
-        machine, runId, signal: stop.signal, stdio: 'ignore',
+        machine, runId, signal: stop.signal, stdio: 'ignore', timeoutMs: demoTimeoutMs(headless),
         command: [
           process.execPath, DIRECTOR, '--tmux', tmuxBin!, '--scenes', scenesFile, '--assistant', paths.assistant,
           '--steps-view', paths.stepsView, '--out', out, '--pace', d.pace, '--size', size, ...(d['close-after'] !== undefined ? ['--close-after', d['close-after']] : []),
@@ -239,16 +240,18 @@ async function main(argv: string[]): Promise<number> {
       });
       running = false;
       await window;
-      if (existsSync(join(out, 'error.txt'))) console.error(`qa demo: the director stopped: ${readFileSync(join(out, 'error.txt'), 'utf8').trim()}`);
+      const error = existsSync(join(out, 'error.txt')), summary = existsSync(join(out, 'summary.json'));
+      if (error) console.error(`qa demo: the director stopped: ${readFileSync(join(out, 'error.txt'), 'utf8').trim()}`);
       let stopped = false;
-      if (existsSync(join(out, 'summary.json'))) {
+      if (summary) {
         const s = JSON.parse(readFileSync(join(out, 'summary.json'), 'utf8'));
         for (const step of s.steps as StepView[]) if (step.state === 'missed') console.error(`  missed: step ${step.id}, ${step.title}: ${step.missing?.join('; ')}`);
         stopped = !!s.stopped;
         console.error(`qa demo: ${s.stopped ? stoppedLine(s.stopped) : doneLine(s.counts)}; each pane's text is in ${out}`);
       }
-      // q or Ctrl-C in the window before the last step: the person stopped it (130), which is neither a pass nor a fail
-      const ended: RunResult = stopped && r.status === 'fail' ? { ...r, status: 'interrupted' } : r;
+      // no summary: the director failed, never a pass; q or Ctrl-C before the last step: interrupted (130)
+      const { ended, note } = demoEnding(r, { summary, stopped, error });
+      if (note) console.error(`qa demo: ${note}`);
       writeFileSync(join(out, 'status.txt'), `${statusLine('demo', ended)}\n`, { flag: 'wx' });   // the ending, with the panes' text
       return reportRun('demo', ended);
     }

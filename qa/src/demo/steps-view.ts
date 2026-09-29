@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The steps pane of the one-click demo (the demo plan, piece B): redraws from $QA_SANDBOX/demo/steps.json when it changes,
+// The steps pane of the one-click demo: redraws from $QA_SANDBOX/demo/steps.json when it changes,
 // and turns keys into words for the conductor, appended to $QA_SANDBOX/demo/control. Render and key mapping are pure.
 //   node src/demo/steps-view.ts
 import { appendFileSync, readFileSync } from 'node:fs';

@@ -2,14 +2,15 @@
 // panes and checked, and everything torn down by qa run's machinery. Real tmux (skipped, with the reason, when it's
 // missing), fake machines always, a tiny scene file and a fake pane program (test/fixtures/demo/).
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, onTestFinished } from 'vitest';
 import { runProcesses } from '../src/check.ts';
 import { conduct, joined, stoppedLine, type ConductorIo, type StepsFile, type Turn } from '../src/demo/conductor.ts';
 import { loadScenes, type Scenes } from '../src/demo/scenes.ts';
-import { copySkills, DEFAULTS, demoPaths, leftoverGroups, LOG_NOTE, preflight, repoServer, running, serverCommand } from '../src/demo/director.ts';
+import { copySkills, DEFAULTS, demoEnding, demoPaths, demoTimeoutMs, leftoverGroups, LOG_NOTE, nodeOk, preflight, repoServer, running, serverCommand } from '../src/demo/director.ts';
+import type { RunResult } from '../src/run.ts';
 import { batch, buildLayout, configure, literal, startServer, tmuxAt, tmuxVersion, versionOk, waitForServer } from '../src/demo/tmux.ts';
 import { sandboxBase } from '../src/sandbox.ts';
 import { cleanup, machine, qaBareSync, qaSpawn, qaSpawnInTerminal, qaSync, scratch, type TestMachine } from './machine.ts';
@@ -283,6 +284,8 @@ describe.skipIf(!!noTmux)(`qa demo with real tmux${noTmux ? ` (skipped: ${noTmux
     expect(r.err).toMatch(new RegExp(`qa demo ${r.runId}: pass${NOTHING_LEFT}`));
     const summary = JSON.parse(r.read('summary.json'));
     expect(summary.steps.map((x: { state: string }) => x.state)).toEqual(['planned', 'seen', 'seen', 'seen', 'seen', 'seen', 'seen', 'seen']);
+    // the developers' panes say, on their borders, that their assistants are scripted (it never scrolls away)
+    expect(Object.keys(layout(r.read('layout.txt'))).sort()).toEqual(['Catalog server log', 'Developer 1 · ana (scripted)', 'Developer 2 · bob (scripted)', 'Steps']);
     expect(joined(r.read('bob.txt'))).toContain('Can run something new on this machine: yes');
     expect(r.read('bob.txt')).toContain('Take it? (y/N) y');   // bob's own answer, in his own pane
     expect(joined(r.read('ana.txt'))).toContain('(ana says yes to publishing)');
@@ -362,17 +365,51 @@ describe.skipIf(!!noTmux)(`qa demo with real tmux${noTmux ? ` (skipped: ${noTmux
 
   it('without --fake-machine, DEMO_CORE, DEMO_ASSISTANT and DEMO_STEPS_VIEW mean nothing: the panes run the demo\'s own programs', () => {
     const env = { DEMO_ASSISTANT: '/x/assistant.mjs', DEMO_STEPS_VIEW: '/x/view.mjs', DEMO_CORE: '/x/core' };
-    expect(demoPaths({ ...env, DEMO_CLIENT: '/x/client' }, true)).toEqual({ assistant: '/x/assistant.mjs', stepsView: '/x/view.mjs', core: '/x/core', client: '/x/client' });
-    expect(demoPaths({ ...env, DEMO_CLIENT: '/x/client' }, false)).toEqual({ assistant: DEFAULTS.assistant, stepsView: DEFAULTS.stepsView, core: DEFAULTS.core, client: DEFAULTS.client });
+    expect(demoPaths({ ...env, DEMO_CLIENT: '/x/client' }, true)).toEqual({ scenes: DEFAULTS.scenes, assistant: '/x/assistant.mjs', stepsView: '/x/view.mjs', core: '/x/core', client: '/x/client' });
+    expect(demoPaths({ ...env, DEMO_CLIENT: '/x/client' }, false)).toEqual({ scenes: DEFAULTS.scenes, assistant: DEFAULTS.assistant, stepsView: DEFAULTS.stepsView, core: DEFAULTS.core, client: DEFAULTS.client });
     // on the command line: a core without its dependencies is refused only when it's the one used
     const saved = process.env.DEMO_CORE;
     onTestFinished(() => { if (saved === undefined) delete process.env.DEMO_CORE; else process.env.DEMO_CORE = saved; });
     process.env.DEMO_CORE = scratch('qa-core-');
     const r = qaBareSync(['demo', '--headless']);
-    expect(r.stderr).not.toContain('run npm ci in ../core first');
+    expect(r.stderr).not.toContain('run npm ci --ignore-scripts in ../core first');
     expect(r.stderr).toContain('the real machine is never used by a test process');   // past the pre-flight, refused at the machine
     expect(r.status).toBe(3);
   });
+
+  it('without --fake-machine, DEMO_SCENES means nothing either: a real run always plays demo/scenes.yaml', () => {
+    expect(demoPaths({ DEMO_SCENES: '/x/scenes.yaml' }, true).scenes).toBe('/x/scenes.yaml');
+    expect(demoPaths({ DEMO_SCENES: '/x/scenes.yaml' }, false).scenes).toBe(DEFAULTS.scenes);
+    // on the command line: a scene file that isn't there would be refused (exit 1) if it were read; it isn't
+    const saved = process.env.DEMO_SCENES;
+    onTestFinished(() => { if (saved === undefined) delete process.env.DEMO_SCENES; else process.env.DEMO_SCENES = saved; });
+    const missing = join(scratch('qa-scenes-'), 'no-such-scenes.yaml');
+    process.env.DEMO_SCENES = missing;
+    const r = qaBareSync(['demo', '--headless']);
+    expect(r.stderr).not.toContain(missing);
+    expect(r.stderr).toContain('the real machine is never used by a test process');   // past the scene file, refused at the machine
+    expect(r.status).toBe(3);
+  });
+
+  it('the usage lists every setting that counts only with --fake-machine', () => {
+    const r = qaSync(null, ['--help']);
+    expect(r.stdout.replace(/\s+/g, ' ')).toContain('with --fake-machine only: DEMO_SCENES, DEMO_ASSISTANT, DEMO_STEPS_VIEW, DEMO_CORE, DEMO_CLIENT');
+  });
+
+  it('a pane title is shown as written: a tmux format in it (#(command) runs a command) is never expanded', async () => {
+    const dir = scratch('qa-demo-tmux-');
+    const server = startServer(dir, { PATH: process.env.PATH ?? '' });
+    servers.push({ kill: () => { spawnSync('tmux', ['-S', 't', '-f', '/dev/null', 'kill-server'], { cwd: dir }); server.kill('SIGKILL'); } });
+    const t = tmuxAt(dir);
+    await waitForServer(t);
+    configure(t, { control: join(dir, 'control') });
+    const marker = join(dir, 'ran');
+    const titles = { ana: `#(touch ${marker})`, bob: 'odd ## #{pane_id};' };
+    const panes = buildLayout(t, { developers: [{ id: 'ana', title: titles.ana }, { id: 'bob', title: titles.bob }], size: { cols: 200, rows: 50 }, cwd: dir });
+    await new Promise((r) => setTimeout(r, 1000));   // a #() job runs in the background: give it time to
+    expect(existsSync(marker)).toBe(false);
+    for (const who of ['ana', 'bob'] as const) expect(t('display-message', '-p', '-t', panes[who], '#{pane_title}').trim(), who).toBe(titles[who]);
+  }, 60_000);
 
   it('--server: a first word that isn\'t an absolute path, or isn\'t there, is refused before anything starts; its command goes to each developer pane as DEMO_MCP', async () => {
     const m = machine();
@@ -430,11 +467,11 @@ describe('qa demo pre-flight: exit 3, one plain line each, nothing started', () 
     refused(m, ['--headless'], { PATH: `${bin}:${process.env.PATH}` }, 'needs tmux 3.2 or later');
   });
 
-  it("the core's dependencies missing", () => { const m = machine(); refused(m, ['--headless'], { DEMO_CORE: scratch('qa-core-') }, 'run npm ci in ../core first'); });
+  it("the core's dependencies missing", () => { const m = machine(); refused(m, ['--headless'], { DEMO_CORE: scratch('qa-core-') }, 'run npm ci --ignore-scripts in ../core first'); });
 
   it('no terminal without --headless', () => { const m = machine(); refused(m, [], {}, 'needs a terminal: run it in one, or add --headless'); });
 
-  it('--live', () => { const m = machine(); refused(m, ['--headless', '--live'], {}, "not yet: live assistants need the catalog's MCP server"); });
+  it('--live', () => { const m = machine(); refused(m, ['--headless', '--live'], {}, 'not yet: real assistants in the panes come later'); });
 
   it('the pre-flight as a function: each problem its own line, none when all is well', () => {
     const core = scratch('qa-core-');
@@ -442,10 +479,43 @@ describe('qa demo pre-flight: exit 3, one plain line each, nothing started', () 
     expect(preflight(ok)).toEqual([]);
     expect(preflight({ ...ok, tty: false, headless: true })).toEqual([]);
     expect(preflight({ ...ok, tmux: null, coreDir: core, tty: false, headless: false, live: true })).toEqual([
-      'needs tmux 3.2 or later', 'run npm ci in ../core first', 'needs a terminal: run it in one, or add --headless', "not yet: live assistants need the catalog's MCP server",
+      'needs tmux 3.2 or later', 'run npm ci --ignore-scripts in ../core first', 'needs a terminal: run it in one, or add --headless', 'not yet: real assistants in the panes come later',
     ]);
     for (const v of ['tmux 3.2', 'tmux 3.2a', 'tmux 3.7c', 'tmux 10.0', 'tmux next-3.6', 'tmux master']) expect(versionOk(v), v).toBe(true);
     for (const v of ['tmux 3.1c', 'tmux 2.9', 'tmux 1.8', 'tmux', '', null]) expect(versionOk(v), String(v)).toBe(false);
+  });
+
+  it('Node older than 24.15 (package.json engines) is refused with one plain line', () => {
+    const ok = { tmux: 'tmux 3.7c', coreDir: fileURLToPath(new URL('../../core', import.meta.url)), tty: true, headless: false, live: false };
+    expect(preflight({ ...ok, node: '24.14.1' })).toEqual(['needs Node 24.15 or later (this is Node 24.14.1)']);
+    expect(preflight({ ...ok, node: '24.15.0' })).toEqual([]);
+    for (const v of ['24.15.0', '24.16.2', '25.0.0', '100.1.0']) expect(nodeOk(v), v).toBe(true);
+    for (const v of ['24.14.9', '24.2.0', '23.99.0', '22.18.0', '', 'x']) expect(nodeOk(v), v).toBe(false);
+  });
+});
+
+describe('how a demo run ends', () => {
+  const run = (over: Partial<RunResult>): RunResult => ({ status: 'pass', exitCode: 0, differences: [], sandbox: '/s', runId: 'r', stopped: [], janitor: { removed: [], skipped: [] }, teardown: { removed: [], skipped: [] }, ...over });
+
+  it('a director that wrote no summary is a failure (exit 1), never a pass, and says so', () => {
+    for (const r of [run({}), run({ status: 'fail', exitCode: 137 }), run({ status: 'fail', exitCode: 130 })]) {
+      expect(demoEnding(r, { summary: false, stopped: false })).toEqual({ ended: { ...r, status: 'fail', exitCode: 1 }, note: 'the director wrote no summary' });
+    }
+    // it said why itself (error.txt): the same failure, without the note
+    expect(demoEnding(run({ status: 'fail', exitCode: 1 }), { summary: false, stopped: false, error: true })).toEqual({ ended: run({ status: 'fail', exitCode: 1 }) });
+    // a timeout, a stop and something left behind keep their own endings
+    for (const status of ['timeout', 'interrupted', 'leak'] as const) expect(demoEnding(run({ status, exitCode: null }), { summary: false, stopped: false }).ended.status).toBe(status);
+  });
+
+  it('with a summary: a pass is a pass, and a stop (q or Ctrl-C before the last step) is interrupted, not a failure', () => {
+    expect(demoEnding(run({}), { summary: true, stopped: false })).toEqual({ ended: run({}) });
+    expect(demoEnding(run({ status: 'fail', exitCode: 130 }), { summary: true, stopped: true }).ended.status).toBe('interrupted');
+    expect(demoEnding(run({ status: 'fail', exitCode: 1 }), { summary: true, stopped: false }).ended).toMatchObject({ status: 'fail', exitCode: 1 });
+  });
+
+  it('an attached run has no time limit (q and Ctrl-C are there); a headless one keeps qa run\'s', () => {
+    expect(demoTimeoutMs(false)).toBe(Infinity);
+    expect(demoTimeoutMs(true)).toBeUndefined();
   });
 });
 
@@ -692,6 +762,17 @@ describe('the director copies each developer\'s skill folders into their own fol
     expect(() => copySkills(one('ana', ['hello']), links, work)).toThrow(/a link/);
     copySkills(one('ana', ['hello']), from, work);
     expect(existsSync(join(work, 'ana', 'skills', 'hello', 'SKILL.md'))).toBe(true);
+  });
+
+  it('refuses a skill folder with a symbolic link anywhere inside, saying which, before anything of it is copied', () => {
+    const root = scratch('qa-demo-copy-');
+    const from = join(root, 'skills'), work = join(root, 'work');
+    cpSync(fixture('skills/hello'), join(from, 'hello'), { recursive: true });
+    mkdirSync(join(from, 'hello', 'deep'));
+    symlinkSync('/etc/hosts', join(from, 'hello', 'deep', 'hosts'));
+    const one = { developers: [{ id: 'ana', title: 'ana', skills: ['hello'] }], steps: [] } as unknown as Scenes;
+    expect(() => copySkills(one, from, work)).toThrow(`${join(from, 'hello', 'deep', 'hosts')}: a symbolic link; skill folders are copied with real files and folders only`);
+    expect(existsSync(join(work, 'ana', 'skills', 'hello'))).toBe(false);
   });
 });
 

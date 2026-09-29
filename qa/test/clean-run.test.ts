@@ -193,6 +193,21 @@ describe('before/after check: processes and ports (plan §6.6)', () => {
     }
   });
 
+  it('asks the system\'s ps by its path: a PATH without ps (as a run\'s may be) changes nothing', async () => {
+    const m = machine();
+    const sb = sandbox(m);
+    const ours = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { detached: true, stdio: 'ignore', env: { ...process.env, ...sb.env } });
+    const saved = process.env.PATH;
+    try {
+      await runningOwnCommand([ours.pid!], /setTimeout/);
+      process.env.PATH = scratch('qa-empty-bin-');
+      expect(runProcesses(sb.runId).map((p) => p.pid)).toEqual([ours.pid]);
+    } finally {
+      process.env.PATH = saved;
+      process.kill(-ours.pid!, 'SIGKILL');
+    }
+  });
+
   it('sees a process from this run that left its process group, and the port it listens on; ignores everyone else\'s', async () => {
     const m = machine();
     const sb = sandbox(m);

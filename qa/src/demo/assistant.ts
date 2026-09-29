@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The stand-in assistant in a developer's pane (the demo plan, piece B): no model. A line it knows from the scene file
+// The stand-in assistant in a developer's pane: no model. A line it knows from the scene file
 // becomes the tool calls an assistant would make, on the real catalog, and it prints what the catalog says in the
 // product's own words (the core's renderers and the vendored surface). One activity.log line per call and one
 // turns.jsonl line per ask; neither ever holds colour. The catalog is behind a Backend: the core in this process, or,
@@ -25,6 +25,8 @@ import { CLI_OPS, findAsk, loadScenes, SCENES_FILE, ScenesError, type Call, type
 const GREEN = '\x1b[32m', ORANGE = '\x1b[38;5;208m', DIM = '\x1b[2m', RESET = '\x1b[0m';
 /** What goes before each line of the product's words; the conductor joins a line that goes on under it. */
 export const GUTTER = '  │ ';
+/** How the stand-in's own unexpected error starts (it isn't the catalog's answer, so it has no gutter). */
+export const STAND_IN_ERROR = '✗ stand-in error: ';
 const paint = (colour: string, s: string) => `${colour}${s}${RESET}`;
 
 export type Op = Exclude<Call, { planned: string }>;
@@ -423,8 +425,9 @@ export async function answer(st: Stage, say: string): Promise<Turn> {
         await call(st, c);
       } catch (e) {
         ok = false;
-        const lines = `error: ${(e as Error).message}`.split('\n');
-        show(st, lines.join('\n'), lines.map((_, i) => i));   // orange, every line, printable
+        // the stand-in's own words, never behind the gutter the catalog's have: orange, every line, printable
+        const lines = printable(`${STAND_IN_ERROR}${(e as Error).message}`).split('\n');
+        st.out(lines.map((l, i) => paint(ORANGE, `${i ? '  ' : ''}${l}`)).join('\n') + '\n');
         break;
       }
     }

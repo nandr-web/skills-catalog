@@ -72,12 +72,15 @@ function readJson(path: string): Record<string, unknown> {
   try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return {}; }
 }
 
+/** The system's ps, by path: never one a PATH puts first, and found when a run's PATH has none. */
+export const PS = ['/bin/ps', '/usr/bin/ps'].find((p) => existsSync(p)) ?? '/bin/ps';
+
 /** This user's processes whose environment carries QA_RUN_ID=<runId>. `ps -E` appends a process's environment to its
  *  command line (shown to its owner); the command line without -E is taken off the front, so a mention in the
  *  arguments doesn't count. */
 export function runProcesses(runId: string): { pid: number; command: string }[] {
   const lines = (withEnv: boolean) => {
-    const r = spawnSync('ps', [...(withEnv ? ['-E'] : []), '-x', '-o', 'pid=,command='], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    const r = spawnSync(PS, [...(withEnv ? ['-E'] : []), '-x', '-o', 'pid=,command='], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
     return new Map((r.stdout ?? '').split('\n').flatMap((line) => { const m = line.match(/^\s*(\d+) (.*)$/); return m ? [[Number(m[1]), m[2]] as [number, string]] : []; }));
   };
   const plain = lines(false), full = lines(true);

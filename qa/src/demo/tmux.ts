@@ -104,8 +104,9 @@ export function buildLayout(t: Tmux, o: { developers: { id: string; title: strin
     panes[d.id] = pane('split-window', '-t', panes[last], '-h', '-l', `${Math.round((100 * left) / (left + 1))}%`);
     last = d.id;
   });
+  // select-pane -T expands tmux formats (#(command) would run one): "##" is a plain "#", so a title shows as written
   t(...batch([
-    ...o.developers.map((d) => ['select-pane', '-t', panes[d.id], '-T', literal(d.title)]),
+    ...o.developers.map((d) => ['select-pane', '-t', panes[d.id], '-T', literal(d.title.replace(/#/g, '##'))]),
     ['select-pane', '-t', panes.steps, '-T', 'Steps'], ['select-pane', '-t', panes.log, '-T', 'Catalog server log'], ['select-pane', '-t', panes.steps],
   ]));
   const share = Math.floor(76 / o.developers.length);
