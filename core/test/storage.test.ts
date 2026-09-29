@@ -1,7 +1,6 @@
-// Storage tests (golden/histories.yaml `concurrent` and `fault`): nothing lost across processes, a refused or failed
-// publish leaves no version behind, and no version ever points at a missing blob.
+// Storage tests (golden/histories.yaml `concurrent` and `fault`): a refused or failed publish leaves no version behind,
+// and no version ever points at a missing blob. Nothing lost across processes is in storage-processes.test.ts.
 
-import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readdirSync, rmSync, utimesSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -16,17 +15,6 @@ import { sandbox } from './sandbox.ts';
 
 const histories = loadGolden('histories.yaml');
 const ana = actAs('ana');
-
-function run(args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
-    let out = '';
-    let err = '';
-    child.stdout.on('data', (d) => (out += d));
-    child.stderr.on('data', (d) => (err += d));
-    child.on('close', (code) => (code === 0 ? resolve(out) : reject(new Error(`exit ${code}: ${err}`))));
-  });
-}
 
 const sha = (b: Uint8Array | string) => createHash('sha256').update(b).digest('hex');
 
@@ -56,43 +44,6 @@ function raceBeforeCommit(rival: () => Promise<void>): (s: Storage) => Storage {
       },
     });
 }
-
-describe('nothing lost (histories.concurrent)', () => {
-  it('20 publishes of one name from 20 processes become versions 1..20, no gaps, each retrievable', async () => {
-    const dir = join(sandbox(), 'catalog');
-    (await openLocalCatalog(dir)).close(); // create the schema once, so the race is only on publishing
-    const script = join(import.meta.dirname, 'fixtures', 'publish-one.ts');
-    const startAt = Date.now() + 1500;
-    const outs = await Promise.all(Array.from({ length: 20 }, (_, i) => run([script, dir, String(i + 1), String(startAt)])));
-    const results = outs.map((o) => JSON.parse(o) as { n: number; version: number; created: boolean; fingerprint: string });
-    expect(results.every((r) => r.created)).toBe(true);
-    expect(results.map((r) => r.version).sort((a, b) => a - b)).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
-    const catalog = await openLocalCatalog(dir);
-    try {
-      for (const r of results) {
-        const got = await catalog.fetch({ name: 'concurrent-skill', version: r.version });
-        expect(got.fingerprint).toBe(r.fingerprint);
-        expect(Buffer.from(got.files.find((f) => f.path === 'SKILL.md')!.content_base64, 'base64').toString()).toContain(`Variant ${r.n}.`);
-      }
-      expect((await catalog.versions({ name: 'concurrent-skill' })).latest).toBe(20);
-    } finally {
-      catalog.close();
-    }
-  }, 30_000);
-});
-
-describe('a fresh catalog opened by several processes at once (two assistants, or a server and the CLI, starting together)', () => {
-  it('every open succeeds: the switch to WAL waits its turn', async () => {
-    const script = join(import.meta.dirname, 'fixtures', 'open-one.ts');
-    for (let round = 0; round < 6; round++) {
-      const dir = join(sandbox(), 'catalog');
-      const startAt = Date.now() + 1200;
-      const outs = await Promise.allSettled(Array.from({ length: 10 }, () => run([script, dir, String(startAt)])));
-      const failed = outs.filter((o) => o.status === 'rejected').map((o) => String((o as PromiseRejectedResult).reason));
-      expect(failed, `round ${round}`).toEqual([]);
-    }
-  }, 120_000);
-});
 
 describe('fault injection (histories.fault)', () => {
   it('the version append fails after the blobs were stored: an error, no version, not searchable; the retry succeeds', async () => {

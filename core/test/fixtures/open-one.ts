@@ -1,12 +1,12 @@
 // One open of a catalog from its own process, for the "a fresh catalog opened at once" test: node open-one.ts
-// <catalog dir> <start at ms>. Every process waits for the same start time, so the opens really overlap.
+// <catalog dir>. It prints "ready" once its imports are loaded, then waits for the start time the test sends every
+// process on stdin, so the opens really overlap however long each process took to start.
 
 import { openLocalCatalog } from '../../src/local/index.ts';
+import { startTogether } from './together.ts';
 
-const [dir, startAt] = process.argv.slice(2) as [string, string];
-while (Date.now() < Number(startAt)) {
-  // spin until the shared start
-}
+const [dir] = process.argv.slice(2) as [string];
+await startTogether();
 const catalog = await openLocalCatalog(dir);
 catalog.close();
 process.stdout.write('opened');
