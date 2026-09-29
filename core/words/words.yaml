@@ -695,6 +695,7 @@ results:
     invalid_confirm: "invalid_request: that confirm value isn't one a preview gives (it may have been cut or changed in copying), so nothing was published. Preview again (${publish} with just the folder), show the person the lists, and use the new values once they say yes."
     not_installed: "not_installed: {name} isn't installed on this machine, so nothing was changed. To see what is: ${status}; to add it: ${install}."
     not_found_path: "not_found: {name} v{version} has no file {path}. Nothing was changed; its files are listed in a read with include files."
+    not_found_token: "not_found: no token of the signed-in person has the id {id}, so nothing was revoked. list_tokens shows the ids of their tokens."
     invalid_manifest: "invalid_manifest: {folder}/SKILL.md {problem}. Nothing was published. Fix: {fix} Then preview again."
     why:
       not_json: isn't valid JSON
@@ -742,6 +743,7 @@ results:
       not_a_cursor: isn't a cursor an earlier page gave
       not_a_developer_name: isn't a valid developer name (lowercase letters, digits and single hyphens)
       not_base64: isn't base64 text
+      not_sha256: isn't a file's SHA-256 (64 lowercase hexadecimal characters)
       name_and_names: can't be given together with name (use one of them)
       paths_need_one_name: work only with one name, not names (read the other skills' files in their own calls)
       fingerprint_or_name_and_version: goes alone (give a fingerprint, or a name and a version, not both)
