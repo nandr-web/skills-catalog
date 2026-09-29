@@ -104,9 +104,12 @@ export interface Events {
   deliver(): Promise<number>; // delivers what's pending; returns how many
 }
 
-// Who is asking (§7 "Who may publish"). Locally "act as" a developer; hosted, a verified sign-in or token.
+// Who is asking (§7 "Who may publish"). Locally "act as" a developer; hosted, a verified sign-in or token, whose scope
+// the hosted transport always gives (an operation that checks it treats a hosted caller without one as a bug; locally
+// there's no scope and no limit).
 export interface Identity {
   actor(): Promise<string | undefined>;
+  scope?(): Promise<TokenScope | undefined>;
 }
 
 export interface Clock {
@@ -151,18 +154,24 @@ export interface TokenInfo extends TokenHolder {
 }
 
 // The hosted catalog's tokens, hosted only: stored hashed, each with a public id; unknown, revoked or expired is nobody.
-// A token's last use is recorded at most once an hour. Revoking is by its owner only (another's id changes nothing) and
-// deletes nothing.
+// A token's last use is recorded at most once an hour. Revoking is by its owner only (another's id changes nothing),
+// up to a scope (a read token revokes read tokens), and deletes nothing. The store also keeps GitHub's numeric id for
+// each login that has signed in, so a login GitHub frees and someone else takes can't sign in as the first.
 export interface TokenStore {
   issue(t: TokenHolder & { expiresAt: Date }): Promise<{ id: string; token: string }>;
   verify(token: string): Promise<TokenHolder | undefined>;
   list(owner: string): Promise<TokenInfo[]>; // oldest first
-  revoke(owner: string, id: string): Promise<boolean>; // false: no token of theirs has that id
+  liveCount(owner: string): Promise<number>; // not revoked, not expired
+  // 'none': no token of theirs has that id; 'above': theirs, but of a scope above upTo (unchanged).
+  revoke(owner: string, id: string, upTo: TokenScope): Promise<'revoked' | 'none' | 'above'>;
+  // The login's first call records the id; true when the id is the one recorded (the login given in lowercase).
+  bindLogin(login: string, githubId: number): Promise<boolean>;
 }
 
-// Signing in with GitHub (§1.1), hosted only: the login of a GitHub token issued to the catalog's own OAuth app, by
-// GitHub's check for that app's tokens; undefined when GitHub says it isn't one (another app's, revoked, unknown).
-// GitHub unreachable is thrown, never undefined: a person whose sign-in is fine is never told it's wrong.
+// Signing in with GitHub (§1.1), hosted only: the login and numeric id of a GitHub token issued to the catalog's own
+// OAuth app, by GitHub's check for that app's tokens; undefined when GitHub says it isn't one (another app's, revoked,
+// unknown). GitHub unreachable, or any answer but those, is thrown, never undefined: a person whose sign-in is fine is
+// never told it's wrong.
 export interface GitHubSignIn {
-  login(githubToken: string): Promise<string | undefined>;
+  login(githubToken: string): Promise<{ login: string; id: number } | undefined>;
 }

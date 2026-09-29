@@ -6,7 +6,7 @@
 import { OPERATIONS, validateInput, webRow, type Face, type OperationDef, type Where } from '../api.ts';
 import type { Catalog, FileAnswer } from '../catalog.ts';
 import { CatalogError, isCatalogError } from '../errors.ts';
-import type { Identity } from '../ports.ts';
+import type { Identity, TokenScope } from '../ports.ts';
 import { renderError } from '../render.ts';
 import { DEFAULT_LIMITS } from '../skill-tree/index.ts';
 import type { Words } from '../words-file.ts';
@@ -86,12 +86,13 @@ type CatalogMethod = (input: unknown, face: Face) => Promise<unknown>;
 /** One operation on the Catalog, through the method its row names, with the caller's face in its own slot: a method
  *  that acts as someone (its row's `acts`) takes the identity second (the developer acting on this call, so one shared
  *  catalog serves every caller), then the face; every other method's second is the face. */
-export async function dispatch(op: string, input: unknown, o: { catalog: Catalog; developer: string | undefined; face: Face }): Promise<unknown> {
+export async function dispatch(op: string, input: unknown, o: { catalog: Catalog; developer: string | undefined; scope?: TokenScope | undefined; face: Face }): Promise<unknown> {
   const row = Object.hasOwn(OPERATIONS, op) ? OPERATIONS[op]! : undefined;
   const method = row ? (o.catalog as unknown as Record<string, unknown>)[row.run] : undefined;
   if (!row || typeof method !== 'function') throw new Error(`no Catalog method for ${op}`);
   if (row.acts) {
-    const identity: Identity = { actor: async () => o.developer };
+    // A hosted caller's token scope goes with it, for an operation that checks it (a local caller has none).
+    const identity: Identity = { actor: async () => o.developer, ...(o.scope ? { scope: async () => o.scope } : {}) };
     return (method as (input: unknown, identity: Identity, face: Face) => Promise<unknown>).call(o.catalog, input, identity, o.face);
   }
   return (method as CatalogMethod).call(o.catalog, input, o.face);
@@ -120,14 +121,14 @@ export function envelope(answer: { data: unknown; developer?: string } | { error
  *  run (the transport's own `run`, e.g. one that logs, or `dispatch`), and the envelope. A CatalogError is the envelope's
  *  error; anything else is a bug the transport turns into internal_error its own way. */
 export async function operationResponse(
-  o: Sentences & { op: string; raw: Uint8Array | 'cut'; developer: string | undefined; max?: number } & (
+  o: Sentences & { op: string; raw: Uint8Array | 'cut'; developer: string | undefined; scope?: TokenScope | undefined; max?: number } & (
       | { run: (op: string, input: Record<string, unknown>) => Promise<unknown>; where: Where }
       | { catalog: Catalog }
     ),
 ): Promise<HttpResponse> {
   try {
     const input = parseBody(o.op, o.raw, 'run' in o ? o.where : o.catalog.where, o.max);
-    const data = await ('run' in o ? o.run(o.op, input) : dispatch(o.op, input, { catalog: o.catalog, developer: o.developer, face: 'web' }));
+    const data = await ('run' in o ? o.run(o.op, input) : dispatch(o.op, input, { catalog: o.catalog, developer: o.developer, scope: o.scope, face: 'web' }));
     return envelope({ data, developer: o.developer }, o);
   } catch (e) {
     if (isCatalogError(e)) return envelope({ error: e }, o);

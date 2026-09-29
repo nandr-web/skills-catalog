@@ -240,6 +240,8 @@ export function renderError(s: Words, e: CatalogError): string {
       if (e.data['why'] === 'hosted_not_available') return fill(w.forbidden_hosted, d);
       // A hosted change made with a token that may only read: the person's matter too, never a token to go looking for.
       if (e.data['why'] === 'read_scope') return fill(w.forbidden_read_scope, d);
+      // A person at the limit of live tokens: theirs to revoke some, never the agent's.
+      if (e.data['why'] === 'too_many_tokens') return fill(w.forbidden_too_many_tokens, d);
       return e.data['why'] === 'read_only' ? fill(w.forbidden_read_only, d) : fill(w.forbidden, d);
     case 'secret_suspected': {
       const kind = w.secret_kind?.[String(d['kind'])];

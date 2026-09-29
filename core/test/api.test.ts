@@ -14,7 +14,7 @@ import { actAs } from '../src/local/index.ts';
 import { filesOf, historyVersion, loadGolden } from './golden.ts';
 import { conforms } from './conforms.ts';
 import { errorOf, openTest, request } from './helpers.ts';
-import { openHostedStandIn, sha256Of } from './hosted-stand-in.ts';
+import { holding, openHostedStandIn, sha256Of } from './hosted-stand-in.ts';
 
 const histories = loadGolden('histories.yaml');
 const skills = loadGolden('skills.yaml');
@@ -320,7 +320,7 @@ describe('each operation\'s output (contract §1)', () => {
     seenHosted.push(['sign_in_with_github', signedIn]);
     await hosted.tokens.verify(signedIn.token);
     seenHosted.push(['list_tokens', await hosted.catalog.listTokens({})]);
-    seenHosted.push(['revoke_token', await hosted.catalog.revokeToken({ id: signedIn.id })]);
+    seenHosted.push(['revoke_token', await hosted.catalog.revokeToken({ id: signedIn.id }, holding('dana', 'read'))]);
     seenHosted.push(['list_tokens', await hosted.catalog.listTokens({})]); // with revoked_at
     hosted.close();
     expect((seenHosted[0]![1] as { files: { kind: string }[] }).files.map((f) => f.kind)).toEqual(['upload', 'stored', 'removing']);

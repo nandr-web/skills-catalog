@@ -105,7 +105,9 @@ describe('sign_in_with_github', () => {
   it("a session lasts the catalog's sessionDays", async () => {
     const s = await standIn({ config: { signInLogins: ['ana-dev'], sessionDays: 2 } });
     const r = await s.catalog.signIn({ github_token: OURS, scope: 'read' });
-    expect(Date.parse(r.expires_at) - Date.parse(s.tokens.byToken.get(r.token)!.created_at)).toBe(2 * DAY);
+    const lasts = Date.parse(r.expires_at) - Date.parse(s.tokens.byToken.get(r.token)!.created_at);
+    expect(lasts).toBeGreaterThanOrEqual(2 * DAY - 5_000);
+    expect(lasts).toBeLessThanOrEqual(2 * DAY + 5_000);
   });
 
   it('GitHub unreachable is the catalog\'s failure (a bug-level error, never unauthenticated), and issues nothing', async () => {

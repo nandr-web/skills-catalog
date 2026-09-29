@@ -129,7 +129,8 @@ function operation(def: OperationDef, where: Where): Json {
     'x-effect': def.effect,
     'x-faces': [...def.faces],
     'x-errors': [...def.errors],
-    security: place.security,
+    // Signing in is how a token is got, so it takes none.
+    security: def.token === 'none' ? [] : place.security,
     ...(place.parameters ? { parameters: [ref('parameters', 'ActingAs')] } : {}),
     requestBody: { required: true, content: { 'application/json': { schema: ref('schemas', `${def.name}_input`) } } },
     responses: {

@@ -76,10 +76,10 @@ describe('the published schema is the definitions\' (contract §1.1)', () => {
     expect(doc.components.securitySchemes).toEqual({ localToken: expect.objectContaining({ type: 'apiKey', in: 'header', name: 'X-Skills-Catalog-Token' }) });
   });
 
-  it('hosted, each operation takes a bearer token and no acting header, as the hosted form of its input sees it', () => {
+  it('hosted, each operation takes a bearer token (signing in, none) and no acting header, as the hosted form of its input sees it', () => {
     for (const d of Object.values(OPERATIONS).filter((o) => o.faces.includes('web'))) {
       const op = hostedDoc.paths[`/api/v1/${d.name}`].post;
-      expect([d.name, op.security, op.parameters]).toEqual([d.name, [{ bearer: [] }], undefined]);
+      expect([d.name, op.security, op.parameters]).toEqual([d.name, d.token === 'none' ? [] : [{ bearer: [] }], undefined]);
       expect(deref(op.requestBody.content['application/json'].schema, hostedDoc)).toEqual(strict(inputSchema(d, 'web', 'hosted')));
       expect([d.name, Object.keys(op.responses).sort()]).toEqual([d.name, ['200', '400', '401', '403', '404', '415']]);
     }

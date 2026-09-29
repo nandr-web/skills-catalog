@@ -56,6 +56,9 @@ export interface OperationDef {
   hostedOutput?: OutputSchema;
   // Called with no Bearer token (hosted): only signing in, which is how one is got.
   token?: 'none';
+  // The operation checks the caller's token scope itself (hosted), so a read-scope token isn't refused before it runs
+  // even though it changes the catalog: revoking, where a read token may revoke read tokens.
+  checksScope?: true;
   // Its method acts as someone: it takes the acting identity after the input, then the face (a publish, the upload
   // links, the token operations); every other method takes the face after the input.
   acts?: true;
@@ -162,6 +165,9 @@ const UPLOAD_LINKS_OUTPUT = obj({
 // value that doesn't match it (not_sha256) before it looks anything up (a test holds the two together).
 export const SHA256_PATTERN = '^[0-9a-f]{64}$';
 const sha256 = { type: 'string', pattern: SHA256_PATTERN } as const;
+// A token's public id (hosted). Like the sha256's, the pattern is for the published schema; the catalog refuses a value
+// that doesn't match it (not_a_token_id, never repeating it) before it looks anything up.
+export const TOKEN_ID_PATTERN = '^[A-Za-z0-9_-]{16}$';
 // The most files one publish may name, in either form (the request's own cap; the skill's file limit is config).
 const MAX_PUBLISH_FILES = 10_000;
 const tokenInfo = obj({ id: str, scope: oneOf('read', 'publish'), kind: oneOf('session', 'personal'), created_at: str, expires_at: str, last_used_at: str, revoked_at: str }, ['last_used_at', 'revoked_at']);
@@ -341,9 +347,10 @@ export const OPERATIONS: Record<string, OperationDef> = {
     effect: 'writes_catalog',
     run: 'revokeToken',
     acts: true,
+    checksScope: true,
     output: obj({ id: str }),
     errors: ['unauthenticated', 'not_found'],
-    input: { type: 'object', properties: { id: { type: 'string', maxLength: 64 } }, required: ['id'] },
+    input: { type: 'object', properties: { id: { type: 'string', pattern: TOKEN_ID_PATTERN } }, required: ['id'] },
   },
   fetch_version: {
     name: 'fetch_version',

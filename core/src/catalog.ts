@@ -3,7 +3,7 @@
 
 import { CatalogError } from './errors.ts';
 import type { BlobLinks, Clock, Events, GitHubSignIn, Identity, Ids, SearchCard, SearchIndex, Storage, TokenInfo, TokenScope, TokenStore, UploadAnswer, VersionRecord } from './ports.ts';
-import { DEFAULT_SEARCH_LIMIT, SHA256_PATTERN, VERSIONS_PAGE, validateInput, type Face, type Where } from './api.ts';
+import { DEFAULT_SEARCH_LIMIT, SHA256_PATTERN, TOKEN_ID_PATTERN, VERSIONS_PAGE, validateInput, type Face, type Where } from './api.ts';
 
 // Each operation checks its input as the face its caller gives (contract §1.1): the client passes its own, the web page's
 // server 'web'. A person-only input (publish's allow_suspected_secrets) passes only as the CLI's; a caller that gives no
@@ -40,8 +40,9 @@ export interface CatalogConfig {
   nonGrantingKeys: readonly string[]; // keys known to grant nothing: with only these, a changed file is no reason to ask
   commonWords: readonly string[];
   readInlineBudget: number; // bytes of text one read inlines (contract §2: 24 KB keeps a result under 8,000 tokens)
-  signInLogins: readonly string[]; // hosted: the GitHub logins that may sign in (§1.1); none, nobody
+  signInLogins: readonly string[]; // hosted: the GitHub logins that may sign in, each maybe login:id (§1.1); none, nobody
   sessionDays: number; // hosted: how long a sign-in's token lasts
+  maxLiveTokens: number; // hosted: the most live tokens (not revoked, not expired) one person may hold before signing in
 }
 
 export const DEFAULT_CONFIG: CatalogConfig = {
@@ -52,6 +53,7 @@ export const DEFAULT_CONFIG: CatalogConfig = {
   readInlineBudget: 24 * 1024,
   signInLogins: [],
   sessionDays: 7,
+  maxLiveTokens: 50,
 };
 
 export interface CatalogPorts {
@@ -76,6 +78,22 @@ const SHA256_HEX = new RegExp(SHA256_PATTERN);
 // A GitHub token as GitHub issues them: an app's user token (gho_, ghu_, ghp_ and 36 or more letters and digits), or
 // the older 40 hex characters. Anything else is refused before GitHub is asked.
 const GITHUB_TOKEN = /^(?:gh[opu]_[A-Za-z0-9]{36,251}|[0-9a-f]{40})$/;
+const TOKEN_ID = new RegExp(TOKEN_ID_PATTERN);
+// One entry of the sign-in list: a login, or login:id to pin the login to GitHub's numeric id from the start.
+const SIGN_IN_ENTRY = /^([^:\s]+)(?::([1-9][0-9]{0,15}))?$/;
+type SignInEntry = { login: string; id?: number };
+
+/** The sign-in list's entries, logins in lowercase (as GitHub compares them); a malformed entry is thrown at open. */
+function signInEntries(list: readonly string[]): Map<string, SignInEntry> {
+  const out = new Map<string, SignInEntry>();
+  for (const entry of list) {
+    const m = SIGN_IN_ENTRY.exec(entry);
+    if (!m) throw new Error(`the sign-in list has an entry that is neither a login nor login:id (entry ${out.size + 1})`);
+    const login = m[1]!.toLowerCase();
+    out.set(login, m[2] === undefined ? { login } : { login, id: Number(m[2]) });
+  }
+  return out;
+}
 // How many uploaded files a hosted publish reads at once.
 const UPLOAD_READS = 8;
 
@@ -318,10 +336,12 @@ function cardOf(v: VersionRecord): SearchCard {
 export class Catalog {
   readonly config: CatalogConfig;
   private readonly p: CatalogPorts;
+  private readonly signInList: Map<string, SignInEntry>;
 
   private constructor(ports: CatalogPorts) {
     this.p = ports;
     this.config = { ...DEFAULT_CONFIG, ...ports.config };
+    this.signInList = signInEntries(this.config.signInLogins);
     // The search index is the first listener on version_published (§5.1 step 4). It reads the latest version rather
     // than trusting the event's order, so a repeated or late delivery can't put an old card back.
     ports.events.subscribe((e) => this.indexSkill(e.name));
@@ -640,14 +660,24 @@ export class Catalog {
     return { name: record.name, version: record.version, fingerprint: record.fingerprint, files };
   }
 
-  // sign_in_with_github (hosted only, §1.1): GitHub's check that the token is one our OAuth app issued, then the login
-  // on the sign-in list (as GitHub compares logins: whatever its case), then a new session token of the scope asked for.
-  // Every refusal is unauthenticated and says nothing more; the token's shape is checked before GitHub is asked.
+  // sign_in_with_github (hosted only, §1.1), in this order: the token's shape; nobody on the sign-in list (GitHub isn't
+  // asked); GitHub's check that the token is one our OAuth app issued; the login on the list (as GitHub compares logins:
+  // whatever its case); GitHub's numeric id, pinned by the list (login:id) or recorded at the login's first sign-in, so a
+  // login GitHub frees and someone else takes can't sign in; then, GitHub having vouched for the person, the limit of
+  // live tokens; then a new session token of the scope asked for. Every refusal before the limit is unauthenticated and
+  // says nothing more.
   async signIn(input: unknown, face: Face = CATALOG_FACE): Promise<SignInResult> {
     const req = validateInput<{ github_token: string; scope: TokenScope }>('sign_in_with_github', input, face, this.p.where);
-    if (!GITHUB_TOKEN.test(req.github_token)) throw new CatalogError('unauthenticated', {});
-    const login = (await this.p.signIn!.login(req.github_token))?.toLowerCase();
-    if (login === undefined || !ACTOR.test(login) || !this.config.signInLogins.some((l) => l.toLowerCase() === login)) throw new CatalogError('unauthenticated', {});
+    if (!GITHUB_TOKEN.test(req.github_token) || this.signInList.size === 0) throw new CatalogError('unauthenticated', {});
+    const github = await this.p.signIn!.login(req.github_token);
+    const login = github?.login.toLowerCase();
+    const entry = login === undefined ? undefined : this.signInList.get(login);
+    if (github === undefined || login === undefined || !ACTOR.test(login) || entry === undefined) throw new CatalogError('unauthenticated', {});
+    const sameId = entry.id !== undefined ? entry.id === github.id : await this.p.tokens!.bindLogin(login, github.id);
+    if (!sameId) throw new CatalogError('unauthenticated', {});
+    // Sign-ins at the same moment can each pass at limit - 1, so the count can pass the limit by that many.
+    const limit = this.config.maxLiveTokens;
+    if ((await this.p.tokens!.liveCount(login)) >= limit) throw new CatalogError('forbidden', { why: 'too_many_tokens', limit });
     const expiresAt = new Date(this.p.clock.now().getTime() + this.config.sessionDays * 86_400_000);
     const { id, token } = await this.p.tokens!.issue({ owner: login, scope: req.scope, kind: 'session', expiresAt });
     return { token, id, scope: req.scope, expires_at: expiresAt.toISOString() };
@@ -660,11 +690,18 @@ export class Catalog {
     return { tokens: (await this.p.tokens!.list(owner)).map(({ owner: _, ...t }) => t) };
   }
 
-  // revoke_token (hosted only): one of the caller's own tokens, at once; another's id is the same not_found as none.
+  // revoke_token (hosted only): one of the caller's own tokens, at once, up to the caller's token's scope (a read token
+  // revokes read tokens, so a leaked one can be cut off without publishing rights). An id of no token id's shape is
+  // refused before anything is looked up, never repeated back; another's id is the same not_found as none.
   async revokeToken(input: unknown, identity: Identity = this.p.identity, face: Face = CATALOG_FACE): Promise<{ id: string }> {
     const req = validateInput<{ id: string }>('revoke_token', input, face, this.p.where);
+    if (!TOKEN_ID.test(req.id)) throw new CatalogError('invalid_request', { field: 'id', why: 'not_a_token_id' });
     const owner = checkActor(await identity.actor());
-    if (!(await this.p.tokens!.revoke(owner, req.id))) throw new CatalogError('not_found', { id: req.id });
+    const upTo = await identity.scope?.();
+    if (upTo === undefined) throw new Error('a hosted caller always has a scope');
+    const r = await this.p.tokens!.revoke(owner, req.id, upTo);
+    if (r === 'none') throw new CatalogError('not_found', { id: req.id });
+    if (r === 'above') throw new CatalogError('forbidden', { why: 'read_scope' });
     return { id: req.id };
   }
 
@@ -673,14 +710,20 @@ export class Catalog {
   // stored one.
   async uploadLinks(input: unknown, identity: Identity = this.p.identity, face: Face = CATALOG_FACE): Promise<UploadLinksResult> {
     const req = validateInput<UploadLinksInput>('request_upload_links', input, face, this.p.where);
-    // Each sha256 is a pure input check, like the schema's: before anything is looked up (§9).
+    // Each sha256, and one size for each, are pure input checks, like the schema's: before anything is looked up (§9).
     checkSha256s(req.files);
+    // One answer per distinct file, its size counted once (a skill can hold the same bytes twice); the same bytes can't
+    // have two sizes, so the later one is refused rather than either winning.
+    const sizes = new Map<string, number>();
+    for (const [i, f] of req.files.entries()) {
+      if ((sizes.get(f.sha256) ?? f.size) !== f.size) throw new CatalogError('invalid_request', { field: `files[${i}].size`, why: 'size_mismatch' });
+      sizes.set(f.sha256, f.size);
+    }
     const publisher = checkActor(await identity.actor());
     const name = checkName(req.name);
     const skill = await this.p.storage.skill(name);
     if (skill && !skill.owners.includes(publisher)) throw new CatalogError('not_owner', { name, owners: skill.owners });
-    // One answer per distinct file, its size counted once (a skill can hold the same bytes twice).
-    const files = [...new Map(req.files.map((f) => [f.sha256, { sha256: f.sha256, size: f.size }])).values()];
+    const files = [...sizes].map(([sha256, size]) => ({ sha256, size }));
     checkSizes(files, this.config.limits);
     return { name, files: await this.p.links!.uploadLinks(files) };
   }

@@ -396,11 +396,7 @@
         "x-errors": [
           "unauthenticated"
         ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -2363,7 +2359,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "maxLength": 64
+            "pattern": "^[A-Za-z0-9_-]{16}$"
           }
         },
         "required": [

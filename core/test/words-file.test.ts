@@ -314,8 +314,9 @@ describe('the words file (vendored, recommended variant)', () => {
     const pathWhy = /export type PathWhy =([^;]+);/.exec(text)![1]!;
     for (const m of pathWhy.matchAll(/'([a-z0-9_]+)'/g)) whys.add(m[1]!);
     expect(whys.size).toBeGreaterThan(25);
-    // hosted_not_available is worded by its own sentence (errors.forbidden_hosted), not as a reason.
-    const missing = [...whys].filter((w) => w !== 'hosted_not_available' && !WORD_GAPS.includes(`errors.why.${w}`) && s.word(`errors.why.${w}`) === undefined);
+    // hosted_not_available and too_many_tokens are worded by their own sentences (errors.forbidden_hosted,
+    // errors.forbidden_too_many_tokens), not as reasons.
+    const missing = [...whys].filter((w) => w !== 'hosted_not_available' && w !== 'too_many_tokens' &&!WORD_GAPS.includes(`errors.why.${w}`) && s.word(`errors.why.${w}`) === undefined);
     expect(missing).toEqual([]);
   });
 
