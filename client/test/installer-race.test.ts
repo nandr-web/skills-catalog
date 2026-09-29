@@ -267,7 +267,12 @@ describe('folders another user could control are refused (target_not_private)', 
       { what: 'project group-writable with a shared group', target: 'project', change: { mode: 0o040775, gid: 20 }, refused: { own: true } },
       { what: 'project group-writable with the person\'s private group', target: 'project', change: { mode: 0o040775, gid: uid }, refused: false },
       { what: 'project group-writable and sticky', target: 'project', change: { mode: 0o041775, gid: 20 }, refused: false },
-      { what: 'project owned by another user, not world-writable', target: 'project', change: { uid: uid + 1 }, refused: false },
+      // Whoever owns a folder can rename what's in it, sticky bit or not: the project's owner is the person, or root.
+      { what: 'project owned by another user', target: 'project', change: { uid: uid + 1 }, refused: { own: false } },
+      { what: 'project owned by another user, sticky', target: 'project', change: { mode: 0o041777, uid: uid + 1 }, refused: { own: false } },
+      { what: 'project owned by root, sticky', target: 'project', change: { mode: 0o041777, uid: 0 }, refused: false },
+      { what: 'project owned by root, not writable by others', target: 'project', change: { mode: 0o040755, uid: 0 }, refused: false },
+      { what: 'project owned by the person', target: 'project', change: { mode: 0o040755 }, refused: false },
       { what: 'project world-writable and sticky', target: 'project', change: { mode: 0o041777 }, refused: false },
       { what: 'project world-writable, not sticky, another user\'s', target: 'project', change: { mode: 0o040777, uid: uid + 1 }, refused: { own: false } },
     ];

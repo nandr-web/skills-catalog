@@ -71,11 +71,13 @@ function skillsFolderFor(dest: string, target: Target): Anchor[] {
   for (let at = root; !existsSync(at) && dirname(at) !== at; at = dirname(at)) missing.unshift(at);
   for (const at of missing) makeFolder(at, 0o755);
   // The folder above .claude (§4.5), which may be reached through a link: whoever can write it can put their own .claude
-  // in its place. The assistant home is held to the same rule as .claude. A project folder may be anyone's, but writable
-  // by others only as that rule allows (a shared group, macOS's staff included, is every member's way in), unless it has
-  // the sticky bit, as /tmp does.
+  // in its place. The assistant home is held to the same rule as .claude. A project folder is the person's or root's
+  // (its owner can always rename what's in it, sticky bit or not), and writable by others only as that rule allows (a
+  // shared group, macOS's staff included, is every member's way in), unless it has the sticky bit, as /tmp does.
   const r = statSync(root, { bigint: true });
-  const open = target === 'user' ? !isPrivate(r) : process.getuid !== undefined && (r.mode & 0o1000n) === 0n && !writableOnlyAsPrivate(r);
+  const uid = process.getuid?.();
+  const ownedWell = uid !== undefined && (r.uid === BigInt(uid) || r.uid === 0n);
+  const open = target === 'user' ? !isPrivate(r) : uid !== undefined && (!ownedWell || ((r.mode & 0o1000n) === 0n && !writableOnlyAsPrivate(r)));
   if (open) throw notPrivate(root, target, r, target === 'user');
   return [claude, skills].map((path) => {
     makeFolder(path, 0o755);
