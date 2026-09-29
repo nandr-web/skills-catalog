@@ -25,6 +25,7 @@ import {
   CASE_FOLDING_FILE,
 } from '../src/skill-tree/index.ts';
 import { GOLDEN, catalogNameOf, filesOf, generated, historyVersion, loadGolden, rawFilesOf, type RawFile } from './golden.ts';
+import { expectLinear, times } from './linear.ts';
 
 const skills = loadGolden('skills.yaml');
 const histories = loadGolden('histories.yaml');
@@ -539,11 +540,19 @@ describe('the secret scan finds a secret by its shape, in any variable name or q
   }
 
   // The scan never backtracks badly: a line of a megabyte is scanned in well under a second, whatever it holds.
-  it('scans a megabyte-long line in well under a second', () => {
-    for (const line of ['password_'.repeat(110_000) + '=' + 'x'.repeat(20), 'ghp_' + 'a'.repeat(1_000_000), 'AKIA'.repeat(250_000), 'a: '.repeat(330_000), 'x'.repeat(200) + '='.repeat(1_000_000), 'k='.repeat(500_000), 'k:'.repeat(500_000), 'password='.repeat(110_000)]) {
-      const start = performance.now();
-      scan(line);
-      expect(performance.now() - start, line.slice(0, 30)).toBeLessThan(1000);
-    }
-  });
+  // The time grows with the line, not faster (test/linear.ts), so a busy machine can't fail it and a backtracking
+  // pattern still does.
+  it('scans a megabyte-long line in linear time', () => {
+    const cases: [string, (scale: number) => string][] = [
+      ['password_ keys, then a value', (s) => times('password_', 110_000)(s) + '=' + 'x'.repeat(20)],
+      ['a token prefix, then letters', (s) => 'ghp_' + times('a', 1_000_000)(s)],
+      ['AKIA again and again', times('AKIA', 250_000)],
+      ['YAML keys', times('a: ', 330_000)],
+      ['equals signs', (s) => 'x'.repeat(200) + times('=', 1_000_000)(s)],
+      ['k= again and again', times('k=', 500_000)],
+      ['k: again and again', times('k:', 500_000)],
+      ['password= again and again', times('password=', 110_000)],
+    ];
+    for (const [label, input] of cases) expectLinear(label, input, scan);
+  }, 120_000);
 });

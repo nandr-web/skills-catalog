@@ -7,6 +7,12 @@ import { injections } from '../src/skill-tree/diff.ts';
 import { checkTree, diffTrees, type RiskFlag } from '../src/skill-tree/index.ts';
 import { injections15f3e65 } from './fixtures/injections-15f3e65.ts';
 import { filesOf, loadGolden } from './golden.ts';
+import { expectLinear, times } from './linear.ts';
+
+// Characters that are hard to see in source: a line separator, a no-break space, a zero-width space.
+const LS = String.fromCharCode(0x2028);
+const NBSP = String.fromCharCode(0xa0);
+const ZWSP = String.fromCharCode(0x200b);
 
 const histories = loadGolden('histories.yaml');
 const pairs: { from: string | null; to: string; risk_flags: Partial<RiskFlag>[]; note?: string }[] = histories.histories.gate.pairs;
@@ -129,25 +135,37 @@ describe('an injected command is found however the file is written', () => {
     expect([...flagsFor(`Plain.\n${'!`true` '.repeat(10_000)}\n`)[0]!.detail]).toHaveLength(200);
     expect(injections('!`true` '.repeat(10_000))[0]!.command.length).toBeLessThan(260);
   });
-  it('scans a megabyte-long markdown file in well under a second', () => {
-    // Each within the core's 1 MiB file limit.
-    for (const body of ['`'.repeat(1_000_000), '!`'.repeat(500_000), '```!\n'.repeat(200_000), '```!\n~~~!\n'.repeat(100_000), `${'```!\n'.repeat(8)}${'x\n'.repeat(400_000)}`, ' '.repeat(300_000), ' '.repeat(400_000) + '```!']) {
-      const start = performance.now();
-      flagsFor(body);
-      expect(performance.now() - start).toBeLessThan(1000);
-    }
-  });
+  // Each within the core's 1 MiB file limit. The time must grow with the file, not faster (test/linear.ts), so a busy
+  // machine can't fail it and a detector that backtracks still does.
+  it('scans a megabyte-long markdown file in linear time', () => {
+    const cases: [string, (scale: number) => string][] = [
+      ['backticks', times('`', 1_000_000)],
+      ['inline commands', times('!`', 500_000)],
+      ['opening fences', times('```!\n', 200_000)],
+      ['opening fences of both characters', times('```!\n~~~!\n', 100_000)],
+      ['8 open blocks over 400,000 lines', (s) => '```!\n'.repeat(8) + times('x\n', 400_000)(s)],
+      ['line separators', times(LS, 300_000)],
+      ['no-break spaces, then a fence', (s) => times(NBSP, 400_000)(s) + '```!'],
+    ];
+    for (const [label, input] of cases) expectLinear(label, input, flagsFor);
+  }, 120_000);
 
   // Blanks (a tab, a space, an invisible character) can never make the detector backtrack: a line of them that isn't a
   // fence, inside or outside an open block, is read once.
   it('reads a line of blanks that isn\'t a fence in linear time, inside a block too', () => {
-    const mixed = '\t ​'.repeat(3_334);
-    for (const body of ['\t'.repeat(64), '```\n' + '\t'.repeat(64), '```!\n' + '\t'.repeat(64), '\t'.repeat(10_000), '```\n' + '\t'.repeat(10_000), '```!\n' + '\t'.repeat(10_000), mixed, '```!\n' + mixed, `${'\t'.repeat(1_000)}\n`.repeat(1_000), `\`\`\`!\n${`${mixed.slice(0, 300)}\n`.repeat(1_500)}`]) {   // the last one near the 1 MiB file limit
-      const start = performance.now();
-      flagsFor(body);
-      expect(performance.now() - start, JSON.stringify(body.slice(0, 12))).toBeLessThan(50);
+    const mixed = '\t' + NBSP + ZWSP;
+    const cases: [string, (scale: number) => string][] = [];
+    for (const [label, before] of [['', ''], [' in a block', '```\n'], [' in a ```! block', '```!\n']]) {
+      cases.push([`64 tabs${label}`, (s) => before + times('\t', 64)(s)], [`10,000 tabs${label}`, (s) => before + times('\t', 10_000)(s)]);
     }
-  });
+    cases.push(
+      ['tabs, no-break and zero-width spaces', times(mixed, 3_334)],
+      ['tabs, no-break and zero-width spaces in a ```! block', (s) => '```!\n' + times(mixed, 3_334)(s)],
+      ['1,000 lines of 1,000 tabs', times(`${'\t'.repeat(1_000)}\n`, 1_000)],
+      ['1,500 lines of 300 blanks in a ```! block, near the 1 MiB file limit', (s) => '```!\n' + times(`${mixed.repeat(100)}\n`, 1_500)(s)],
+    );
+    for (const [label, input] of cases) expectLinear(label, input, flagsFor);
+  }, 120_000);
 });
 
 // A fence line added, removed or changed in a file with a ```! block can re-nest what the blocks hold, so it counts as
