@@ -278,6 +278,39 @@ function newInjections(a: TreeFile | undefined, b: TreeFile): Injection[] {
   });
 }
 
+// The lines that shape blocks: those whose first non-blanks are three or more backticks or tildes, with or without a
+// `!` (an opening fence, a close, or a doubtful one), in order; and whether any opens a ```! block.
+function fenceLines(text: string): { fences: { line: number; text: string }[]; opener: boolean } {
+  const fences: { line: number; text: string }[] = [];
+  let opener = false;
+  text.split(LINE_BREAK).forEach((l, i) => {
+    if (!l.includes('`') && !l.includes('~')) return;
+    const at = skipBlanks(l, 0);
+    const char = l[at];
+    if ((char !== '`' && char !== '~') || countRun(l, at, char) < 3) return;
+    fences.push({ line: i + 1, text: l });
+    opener ||= openingFence(l) !== null;
+  });
+  return { fences, opener };
+}
+// An update that adds, removes or changes a fence line in a markdown file with a ```! block (before or after) can
+// re-nest what the blocks hold, so more may run as the skill loads with no command's own text changed: it counts as
+// runs_at_load, at the first fence line that differs (the detector errs toward asking). With the fence lines the same,
+// every block spans the same lines, and an edit inside one changes that command's text.
+function fenceChange(a: TreeFile, b: TreeFile): { line: number; text: string } | null {
+  if (!isMarkdown(b.path) || !isText(a.bytes) || !isText(b.bytes)) return null;
+  const was = fenceLines(decodeText(a.bytes));
+  const now = fenceLines(decodeText(b.bytes));
+  if (!was.opener && !now.opener) return null;
+  const n = Math.max(was.fences.length, now.fences.length);
+  for (let i = 0; i < n; i++) {
+    if (was.fences[i]?.text === now.fences[i]?.text) continue;
+    const at = now.fences[i] ?? now.fences[now.fences.length - 1];
+    return { line: at?.line ?? 1, text: (now.fences[i] ?? was.fences[i])!.text.trim() };
+  }
+  return null;
+}
+
 // What a version grants, so a changed instruction could act without asking (contract §5.3): an injected command, or a
 // front matter key on neither the safe list nor the non-granting list. Each says what it grants, for the flag's detail.
 function grantsOf(files: readonly TreeFile[], fm: Record<string, unknown>, safeKeys: readonly string[], nonGranting: readonly string[]): string[] {
@@ -367,6 +400,11 @@ export function diffTrees(
     const injected = b ? newInjections(a, b) : [];
     if (injected.length) {
       for (const x of injected) risk.push({ kind: 'runs_at_load', path, line: x.line, detail: flagText(x.command) });
+      continue;
+    }
+    const fence = a && b ? fenceChange(a, b) : null;
+    if (fence) {
+      risk.push({ kind: 'runs_at_load', path, line: fence.line, detail: flagText(fence.text) });
       continue;
     }
     const instructions = path !== MANIFEST || fa.body !== fb.body || safeChanged;

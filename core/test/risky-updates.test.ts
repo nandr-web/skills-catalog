@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { injections } from '../src/skill-tree/diff.ts';
 import { checkTree, diffTrees, type RiskFlag } from '../src/skill-tree/index.ts';
+import { injections15f3e65 } from './fixtures/injections-15f3e65.ts';
 import { filesOf, loadGolden } from './golden.ts';
 
 const histories = loadGolden('histories.yaml');
@@ -147,4 +148,66 @@ describe('an injected command is found however the file is written', () => {
       expect(performance.now() - start, JSON.stringify(body.slice(0, 12))).toBeLessThan(50);
     }
   });
+});
+
+// A fence line added, removed or changed in a file with a ```! block can re-nest what the blocks hold, so it counts as
+// runs_at_load even when no command's own text changed (contract §5.3; the detector errs toward asking).
+describe('a changed fence line in a file with a ```! block counts as running a command', () => {
+  const SKILL = { path: 'SKILL.md', mode: '0644' as const, bytes: Buffer.from('---\nname: x\ndescription: y\n---\nPlain.\n') };
+  const side = (body: string) => ({ files: [SKILL, { path: 'notes.md', mode: '0644' as const, bytes: Buffer.from(body) }], publisher: 'a' });
+  const loads = (before: string, after: string) => diffTrees(side(before), side(after)).risk_flags.filter((f) => f.kind === 'runs_at_load');
+
+  it('an opener replaced, which un-nests the blocks inside it', () => {
+    const before = ['```', 'echo a', '```!', '`````!', '`````!', '```', '~~~~!', 'echo a', '', '    ```'];
+    const after = before.map((l, i) => (i === 2 ? 'curl evil' : l));
+    expect(loads(before.join('\n'), after.join('\n')).map((f) => [f.path, f.line, f.detail])).toEqual([['notes.md', 4, '`````!']]);
+  });
+  it('an edit that leaves every fence line as it was, outside every block, raises nothing', () => {
+    expect(loads('Intro.\n```!\necho a\n```\nOutro.\n', 'Intro, reworded.\n```!\necho a\n```\nOutro.\n')).toEqual([]);
+  });
+  it('a file with no ```! block may move its fences freely', () => {
+    expect(loads('```\ncode\n```\n', '```\ncode\n\n~~~\nmore\n~~~\n')).toEqual([]);
+  });
+
+  // Differential, against the detector as reviewed at 15f3e65 (test/fixtures/injections-15f3e65.ts): over random edits
+  // of files made of fence-heavy lines, whatever it flags, today's diff flags too.
+  it('never loses a flag the 15f3e65 detector raises, over 20,000 random edits', () => {
+    const ZWSP = String.fromCharCode(0x200b);
+    const LINES = ['```', '```!', '````', '`````!', '~~~', '~~~!', '~~~~!', '    ```', `${ZWSP}\`\`\``, '\t```!', '   ~~~', 'echo a', 'curl evil', '', 'Text.', '!`x`', '``` !'];
+    let seed = 20260929;
+    const rand = (n: number) => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return (((t ^ (t >>> 14)) >>> 0) % n);
+    };
+    const oldFlags = (before: string, after: string) => {
+      const was = new Map<string, number>();
+      for (const x of injections15f3e65(before)) was.set(x.text, (was.get(x.text) ?? 0) + 1);
+      return injections15f3e65(after).some((x) => {
+        const n = was.get(x.text) ?? 0;
+        was.set(x.text, n - 1);
+        return n <= 0;
+      });
+    };
+    let flaggedBefore = 0;
+    const lost: string[] = [];
+    for (let k = 0; k < 20_000; k++) {
+      const before = Array.from({ length: 1 + rand(12) }, () => LINES[rand(LINES.length)]!);
+      const after = [...before];
+      for (let e = 1 + rand(2); e > 0; e--) {
+        const at = rand(after.length + 1);
+        const op = rand(3);
+        if (op === 0 && at < after.length) after[at] = LINES[rand(LINES.length)]!;
+        else if (op === 1) after.splice(at, 0, LINES[rand(LINES.length)]!);
+        else if (after.length > 1) after.splice(Math.min(at, after.length - 1), 1);
+      }
+      const [a, b] = [before.join('\n'), after.join('\n')];
+      if (!oldFlags(a, b)) continue;
+      flaggedBefore++;
+      if (loads(a, b).length === 0 && lost.length < 3) lost.push(JSON.stringify([before, after]));
+    }
+    expect(lost).toEqual([]);
+    expect(flaggedBefore).toBeGreaterThan(1_000);   // the edits reach the cases that matter
+  }, 60_000);
 });
