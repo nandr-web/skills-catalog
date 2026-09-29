@@ -416,6 +416,7 @@ results:
       behind: " (v{latest} is available)"
     next_behind: "To bring them up to date: ${update}."
     empty: "No skills from the shared catalog are installed on this machine yet. To find one: ${search}; to add one: ${install}."
+    empty_cli: "No skills from the shared catalog are installed on this machine yet. To add one: ${install} (to find one first, search the catalog)."
   policy_set:
     default: The default for updates is now {policy}; skills with their own setting keep it.
     skill: "Updates for {name}: {policy}."

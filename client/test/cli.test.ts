@@ -62,6 +62,16 @@ describe('the CLI face', () => {
     expect(u.err.split('\n').filter((l) => l.startsWith('  ')).map((l) => l.trim().split(' ')[1])).toEqual(['install', 'update', 'list', 'update', 'mcp']);
   });
 
+  it('list with nothing installed says how to add one, naming only commands the CLI serves', async () => {
+    const p = place();
+    await seed(p);
+    const r = await cli(p, ['list']);
+    expect(r.code).toBe(0);
+    expect(r.out.trimEnd()).toBe(S.format(S.word('status.empty')));
+    expect(r.out).toContain('skills-catalog install <name>');
+    expect(r.out).not.toMatch(/skills-catalog (search|read|versions|diff|publish|policy)/);
+  });
+
   it('install takes a version and a target as flags', async () => {
     const p = place();
     await seed(p);
