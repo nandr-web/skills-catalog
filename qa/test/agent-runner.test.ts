@@ -1,44 +1,19 @@
 // The agent scenario runner end to end (brief §2), with a fake `claude` that replays a recorded trace, so it costs nothing:
 // a sandbox per try, the MCP config and companion skill per setup, the trace kept, sessions recorded, teardown and the
-// before/after check, scores and the report. Live runs (a real assistant) are in agent-live.test.ts, behind QA_LIVE=1.
+// before/after check, scores and the report. Live runs (a real assistant) are in agent-live.test.ts, behind QA_LIVE=1;
+// how many tries each model gets is in agent-runner-tries.test.ts.
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parse, stringify } from 'yaml';
 import { runScenarios } from '../src/agent/runner.ts';
 import { RUN_ID } from '../src/safe-delete.ts';
-import { cleanup, PROCESS_TEST_MS, machine as fakeMachine } from './machine.ts';
+import { base, forgetFakeClaude, here, machine, traceFile } from './agent-setup.ts';
+import { cleanup, PROCESS_TEST_MS } from './machine.ts';
 
 vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start processes (see PROCESS_TEST_MS)
 
-const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
-afterEach(() => { cleanup(); for (const k of Object.keys(process.env)) if (k.startsWith('QA_FAKE_CLAUDE_')) delete process.env[k]; });
-
-const machine = () => { const m = fakeMachine(); return { ...m, out: join(m.dir, 'out') }; };
-
-/** The QA plan's direct-MCP spike trace, with the spike's stand-in tool renamed to this surface's search tool. */
-function traceFile(dir: string, fixture: string) {
-  const t = readFileSync(here(`../fixtures/traces/${fixture}`), 'utf8').replaceAll('mcp__catalog__find_skills', 'mcp__skills-catalog__search_shared_skills');
-  const p = join(dir, fixture);
-  writeFileSync(p, t);
-  return p;
-}
-
-const base = (m: ReturnType<typeof machine>) => ({
-  scenariosFile: here('../golden/agent-scenarios.yaml'),
-  queriesFile: here('../golden/queries.yaml'),
-  phrasesFile: here('../golden/phrases.yaml'),
-  surface: `${here('./fixtures/surface.yaml')}#proposed`,
-  catalogCommand: [process.execPath, '-e', ''],
-  cliCommand: [process.execPath, '-e', ''],
-  claude: [process.execPath, here('./fixtures/fake-claude.mjs')],
-  models: ['claude-haiku-4-5-20251001'],
-  tries: 1,
-  out: m.out,
-  machine: m,
-  productRepo: null,
-});
+afterEach(() => { cleanup(); forgetFakeClaude(); });
 
 describe('agent scenario runner (fake claude)', () => {
   it('runs a scenario in each setup: sandbox, MCP config, companion skill, trace, scores, report; leaves nothing behind', async () => {
@@ -95,13 +70,6 @@ describe('agent scenario runner (fake claude)', () => {
     const { DISCOVERY } = await import('../src/agent/runner.ts');
     expect([...DISCOVERY].sort()).toEqual(['A1', 'A11', 'A13', 'A2', 'A3', 'A3g']);
   });
-
-  it('five tries for Haiku on the discovery asks, three otherwise, unless --tries says', async () => {
-    const m = machine();
-    process.env.QA_FAKE_CLAUDE_TRACE = traceFile(m.out.replace(/out$/, ''), 'haiku-mcp-only-direct.jsonl');
-    const report = await runScenarios({ ...base(m), tries: undefined, scenarios: ['A1'], setups: ['mcp'], models: ['claude-haiku-4-5-20251001', 'claude-opus-5-5'] });
-    expect(report.summary.map((s) => [s.model, s.tries])).toEqual([['claude-haiku-4-5-20251001', 5], ['claude-opus-5-5', 3]]);
-  }, 30_000);   // several tries, each with its before/after check (processes and ports included)
 
   it('skips a scenario whose starting catalog needs the catalog code, saying why', async () => {
     const m = machine();
