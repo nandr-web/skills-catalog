@@ -69,6 +69,13 @@ describe('pre-flight', () => {
     } finally { delete process.env.AWS_SECRET_ACCESS_KEY; }
   });
 
+  it('refuses a round whose scenarios use a rule the scorer doesn\'t know (a typo), before anything is spent', async () => {
+    const d = dir(); ok();
+    const p = scenarios(d, (doc) => { doc.scenarios.find((s: any) => s.id === 'A1').expect.push({ answer_containz: 'release' }); });
+    expect(await preflight(opts(d, { scenariosFile: p }))).toEqual([expect.stringMatching(/A1: answer_containz.*isn't a rule the scorer knows/)]);
+    expect(await preflight(opts(d, { scenariosFile: p, scenarios: ['A2'] }))).toEqual([]);   // only the chosen scenarios count
+  });
+
   it('flags an allowed CLI rule that doesn\'t match the surface\'s CLI name', async () => {
     const d = dir(); ok();
     const p = scenarios(d, (doc) => { doc.setups['skill+cli'].allowed = ['Bash(skills *)', 'Skill']; });

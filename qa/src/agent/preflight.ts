@@ -12,12 +12,13 @@ import { mcpConfig, SETUPS_FROM } from './command.ts';
 import { connect } from './mcp-client.ts';
 import { loadSurface } from './surface.ts';
 import { parseTrace } from './trace.ts';
-import { score } from './score.ts';
+import { ruleCheck, score } from './score.ts';
 import { loadPhrases } from './phrases.ts';
 
 export type PreflightOptions = {
   qaDir: string; scenariosFile: string; surfaceFile: string; variant: string; catalogCommand: string[];
   claude?: string[]; skipTests?: boolean; skipLogin?: boolean;
+  scenarios?: string[];   // the round's scenarios (default: all), whose rules must be ones the scorer knows
   machine: Machine;
 };
 
@@ -46,6 +47,9 @@ export async function preflight(o: PreflightOptions): Promise<string[]> {
       if (surfaceDoc.companion_skill?.[kind]) for (const u of s.unfilled(s.companionSkill(kind))) problems.push(`companion skill (${kind}): ${u} unfilled (${variant})`);
     }
   }
+  // Every rule the round's scenarios use is one the scorer knows: a typo would otherwise show only after a paid round,
+  // with every try incomplete. Rules waiting on a later slice are fine (the CLI lists which scenarios they leave incomplete).
+  for (const u of ruleCheck(doc, o.scenarios).unknown) problems.push(`scenario ${u} isn't a rule the scorer knows (a typo in the goldens?)`);
   const run = loadSurface(`${o.surfaceFile}#${o.variant}`);
   for (const [name, setup] of Object.entries(doc.setups as Record<string, { allowed: string[]; mcp: boolean }>)) {
     for (const a of setup.allowed) {

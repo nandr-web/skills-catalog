@@ -2,9 +2,11 @@
 // qa: the skills catalog's QA tools (the QA plan §11). The command line is the one place that picks the real machine; with
 // --fake-machine <dir> every place qa reads, writes or deletes is under <dir> (how the tests run it).
 import { readFileSync } from 'node:fs';
+import { parse } from 'yaml';
 import { parseArgs, type ParseArgsOptionsConfig } from 'node:util';
 import { preflight } from './agent/preflight.ts';
 import { runScenarios } from './agent/runner.ts';
+import { ruleCheck } from './agent/score.ts';
 import { scrubTrace } from './agent/scrub.ts';
 import { janitor } from './janitor.ts';
 import type { Cleanup } from './leftovers.ts';
@@ -106,9 +108,11 @@ async function main(argv: string[]): Promise<number> {
       const out = a.out ?? `out/agent/${newRunId()}`;
       if (!a['no-preflight']) {
         const [surfaceFile, variant] = a.surface.split('#');
-        const problems = await preflight({ qaDir: new URL('..', import.meta.url).pathname, scenariosFile: golden('agent-scenarios.yaml'), surfaceFile, variant, catalogCommand: words(a.mcp)!, claude: words(a.claude), machine });
+        const problems = await preflight({ qaDir: new URL('..', import.meta.url).pathname, scenariosFile: golden('agent-scenarios.yaml'), surfaceFile, variant, catalogCommand: words(a.mcp)!, claude: words(a.claude), machine, scenarios: list(a.scenario) });
         if (problems.length) { console.error(`qa agent: pre-flight failed, nothing ran:\n  ${problems.join('\n  ')}`); return 3; }
         console.error('qa agent: pre-flight clean');
+        const later = ruleCheck(parse(readFileSync(golden('agent-scenarios.yaml'), 'utf8')), list(a.scenario)).incomplete;
+        if (later.length) console.error(`qa agent: these will be incomplete (their rules wait on a later slice):\n  ${later.join('\n  ')}`);
       }
       const stop = new AbortController();
       process.on('SIGINT', () => stop.abort());

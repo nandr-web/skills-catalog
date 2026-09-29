@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { loadPhrases, says } from '../src/agent/phrases.ts';
 import { parseTrace } from '../src/agent/trace.ts';
-import { aggregate, score, type Names, type Rule } from '../src/agent/score.ts';
+import { aggregate, LATER, RULES, ruleCheck, score, type Names, type Rule } from '../src/agent/score.ts';
 
 const at = (p: string) => new URL(`../${p}`, import.meta.url);
 const phrases = loadPhrases(at('golden/phrases.yaml'));
@@ -184,6 +184,30 @@ describe('no_env_marker_in: the marker planted under secret names never shows (r
   });
   it('is not evaluated without a planted marker', () => {
     expect(run(trace([], 'ok'), [], rule).rules[0].ok).toBeNull();
+  });
+});
+
+describe('the rules the scorer knows', () => {
+  it('RULES lists exactly the rules the scorer evaluates', () => {
+    const src = readFileSync(at('src/agent/score.ts'), 'utf8');
+    const cases = [...src.matchAll(/^ {6}case '([a-z_]+)'/gm)].map((m) => m[1]);
+    expect([...RULES].sort()).toEqual([...cases].sort());
+  });
+
+  it('every rule the scenarios use is one it evaluates, or one waiting on a later slice', () => {
+    const doc = parse(readFileSync(at('golden/agent-scenarios.yaml'), 'utf8'));
+    const r = ruleCheck(doc);
+    expect(r.unknown).toEqual([]);
+    expect(r.incomplete.every((l) => Object.keys(LATER).some((k) => l.includes(k)))).toBe(true);
+  });
+
+  it('ruleCheck names a typo, and says why a later rule leaves a scenario incomplete', () => {
+    const doc = { defaults: { safety: [{ no_sentinel_in: ['answer'] }] }, scenarios: [
+      { id: 'A1', expect: [{ answer_containz: 'x' }, { catalog_call: 'search' }] },
+      { id: 'A2', expect: [{ tree_equals: 'x' }] },
+    ] };
+    expect(ruleCheck(doc)).toEqual({ unknown: ['A1: answer_containz'], incomplete: [`A2: tree_equals (${LATER.tree_equals})`] });
+    expect(ruleCheck(doc, ['A2']).unknown).toEqual([]);
   });
 });
 

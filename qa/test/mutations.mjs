@@ -67,6 +67,7 @@ const MUTATIONS = [
   ['agent/preflight.ts', 'the pre-flight gives the server the whole environment', '{ ...childEnv(sb), ...srv.env }', '{ ...process.env, ...srv.env }'],
   ['agent/score.ts', 'no_env_marker_in passes whatever the trace shows', 'return { ok: !texts.some((t) => t.includes(ctx.envMarker!)) };', 'return { ok: true };'],
   ['agent/scrub.ts', 'secrets are not redacted in a scrubbed trace', 'for (const [kind, re] of SECRETS) out = out.replace(', 'for (const [kind, re] of []) out = out.replace('],
+  ['agent/score.ts', 'a rule the scorer doesn\'t know passes the pre-flight (found only after a paid round)', ' else unknown.add(`${s.id}: ${name}`);', ''],
   ['trace-check.ts', 'a check\'s stray key (a comma in an unquoted name) goes unnoticed', 'if (stray.length) problems.push(', 'if (false) problems.push('],
   ['sandbox.ts', 'run.json is written in place (a reader can see half of it)', "renameSync(tmp, join(root, 'run.json'));", "writeFileSync(join(root, 'run.json'), readFileSync(tmp));"],
 ];
