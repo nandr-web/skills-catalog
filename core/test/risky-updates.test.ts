@@ -121,6 +121,15 @@ describe('an injected command is found however the file is written', () => {
     const notes = (text: string) => ({ path: 'run.txt', mode: '0644' as const, bytes: Buffer.from(text) });
     expect(diffTrees({ files: checkTree([md(`Plain.\n${block}`), notes('a\n')]), publisher: 'a' }, { files: checkTree([md(`Plain.\n${block}`), notes('a\rb\n')]), publisher: 'a' }).risk_flags.filter((f) => f.detail === UNUSUAL_BREAK_DETAIL)).toEqual([]);
   });
+  it('an added markdown file with an unusual line break and a ! block is flagged at the break too', () => {
+    const LS = String.fromCodePoint(0x2028);
+    const added = { path: 'notes.md', mode: '0644' as const, bytes: Buffer.from(`Intro.${LS}\`\`\`!\necho QA-MARKER\n\`\`\`\n`) };
+    const d = diffTrees({ files: plain, publisher: 'a' }, { files: checkTree([md('Plain.\n'), added]), publisher: 'a' });
+    expect(d.risk_flags.map((f) => [f.kind, f.path, f.line, f.detail])).toEqual([
+      ['runs_at_load', 'notes.md', 1, UNUSUAL_BREAK_DETAIL],
+      ['runs_at_load', 'notes.md', 2, 'echo QA-MARKER'],
+    ]);
+  });
   it('finds an unusual line break in linear time', () => {
     const block = '```!\necho QA-MARKER\n```\n';
     expectLinear('half a megabyte of lines, then a lone CR', (s) => `${'Plain line.\n'.repeat(Math.round(40_000 * s))}Late.\r${block}`, (body) => flagsFor(body));
