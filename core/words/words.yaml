@@ -1045,6 +1045,7 @@ setup:
   settings_unusable:
     unreadable: "it can't be read: check its permissions"
     too_big: it's over 1 MiB
+    too_many_files: it's a folder with more than 64 entries, more than the installer reads
     not_json: it isn't a JSON object of settings
     link: it's a link, which isn't followed
     wrong_type: the setting {key} has the wrong type
