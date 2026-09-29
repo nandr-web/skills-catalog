@@ -396,7 +396,7 @@ requirements:
       - {layer: setup, name: "setup's result leads with the remaining step and 'N skills to search; none installed yet'", auto: true}
       - {layer: setup, name: "the written settings allow exactly the contract §6 MCP tools and shell prefixes, no more, and the CLI allow list equals the registry's read-only commands (search, read, versions, diff, list); the hook and the MCP entry start node by process.execPath, never a shim, npx or a bare name", auto: true}
       - {layer: setup, name: "the pre-allowed read-only commands never write: pointed with --catalog and --home at an empty folder they fail or read, and the folder stays empty (no catalog created, no sweep, no index rebuilt)", auto: true}
-      - {layer: setup, name: "--accept or --allow-suspected-secrets with no terminal exits 3 and changes nothing", auto: true}
+      - {layer: setup, name: "--accept (and --allow-suspected-secrets, once the CLI has a publish: 3e56b3e) with no terminal exits 3 and changes nothing", auto: true}
       - {layer: setup, name: "the session-start notice never contains a publisher-chosen string: a sentinel planted in a skill's path and description is absent from it", auto: true}
       - {layer: manual, name: the owner watches a recording of the wizard, auto: false, automate_by: "pseudo-terminal screen snapshots approved once"}
 
