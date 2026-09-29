@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { EMOJI_PROPERTIES_FILE, EMOJI_MODIFIER, EXTENDED_PICTOGRAPHIC, reviewFlags } from '../src/skill-tree/index.ts';
+import { EMOJI_PROPERTIES_FILE, EMOJI_MODIFIER, EXTENDED_PICTOGRAPHIC, SPACE_SEPARATORS, reviewFlags } from '../src/skill-tree/index.ts';
 
 const core = join(import.meta.dirname, '..');
 const extract = readFileSync(join(core, 'scripts', 'unicode', 'emoji-data-16.0.0-Emoji_Modifier_Extended_Pictographic.txt'), 'utf8');
@@ -59,5 +59,22 @@ describe('the emoji table', () => {
   it('is the reviewer\'s only source for emoji properties: no emoji property escape in review.ts', () => {
     const source = readFileSync(join(core, 'src', 'skill-tree', 'review.ts'), 'utf8').replace(/^\s*\/\/.*$/gm, '');
     expect(/\\[pP]\{(?:Extended_Pictographic|Emoji\w*)\}/.test(source)).toBe(false);
+  });
+});
+
+// The space separators the reviewer spares come from Unicode 16.0 too: its 17 Zs code points, listed here, never the
+// runtime's \p{Zs}. Only \p{L} (comment letters) is left to the runtime, and it never decides which character is hidden.
+describe('the space separators', () => {
+  const ZS_16 = [0x20, 0xa0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a, 0x202f, 0x205f, 0x3000];
+  it('are Unicode 16.0\'s 17, and none is flagged as hidden', () => {
+    expect(SPACE_SEPARATORS.length).toBe(17);
+    expect([...SPACE_SEPARATORS]).toEqual(ZS_16);
+    for (const cp of ZS_16) expect(hidden(`Keep${String.fromCodePoint(cp)}it short.`), cp.toString(16)).toEqual([]);
+    // the Mongolian vowel separator stopped being one in Unicode 6.3: it's hidden
+    expect(hidden(`Keep${String.fromCodePoint(0x180e)}it short.`)).toEqual(['hidden character U+180E']);
+  });
+  it('no property escape but \\p{L} is left in review.ts', () => {
+    const source = readFileSync(join(core, 'src', 'skill-tree', 'review.ts'), 'utf8').replace(/^\s*\/\/.*$/gm, '');
+    expect([...source.matchAll(/\\\\?[pP]\{(\w+)\}/g)].map((m) => m[1])).toEqual(['L']);
   });
 });

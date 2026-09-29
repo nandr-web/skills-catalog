@@ -33,7 +33,11 @@ export function checkContextCostBudget(value: unknown): number {
 // spaces, tag characters, U+2800 …), except what hides nothing: a tab, a space separator (a no-break space), a variation
 // selector or zero-width joiner inside an emoji sequence (every emoji with VS16 or ZWJ would otherwise hold an update), and
 // a byte-order mark as a file's first character, which marks its encoding. Each candidate is one character.
-const CANDIDATE = new RegExp(`[\\u202a-\\u202e\\u2066-\\u2069]|(?![\\t\\p{Zs}])(?:${INVISIBLE.source})`, 'gu');
+// The space separators are Unicode 16.0's 17 (general category Zs), listed here rather than read from the runtime's
+// \p{Zs}, so a newer runtime can't change which character is hidden.
+export const SPACE_SEPARATORS: readonly number[] = [0x20, 0xa0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a, 0x202f, 0x205f, 0x3000];
+const SPARED_BLANK = `\\t${SPACE_SEPARATORS.map((cp) => `\\u{${cp.toString(16)}}`).join('')}`;
+const CANDIDATE = new RegExp(`[\\u202a-\\u202e\\u2066-\\u2069]|(?![${SPARED_BLANK}])(?:${INVISIBLE.source})`, 'gu');
 // Which characters are pictographs and skin tones comes from config/emoji-properties.txt (made by
 // scripts/emoji-properties.py from Unicode's emoji-data.txt 16.0), never the runtime's properties, so a line is reviewed
 // the same on every machine: sections of code-point ranges, each after its [property] line.
