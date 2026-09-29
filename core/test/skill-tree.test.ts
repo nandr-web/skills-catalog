@@ -474,6 +474,11 @@ describe('the secret scan finds a secret by its shape, in any variable name or q
     ["  'auth_token': 'abcdefghijklmnop',", 'password_or_token'],
     ['password: correct-horse-battery', 'password_or_token'],
     ['apiKey=0123456789abcdefghij', 'password_or_token'],
+    // the key is a run of letters, digits, _ - . that ends in one of the words (contract §2)
+    ['MYPASSWORD=correct-horse-battery', 'password_or_token'],
+    ['client_secret: abcdefghijklmnopqrst', 'password_or_token'],
+    ['OPENAI_SECRET_KEY = "abcdefghijklmnopqrst"', 'password_or_token'],
+    ['service.private-key=abcdefghijklmnopqrst', 'password_or_token'],
     ['KEY_ID=prefix_AKIAIOSFODNN7EXAMPLE', 'aws_access_key'],
   ];
   for (const [line, kind] of flagged) {
@@ -486,6 +491,8 @@ describe('the secret scan finds a secret by its shape, in any variable name or q
     'password: ${DB_PASSWORD}',
     'echo "$API_TOKEN" > /dev/null',
     'The token comes from the environment, never from this file.',
+    'TOKENS=abcdefghijklmnopqrst',
+    'password_hint=the-name-of-my-first-dog',
   ];
   for (const line of passed) {
     it(`leaves alone ${line}`, () => expect(scan(line)).toBeNull());

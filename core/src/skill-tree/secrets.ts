@@ -16,10 +16,12 @@ export interface SecretHit {
 // variable's name, must not hide it.
 const START = '(?<![A-Za-z0-9])';
 const END = '(?![A-Za-z0-9])';
-// A setting whose name holds one of these words as a part (DB_PASSWORD, AWS_SECRET_ACCESS_KEY, "password", apiKey),
-// quoted or not, set to a value: a part is joined by _ - or ., so prose ("passwords", "tokenizer") never matches.
-const KEYWORD = '(?:password|passwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token|token)';
-const SETTING = `${START}(?:[A-Za-z0-9]+[_.-])*${KEYWORD}(?:[_.-][A-Za-z0-9]+)*['"]?\\s*[:=]\\s*['"]?[A-Za-z0-9/+_\\-.]{12,}`;
+// A setting (contract §2): a key, a run of letters, digits, _ - and ., that ends in one of these words (MYPASSWORD,
+// DB_PASSWORD, client_secret, AWS_SECRET_ACCESS_KEY, "password", apiKey), then an optional closing quote, : or = with
+// spaces around it, an optional opening quote and a value of 12 or more letters, digits and / + _ - . A key that goes
+// on past the word (passwords, tokenizer, password_hint, TOKENS) isn't one.
+const KEYWORD = '(?:password|passwd|secret|secret[_-]?key|private[_-]?key|api[_-]?key|access[_-]?key|access[_-]?token|auth[_-]?token|token)';
+const SETTING = `(?<![A-Za-z0-9_.-])[A-Za-z0-9_.-]*${KEYWORD}['"]?\\s*[:=]\\s*['"]?[A-Za-z0-9/+_\\-.]{12,}`;
 
 const RULES: readonly [SecretKind, RegExp][] = [
   ['aws_access_key', new RegExp(`${START}(?:AKIA|ASIA)[0-9A-Z]{16}${END}`)],
