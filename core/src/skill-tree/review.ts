@@ -111,8 +111,8 @@ function hiddenIn(text: string, fileStart: boolean): string | null {
 // in the BMP, so no /u flag is needed and /i keeps its plain ASCII folding).
 const BLANKS = `\\t\\n\\v\\f\\r\\ufeff\\u2028\\u2029${SPACE_SEPARATORS.map((cp) => `\\u${cp.toString(16).padStart(4, '0')}`).join('')}`;
 const S = `[${BLANKS}]`;
-const BLANK = new RegExp(`^${S}$`);
-const isBlank = (c: string | undefined) => c !== undefined && BLANK.test(c);
+const BLANK_SET = new Set(['\t', '\n', '\v', '\f', '\r', String.fromCharCode(0xfeff, 0x2028, 0x2029).split(''), SPACE_SEPARATORS.map((cp) => String.fromCharCode(cp))].flat());
+const isBlank = (c: string | undefined) => c !== undefined && BLANK_SET.has(c);
 
 // "ignore previous instructions": ignore, disregard or forget, then optionally all, any or the, then previous, prior,
 // above, earlier or system, then instruction, guidance, rule, message or prompt, singular or plural.
@@ -123,149 +123,356 @@ const IGNORE = new RegExp(`\\b(?:ignore|disregard|forget)${S}+(?:(?:all|any|the)
 const NOUN = '(?:assistant|ai|model|llm|agent|claude)s?';
 const ADDRESSED = new RegExp(`\\bto${S}+the${S}+${NOUN}${S}*:|\\bnote${S}+to${S}+(?:the${S}+)?${NOUN}\\b|\\b${NOUN}${S}+reading${S}+this\\b`, 'i');
 
-// One word of a command from `i`: blanks skipped, then everything up to a blank or where a command ends (`|`, `;`, `&`,
-// a backtick). Null when the command has ended.
-const COMMAND_END = new Set(['|', ';', '&', '`']);
-function nextWord(text: string, i: number): { word: string; next: number } | null {
-  while (isBlank(text[i])) i++;
-  const start = i;
-  while (i < text.length && !isBlank(text[i]) && !COMMAND_END.has(text[i]!)) i++;
-  return i > start ? { word: text.slice(start, i), next: i } : null;
+// ---------- commands, as a shell would read them (contract §5.3) ----------
+//
+// A line is read once, left to right, into commands. A command word counts only where a shell would read one: at the
+// start of the line or of a code span, after `|`, `|&`, `||`, `;`, `&` or `&&`, and at the start of a `$( … )`, `<( … )`
+// or backtick substitution; sudo and env are looked past with their options and settings. A command runs to the next of
+// those, or to the end of its span or substitution; on the line itself (prose, or a line of a code block) a backtick ends
+// it too, so prose never reaches into a later code span. A quote that opens a word (or follows `=`) keeps it whole; a
+// quote inside a word, as in "don't", is text, so an apostrophe can't hide the rest of a line. A substitution inside a
+// word is read as its own commands and marks the word when it runs a download. Substitutions nest at most MAX_NESTING deep
+// (deeper, an opener is text), so each character is read a bounded number of times.
+const MAX_NESTING = 8;
+type FrameKind = 'line' | 'span' | 'dollar' | 'process' | 'tick';
+interface Word {
+  start: number;
+  end: number;
+  download: boolean; // holds a substitution that runs a download
 }
-const nameOf = (word: string) => word.slice(word.lastIndexOf('/') + 1).toLowerCase();
+interface Frame {
+  kind: FrameKind;
+  words: Word[];
+  word: Word | null;
+  quote: '' | '"' | "'";
+  afterPipe: boolean; // this command is fed by a pipe
+  pipedDownload: boolean; // a download ran earlier in this pipeline
+  downloads: boolean; // a command in this frame is a download (for the word holding the substitution)
+  prose: boolean; // this command follows a code span on the line: its first word isn't at a command start
+}
+interface Command {
+  words: string[];
+  download: boolean[];
+}
 
-// "curl piped to a shell": curl or wget with at least one argument, then any later single `|` (not `||`) followed, after
-// blanks of any length, by the shell: sh, bash, zsh, or python/python3 unless given a module (-m) or a script file, by
-// name or path, through env (with any NAME=value settings) or through sudo with any flags and options, each word read
-// whole. Or a download run through a substitution as a shell's argument or into eval, source or `.`: `sh -c "$(curl …)"`
-// (blanks inside the quote too), `bash <(curl …)`, `eval "$(curl …)"`, `source <(curl …)`, backticks around the download.
-const FETCHERS = /\b(?:curl|wget)\b/gi;
-const NOT_AN_ARGUMENT = new Set(['|', ';', '&', '`', ')']);
+const BLANK_RUN = new RegExp(`${S}+`);
+const QUOTING = /["'\\]/;
+const unquote = (word: string) => (QUOTING.test(word) ? word.replace(/["'\\]/g, '') : word);
+const nameOf = (word: string) => {
+  const w = unquote(word);
+  return w.slice(w.lastIndexOf('/') + 1).toLowerCase();
+};
+const SETTING = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const FETCH_NAMES = new Set(['curl', 'wget']);
 const SHELL_NAME = /^(?:sh|bash|zsh)$/;
 const PYTHON_NAME = /^python3?$/;
-const SUDO_TAKES_VALUE = new Set(['-u', '-g', '-C', '-D', '-h', '-p', '-r', '-t', '-T', '-U']);
-const ENV_TAKES_VALUE = new Set(['-u', '-C', '-S']);
-const SETTING = /^[A-Za-z_][A-Za-z0-9_]*=/;
-// Where the first curl or wget that has an argument ends, or -1. Each match's blanks are read once.
-function downloadEnd(text: string): number {
-  for (const m of text.matchAll(FETCHERS)) {
-    let j = m.index + m[0].length;
-    while (isBlank(text[j])) j++;
-    if (j > m.index + m[0].length && j < text.length && !NOT_AN_ARGUMENT.has(text[j]!)) return j;
-  }
-  return -1;
-}
-// Whether the command from `i` (just after a pipe) is a shell that reads its program from the pipe.
-function intoShell(text: string, i: number): boolean {
-  let w = nextWord(text, i);
-  if (w && nameOf(w.word) === 'sudo') {
-    for (w = nextWord(text, w.next); w && w.word.startsWith('-'); w = w && nextWord(text, w.next)) if (SUDO_TAKES_VALUE.has(w.word)) w = nextWord(text, w.next);
-  }
-  if (w && nameOf(w.word) === 'env') {
-    for (w = nextWord(text, w.next); w && (w.word.startsWith('-') || SETTING.test(w.word)); w = w && nextWord(text, w.next)) if (ENV_TAKES_VALUE.has(w.word)) w = nextWord(text, w.next);
-  }
-  if (!w) return false;
-  const name = nameOf(w.word);
-  if (SHELL_NAME.test(name)) return true;
-  if (!PYTHON_NAME.test(name)) return false;
-  // python reads the pipe with no arguments, `-` or -c; a module (-m) or a script file is its own program
-  for (let v = nextWord(text, w.next); v; v = nextWord(text, v.next)) {
-    if (v.word === '-m') return false;
-    if (v.word === '-c' || v.word === '-') return true;
-    if (!v.word.startsWith('-')) return false;
-  }
-  return true;
-}
-// A substitution that opens on a download, and what runs it just before (read over a short window, so still linear).
-const SUBSTITUTION_OF_DOWNLOAD = /(?:\$\(|<\(|`)[ \t]*(?:curl|wget)\b/gi;
-const SHELL = '(?:\\/[\\w.-]*)*\\/?(?:sh|bash|zsh|python3?)(?![\\w-])';
-const RUNS_BEFORE = new RegExp(`(?:^|[^\\w/.-])(?:${SHELL}(?:${S}+-[^${BLANKS}]+)*|eval|source|\\.)${S}+(?:["']${S}*)?$`, 'i');
-function curlToShell(text: string): boolean {
-  const from = downloadEnd(text);
-  if (from >= 0) {
-    for (let at = text.indexOf('|', from); at >= 0; at = text.indexOf('|', at + 1)) {
-      if (text[at + 1] === '|') {
-        at++;
-        continue;
-      }
-      if (intoShell(text, at + 1)) return true;
-    }
-  }
-  for (const m of text.matchAll(SUBSTITUTION_OF_DOWNLOAD)) if (RUNS_BEFORE.test(text.slice(Math.max(0, m.index - 80), m.index))) return true;
-  return false;
-}
+const SOURCING = new Set(['eval', 'source', '.']);
+const SUDO_SHORT_VALUE = new Set([...'ugCDhprtTUR']);
+const SUDO_LONG_VALUE = new Set(['--user', '--group', '--close-from', '--chdir', '--host', '--prompt', '--role', '--type', '--command-timeout', '--other-user', '--chroot']);
+const ENV_SHORT_VALUE = new Set([...'uCS']);
+const ENV_LONG_VALUE = new Set(['--unset', '--chdir', '--split-string']);
 
-// "sends a local file or variable": curl, wget or nc with a data option (-d, --data…, --json, -F, --form,
-// --upload-file, -T, those letters inside a cluster such as -sd or -sT, and wget's --post-data and --post-file) naming a
-// home path or a variable ($…, ~/…, .ssh, .aws, .env), or with a command substitution ($(…) or backticks) in its URL or
-// the value of -H/--header. Only within that command: it ends at a `|`, a `;` or a `&&` outside quotes, or at the
-// backtick that closes the code span it sits in, never in a later word of the sentence.
-const SENDERS = /\b(?:curl|wget|nc)\b/gi;
-const LOCAL = /\$|~\/|\.ssh|\.aws|\.env/;
-const COMMAND_SUBSTITUTION = /\$\(|`[\w$]/;
-const DATA_OPTIONS = new Set(['--data', '--data-raw', '--data-binary', '--data-urlencode', '--data-ascii', '--json', '--form', '--form-string', '--upload-file', '--post-data', '--post-file']);
-const HEADER_OPTIONS = new Set(['--header']);
-const VALUE_LETTERS = new Set([...'AbcCDeEKmoPQrtuUwxXyYz']); // curl's other short options that take a value
-// A command's words from `from`: runs of anything but blanks, a quoted part kept whole (so a quoted header is one word),
-// up to where the command ends. Each character is read once.
-function commandWords(text: string, from: number, inSpan: boolean): { words: string[]; end: number } {
-  const words: string[] = [];
-  let word = '';
-  let quote = '';
-  let i = from;
-  for (; i < text.length; i++) {
-    const c = text[i]!;
-    if (quote) {
-      word += c;
-      if (c === quote) quote = '';
+// The command's own word, past sudo and env with their options and settings (and NAME=value before it): the words and
+// its index. env -S's string holds the command, so it's read as the words.
+function commandOf(words: readonly string[]): { words: readonly string[]; at: number } | null {
+  let k = 0;
+  while (k < words.length) {
+    const w = unquote(words[k]!);
+    if (SETTING.test(w)) {
+      k++;
       continue;
     }
-    if (c === '|' || c === ';' || (c === '&' && text[i + 1] === '&') || (c === '`' && inSpan)) break;
-    if (isBlank(c)) {
-      if (word) words.push(word);
-      word = '';
-      continue;
+    const name = nameOf(w);
+    if (name !== 'sudo' && name !== 'env') return { words, at: k };
+    const [short, long] = name === 'sudo' ? [SUDO_SHORT_VALUE, SUDO_LONG_VALUE] : [ENV_SHORT_VALUE, ENV_LONG_VALUE];
+    for (k++; k < words.length; k++) {
+      const o = unquote(words[k]!);
+      if (o === '--') {
+        k++;
+        break;
+      }
+      if (o === '-' || SETTING.test(o)) continue;
+      if (!o.startsWith('-')) break;
+      // the option's value: after `=`, the rest of a short cluster, or the next word
+      let option = o;
+      let value: string | undefined;
+      let next = false;
+      if (o.startsWith('--')) {
+        const eq = o.indexOf('=');
+        option = eq < 0 ? o : o.slice(0, eq);
+        if (long.has(option)) {
+          if (eq < 0) next = true;
+          else value = o.slice(eq + 1);
+        }
+      } else {
+        for (let j = 1; j < o.length; j++) {
+          if (!short.has(o[j]!)) continue;
+          option = `-${o[j]}`;
+          if (j + 1 < o.length) value = o.slice(j + 1);
+          else next = true;
+          break;
+        }
+      }
+      if (next) value = k + 1 < words.length ? unquote(words[++k]!) : undefined;
+      if (name === 'env' && (option === '-S' || option === '--split-string') && value !== undefined) {
+        return commandOf(value.split(BLANK_RUN).filter(Boolean));
+      }
     }
-    if (c === '"' || c === "'") quote = c;
-    word += c;
-  }
-  if (word) words.push(word);
-  return { words, end: i };
-}
-// What option the word at `k` is, if it's a data or header option, and its value (the rest of the word, or the next).
-function optionAt(words: readonly string[], k: number): { kind: 'data' | 'header'; value: string | undefined } | null {
-  const w = words[k]!;
-  if (w.startsWith('--')) {
-    const eq = w.indexOf('=');
-    const name = eq < 0 ? w : w.slice(0, eq);
-    const kind = DATA_OPTIONS.has(name) ? 'data' : HEADER_OPTIONS.has(name) ? 'header' : null;
-    return kind && { kind, value: eq < 0 ? words[k + 1] : w.slice(eq + 1) };
-  }
-  if (!w.startsWith('-')) return null;
-  for (let j = 1; j < w.length; j++) {
-    const c = w[j]!;
-    const kind = c === 'd' || c === 'F' || c === 'T' ? 'data' : c === 'H' ? 'header' : null;
-    if (kind) return { kind, value: j + 1 < w.length ? w.slice(j + 1) : words[k + 1] };
-    if (VALUE_LETTERS.has(c) || !/[A-Za-z]/.test(c)) return null;
   }
   return null;
 }
-function sendsLocal(text: string): boolean {
-  let pos = 0;
-  for (const m of text.matchAll(SENDERS)) {
-    if (m.index < pos) continue;
-    let b = m.index - 1;
-    while (b >= pos && isBlank(text[b])) b--;
-    const { words, end } = commandWords(text, m.index + m[0].length, b >= pos && text[b] === '`');
-    pos = end;
-    for (let k = 0; k < words.length; k++) {
-      const option = optionAt(words, k);
-      if (option?.kind === 'data' && option.value !== undefined && LOCAL.test(option.value)) return true;
-      if (option?.kind === 'header' && option.value !== undefined && COMMAND_SUBSTITUTION.test(option.value)) return true;
-      if (words[k]!.includes('://') && COMMAND_SUBSTITUTION.test(words[k]!)) return true;
+const commandName = (words: readonly string[]) => {
+  const c = commandOf(words);
+  return c && { ...c, name: nameOf(c.words[c.at]!) };
+};
+
+// A shell that reads its program from the pipe: sh, bash, zsh, or python with no script and no module (-c or - counts).
+type Resolved = { words: readonly string[]; at: number; name: string } | null;
+function readsPipe(c: Resolved): boolean {
+  if (!c) return false;
+  if (SHELL_NAME.test(c.name)) return true;
+  if (!PYTHON_NAME.test(c.name)) return false;
+  for (let k = c.at + 1; k < c.words.length; k++) {
+    const w = unquote(c.words[k]!);
+    if (w === '-m') return false;
+    if (w === '-c' || w === '-') return true;
+    if (!w.startsWith('-')) return false;
+  }
+  return true;
+}
+// A curl or wget with at least one argument, anywhere in the command (the pipe rule reads prose too).
+const hasDownload = (names: readonly string[]) => names.some((n, k) => k + 1 < names.length && FETCH_NAMES.has(n));
+// A curl or wget command with at least one argument.
+const isDownload = (c: Resolved) => c !== null && FETCH_NAMES.has(c.name) && c.at + 1 < c.words.length;
+
+// "sends a local file or variable": a curl, wget or nc word anywhere in a command (prose too), then its own data option
+// naming a home path or a variable, or a command substitution in its URL (the first word that isn't an option or an
+// option's value) or its header's value. Each tool's options as it spells them; a value is its whole word. A tool's words
+// run to the next tool word, so each word is read once.
+const LOCAL = /\$|~\/|\/home\/|\/users\/|\.ssh|\.aws|\.env/i;
+const SUBSTITUTION = /\$\(|`/;
+const CURL_SHORT_VALUE = new Set([...'AbcCDeEKmoPQrtuUwxXyYz']);
+const CURL_LONG_VALUE = new Set(['--user', '--user-agent', '--referer', '--output', '--output-dir', '--request', '--cookie', '--cookie-jar', '--proxy', '--proxy-user', '--cert', '--key', '--cacert', '--capath', '--config', '--connect-timeout', '--max-time', '--retry', '--write-out', '--range', '--resolve', '--connect-to', '--interface', '--limit-rate', '--max-filesize', '--netrc-file', '--oauth2-bearer', '--proto', '--proto-redir', '--dump-header', '--unix-socket', '--variable', '--expand-url']);
+const WGET_SHORT_VALUE = new Set([...'OoaPtTweilDUQARB']);
+const WGET_LONG_VALUE = new Set(['--output-document', '--output-file', '--append-output', '--directory-prefix', '--tries', '--timeout', '--wait', '--input-file', '--level', '--domains', '--user-agent', '--user', '--password', '--method', '--referer', '--load-cookies', '--save-cookies', '--accept', '--reject', '--base']);
+const WGET_DATA = ['--post-data', '--post-file', '--body-data', '--body-file'];
+type OptionKind = 'data' | 'header' | 'url' | 'other' | null;
+// A tool's options: what each long option or short cluster is, and its value.
+function sendsWith(args: readonly string[], long: (name: string) => OptionKind, short: (cluster: string) => { kind: OptionKind; at: number }): boolean {
+  let url: string | undefined;
+  for (let k = 0; k < args.length; k++) {
+    const raw = args[k]!;
+    const o = unquote(raw);
+    let kind: OptionKind = null;
+    let value: string | undefined;
+    if (o.startsWith('--') && o.length > 2) {
+      const eq = o.indexOf('=');
+      kind = long(eq < 0 ? o : o.slice(0, eq));
+      if (kind && eq >= 0) value = raw.slice(raw.indexOf('=') + 1);
+      else if (kind) value = args[++k];
+    } else if (o.startsWith('-') && o.length > 1) {
+      const s = short(o);
+      kind = s.kind;
+      if (kind && s.at + 1 < o.length) value = o.slice(s.at + 1);
+      else if (kind) value = args[++k];
+    } else if (url === undefined) {
+      url = raw;
+      if (SUBSTITUTION.test(raw)) return true;
+      continue;
     }
+    if (value === undefined) continue;
+    if (kind === 'data' && LOCAL.test(value)) return true;
+    if ((kind === 'header' || kind === 'url') && SUBSTITUTION.test(value)) return true;
+    if (kind === 'url') url ??= value;
   }
   return false;
+}
+const curlLong = (name: string): OptionKind =>
+  /^--data/.test(name) || /^--form/.test(name) || name === '--json' || name === '--upload-file' ? 'data' : name === '--header' ? 'header' : name === '--url' ? 'url' : CURL_LONG_VALUE.has(name) ? 'other' : null;
+// curl's d, F and T anywhere in a cluster are data (with any other option characters: -sd, -4d, -#d, -0F), H a header.
+function curlShort(cluster: string): { kind: OptionKind; at: number } {
+  const data = cluster.slice(1).search(/[dFT]/);
+  if (data >= 0) return { kind: 'data', at: data + 1 };
+  for (let j = 1; j < cluster.length; j++) {
+    if (cluster[j] === 'H') return { kind: 'header', at: j };
+    if (CURL_SHORT_VALUE.has(cluster[j]!)) return { kind: 'other', at: j };
+  }
+  return { kind: null, at: 0 };
+}
+// wget's data options, and any abbreviation of them down to --post- or --body-.
+const wgetLong = (name: string): OptionKind =>
+  (name.startsWith('--post-') || name.startsWith('--body-')) && WGET_DATA.some((full) => full.startsWith(name))
+    ? 'data'
+    : name === '--header'
+      ? 'header'
+      : WGET_LONG_VALUE.has(name)
+        ? 'other'
+        : null;
+function wgetShort(cluster: string): { kind: OptionKind; at: number } {
+  for (let j = 1; j < cluster.length; j++) if (WGET_SHORT_VALUE.has(cluster[j]!)) return { kind: 'other', at: j };
+  return { kind: null, at: 0 };
+}
+// nc's input redirected from a file: `< path` or `<path`.
+function ncSends(args: readonly string[]): boolean {
+  for (let k = 0; k < args.length; k++) {
+    const o = unquote(args[k]!);
+    const from = o === '<' ? args[k + 1] : o.startsWith('<') && !o.startsWith('<(') ? o.slice(1) : undefined;
+    if (from !== undefined && LOCAL.test(from)) return true;
+  }
+  return false;
+}
+const SENDER_NAMES = new Set(['curl', 'wget', 'nc']);
+function sends(words: readonly string[], names: readonly string[]): boolean {
+  let tool = '';
+  let from = 0;
+  const check = (to: number) => {
+    const args = words.slice(from, to);
+    return tool === 'curl' ? sendsWith(args, curlLong, curlShort) : tool === 'wget' ? sendsWith(args, wgetLong, wgetShort) : tool === 'nc' && ncSends(args);
+  };
+  for (let k = 0; k < words.length; k++) {
+    const name = names[k]!;
+    if (!SENDER_NAMES.has(name)) continue;
+    if (tool && check(k)) return true;
+    tool = name;
+    from = k + 1;
+  }
+  return tool !== '' && check(words.length);
+}
+
+// Reads a line's commands: `pipe` when a download is piped into a shell or run through a substitution by a shell, eval,
+// source or `.`; `send` when a curl, wget or nc command sends a local file or variable.
+const ANY_TOOL = /\b(?:curl|wget|nc)\b/i;
+function commandFlags(text: string): { pipe: boolean; send: boolean } {
+  const out = { pipe: false, send: false };
+  // both rules need a download or a sender somewhere on the line: without one there's nothing to read
+  if (!ANY_TOOL.test(text)) return out;
+  const frame = (kind: FrameKind): Frame => ({ kind, words: [], word: null, quote: '', afterPipe: false, pipedDownload: false, downloads: false, prose: false });
+  const stack: Frame[] = [frame('line')];
+  const top = () => stack[stack.length - 1]!;
+  const startWord = (f: Frame, i: number) => {
+    f.word ??= { start: i, end: i, download: false };
+  };
+  const endWord = (f: Frame, i: number) => {
+    if (!f.word) return;
+    f.word.end = i;
+    f.words.push(f.word);
+    f.word = null;
+  };
+  // A command ends: its checks run, and `pipe` says whether a pipe carries its output into the next one.
+  const endCommand = (f: Frame, i: number, pipe: boolean) => {
+    endWord(f, i);
+    const words = f.words.map((w) => text.slice(w.start, w.end));
+    if (words.length) {
+      const cmd: Command = { words, download: f.words.map((w) => w.download) };
+      const c = f.prose ? null : commandName(cmd.words);
+      if (f.afterPipe && f.pipedDownload && readsPipe(c)) out.pipe = true;
+      if (c && (SHELL_NAME.test(c.name) || PYTHON_NAME.test(c.name) || SOURCING.has(c.name)) && cmd.download.some(Boolean)) out.pipe = true;
+      const names = words.map(nameOf);
+      if (!out.send && sends(cmd.words, names)) out.send = true;
+      if (isDownload(c)) f.downloads = true;
+      f.pipedDownload = pipe && (f.pipedDownload || hasDownload(names));
+    } else if (!pipe) f.pipedDownload = false;
+    f.afterPipe = pipe;
+    f.words = [];
+    if (f.kind === 'line') runner = undefined;
+    f.prose = false;
+  };
+  // Whether the command read so far on this frame is one a substitution would run for. Only asked on the line, and the
+  // answer is kept for the command (a backtick that doesn't open a substitution ends it), so each word is read once.
+  let runner: boolean | undefined;
+  const runsSubstitutions = (f: Frame) => {
+    if (runner === undefined) {
+      const c = f.prose ? null : commandName(f.words.map((w) => text.slice(w.start, w.end)));
+      runner = c !== null && (SHELL_NAME.test(c.name) || PYTHON_NAME.test(c.name) || SOURCING.has(c.name));
+    }
+    return runner;
+  };
+  const open = (kind: FrameKind, i: number) => {
+    startWord(top(), i);
+    stack.push(frame(kind));
+  };
+  const close = (i: number) => {
+    const f = stack.pop()!;
+    endCommand(f, i, false);
+    const parent = top();
+    if (f.downloads && parent.word) parent.word.download = true;
+    // what follows a code span on the line isn't at a command start (the contract's starts don't include it)
+    if (f.kind === 'span') parent.prose = true;
+  };
+  for (let i = 0; i < text.length; i++) {
+    const f = top();
+    const c = text[i]!;
+    if (f.quote === "'") {
+      if (c === "'") f.quote = '';
+      continue;
+    }
+    if (c === '\\') {
+      startWord(f, i);
+      i++;
+      continue;
+    }
+    const room = stack.length <= MAX_NESTING;
+    if (f.quote === '"') {
+      if (c === '"') f.quote = '';
+      else if (room && c === '$' && text[i + 1] === '(') {
+        open('dollar', i);
+        i++;
+      } else if (room && c === '`') open('tick', i);
+      continue;
+    }
+    if (c === "'" || c === '"') {
+      if (!f.word || text[i - 1] === '=') f.quote = c;
+      startWord(f, i);
+      continue;
+    }
+    if (c === '`') {
+      // A span's or substitution's own backtick closes it; inside a substitution a backtick opens one. On the line, a
+      // backtick in a command a substitution would run for (a shell, eval, source or .) opens a backtick substitution in
+      // its word, as the shell reads `bash -c `curl …``; anywhere else it ends the command and opens a code span.
+      if (f.kind === 'tick' || f.kind === 'span') close(i);
+      else if (f.kind !== 'line') {
+        if (room) open('tick', i);
+        else startWord(f, i);
+      } else if (room && runsSubstitutions(f)) open('tick', i);
+      else {
+        endCommand(f, i, false);
+        if (room) stack.push(frame('span'));
+      }
+      continue;
+    }
+    if (room && (c === '$' || c === '<') && text[i + 1] === '(') {
+      open(c === '$' ? 'dollar' : 'process', i);
+      i++;
+      continue;
+    }
+    if (c === ')' && (f.kind === 'dollar' || f.kind === 'process')) {
+      close(i);
+      continue;
+    }
+    if (isBlank(c)) {
+      endWord(f, i);
+      continue;
+    }
+    if (c === '|') {
+      if (text[i + 1] === '|') {
+        endCommand(f, i, false);
+        i++;
+      } else {
+        endCommand(f, i, true);
+        if (text[i + 1] === '&') i++;
+      }
+      continue;
+    }
+    if (c === ';' || c === '&') {
+      endCommand(f, i, false);
+      if (c === '&' && text[i + 1] === '&') i++;
+      continue;
+    }
+    startWord(f, i);
+  }
+  while (stack.length > 1) close(text.length);
+  endCommand(top(), text.length, false);
+  return out;
 }
 
 // Markdown's link-reference comment: `[<any label>]: #` then `(…)`, `"…"` or `'…'`, or `[<any label>]: <> (…)`, holding
@@ -283,8 +490,9 @@ function lineRule(text: string, fileStart: boolean): string | null {
   if (hidden) return `hidden character ${codePoint(hidden)}`;
   if (IGNORE.test(text)) return 'ignore previous instructions';
   if (ADDRESSED.test(text)) return 'addressed to the assistant';
-  if (curlToShell(text)) return 'curl piped to a shell';
-  if (sendsLocal(text)) return 'sends a local file or variable';
+  const commands = commandFlags(text);
+  if (commands.pipe) return 'curl piped to a shell';
+  if (commands.send) return 'sends a local file or variable';
   if (hiddenLinkComment(text)) return 'text hidden in an HTML comment';
   return null;
 }
