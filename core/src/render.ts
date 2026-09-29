@@ -9,7 +9,7 @@ import type { Surface } from './surface.ts';
 
 // Words the agent-facing surface doesn't have yet (asked for). A test fails when one of them appears in the surface,
 // so each is wired as soon as it lands.
-export const WORD_GAPS: readonly string[] = [];
+export const WORD_GAPS = ['errors.why'] as const;
 
 function asData(code: string, data: Record<string, unknown>): string {
   return `${code}: ` + Object.entries(data).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ');
@@ -108,7 +108,7 @@ export function renderDiff(s: Surface, r: DiffResult): string {
   for (const c of r.frontmatter_changes) lines.push(s.format(w.frontmatter, { field: c.field, from: show(c.from), to: show(c.to) }));
   const publisher = r.risk_flags.find((f) => f.kind === 'new_publisher');
   if (publisher) {
-    const [from, to] = publisher.detail.split(' → ');
+    const { from, to } = publisher;
     lines.push(s.format(w.publisher, { from, to }));
   }
   const hunks = r.files.map((f) => f.unified).filter((u): u is string => !!u);
@@ -119,7 +119,8 @@ export function renderDiff(s: Surface, r: DiffResult): string {
 export function renderError(s: Surface, e: CatalogError): string {
   if (!s.guided) return JSON.stringify({ error: e.toJSON() });
   const w = s.word('errors');
-  const d = e.data;
+  // A reason is a code (why: 'unknown_field'); the surface words it once errors.why exists (a listed gap until then).
+  const d: Record<string, unknown> = typeof e.data['why'] === 'string' ? { ...e.data, why: w.why?.[e.data['why'] as string] ?? e.data['why'] } : e.data;
   const fill = (template: string, fields: Record<string, unknown>) => {
     try {
       return s.format(template, fields);

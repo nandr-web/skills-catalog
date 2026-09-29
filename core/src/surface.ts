@@ -5,30 +5,31 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
+import { OPERATIONS, type OperationDef, type Schema } from './registry.ts';
 
 export const SURFACE_FILE = join(import.meta.dirname, '..', 'surface', 'surface.yaml');
+
+export interface JsonSchema {
+  type: string;
+  description?: string;
+  properties?: Record<string, JsonSchema>;
+  required?: string[];
+  additionalProperties?: boolean;
+  items?: JsonSchema;
+  enum?: readonly string[];
+  minimum?: number;
+  maximum?: number;
+  maxLength?: number;
+  maxItems?: number;
+}
 
 export interface ToolDef {
   name: string;
   op: string;
   description: string;
-  inputSchema: { type: 'object'; properties: Record<string, unknown>; required: string[] };
+  inputSchema: JsonSchema & { type: 'object' };
   annotations: Record<string, unknown>;
 }
-
-// Which parameters each tool requires (the rest are optional).
-const REQUIRED: Record<string, string[]> = {
-  search: [],
-  get: [],
-  status: [],
-  update: [],
-  versions: ['name'],
-  diff: ['name', 'from', 'to'],
-  install: ['name'],
-  policy: ['policy'],
-  publish: ['folder'],
-  accept: ['name', 'confirm'],
-};
 
 export class UnfilledError extends Error {}
 
@@ -92,24 +93,48 @@ export class Surface {
     return text ? this.fill(text) : null;
   }
 
-  toolDefs(): ToolDef[] {
+  // The MCP tools: every registry operation that has one. Types, required fields and limits come from the registry
+  // (one schema per operation, contract §1); the surface gives only the names and the words.
+  toolDefs(operations: Record<string, OperationDef> = OPERATIONS): ToolDef[] {
+    return Object.values(operations)
+      .filter((op) => op.mcp && op.surface && this.doc.tools[op.surface])
+      .map((op) => {
+        const spec = this.doc.tools[op.surface!];
+        return {
+          name: this.names[op.surface!]!,
+          op: op.name,
+          description: this.fill(spec.description[this.v['descriptions']]),
+          inputSchema: this.jsonSchema(op.input, { properties: spec.params ?? {} }) as ToolDef['inputSchema'],
+          annotations: spec.annotations ?? {},
+        };
+      });
+  }
+
+  // A registry schema as JSON Schema, with each property's description from the surface's words for it.
+  private jsonSchema(schema: Schema, words: any): JsonSchema {
     const level = this.v['descriptions'];
-    return Object.entries<any>(this.doc.tools).map(([op, spec]) => {
-      const properties: Record<string, unknown> = {};
-      for (const [p, ps] of Object.entries<any>(spec.params ?? {})) {
-        const prop: Record<string, unknown> = { type: ps.type, description: this.fill(String(ps[level]).replace('{page}', String(this.page))) };
-        if (ps.items) prop['items'] = { type: ps.items };
-        if (ps.enum) prop['enum'] = ps.enum;
-        properties[p] = prop;
-      }
-      return {
-        name: this.names[op]!,
-        op,
-        description: this.fill(spec.description[level]),
-        inputSchema: { type: 'object', properties, required: REQUIRED[op] ?? [] },
-        annotations: spec.annotations ?? {},
-      };
-    });
+    const out: JsonSchema = { type: schema.type };
+    if (words?.[level] !== undefined) out.description = this.fill(String(words[level]).replace('{page}', String(this.page)));
+    switch (schema.type) {
+      case 'string':
+        if (schema.enum) out.enum = schema.enum;
+        if (schema.maxLength !== undefined) out.maxLength = schema.maxLength;
+        break;
+      case 'integer':
+        if (schema.minimum !== undefined) out.minimum = schema.minimum;
+        if (schema.maximum !== undefined) out.maximum = schema.maximum;
+        break;
+      case 'array':
+        out.items = this.jsonSchema(schema.items, undefined);
+        if (schema.maxItems !== undefined) out.maxItems = schema.maxItems;
+        break;
+      case 'object':
+        out.properties = Object.fromEntries(Object.entries(schema.properties).map(([k, sub]) => [k, this.jsonSchema(sub, words?.properties?.[k])]));
+        out.required = [...(schema.required ?? [])];
+        out.additionalProperties = false;
+        break;
+    }
+    return out;
   }
 
   companionSkill(kind: 'mcp' | 'cli'): string {

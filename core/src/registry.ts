@@ -15,6 +15,7 @@ export interface OperationDef {
   kind: 'catalog' | 'machine';
   phase: 1 | 2 | 'aws' | 'later';
   mcp: boolean;
+  surface?: string; // its key in the agent-facing surface (the tool's words), for operations with an MCP tool
   input: Extract<Schema, { type: 'object' }>;
 }
 
@@ -30,6 +31,7 @@ const version = { type: 'integer', minimum: 1 } as const;
 export const OPERATIONS: Record<string, OperationDef> = {
   search_shared_skills: {
     name: 'search_shared_skills',
+    surface: 'search',
     kind: 'catalog',
     phase: 1,
     mcp: true,
@@ -52,6 +54,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
   },
   read_shared_skill: {
     name: 'read_shared_skill',
+    surface: 'get',
     kind: 'catalog',
     phase: 1,
     mcp: true,
@@ -67,6 +70,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
   },
   list_shared_skill_versions: {
     name: 'list_shared_skill_versions',
+    surface: 'versions',
     kind: 'catalog',
     phase: 1,
     mcp: true,
@@ -74,6 +78,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
   },
   diff_shared_skill_versions: {
     name: 'diff_shared_skill_versions',
+    surface: 'diff',
     kind: 'catalog',
     phase: 1,
     mcp: true,
