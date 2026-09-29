@@ -544,6 +544,8 @@ export class Catalog {
   // identity (the given one, else the catalog's), never a field in the request or the front matter.
   async publish(input: unknown, identity: Identity = this.p.identity, face: Face = CATALOG_FACE): Promise<PublishResult> {
     const req = validateInput<PublishInput>('publish_version', input, face, this.p.where);
+    // Hosted, each file's sha256 is an input check, like the schema's: before anything is looked up (§9).
+    if (this.p.where === 'hosted') checkSha256s(req.files as UploadedFile[]);
     // A version's message is a one-line field (contract §2, §4.1).
     if (req.message !== undefined && hasLineBreakOrControl(req.message)) throw new CatalogError('invalid_request', { field: 'message', why: 'control_character' });
     const publisher = checkActor(await identity.actor());
@@ -682,13 +684,12 @@ export class Catalog {
   }
 
   // The hosted form's files: each one's bytes as stored, read UPLOAD_READS at a time and checked in the request's order,
-  // so the first refusal is the same as one by one, and the size limits stop the reads a batch past the limit. Every
-  // file's sha256 is checked before anything is looked up (not_sha256); one not stored, or whose bytes don't hash to its
-  // name, was never uploaded.
+  // so the first refusal is the same as one by one, and the size limits stop the reads a batch past the limit. Each
+  // sha256 was checked on the way in (publish); one not stored, or whose bytes don't hash to its name, was never
+  // uploaded.
   private async uploaded(files: UploadedFile[]): Promise<{ path: string; mode: string; bytes: Uint8Array }[]> {
     const limits = this.config.limits;
     if (files.length > limits.files) throw new CatalogError('too_large', { limit: 'files', max: limits.files, value: files.length });
-    checkSha256s(files);
     const out: { path: string; mode: string; bytes: Uint8Array }[] = [];
     let total = 0;
     for (let at = 0; at < files.length; at += UPLOAD_READS) {
