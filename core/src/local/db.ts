@@ -3,6 +3,10 @@
 
 import { DatabaseSync } from 'node:sqlite';
 
+// Stemmed, so "review pull request" matches "reviewing pull requests" (contract §2); match and matched_words
+// ask this same index, word by word, so they stem the same way.
+export const TOKENIZE = 'porter unicode61';
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS skills (
   name TEXT PRIMARY KEY,
@@ -37,20 +41,28 @@ CREATE TABLE IF NOT EXISTS search_cards (
   publisher TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
-CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5 (name UNINDEXED, words, description, tokenize = 'unicode61');
+CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5 (name UNINDEXED, words, description, tokenize = '${TOKENIZE}');
 `;
 
 const BUSY_MS = 15_000;
 
 export class LocalDb {
   readonly db: DatabaseSync;
+  // True when the search index was dropped because its tokenizer changed: the catalog rebuilds it from the versions.
+  readonly indexReset: boolean;
 
   constructor(file: string) {
     this.db = new DatabaseSync(file, { timeout: BUSY_MS });
     this.db.exec(`PRAGMA busy_timeout = ${BUSY_MS}`);
     this.db.exec('PRAGMA journal_mode = WAL');
     this.db.exec('PRAGMA synchronous = NORMAL');
-    this.immediate(() => this.db.exec(SCHEMA));
+    this.indexReset = this.immediate(() => {
+      const fts = this.db.prepare("SELECT sql FROM sqlite_master WHERE name = 'search_fts'").get() as { sql: string } | undefined;
+      const stale = fts !== undefined && !fts.sql.includes(`'${TOKENIZE}'`);
+      if (stale) this.db.exec('DROP TABLE search_fts; DELETE FROM search_cards;');
+      this.db.exec(SCHEMA);
+      return stale;
+    });
   }
 
   // Runs fn inside BEGIN IMMEDIATE ... COMMIT; rolls back if it throws. Nested calls join the outer transaction.

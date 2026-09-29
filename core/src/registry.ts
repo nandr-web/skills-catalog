@@ -122,19 +122,19 @@ function check(schema: Schema, value: unknown, field: string): void {
     case 'string':
       if (typeof value !== 'string') fail(field, 'must be text');
       if (schema.enum && !schema.enum.includes(value)) fail(field, `must be one of ${schema.enum.join(', ')}`);
-      if (schema.maxLength !== undefined && value.length > schema.maxLength) fail(field, `longer than ${schema.maxLength}`, { limit: schema.maxLength, value: value.length });
+      if (schema.maxLength !== undefined && value.length > schema.maxLength) fail(field, 'is too long', { limit: schema.maxLength, value: value.length });
       return;
     case 'integer':
       if (typeof value !== 'number' || !Number.isInteger(value)) fail(field, 'must be a whole number');
-      if (schema.minimum !== undefined && value < schema.minimum) fail(field, `must be at least ${schema.minimum}`, { limit: schema.minimum, value });
-      if (schema.maximum !== undefined && value > schema.maximum) fail(field, `must be at most ${schema.maximum}`, { limit: schema.maximum, value });
+      if (schema.minimum !== undefined && value < schema.minimum) fail(field, 'is too low', { limit: schema.minimum, value });
+      if (schema.maximum !== undefined && value > schema.maximum) fail(field, 'is too high', { limit: schema.maximum, value });
       return;
     case 'boolean':
       if (typeof value !== 'boolean') fail(field, 'must be true or false');
       return;
     case 'array':
       if (!Array.isArray(value)) fail(field, 'must be a list');
-      if (schema.maxItems !== undefined && value.length > schema.maxItems) fail(field, `more than ${schema.maxItems}`, { limit: schema.maxItems, value: value.length });
+      if (schema.maxItems !== undefined && value.length > schema.maxItems) fail(field, 'has too many items', { limit: schema.maxItems, value: value.length });
       value.forEach((v, i) => check(schema.items, v, `${field}[${i}]`));
       return;
     case 'object': {

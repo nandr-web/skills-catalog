@@ -33,8 +33,9 @@ export function checkName(name: unknown): string {
 
 const FRONT = /^﻿?---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/;
 
-function manifestError(problem: string, fields?: string[]): CatalogError {
-  return new CatalogError('invalid_manifest', fields ? { problem, fields } : { problem });
+// invalid_manifest {fields}: the front matter fields at fault, or SKILL.md itself when it can't be read at all.
+function manifestError(problem: string, fields: string[] = [MANIFEST]): CatalogError {
+  return new CatalogError('invalid_manifest', { problem, fields });
 }
 
 // Parse the front matter with YAML's core schema: no custom tags (a tag it doesn't know is refused, not ignored),
@@ -81,7 +82,25 @@ export function checkManifest(files: readonly TreeFile[], catalogName?: string):
   if (catalogName !== undefined && name !== catalogName) {
     throw new CatalogError('invalid_name', { name: catalogName, why: `SKILL.md says its name is ${String(name)}` });
   }
-  const rawTags = frontmatter['tags'];
-  const tags = Array.isArray(rawTags) ? rawTags.filter((t): t is string => typeof t === 'string') : [];
-  return { frontmatter, body, name: name as string, description: description as string, tags };
+  return { frontmatter, body, name: name as string, description: description as string, tags: tagsOf(frontmatter) };
+}
+
+export const MAX_TAGS = 10;
+const TAG_RE = /^[a-z0-9-]{1,32}$/;
+
+// Tags live in the Agent Skills spec's extension point, `metadata` (string values only), as one comma-separated
+// string: `metadata: {tags: "docs, release"}` (contract §4.1). Up to 10, each 1-32 lowercase letters, digits and
+// hyphens; duplicates dropped, order kept; none is fine.
+export function tagsOf(frontmatter: Record<string, unknown>): string[] {
+  const metadata = frontmatter['metadata'];
+  if (metadata === undefined || metadata === null) return [];
+  if (typeof metadata !== 'object' || Array.isArray(metadata)) throw manifestError('metadata is not a mapping of keys', ['metadata']);
+  const raw = (metadata as Record<string, unknown>)['tags'];
+  if (raw === undefined || raw === null || raw === '') return [];
+  if (typeof raw !== 'string') throw manifestError('metadata.tags is not one comma-separated string', ['metadata.tags']);
+  const tags = [...new Set(raw.split(',').map((t) => t.trim()))];
+  const bad = tags.find((t) => !TAG_RE.test(t));
+  if (bad !== undefined) throw manifestError(`tag "${bad}" is not 1-32 lowercase letters, digits and hyphens`, ['metadata.tags']);
+  if (tags.length > MAX_TAGS) throw manifestError(`has ${tags.length} tags; at most ${MAX_TAGS}`, ['metadata.tags']);
+  return tags;
 }

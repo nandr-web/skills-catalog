@@ -283,11 +283,35 @@ describe('search: discoverable, any word, and says how it matched (contract §2)
     expect(all.results.map((c) => c.name)).toEqual(['graphql-client', 'sql-migration-writer']);
   });
 
+  it('matches stemmed words, and match and matched_words stem the same way (words reported as asked)', () => {
+    const { catalog } = openTest();
+    catalog.publish(request('pr-review-helper', md('pr-review-helper', 'Helps with reviewing pull requests.')), 'ana');
+    const r = catalog.search({ query: 'Review pull request' });
+    expect(r).toMatchObject({ match: 'all', total_matches: 1 });
+    expect(r.results[0]!.matched_words).toEqual(['review', 'pull', 'request']);
+  });
+
+  it('an index built with another tokenizer is rebuilt from the versions when the catalog opens', async () => {
+    const { DatabaseSync } = await import('node:sqlite');
+    const { openLocalCatalog } = await import('../src/local/index.ts');
+    const { join } = await import('node:path');
+    const { dir, catalog } = openTest();
+    catalog.publish(request('pr-review-helper', md('pr-review-helper', 'Helps with reviewing pull requests.')), 'ana');
+    catalog.close();
+    const db = new DatabaseSync(join(dir, 'catalog', 'catalog.sqlite'));
+    db.exec("DROP TABLE search_fts; CREATE VIRTUAL TABLE search_fts USING fts5 (name UNINDEXED, words, description, tokenize = 'unicode61'); DELETE FROM search_cards;");
+    db.close();
+    const reopened = openLocalCatalog(join(dir, 'catalog'));
+    expect(reopened.search({ query: 'review' }).results.map((c) => c.name)).toEqual(['pr-review-helper']);
+    reopened.close();
+  });
+
   it('filters by tags and publisher, and pages with a cursor', () => {
     const { catalog } = openTest();
     for (let i = 0; i < 12; i++) {
-      catalog.publish(request(`note-${i}`, md(`note-${i}`, `Writes notes number ${i}.`, i % 2 ? 'tags: [docs, writing]\n' : 'tags: [docs]\n')), i < 6 ? 'ana' : 'bo');
+      catalog.publish(request(`note-${i}`, md(`note-${i}`, `Writes notes number ${i}.`, i % 2 ? 'metadata:\n  tags: docs, writing, docs\n' : 'metadata:\n  tags: docs\n')), i < 6 ? 'ana' : 'bo');
     }
+    expect(catalog.search({ query: 'notes', limit: 1, filters: { tags: ['writing'] } }).results[0]!.tags).toEqual(['docs', 'writing']);
     expect(catalog.search({ query: 'notes', filters: { tags: ['docs', 'writing'] } }).total_matches).toBe(6);
     expect(catalog.search({ query: 'notes', filters: { publisher: 'bo' } }).total_matches).toBe(6);
     const first = catalog.search({ query: 'notes', limit: 5 });
@@ -297,6 +321,22 @@ describe('search: discoverable, any word, and says how it matched (contract §2)
     expect(third.next_cursor).toBeUndefined();
     const seen = [...first.results, ...second.results, ...third.results].map((c) => c.name);
     expect(new Set(seen).size).toBe(12);
+  });
+
+  it('tags: metadata.tags, one comma-separated string; a bad one is invalid_manifest {fields: [metadata.tags]}', () => {
+    const { catalog } = openTest();
+    const bad = ['metadata:\n  tags: [docs]\n', 'metadata:\n  tags: Docs\n', `metadata:\n  tags: ${'x'.repeat(33)}\n`, `metadata:\n  tags: ${Array.from({ length: 11 }, (_, i) => `t${i}`).join(', ')}\n`, 'metadata:\n  tags: a,,b\n'];
+    for (const extra of bad) {
+      const e = errorOf(() => catalog.publish(request('tagged', md('tagged', 'Has tags.', extra)), 'ana'));
+      expect(e.code, extra).toBe('invalid_manifest');
+      expect(e.data['fields'], extra).toEqual(['metadata.tags']);
+    }
+    expect(catalog.publish(request('tagged', md('tagged', 'Has tags.', `metadata:\n  tags: ${Array.from({ length: 10 }, (_, i) => `t${i}`).join(' , ')}\n  owner-team: docs\n`)), 'ana').created).toBe(true);
+    expect(catalog.search({ query: 'tags', filters: { tags: ['t0', 't9'] } }).results[0]!.tags).toHaveLength(10);
+    // A top-level tags key is an ordinary key: kept, no error, not a tag; and tags are filters, not search words.
+    expect(catalog.publish(request('plain', md('plain', 'No metadata.', 'tags: [docs]\n')), 'ana').created).toBe(true);
+    expect(catalog.search({ query: 'plain', filters: { tags: ['docs'] } }).results).toEqual([]);
+    expect(catalog.search({ query: 't3' }).results).toEqual([]);
   });
 
   it('cards carry no fingerprint or timestamps', () => {

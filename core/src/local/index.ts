@@ -35,7 +35,7 @@ export function openLocalCatalog(dir: string, opts: LocalOptions = {}): Catalog 
   const db = new LocalDb(join(dir, DB_FILE));
   const meta = new SqliteMetadataStore(db);
   const blobs = new FolderBlobStore(dir, ids, clock);
-  return new Catalog({
+  const catalog = new Catalog({
     meta: opts.wrapMeta ? opts.wrapMeta(meta) : meta,
     blobs: opts.wrapBlobs ? opts.wrapBlobs(blobs) : blobs,
     index: new SqliteSearchIndex(db),
@@ -45,6 +45,8 @@ export function openLocalCatalog(dir: string, opts: LocalOptions = {}): Catalog 
     ...(opts.config ? { config: opts.config } : {}),
     close: () => db.close(),
   });
+  if (db.indexReset) catalog.rebuildIndex();
+  return catalog;
 }
 
 // SKILLS_CATALOG (contract §8): file:///… is the local adapter; https://… is the hosted one (not built in phase 1).

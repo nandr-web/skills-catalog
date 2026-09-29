@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { readFileSync } from 'node:fs';
 import { OPERATIONS } from '../src/registry.ts';
-import { WORD_GAPS, renderError, renderRead, renderSearch } from '../src/render.ts';
+import { WORD_GAPS, renderDiff, renderError, renderRead, renderSearch, renderVersions } from '../src/render.ts';
 import { SURFACE_FILE, Surface } from '../src/surface.ts';
 import { toCatalogError } from '../src/internal-error.ts';
 import { CatalogError } from '../src/errors.ts';
@@ -66,8 +66,21 @@ describe('the surface (vendored, recommended variant)', () => {
       renderError(s, errorOf(() => catalog.read({ name: 'deploy-to-mars' }))),
       renderError(s, errorOf(() => catalog.publish(request('release-notes-kit', historyVersion(histories.versions['h1.v3'])), 'bo'))),
       renderError(s, errorOf(() => catalog.search({ limit: 99 }))),
+      renderError(s, errorOf(() => catalog.search({ unknown: 1 }))),
+      renderError(s, errorOf(() => catalog.publish(request('release-notes-kit', historyVersion(histories.versions['h1.v3']), { expected_latest: 1 }), 'ana'))),
+      renderError(s, errorOf(() => catalog.publish({ name: 'Bad-Name', files: [] }, 'ana'))),
+      renderError(s, errorOf(() => catalog.publish({ name: 'x', files: [{ path: '../x', mode: '0644', content_base64: '' }] }, 'ana'))),
+      renderError(s, errorOf(() => catalog.publish(request('x', [{ path: 'SKILL.md', mode: '0644', bytes: Buffer.alloc(2 * 1024 * 1024) }]), 'ana'))),
+      renderError(s, errorOf(() => catalog.publish(request('x', []), undefined))),
+      renderError(s, new CatalogError('forbidden', {})),
       renderError(s, new CatalogError('invalid_manifest', { folder: 'my-skill', problem: 'is missing description', fields: ['description'] })),
+      renderError(s, new CatalogError('invalid_manifest', { folder: 'my-skill', problem: 'is missing name', fields: ['name'], suggestion: 'my-skill' })),
+      renderError(s, new CatalogError('invalid_manifest', { folder: 'my-skill', problem: 'is missing', fields: ['SKILL.md'] })),
+      renderError(s, new CatalogError('invalid_name', { folder: 'my-skill', name: 'My Skill', why: 'uppercase', suggestion: 'my-skill' })),
       renderError(s, toCatalogError(new Error('boom'), sandbox())),
+      renderVersions(s, catalog.versions({ name: 'release-notes-kit' })),
+      renderDiff(s, catalog.diff({ name: 'release-notes-kit', from: 1, to: 2 })),
+      renderDiff(s, catalog.diff({ name: 'release-notes-kit', from: 2, to: 2 })),
     ];
     // Skill files inside the fences are the publisher's data (a template may well say "{{version}}"), not our words.
     const ours = (text: string) =>
