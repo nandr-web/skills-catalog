@@ -50,7 +50,9 @@ const REFERENCE = [
   /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\(/,
   /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+/,
 ];
-export const refersToSecret = (value: string) => REFERENCE.some((re) => re.test(value));
+// A JWT (three base64url parts, the first starting eyJ) is a secret's value, though it reads like a dotted name.
+const JWT = /^eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/;
+export const refersToSecret = (value: string) => !JWT.test(value) && REFERENCE.some((re) => re.test(value));
 
 // Every walk is bounded, so a line of any length is scanned in linear time: no pattern here can backtrack.
 const MAX_KEY = 200;

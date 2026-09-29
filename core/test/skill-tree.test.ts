@@ -488,6 +488,9 @@ describe('the secret scan finds a secret by its shape, in any variable name or q
     ['mysql --password s3cr3t-value-1234 -u root', 'password_or_token'],
     ['curl --auth-token=abcdefghijklmnopqrst https://example.com', 'password_or_token'],
     ['password=abc!def#ghi%jkl&', 'password_or_token'],
+    // a JWT is a secret's value, never a dotted name (jwt.io's shape: its header, a sub, a 32-byte signature). Joined here,
+    // since a real-looking token in a public repo trips GitHub's push protection.
+    [['token = ', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9', '.', 'eyJzdWIiOiJRQUZBS0UifQ', '.', 'QAFAKE0000QAFAKE0000QAFAKE0000QAFAKE0000QAF'].join(''), 'password_or_token'],
     ['KEY_ID=prefix_AKIAIOSFODNN7EXAMPLE', 'aws_access_key'],
   ];
   for (const [line, kind] of flagged) {
