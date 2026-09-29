@@ -37,7 +37,9 @@ export type CommitResult =
   | { kind: 'created'; record: VersionRecord }
   | { kind: 'identical'; record: VersionRecord }
   | { kind: 'conflict'; latest: number }
-  | { kind: 'not_owner'; owners: string[] };
+  | { kind: 'not_owner'; owners: string[] }
+  // A file named by its sha256 alone that isn't stored (contract §1.1); nothing is changed.
+  | { kind: 'not_uploaded'; missing: string[] };
 
 // Storage: the contract's MetadataStore (versions, the latest pointer) and BlobStore (bytes by sha256), with the
 // publish's commit point behind them (§5.1 steps 2-3). How the two stay consistent is the adapter's business:
@@ -57,12 +59,13 @@ export interface Storage {
   // ago and not marked for removal, that no version names yet, is on its way (the lookup is written seconds after a
   // publish); locally the lookup is immediate, so never.
   fileState(sha256: string): Promise<FileState>;
-  // Stores the bytes, then compare-and-appends the version with its version_published event, atomically.
-  // Refused (conflict, not_owner, identical): storage is left exactly as it was. Never: a version that points at
-  // a missing blob.
+  // Stores the bytes, then compare-and-appends the version with its version_published event, atomically. A file
+  // given by its sha256 alone (hosted: already uploaded) is checked inside the commit instead: one not stored is
+  // not_uploaded. Refused (conflict, not_owner, identical, not_uploaded): storage is left exactly as it was. Never: a
+  // version that points at a missing blob.
   commit(
     v: NewVersion,
-    files: readonly { sha256: string; bytes: Uint8Array }[],
+    files: readonly { sha256: string; bytes?: Uint8Array | undefined }[],
     cond: { expectedLatest?: number | undefined },
     event: (version: number) => VersionPublished,
   ): Promise<CommitResult>;

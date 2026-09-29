@@ -58,16 +58,17 @@ export class LocalStorage implements Storage {
 
   async commit(
     v: NewVersion,
-    files: readonly { sha256: string; bytes: Uint8Array }[],
+    files: readonly { sha256: string; bytes?: Uint8Array | undefined }[],
     cond: { expectedLatest?: number | undefined },
     event: (version: number) => VersionPublished,
   ): Promise<CommitResult> {
     // The files not stored yet are marked pending first, in their own short transaction, so a crash from here on
-    // leaves rows the open-time cleanup reads, never an unmarked file.
-    const fresh = [...new Set(files.filter((f) => !this.blobs.has(f.sha256)).map((f) => f.sha256))];
+    // leaves rows the open-time cleanup reads, never an unmarked file. Only files this commit writes (given with their
+    // bytes): one named by its sha256 alone is never written here.
+    const fresh = [...new Set(files.filter((f) => f.bytes && !this.blobs.has(f.sha256)).map((f) => f.sha256))];
     if (fresh.length) this.meta.markPending(fresh, this.clock.now().toISOString());
     const added = new Set<string>();
-    for (const f of files) if (this.blobs.put(f.sha256, f.bytes)) added.add(f.sha256);
+    for (const f of files) if (f.bytes && this.blobs.put(f.sha256, f.bytes)) added.add(f.sha256);
     // A refused or failed commit takes back the blobs it added that no version references, and its pending rows,
     // under the lock, so storage is exactly as it was even when another publish won the race.
     const takeBack = () => {
@@ -88,9 +89,17 @@ export class LocalStorage implements Storage {
         // publish fails, retryable, with no version stored. A blob put again here gets no pending row: a row written
         // inside this transaction would be rolled back with it by the very crash it's meant to outlive. So only a crash
         // between this put and the append, after a raced take-back, can leave a file no version names; it stays unseen
-        // and is as rare as the stalled publish before it.
-        r = this.meta.withWriteLock(() => {
-          for (const f of files) if (!this.blobs.has(f.sha256) && this.blobs.put(f.sha256, f.bytes)) added.add(f.sha256);
+        // and is as rare as the stalled publish before it. A file named by its sha256 alone must already be stored; any
+        // that isn't is not_uploaded, and no version is stored.
+        r = this.meta.withWriteLock((): CommitResult => {
+          const missing: string[] = [];
+          for (const f of files) {
+            if (this.blobs.has(f.sha256)) continue;
+            // Presence only: the ages a stored file must be under are the hosted adapter's (contract §1.1).
+            if (!f.bytes) missing.push(f.sha256);
+            else if (this.blobs.put(f.sha256, f.bytes)) added.add(f.sha256);
+          }
+          if (missing.length) return { kind: 'not_uploaded', missing };
           const out = this.meta.append(v, cond, event);
           if (out.kind === 'created') this.meta.clearPending(files.map((f) => f.sha256));
           return out;

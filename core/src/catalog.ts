@@ -527,6 +527,10 @@ export class Catalog {
         throw new CatalogError('conflict', { name, latest: r.latest, expected_latest: req.expected_latest });
       case 'identical':
         return unchanged(r.record.version);
+      case 'not_uploaded':
+        // This publish gives every file's bytes, so a file missing at the commit is a bug here (internal_error); the
+        // hosted publish, which names uploaded files by sha256, answers not_uploaded itself.
+        throw new Error(`commit found ${r.missing.length} file(s) not stored although their bytes were given`);
       case 'created':
         try {
           await this.p.events.deliver();
