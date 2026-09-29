@@ -59,7 +59,9 @@ const CANT: Record<string, string> = {
   'install-dir-parent-world-writable': 'SKILLS_INSTALL_DIR comes with guided setup (P1)',
   'project-on-another-volume': 'needs a second volume (the QA safety rules: an APFS image or a Docker tmpfs)',
   'recreated-checked-folders-fail': 'its seam fires in the check of an unchanged recreated copy, which makes no rename to hook',
-  'copy-sent-elsewhere': 'waits for the contract: the installer puts copies back through a link that leads to the same skills folder, the row says never',
+  // Under 06c0e7a5 (nothing moves through a swapped-in link) the copy moved aside through the link stays in staging, named.
+  'skills-dir-swapped-for-link': 'waits for its golden to follow 06c0e7a5: the moved-aside copy is kept in staging, not put back through the link',
+  'claude-dir-swapped-for-link': 'waits for its golden to follow 06c0e7a5: the moved-aside copy is kept in staging, not put back through the link',
 };
 
 type Paths = { A: string; P: string; S: string; ST: string; RUN: string; dest: string };

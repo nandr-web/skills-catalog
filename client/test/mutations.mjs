@@ -87,6 +87,8 @@ const MUTATIONS = [
   ['machine/installer.ts', 'the folder above .claude isn\'t checked', "  if (open) throw notPrivate(root, target, r, target === 'user');\n", ''],
   ['machine/installer.ts', 'a folder on the way that can\'t be made is a failure of the tool', "      if (!UNMAKEABLE.has((e as NodeJS.ErrnoException).code ?? '')) throw e;", '      throw e;'],
   ['machine/installer.ts', 'a moved-aside folder is removed by its path alone', '  if (!isCopy(lstatOf(path), id)) return false;\n', ''],
+  ['machine/installer.ts', 'a folder is put back through a swapped-in link', '      if (!anchored() || !moved(aside, dest)) return void left.push(aside);', '      if (!moved(aside, dest)) return void left.push(aside);'],
+  ['machine/installer.ts', 'the new copy is taken back out through a swapped-in link', '      if (!linkOnTheWay() && isCopy(lstatOf(dest), copy)) {', '      if (isCopy(lstatOf(dest), copy)) {'],
   ['machine/installer.ts', 'staging isn\'t looked at again before its .gitignore', '    stagingThere();\n    try {', '    try {'],
   ['machine/installer.ts', 'a staging folder already there is checked only once the skills folder is made', '  if (existsSync(early)) realFolder(early, target);\n', ''],
   ['machine/installer.ts', 'staging isn\'t looked at again before the temp folder is made', '  stagingThere();\n  const tmp', '  const tmp'],

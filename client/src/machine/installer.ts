@@ -290,41 +290,31 @@ function writeSkill(dest: string, target: Target, files: readonly TreeFile[], en
       const temp = path === tmp || path === stagingDir;
       throw new CatalogError('target_changed', { path, ...(temp ? { temp: true } : {}), ...at, ...(elsewhere ? { elsewhere: true } : {}) });
     };
-    // The folder the skill's path is in right now, through any link: where a folder moved out of it came from.
-    const parentNow = (): Id | undefined => {
-      try {
-        return idFrom(statSync(dirname(dest), { bigint: true }));
-      } catch {
-        return undefined;
-      }
-    };
-    // Puts a folder moved out of the skill's path back into the folder it came from, checking first that the path still
-    // leads there; otherwise it stays in staging, named. If the path changed during the move back, it's taken out again.
-    const restore = (aside: string, id: Id | undefined, from: Id | undefined): void => {
-      const home = () => anchored() || same(parentNow(), from);
-      if (!home() || !moved(aside, dest)) return void left.push(aside);
-      if (home()) return;
+    // Puts a folder moved out of the skill's path back, only while the checked folders are still the real ones at their
+    // paths: nothing moves through a swapped-in link, even one leading to the same folder moved elsewhere. Otherwise it
+    // stays in staging, named. If the path changed during the move back, it's taken out again.
+    const restore = (aside: string, id: Id | undefined): void => {
+      if (!anchored() || !moved(aside, dest)) return void left.push(aside);
+      if (anchored()) return;
       if (isCopy(lstatOf(dest), id) && moved(dest, aside)) left.push(aside);
     };
+    // A link where a checked folder was: nothing is moved through it.
+    const linkOnTheWay = () => anchors.some((a) => lstatOf(a.path)?.isSymbolicLink() ?? false);
 
     const there = lstatOf(dest);
     if (there?.isSymbolicLink()) throw new CatalogError('target_symlink', { path: dest });
-    let old: { path: string; id: Id | undefined; from: Id | undefined } | undefined;
+    let old: { path: string; id: Id | undefined } | undefined;
     if (!entry) {
       if (there) throw new CatalogError('exists_untracked', { path: dest });
     } else if (there) {
       // Only a real folder can be the installed copy, or the person's recreation of it.
       if (!there.isDirectory()) throw new CatalogError('exists_untracked', { path: dest });
       if (!anchored()) refuse();
-      old = { path: `${tmp}-replaced`, id: undefined, from: undefined };
-      // Where it came from is known only when the path led to the same folder just before and just after the move.
-      const before = parentNow();
+      old = { path: `${tmp}-replaced`, id: undefined };
       if (!moved(dest, old.path)) {
         failed ??= dest;
         refuse();
       }
-      const after = parentNow();
-      old.from = same(before, after) ? after : undefined;
       const s = lstatOf(old.path);
       old.id = s && idFrom(s);
       // A real folder whose identity isn't the recorded copy's, while the checked folders hold, was recreated by the
@@ -334,37 +324,38 @@ function writeSkill(dest: string, target: Target, files: readonly TreeFile[], en
       const held = anchored();
       if (!real) failed ??= dest;
       if (!real || !held) {
-        restore(old.path, old.id, old.from);
+        restore(old.path, old.id);
         refuse();
       }
     }
     // The temp folder is checked once more just before it's moved in, so a folder swapped in for it is never moved in.
     if (!isCopy(lstatOf(tmp), copy)) {
       failed ??= tmp;
-      if (old) restore(old.path, old.id, old.from);
+      if (old) restore(old.path, old.id);
       refuse(wrote);
     }
     if (!anchored() || !moved(tmp, dest)) {
       failed ??= dest;
-      if (old) restore(old.path, old.id, old.from);
+      if (old) restore(old.path, old.id);
       refuse();
     }
-    // The new copy must be where it was meant to go. If not, take it back out into a fresh staging path, and delete it
-    // there only if it's still the copy made here; anything else is put back or kept, and named. Then a replaced copy
-    // goes back if the path still leads home, and otherwise stays in staging, named.
+    // The new copy must be where it was meant to go. If not, take it back out into a fresh staging path (never through a
+    // link that appeared where a checked folder was: then it went where the link leads, and the refusal says a copy may
+    // be elsewhere), and delete it there only if it's still the copy made here; anything else is put back or kept, and
+    // named. Then a replaced copy goes back if the checked folders are still the real ones, and otherwise stays in
+    // staging, named.
     if (!anchored() || !isCopy(lstatOf(dest), copy)) {
       failed ??= dest;
       let elsewhere = true;
-      if (isCopy(lstatOf(dest), copy)) {
-        const from = parentNow();
+      if (!linkOnTheWay() && isCopy(lstatOf(dest), copy)) {
         const back = `${tmp}-back`;
         if (moved(dest, back)) {
           const s = lstatOf(back);
           if (removeIfOurs(back, copy)) elsewhere = false;
-          else restore(back, s && idFrom(s), from);
+          else restore(back, s && idFrom(s));
         }
       }
-      if (old) restore(old.path, old.id, old.from);
+      if (old) restore(old.path, old.id);
       refuse(elsewhere);
     }
     if (!old) return { copy };
