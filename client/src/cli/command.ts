@@ -42,6 +42,8 @@ export type Command = {
   personOnlyOp?: string;
   /** Reads the catalog and never writes it (setup may let an assistant run these without asking, contract §6). */
   readOnly?: boolean;
+  /** Setup lets an assistant run the bare command, exactly (no words, no flags), without asking (contract §6). */
+  preAllowBare?: boolean;
   /** Outcomes that aren't errors on every face but are a failure here (exit 1, on stderr): a read that found none of its
    *  names (contract §1). */
   failsOn?: readonly string[];
