@@ -151,14 +151,21 @@ describe('who is asking, hosted', () => {
     }
   }, 30_000);
 
-  it('a bug is internal_error in the envelope, never a stack trace, and the words say it is a bug', async () => {
+  it('a bug is internal_error in the envelope, never a stack trace; the log gets where it happened, never its message or the token', async () => {
     const w = await world();
-    const broken = createHostedHandler({ catalog: new Proxy({}, { get: () => () => Promise.reject(new Error('a secret-looking stack')) }) as never, tokens: { verify: async (t) => HOLDERS[t] }, words, file: async () => ({ kind: 'unknown' }) });
+    const logged: string[] = [];
+    const broken = createHostedHandler({ catalog: new Proxy({}, { get: () => () => Promise.reject(new Error('skill text: release notes body')) }) as never, tokens: { verify: async (t) => HOLDERS[t] }, words, file: async () => ({ kind: 'unknown' }), log: (l) => logged.push(l) });
     try {
       const r = await broken.handle(req(search));
       expect(r.status).toBe(200);
-      expect(String(r.body)).not.toContain('secret-looking');
-      expect(JSON.parse(String(r.body))).toMatchObject({ ok: false, error: { code: 'internal_error' } });
+      expect(String(r.body)).not.toContain('release notes body');
+      expect(JSON.parse(String(r.body))).toMatchObject({ ok: false, error: { code: 'internal_error' }, words: { error: expect.any(String) } });
+      // The log gets where it happened, never the error's message (it could carry skill text) or the token.
+      expect(logged.length).toBe(1);
+      expect(logged[0]).toContain('internal_error');
+      expect(logged[0]).toMatch(/at /);
+      expect(logged[0]).not.toContain('release notes body');
+      expect(logged[0]).not.toContain('t-dev1');
     } finally {
       w.close();
     }
