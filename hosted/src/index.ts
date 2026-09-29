@@ -5,7 +5,7 @@ export { HostedEvents } from './events.ts';
 export { S3SearchIndex } from './search.ts';
 export { HostedBlobLinks, LINK_SECONDS, type UploadAnswer } from './links.ts';
 export { HostedSweep } from './sweep.ts';
-export { HostedFileNames, fileNamePk, namesIndexer } from './names.ts';
+export { HostedFileNames, fileNamePk, namesClient, namesIndexer } from './names.ts';
 export { fileState, type FileState } from './api/files.ts';
 export { HostedTokenStore, type TokenHolder, type TokenKind, type TokenScope } from './tokens.ts';
 export { COMMIT_AGE_MS, MARK_WAIT_MS, SWEEP_AGE_MS, ageOf, committable, inspect } from './blobs.ts';

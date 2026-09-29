@@ -3,45 +3,43 @@
 // publish by seconds, like the search index; installing never waits on it (a fetch issues its links from the version it
 // reads). Rebuildable from the versions at any time; writing the same version twice changes nothing.
 
-import { BatchWriteItemCommand, QueryCommand, type BatchWriteItemCommandOutput, type DynamoDBClient, type WriteRequest } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, PutItemCommand, QueryCommand, type DynamoDBClientConfig } from '@aws-sdk/client-dynamodb';
 import type { Storage, VersionPublished, VersionRecord } from '@skills-catalog/core';
 import { versionSk, type Place } from './place.ts';
 
-// DynamoDB's limit on one batch write.
-const BATCH = 25;
-// Items a busy table leaves unprocessed are written again after a wait that doubles from BACKOFF_MS up to BACKOFF_CAP_MS,
-// plus jitter of up to one step, at most TRIES times.
-const TRIES = 6;
-const BACKOFF_MS = 50;
-const BACKOFF_CAP_MS = 2000;
+// One PutItem per file, never a batch write: a batch write can delete, and no role is given that right. This many run at
+// once; throttling is the client's to absorb (NAMES_MAX_ATTEMPTS, its own jittered backoff).
+export const NAMES_PUTS_AT_ONCE = 8;
+const NAMES_MAX_ATTEMPTS = 6;
+
+/** The indexer's DynamoDB client: the given settings, with each call tried NAMES_MAX_ATTEMPTS times. */
+export function namesClient(config: DynamoDBClientConfig): DynamoDBClient {
+  return new DynamoDBClient({ ...config, maxAttempts: NAMES_MAX_ATTEMPTS });
+}
 
 export const fileNamePk = (sha256: string) => `file#${sha256}`;
 
-export type NamesParts = { ddb: DynamoDBClient; place: Place; sleep?: (ms: number) => Promise<void>; random?: () => number };
+export type NamesParts = { ddb: DynamoDBClient; place: Place };
 
 export class HostedFileNames {
-  private readonly p: Required<NamesParts>;
+  private readonly p: NamesParts;
 
   constructor(parts: NamesParts) {
-    this.p = { sleep: (ms) => new Promise((r) => setTimeout(r, ms)), random: Math.random, ...parts };
+    this.p = parts;
   }
 
-  /** The indexer's step for one published version: each of its files is named by it. */
+  /** The indexer's step for one published version: each of its files is named by it. A put that fails fails the step. */
   async record(v: VersionRecord): Promise<void> {
     const sk = `${v.name}#${versionSk(v.version)}`;
-    const puts: WriteRequest[] = [...new Set(v.files.map((f) => f.sha256))].map((sha) => ({ PutRequest: { Item: { pk: { S: fileNamePk(sha) }, sk: { S: sk } } } }));
-    for (let i = 0; i < puts.length; i += BATCH) {
-      let pending: WriteRequest[] | undefined = puts.slice(i, i + BATCH);
-      for (let attempt = 0; pending?.length; attempt++) {
-        if (attempt >= TRIES) throw new Error('the file names kept coming back unprocessed (the table is busy)');
-        if (attempt > 0) {
-          const step = Math.min(BACKOFF_CAP_MS, BACKOFF_MS * 2 ** (attempt - 1));
-          await this.p.sleep(step * (1 + this.p.random()));
-        }
-        const r: BatchWriteItemCommandOutput = await this.p.ddb.send(new BatchWriteItemCommand({ RequestItems: { [this.p.place.table]: pending } }));
-        pending = r.UnprocessedItems?.[this.p.place.table];
+    const shas = [...new Set(v.files.map((f) => f.sha256))];
+    let next = 0;
+    const worker = async () => {
+      while (next < shas.length) {
+        const sha = shas[next++]!;
+        await this.p.ddb.send(new PutItemCommand({ TableName: this.p.place.table, Item: { pk: { S: fileNamePk(sha) }, sk: { S: sk } } }));
       }
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(NAMES_PUTS_AT_ONCE, shas.length) }, worker));
   }
 
   /** Whether any version the indexer has recorded names this file. */
