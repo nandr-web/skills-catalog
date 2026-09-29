@@ -531,6 +531,108 @@ describe('folders another user could control are refused (target_not_private)', 
   });
 });
 
+// The temp folder is checked before each file and again just before it's moved in: a folder swapped in for it is never
+// moved into the skills folder. Once a file was written, the files may sit wherever the temp folder was moved, so the
+// refusal says a copy may be elsewhere; its path is the temp folder, the first path that failed (contract §4.5).
+describe('the temp folder is checked before every use', () => {
+  const tmpPattern = /\.skills-catalog-staging\/install-[^/]+$/;
+  // Moves the temp folder away and puts a folder of someone else's making, holding `planted`, in its place.
+  const swapTmp = (p: Place, tmp: string) => {
+    race.fs.renameSync(tmp, join(p.dir, 'moved-tmp'));
+    race.fs.mkdirSync(tmp);
+    race.fs.writeFileSync(join(tmp, 'planted'), 'not the skill\n');
+  };
+  // Records whether a folder holding `planted` ever lands at the skill's path.
+  const watchDest = (dest: string) => {
+    const seen = { planted: false };
+    race.afterRename = (_from, to) => {
+      if (to === dest && race.fs.existsSync(join(dest, 'planted'))) seen.planted = true;
+    };
+    return seen;
+  };
+
+  it('swapped after the last file is written, before it is moved in: never moved in, refused, the copy may be elsewhere', async () => {
+    const p = place();
+    await publish(p, 'alpha', 'Body.\n');
+    const dest = join(p.dir, 'project', '.claude', 'skills', 'alpha');
+    let tmp: string | undefined;
+    race.onLstat = (path) => {
+      if (tmpPattern.test(path)) tmp ??= path;
+      if (path !== dest || !tmp || !race.fs.existsSync(join(tmp, 'SKILL.md'))) return;
+      race.onLstat = undefined;
+      swapTmp(p, tmp);
+    };
+    const seen = watchDest(dest);
+    let r: unknown;
+    try {
+      r = await install(ctxFor(p), { name: 'alpha', target: 'project' }).catch((e: unknown) => e);
+    } finally {
+      clearHooks();
+    }
+    expect(seen.planted).toBe(false);
+    expect([codeOf(r), refused(r).data]).toEqual(['target_changed', { path: tmp, elsewhere: true }]);
+    expect(race.fs.existsSync(dest)).toBe(false);
+  });
+
+  it('swapped as the installed copy is moved aside: never moved in, the installed copy is back, refused', async () => {
+    const p = place();
+    await publish(p, 'alpha', 'First.\n');
+    await install(ctxFor(p), { name: 'alpha', target: 'project' });
+    await publish(p, 'alpha', 'Second.\n');
+    const dest = join(p.dir, 'project', '.claude', 'skills', 'alpha');
+    let tmp: string | undefined;
+    race.onLstat = (path) => {
+      if (tmpPattern.test(path)) tmp ??= path;
+    };
+    race.onRename = (from) => {
+      if (from !== dest || !tmp) return;
+      race.onRename = undefined;
+      swapTmp(p, tmp);
+    };
+    const seen = watchDest(dest);
+    let r: unknown;
+    try {
+      r = await install(ctxFor(p), { name: 'alpha', version: 2, target: 'project' }).catch((e: unknown) => e);
+    } finally {
+      clearHooks();
+    }
+    expect(seen.planted).toBe(false);
+    expect([codeOf(r), refused(r).data]).toEqual(['target_changed', { path: tmp, elsewhere: true }]);
+    expect(race.fs.readFileSync(join(dest, 'SKILL.md'), 'utf8')).toContain('First.');
+  });
+
+  it('swapped between two files: refused before the second, the copy may be elsewhere; swapped before any file: not elsewhere', async () => {
+    for (const [at, elsewhere] of [[1, true], [0, false]] as const) {
+      const p = place();
+      const c = await open(p);
+      try {
+        await c.publish(request('alpha', [{ path: 'SKILL.md', text: skillMd('alpha', 'The alpha skill.') }, { path: 'zz.md', text: 'Last.\n' }]), actAs('ana'));
+      } finally {
+        c.close();
+      }
+      let tmp: string | undefined;
+      let checks = 0;
+      // The temp folder's checks: its identity once made, then one before each file.
+      race.onLstat = (path) => {
+        if (!tmpPattern.test(path)) return;
+        tmp ??= path;
+        if (checks++ !== at + 1) return;
+        race.onLstat = undefined;
+        swapTmp(p, tmp);
+      };
+      let r: unknown;
+      try {
+        r = await install(ctxFor(p), { name: 'alpha', target: 'project' }).catch((e: unknown) => e);
+      } finally {
+        clearHooks();
+      }
+      expect([at, codeOf(r), refused(r).data]).toEqual([at, 'target_changed', { path: tmp, ...(elsewhere ? { elsewhere: true } : {}) }]);
+      expect(race.fs.readdirSync(join(p.dir, 'moved-tmp'))).toEqual(elsewhere ? ['SKILL.md'] : []);
+      expect(race.fs.existsSync(join(p.dir, 'project', '.claude', 'skills', 'alpha'))).toBe(false);
+    }
+  });
+});
+
 // Inode numbers past 2^53 (overlay and some network file systems): compared exactly, and left out of the lock rather than
 // written as numbers its own reader would refuse (every command would then stop with invalid_local_file).
 describe('identities past 2^53', () => {

@@ -212,21 +212,25 @@ function writeSkill(dest: string, target: Target, files: readonly TreeFile[], en
   const copy = idOf(tmp)!;
   try {
     // Nothing is written until the folders are still the ones checked, and each file only while the temp folder is still
-    // the one made here; files are created, never opened where something already stands.
+    // the one made here; files are created, never opened where something already stands. Once a file was written, a temp
+    // folder that fails its check may have taken it somewhere else: the refusal says so.
     if (!anchored()) throw new CatalogError('target_changed', { path: dest });
+    let wrote = false;
+    const tmpChanged = () => new CatalogError('target_changed', { path: tmp, ...(wrote ? { elsewhere: true } : {}) });
     for (const f of files) {
-      if (!isCopy(lstatOf(tmp), copy)) throw new CatalogError('target_changed', { path: dest });
+      if (!isCopy(lstatOf(tmp), copy)) throw tmpChanged();
       const parts = f.path.split('/');
       for (let i = 1; i < parts.length; i++) makeFolder(join(tmp, ...parts.slice(0, i)), 0o755);
       writeNew(join(tmp, f.path), f.bytes, f.mode === '0755' ? 0o755 : 0o644);
+      wrote = true;
     }
     madeAs(tmp, 0o755);
     // Folders left in staging because they couldn't be put back: named in the refusal (the staging folder itself when
     // more than one is there).
     const left: string[] = [];
-    const refuse = (elsewhere = false): never => {
+    const refuse = (elsewhere = false, path = dest): never => {
       const at = left.length === 0 ? {} : { staging: left.length === 1 ? left[0] : stagingDir };
-      throw new CatalogError('target_changed', { path: dest, ...at, ...(elsewhere ? { elsewhere: true } : {}) });
+      throw new CatalogError('target_changed', { path, ...at, ...(elsewhere ? { elsewhere: true } : {}) });
     };
     // The folder the skill's path is in right now, through any link: where a folder moved out of it came from.
     const parentNow = (): Id | undefined => {
@@ -266,6 +270,11 @@ function writeSkill(dest: string, target: Target, files: readonly TreeFile[], en
         restore(old.path, old.id, old.from);
         refuse();
       }
+    }
+    // The temp folder is checked once more just before it's moved in, so a folder swapped in for it is never moved in.
+    if (!isCopy(lstatOf(tmp), copy)) {
+      if (old) restore(old.path, old.id, old.from);
+      refuse(wrote, tmp);
     }
     if (!anchored() || !moved(tmp, dest)) {
       if (old) restore(old.path, old.id, old.from);
