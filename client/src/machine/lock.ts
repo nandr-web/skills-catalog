@@ -131,7 +131,8 @@ const SAME_START_MS = 2000;
 
 type Holder = { pid: number; started: number };
 const startedHere = () => Date.now() - Math.round(process.uptime() * 1000);
-const sleep = (ms: number) => void Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+// Waits without blocking: the MCP server answers other calls meanwhile.
+const wait = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
 function lstatOr(path: string): Stats | undefined {
   try {
     return lstatSync(path);
@@ -197,7 +198,7 @@ function removeIfSame(path: string, was: Stats): boolean {
  *  it, so a reader sees the whole old or new file), and removes the lock file, whether the change succeeded or not. A
  *  lock held by another run is waited for up to 5 seconds, then the call refuses with lock_busy {path, pid}, having
  *  changed nothing; a stale one is removed and taken. `now` is the clock the wait is measured by. */
-export function withLock<T>(home: string, now: () => number, change: (lock: Lock) => T): T {
+export async function withLock<T>(home: string, now: () => number, change: (lock: Lock) => T): Promise<T> {
   mkdirSync(home, { recursive: true, mode: 0o700 });
   const path = join(home, 'lock.json.lock');
   const deadline = now() + LOCK_WAIT_MS;
@@ -219,7 +220,7 @@ export function withLock<T>(home: string, now: () => number, change: (lock: Lock
     if (!found) continue;
     if (isStale(found) && removeIfSame(path, found.st)) continue;
     if (now() >= deadline) throw new CatalogError('lock_busy', { path, pid: found.holder?.pid ?? null });
-    sleep(LOCK_RETRY_MS);
+    await wait(LOCK_RETRY_MS);
   }
   try {
     const lock = readLock(home);

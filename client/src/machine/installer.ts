@@ -559,7 +559,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   // The same version over an intact copy (its files are the lock's fingerprint) changes nothing; a copy the person
   // recreated just has its identity recorded again. A changed or incomplete copy is written again, whatever the policy.
   if (existing && !otherCatalog && existing.version === version && to.fingerprint === existing.fingerprint && folderFingerprint(dest) === existing.fingerprint) {
-    recordAgain(ctx, dest, target, existing);
+    await recordAgain(ctx, dest, target, existing);
     return { text: s.format(w.unchanged, { name: req.name, version }), target: `${req.name} v${version}`, result: log.result('install', 'unchanged'), outcome: 'unchanged' };
   }
   const from = existing ? await installedSide(catalog, existing) : null;
@@ -583,7 +583,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
     return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held' };
   }
   // Written while this run holds the lock, from the lock's entry as it is now (another run may have changed it).
-  const { written, entry } = withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
+  const { written, entry } = await withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
     const now = fresh.skills[dest];
     const written = writeSkill(dest, target, to.files, now);
     return { written, entry: record(ctx, fresh, dest, { name: req.name, target }, to, req.policy ?? now?.policy, now?.accepted ?? [], toLock(written.copy)) };
@@ -657,12 +657,12 @@ function folderFingerprint(dir: string): string | undefined {
 
 /** An intact copy the person recreated (a restore, a branch switch): its identity is recorded again, only while the
  *  folders above it are the real, private ones and it's a real folder itself; nothing is moved. */
-function recordAgain(ctx: Context, dest: string, target: Target, e: LockEntry): void {
+async function recordAgain(ctx: Context, dest: string, target: Target, e: LockEntry): Promise<void> {
   const now = idOf(dest);
   if (now === undefined || same(now, fromLock(e.copy))) return;
   skillsFolderFor(dest, target);
   if (!isCopy(lstatOf(dest), now)) return;
-  withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
+  await withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
     const entry = fresh.skills[dest];
     if (entry) fresh.skills[dest] = { ...entry, copy: toLock(now) };
   });
@@ -708,7 +708,7 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   if (to.fingerprint !== t.fingerprint) throw conflict();
   const flags = gate(existing ? await installedSide(catalog, existing) : null, to).risk_flags;
   if (!sameSet(req.flags, kinds(flags))) throw conflict();
-  const { written, entry } = withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
+  const { written, entry } = await withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
     const now = fresh.skills[dest];
     const written = writeSkill(dest, t.target, to.files, now);
     return { written, entry: record(ctx, fresh, dest, { name: req.name, target: t.target }, to, now?.policy, [...(now?.accepted ?? []), { version: to.version, flags: kinds(flags) }], toLock(written.copy)) };
@@ -850,7 +850,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     // Another run holding the lock past the wait refuses the whole call (lock_busy).
     let written: ReturnType<typeof writeSkill>;
     try {
-      written = withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
+      written = await withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
         const now = fresh.skills[dest] ?? e;
         const w = writeSkill(dest, e.target, to.files, now);
         record(ctx, fresh, dest, now, to, now.policy, now.accepted, toLock(w.copy));
@@ -911,7 +911,7 @@ export async function setPolicy(ctx: Context, args: unknown): Promise<Done> {
   if (!entries.length) throw new CatalogError('not_installed', { name: req.name });
   // A pin set while an update waits for the person is their answer to it (§3's usage metrics), taken before it changes.
   const waiting = req.policy === 'pin' ? await pendingHold(ctx, req.name).catch(() => null) : null;
-  withLock(home, clockOf(ctx), (fresh) => {
+  await withLock(home, clockOf(ctx), (fresh) => {
     for (const e of entries) {
       const key = destOf(ctx, e.target, e.name);
       const now = fresh.skills[key];

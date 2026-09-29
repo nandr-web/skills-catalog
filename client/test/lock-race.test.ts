@@ -66,6 +66,25 @@ describe('the lock file', () => {
     expect(JSON.parse(readFileSync(lockPath(p), 'utf8'))).toEqual({ pid: process.pid, started: startedHere });
   });
 
+  // The MCP server answers other calls while one waits for the lock: the wait never blocks the event loop.
+  it('a run waiting for the lock leaves the event loop free', async () => {
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], { stdio: 'ignore' });
+    let ticks = 0;
+    const tick = setInterval(() => ticks++, 5);
+    try {
+      const p = await published('alpha');
+      hold(p, child.pid!, Date.now());
+      // A clock that moves 400 ms each time it's read: about a dozen waits before lock_busy.
+      let t = Date.parse('2026-09-29T12:00:00Z');
+      const e = await install(ctxFor(p, () => new Date((t += 400))), { name: 'alpha' }).catch((x: unknown) => x);
+      expect((e as CatalogError).code).toBe('lock_busy');
+      expect(ticks).toBeGreaterThan(3);
+    } finally {
+      clearInterval(tick);
+      child.kill();
+    }
+  });
+
   // A holder's start, as the system reports it, is compared without a time zone: whatever TZ this run has, a live holder
   // is never taken for a stale one (two runs would then write at once).
   it('held by a live process in any time zone: still waited for, then lock_busy', async () => {
