@@ -3,7 +3,7 @@
 // adapter (test/adapters.ts).
 
 import { describe, expect, it } from 'vitest';
-import type { ReadItem } from '../../src/catalog.ts';
+import { inlineFiles, type ReadItem } from '../../src/catalog.ts';
 import { actAs } from '../../src/local/index.ts';
 import { openOn, type TestAdapter } from '../adapters.ts';
 import { catalogNameOf, filesOf, generated, historyVersion, loadGolden, rawFilesOf, type RawFile } from '../golden.ts';
@@ -29,7 +29,7 @@ export function catalogSuite(a: TestAdapter): void {
         const got = (await catalog.fetch({ name, version: pub.version }));
         expect(got.fingerprint).toBe(pub.fingerprint);
         const want = files.map((f) => ({ path: f.path.normalize('NFC'), mode: f.mode, b64: Buffer.from(f.bytes).toString('base64') })).sort((a, b) => Buffer.compare(Buffer.from(a.path), Buffer.from(b.path)));
-        expect(got.files.map((f) => ({ path: f.path, mode: f.mode, b64: f.content_base64 })), key).toEqual(want);
+        expect(inlineFiles(got).map((f) => ({ path: f.path, mode: f.mode, b64: f.content_base64 })), key).toEqual(want);
         expect((await catalog.fetch({ fingerprint: pub.fingerprint })).files).toEqual(got.files);
         const read = (await catalog.read({ name, include: 'contents' })).skills[0] as ReadItem;
         for (const f of read.files!) {

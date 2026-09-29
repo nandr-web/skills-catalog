@@ -2,7 +2,7 @@
 // here knows how versions and bytes are stored or kept consistent.
 
 import { CatalogError } from './errors.ts';
-import type { BlobLinks, Clock, Events, Identity, Ids, SearchCard, SearchIndex, Storage, VersionRecord } from './ports.ts';
+import type { BlobLinks, Clock, Events, Identity, Ids, SearchCard, SearchIndex, Storage, UploadAnswer, VersionRecord } from './ports.ts';
 import { DEFAULT_SEARCH_LIMIT, VERSIONS_PAGE, validateInput, type Face, type Where } from './api.ts';
 
 // Each operation checks its input as the face its caller gives (contract §1.1): the client passes its own, the web page's
@@ -60,7 +60,7 @@ export interface CatalogPorts {
   ids: Ids;
   config?: Partial<CatalogConfig>;
   close?: () => void;
-  links?: BlobLinks; // hosted only: the files route answers with a link instead of the bytes
+  links?: BlobLinks; // hosted only: files go up and come back by link, never as bytes in a request or an answer
 }
 
 // A stored version's file, as the files route answers it (§1.1): its bytes (local), a link to them (hosted), on its
@@ -153,9 +153,13 @@ export interface DiffResult extends TreeDiff {
   to: number;
 }
 
+// A file as a publish names it: its bytes inline (local), or its sha256 once uploaded through a link (hosted).
+export type InlineFile = { path: string; mode: string; content_base64: string };
+export type UploadedFile = { path: string; mode: string; sha256: string };
+
 export interface PublishInput {
   name: string;
-  files: { path: string; mode: string; content_base64: string }[];
+  files: InlineFile[] | UploadedFile[];
   message?: string;
   expected_latest?: number;
   dry_run?: boolean;
@@ -183,7 +187,28 @@ export interface FetchResult {
   name: string;
   version: number;
   fingerprint: string;
-  files: { path: string; mode: Mode; content_base64: string }[];
+  // Inline locally; hosted, each file by its sha256 and size with a short-lived link to its bytes.
+  files: InlineFetched[] | LinkedFetched[];
+}
+
+export type InlineFetched = { path: string; mode: Mode; content_base64: string };
+export type LinkedFetched = { path: string; mode: Mode; sha256: string; size: number; url: string };
+
+// A fetch's files with their bytes inline, as a local catalog answers. A hosted catalog's come by link, which a caller
+// that reads bytes from the answer doesn't follow: refused, never read as empty.
+export function inlineFiles(r: FetchResult): InlineFetched[] {
+  if (r.files.every((f) => 'content_base64' in f)) return r.files as InlineFetched[];
+  throw new Error("this fetch answered with links (a hosted catalog's); the bytes are at each file's url");
+}
+
+export interface UploadLinksInput {
+  name: string;
+  files: { sha256: string; size: number }[];
+}
+
+export interface UploadLinksResult {
+  name: string;
+  files: UploadAnswer[];
 }
 
 // ---------- helpers ----------
@@ -230,17 +255,35 @@ function decodedSize(b64: string): number {
 }
 
 // Size limits checked on the request itself, before any byte is decoded (a huge request never reaches memory twice).
-function checkRequestSize(files: PublishInput['files'], limits: Limits): void {
+function checkRequestSize(files: InlineFile[], limits: Limits): void {
+  checkSizes(
+    files.map((f, i) => {
+      if (!BASE64.test(f.content_base64)) throw new CatalogError('invalid_request', { field: `files[${i}].content_base64`, why: 'not_base64' });
+      return { size: decodedSize(f.content_base64), path: f.path };
+    }),
+    limits,
+  );
+}
+
+// The size limits (contract §4.2) on each file's size and their total, in order: a file over the file limit, else the
+// first file that takes the total over the skill limit. A request for upload links states its sizes; a publish's are
+// its bytes'.
+function checkSizes(files: readonly { size: number; path?: string }[], limits: Limits): void {
   if (files.length > limits.files) throw new CatalogError('too_large', { limit: 'files', max: limits.files, value: files.length });
   let total = 0;
-  for (const [i, f] of files.entries()) {
-    if (!BASE64.test(f.content_base64)) throw new CatalogError('invalid_request', { field: `files[${i}].content_base64`, why: 'not_base64' });
-    const size = decodedSize(f.content_base64);
-    if (size > limits.file_bytes) throw new CatalogError('too_large', { limit: 'file_bytes', max: limits.file_bytes, value: size, path: f.path });
-    total += size;
+  for (const f of files) {
+    if (f.size > limits.file_bytes) throw new CatalogError('too_large', { limit: 'file_bytes', max: limits.file_bytes, value: f.size, ...(f.path !== undefined ? { path: f.path } : {}) });
+    total += f.size;
     if (total > limits.skill_bytes) throw new CatalogError('too_large', { limit: 'skill_bytes', max: limits.skill_bytes, value: total });
   }
 }
+
+function inline(files: InlineFile[], limits: Limits): { path: string; mode: string; bytes: Uint8Array }[] {
+  checkRequestSize(files, limits);
+  return files.map((f) => ({ path: f.path, mode: f.mode, bytes: Buffer.from(f.content_base64, 'base64') }));
+}
+
+const notUploaded = (i: number) => new CatalogError('invalid_request', { field: `files[${i}].sha256`, why: 'not_uploaded' });
 
 function cardOf(v: VersionRecord): SearchCard {
   return { name: v.name, description: v.description, latest_version: v.version, tags: v.tags, publisher: v.publisher, updated_at: v.published_at };
@@ -488,8 +531,7 @@ export class Catalog {
     const latestNo = skill?.latest ?? 0;
     if (req.expected_latest !== undefined && req.expected_latest !== latestNo) throw new CatalogError('conflict', { name, latest: latestNo, expected_latest: req.expected_latest });
 
-    checkRequestSize(req.files, this.config.limits);
-    const raw = req.files.map((f) => ({ path: f.path, mode: f.mode, bytes: Buffer.from(f.content_base64, 'base64') }));
+    const raw = this.p.where === 'hosted' ? await this.uploaded(req.files as UploadedFile[]) : inline(req.files as InlineFile[], this.config.limits);
     const tree = checkTree(raw, this.config.limits);
     const md = checkManifest(tree, name);
     // The secret scan: a hit refuses the publish, dry run or not, unless the person allowed it for this one (§2).
@@ -514,9 +556,11 @@ export class Catalog {
     if (req.dry_run) return result(latestNo + 1, false);
 
     const at = this.p.clock.now().toISOString();
+    // Hosted, the commit names each file by its sha256 alone and checks it's still stored and usable (§1.1).
+    const hosted = this.p.where === 'hosted';
     const r = await this.p.storage.commit(
       { name, fingerprint, publisher, message: req.message ?? '', published_at: at, files: entries, description: md.description, tags: md.tags, frontmatter: md.frontmatter },
-      tree.map((f) => ({ sha256: sha256Hex(f.bytes), bytes: f.bytes })),
+      tree.map((f) => (hosted ? { sha256: sha256Hex(f.bytes) } : { sha256: sha256Hex(f.bytes), bytes: f.bytes })),
       { expectedLatest: req.expected_latest },
       (version) => ({ type: 'version_published', name, version, fingerprint, publisher, at }),
     );
@@ -527,11 +571,14 @@ export class Catalog {
         throw new CatalogError('conflict', { name, latest: r.latest, expected_latest: req.expected_latest });
       case 'identical':
         return unchanged(r.record.version);
-      case 'not_uploaded':
-        // Every file here came with its bytes, so a file missing at the commit is a bug (internal_error). The hosted
-        // form (files named by sha256, uploaded first) goes through this same publish once it takes that form, and
-        // answers invalid_request {field: files[i].sha256, why: not_uploaded} here.
+      case 'not_uploaded': {
+        // Locally every file came with its bytes, so a file missing at the commit is a bug (internal_error). Hosted, a
+        // file read for the checks can be swept or age out before the commit looks: the first such file, by its place
+        // in the request.
+        const i = hosted ? (req.files as UploadedFile[]).findIndex((f) => r.missing.includes(f.sha256)) : -1;
+        if (i >= 0) throw notUploaded(i);
         throw new Error(`commit found ${r.missing.length} file(s) not stored although their bytes were given`);
+      }
       case 'created':
         try {
           await this.p.events.deliver();
@@ -555,8 +602,45 @@ export class Catalog {
       if (req.name === undefined || req.version === undefined) throw new CatalogError('invalid_request', { field: req.name === undefined ? 'name' : 'version', why: 'required' });
       record = (await this.versionOf(req.name, req.version)).record;
     }
+    // Hosted, links straight from the version read here (strongly consistent), never through the files route's lookup.
+    if (this.p.links) {
+      const links = this.p.links;
+      const files = await Promise.all(record.files.map(async (f) => ({ path: f.path, mode: f.mode, sha256: f.sha256, size: f.size, url: await links.downloadLink(f.sha256) })));
+      return { name: record.name, version: record.version, fingerprint: record.fingerprint, files };
+    }
     const files = (await this.tree(record)).map((f) => ({ path: f.path, mode: f.mode, content_base64: Buffer.from(f.bytes).toString('base64') }));
     return { name: record.name, version: record.version, fingerprint: record.fingerprint, files };
+  }
+
+  // request_upload_links (hosted only, §1.1): every check a publish makes before its files (who is asking, the name
+  // theirs or new, the sizes), then a link for each file not stored; the links port claims each stored one.
+  async uploadLinks(input: unknown, identity: Identity = this.p.identity, face: Face = CATALOG_FACE): Promise<UploadLinksResult> {
+    const req = validateInput<UploadLinksInput>('request_upload_links', input, face, this.p.where);
+    const publisher = checkActor(await identity.actor());
+    const name = checkName(req.name);
+    const skill = await this.p.storage.skill(name);
+    if (skill && !skill.owners.includes(publisher)) throw new CatalogError('not_owner', { name, owners: skill.owners });
+    for (const [i, f] of req.files.entries()) if (!SHA256_HEX.test(f.sha256)) throw new CatalogError('invalid_request', { field: `files[${i}].sha256`, why: 'not_sha256' });
+    checkSizes(req.files, this.config.limits);
+    return { name, files: await this.p.links!.uploadLinks(req.files.map((f) => ({ sha256: f.sha256, size: f.size }))) };
+  }
+
+  // The hosted form's files: each one's bytes as stored, in order, within the size limits as they're read. A file not
+  // stored, whose bytes don't hash to its name, or named by something that isn't a sha256, was never uploaded.
+  private async uploaded(files: UploadedFile[]): Promise<{ path: string; mode: string; bytes: Uint8Array }[]> {
+    const limits = this.config.limits;
+    if (files.length > limits.files) throw new CatalogError('too_large', { limit: 'files', max: limits.files, value: files.length });
+    const out: { path: string; mode: string; bytes: Uint8Array }[] = [];
+    let total = 0;
+    for (const [i, f] of files.entries()) {
+      const bytes = SHA256_HEX.test(f.sha256) ? await this.p.storage.blob(f.sha256) : undefined;
+      if (bytes === undefined || sha256Hex(bytes) !== f.sha256) throw notUploaded(i);
+      if (bytes.length > limits.file_bytes) throw new CatalogError('too_large', { limit: 'file_bytes', max: limits.file_bytes, value: bytes.length, path: f.path });
+      total += bytes.length;
+      if (total > limits.skill_bytes) throw new CatalogError('too_large', { limit: 'skill_bytes', max: limits.skill_bytes, value: total });
+      out.push({ path: f.path, mode: f.mode, bytes });
+    }
+    return out;
   }
 
   // A stored version's file by its sha256 (§1.1, the files route; not an operation, so no face): only a file some

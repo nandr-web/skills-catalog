@@ -4,6 +4,7 @@
 
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { inlineFiles } from '../../src/catalog.ts';
 import type { SearchIndex, Storage } from '../../src/ports.ts';
 import { actAs } from '../../src/local/index.ts';
 import { openOn, type TestAdapter } from '../adapters.ts';
@@ -66,7 +67,7 @@ export function storageSuite(a: TestAdapter): void {
       const e = await errorOf(() => catalog.publish(request('pr-review-checklist', historyVersion(histories.versions['prc.v3'])), ana));
       expect(e.code).toBe('not_owner');
       expect(e.data['owners']).toEqual(['bo']);
-      const referenced = new Set((await catalog.fetch({ name: 'pr-review-checklist', version: 1 })).files.map((f) => sha(Buffer.from(f.content_base64, 'base64'))));
+      const referenced = new Set(inlineFiles(await catalog.fetch({ name: 'pr-review-checklist', version: 1 })).map((f) => sha(Buffer.from(f.content_base64, 'base64'))));
       expect(await store.versionsIn('pr-review-checklist')).toEqual([1]);
       expectFilesAfterRefusal(a, await store.blobs(), referenced);
     });
@@ -90,7 +91,7 @@ export function storageSuite(a: TestAdapter): void {
       expect(e.data['latest']).toBe(22);
       const referenced = new Set<string>();
       for (let v = 1; v <= 22; v++) {
-        for (const f of (await catalog.fetch({ name: 'pr-review-checklist', version: v })).files) referenced.add(sha(Buffer.from(f.content_base64, 'base64')));
+        for (const f of inlineFiles(await catalog.fetch({ name: 'pr-review-checklist', version: v }))) referenced.add(sha(Buffer.from(f.content_base64, 'base64')));
       }
       expect(await store.versionsIn('pr-review-checklist')).toEqual(Array.from({ length: 22 }, (_, i) => i + 1));
       expectFilesAfterRefusal(a, await store.blobs(), referenced);

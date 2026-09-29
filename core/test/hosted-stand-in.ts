@@ -36,6 +36,8 @@ export interface StandInOptions {
   config?: Partial<CatalogConfig>;
   /** Files the links port answers as being removed, with when to try again. */
   removing?: Record<string, string>;
+  /** Files whose stored bytes aren't the ones their name hashes (as a body S3 took unchecked would be). */
+  altered?: Record<string, string>;
   /** Uploads the sweep takes away after the publish reads them and before its commit looks. */
   sweptBeforeCommit?: string[];
 }
@@ -58,6 +60,8 @@ export async function openHostedStandIn(opts: StandInOptions = {}): Promise<Stan
   const hosted: Storage = Object.assign(Object.create(storage), {
     blob: async (sha: string) => {
       blobReads.push(sha);
+      const altered = opts.altered?.[sha];
+      if (altered !== undefined) return Buffer.from(altered);
       return uploads.get(sha) ?? storage.blob(sha);
     },
     commit: async (...[v, files, cond, event]: Parameters<Storage['commit']>) => {

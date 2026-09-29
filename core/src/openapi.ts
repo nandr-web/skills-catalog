@@ -184,7 +184,7 @@ export function openapi(where: Where, ops: Record<string, OperationDef> = OPERAT
   const paths: Json = {};
   for (const def of web) {
     schemas[`${def.name}_input`] = strict(inputSchema(def, 'web', where));
-    schemas[`${def.name}_output`] = def.output as OutputSchema;
+    schemas[`${def.name}_output`] = (where === 'hosted' && def.hostedOutput) || (def.output as OutputSchema);
     schemas[`${def.name}_envelope`] = envelope(def);
     paths[`${API_PATH}/${def.name}`] = { post: operation(def, where) };
   }

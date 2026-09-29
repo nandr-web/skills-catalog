@@ -339,7 +339,7 @@ describe('the words file (vendored, recommended variant)', () => {
       expect([why, typeof w.why[why]]).toEqual([why, 'string']);
       expect(renderError(s, new CatalogError('invalid_request', { field: 'f', why }))).toBe(s.format(w.invalid_request, { field: 'f', why: w.why[why] }));
     }
-    expect(WORD_GAPS).toEqual([]);
+    expect(WORD_GAPS).toEqual(['errors.why.not_sha256']);
   });
 
   it('a link in a published folder and a confirm from elsewhere each have their own sentence', () => {

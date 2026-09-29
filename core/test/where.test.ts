@@ -77,7 +77,7 @@ describe('where the catalog runs is said when it\'s opened', () => {
     ids: counterIds(),
     ...(links ? { links } : {}),
   });
-  const links: BlobLinks = { downloadLink: async (s) => s };
+  const links: BlobLinks = { uploadLinks: async () => [], downloadLink: async (s) => s };
 
   it('a hosted catalog needs its links, and a local one has none', async () => {
     expect((await Catalog.open(ports('hosted', links))).where).toBe('hosted');

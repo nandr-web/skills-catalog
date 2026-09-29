@@ -15,7 +15,7 @@
 
 import { closeSync, constants, existsSync, fchmodSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync, writeSync, type BigIntStats } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { CatalogError, shellQuote, validateInput, type Catalog, type Words, type VersionsResult } from '@skills-catalog/core';
+import { CatalogError, inlineFiles, shellQuote, validateInput, type Catalog, type Words, type VersionsResult } from '@skills-catalog/core';
 import { DEFAULT_LIMITS, checkFetched, checkName, diffTrees, fingerprint, flagText, sha256Hex, type RiskFlag, type TreeDiff, type TreeFile } from '@skills-catalog/core/skill-tree';
 import { reasons } from '@skills-catalog/core';
 import { logWords } from '../activity.ts';
@@ -391,7 +391,7 @@ const inForm = (x: unknown) => (typeof x === 'string' && /^sha256:[0-9a-f]{64}$/
  *  is refused the same way. */
 async function fetchChecked(catalog: Catalog, name: string, version: number, publisher: string, claimed: string | undefined): Promise<Side> {
   const r = await catalog.fetch({ name, version });
-  const files = r.files.map((f) => ({ path: f.path, mode: f.mode, bytes: Buffer.from(f.content_base64, 'base64') }));
+  const files = inlineFiles(r).map((f) => ({ path: f.path, mode: f.mode, bytes: Buffer.from(f.content_base64, 'base64') }));
   if (r.version !== version) throw new CatalogError('fingerprint_mismatch', { name, version, expected: inForm(claimed), got: inForm(r.fingerprint) });
   const checked = checkFetched(name, version, claimed, files);
   // Past the check, `claimed` is the bytes' own fingerprint.

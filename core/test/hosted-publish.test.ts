@@ -78,8 +78,20 @@ describe('publish_version, hosted: files named by sha256', () => {
       const e = await errorOf(() => s.catalog.publish({ name: 'odd', files: [{ path: 'SKILL.md', mode: '0644', sha256: bad }] }));
       expect([bad, e.code, e.data]).toEqual([bad, 'invalid_request', { field: 'files[0].sha256', why: 'not_uploaded' }]);
     }
+    // Not a sha256 is unknown before any lookup: the storage is never asked.
+    expect(s.blobReads).toEqual([]);
     const long = await errorOf(() => s.catalog.publish({ name: 'odd', files: [{ path: 'SKILL.md', mode: '0644', sha256: 'a'.repeat(65) }] }));
     expect([long.code, (long.data as { field: string }).field]).toEqual(['invalid_request', 'files[0].sha256']);
+  });
+
+  it('a stored file whose bytes don\'t hash to its name was never uploaded: not_uploaded, and nothing is committed', async () => {
+    const claimed = sha256Of('The bytes it names.\n');
+    const s = await standIn({ altered: { [claimed]: 'Other bytes.\n' } });
+    const req = uploaded(s, 'altered', [{ path: 'SKILL.md', text: skillMd('altered') }]);
+    req.files.push({ path: 'notes.md', mode: '0644', sha256: claimed });
+    const e = await errorOf(() => s.catalog.publish(req));
+    expect([e.code, e.data]).toEqual(['invalid_request', { field: 'files[1].sha256', why: 'not_uploaded' }]);
+    expect(s.commits).toEqual([]);
   });
 
   it('a file gone by the commit (swept between the read and the commit) is not_uploaded too, never a bug', async () => {

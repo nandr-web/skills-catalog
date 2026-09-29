@@ -117,8 +117,17 @@ export interface Ids {
   next(): string;
 }
 
-// Short-lived links to a stored file's bytes (§1.1, §7), hosted only: where it's wired, the files route answers with a
-// link instead of reading the bytes.
+// What a request for upload links answers per file (§1.1): a link to put one not stored; "stored" for one that is
+// (claimed by the asking, so a commit in the next day takes it); "removing" for one the sweep is taking away, with when
+// to try again.
+export type UploadAnswer =
+  | { kind: 'upload'; sha256: string; url: string; headers: Record<string, string> }
+  | { kind: 'stored'; sha256: string }
+  | { kind: 'removing'; sha256: string; retry_after: string };
+
+// Short-lived links (§1.1, §7), hosted only: to put a file by its sha256 before a publish names it, and to a stored
+// file's bytes, so the files route and a hosted fetch answer with a link instead of reading the bytes.
 export interface BlobLinks {
+  uploadLinks(files: readonly { sha256: string; size: number }[]): Promise<UploadAnswer[]>;
   downloadLink(sha256: string): Promise<string>;
 }

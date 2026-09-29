@@ -329,6 +329,63 @@
         }
       }
     },
+    "/api/v1/request_upload_links": {
+      "post": {
+        "operationId": "request_upload_links",
+        "x-effect": "writes_catalog",
+        "x-faces": [
+          "web"
+        ],
+        "x-errors": [
+          "unauthenticated",
+          "not_owner",
+          "invalid_name",
+          "too_large"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/request_upload_links_input"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The operation's answer, error or not.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/request_upload_links_envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/TokenOnly"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoToken"
+          },
+          "403": {
+            "$ref": "#/components/responses/Refused"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "415": {
+            "$ref": "#/components/responses/NotJson"
+          }
+        }
+      }
+    },
     "/api/v1/fetch_version": {
       "post": {
         "operationId": "fetch_version",
@@ -1401,14 +1458,15 @@
                   "type": "string",
                   "maxLength": 8
                 },
-                "content_base64": {
-                  "type": "string"
+                "sha256": {
+                  "type": "string",
+                  "maxLength": 64
                 }
               },
               "required": [
                 "path",
                 "mode",
-                "content_base64"
+                "sha256"
               ],
               "additionalProperties": false
             },
@@ -1707,6 +1765,202 @@
           }
         ]
       },
+      "request_upload_links_input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 100
+          }
+        },
+        "required": [
+          "name",
+          "files"
+        ],
+        "additionalProperties": false
+      },
+      "request_upload_links_output": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "upload"
+                      ]
+                    },
+                    "sha256": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "headers": {
+                      "type": "object",
+                      "properties": {},
+                      "required": [],
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "sha256",
+                    "url",
+                    "headers"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "stored"
+                      ]
+                    },
+                    "sha256": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "sha256"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "removing"
+                      ]
+                    },
+                    "sha256": {
+                      "type": "string"
+                    },
+                    "retry_after": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "sha256",
+                    "retry_after"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "name",
+          "files"
+        ],
+        "additionalProperties": false
+      },
+      "request_upload_links_envelope": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": true
+              },
+              "data": {
+                "$ref": "#/components/schemas/request_upload_links_output"
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": false
+              },
+              "error": {
+                "type": "object",
+                "description": "The error's code and its data (contract §9). An invalid_request naming an unknown key longer than 200 characters names its first 200 and carries field_cut: true.",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "enum": [
+                      "internal_error",
+                      "invalid_request",
+                      "invalid_name",
+                      "too_large",
+                      "not_owner",
+                      "forbidden",
+                      "unauthenticated",
+                      "invalid_developer_setting"
+                    ]
+                  },
+                  "field_cut": {
+                    "type": "boolean",
+                    "description": "The field names only the first 200 characters of an unknown key."
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "additionalProperties": true
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
       "fetch_version_input": {
         "type": "object",
         "properties": {
@@ -1752,14 +2006,22 @@
                     "0755"
                   ]
                 },
-                "content_base64": {
+                "sha256": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "integer"
+                },
+                "url": {
                   "type": "string"
                 }
               },
               "required": [
                 "path",
                 "mode",
-                "content_base64"
+                "sha256",
+                "size",
+                "url"
               ],
               "additionalProperties": false
             }

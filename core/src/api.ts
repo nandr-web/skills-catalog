@@ -52,6 +52,8 @@ export interface OperationDef {
   where?: 'hosted';
   // Inputs that take another form on a hosted catalog; each form refuses the other (unknown_field).
   hostedForm?: Record<string, Schema>;
+  // Its result on a hosted catalog, where that differs (a fetch answers links there, not bytes).
+  hostedOutput?: OutputSchema;
 }
 
 // Request limits are errors that name the field and the limit, never silent clamps (contract §9).
@@ -139,6 +141,24 @@ const PUBLISH_OUTPUT = obj({
   risk_flags: list(riskFlag),
 });
 const FETCH_OUTPUT = obj({ name: str, version: int, fingerprint: str, files: list(obj({ path: str, mode, content_base64: str })) });
+const FETCH_OUTPUT_HOSTED = obj({ name: str, version: int, fingerprint: str, files: list(obj({ path: str, mode, sha256: str, size: int, url: str })) });
+// Each file's answer is one of three, each with its own fields (the port's UploadAnswer).
+const UPLOAD_LINKS_OUTPUT = obj({
+  name: str,
+  files: list({
+    anyOf: [
+      obj({ kind: oneOf('upload'), sha256: str, url: str, headers: { type: 'object', properties: {}, required: [], additionalProperties: str } }),
+      obj({ kind: oneOf('stored'), sha256: str }),
+      obj({ kind: oneOf('removing'), sha256: str, retry_after: str }),
+    ],
+  }),
+});
+// A file named by its sha256 (hosted, after its upload).
+const sha256 = { type: 'string', maxLength: 64 } as const;
+// The most files one publish may name, in either form (the request's own cap; the skill's file limit is config).
+const MAX_PUBLISH_FILES = 10_000;
+// The most files one request for upload links may name (contract §1.1).
+export const MAX_UPLOAD_LINKS = 100;
 
 export const OPERATIONS: Record<string, OperationDef> = {
   search_shared_skills: {
@@ -234,7 +254,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
             properties: { path: { type: 'string', maxLength: 4096 }, mode: { type: 'string', maxLength: 8 }, content_base64: { type: 'string' } },
             required: ['path', 'mode', 'content_base64'],
           },
-          maxItems: 10_000,
+          maxItems: MAX_PUBLISH_FILES,
         },
         message: { type: 'string', maxLength: 1000 },
         expected_latest: { type: 'integer', minimum: 0 },
@@ -243,7 +263,34 @@ export const OPERATIONS: Record<string, OperationDef> = {
       },
       required: ['name', 'files'],
     },
+    hostedForm: {
+      files: {
+        type: 'array',
+        items: { type: 'object', properties: { path: { type: 'string', maxLength: 4096 }, mode: { type: 'string', maxLength: 8 }, sha256 }, required: ['path', 'mode', 'sha256'] },
+        maxItems: MAX_PUBLISH_FILES,
+      },
+    },
     cliOnly: ['allow_suspected_secrets'],
+  },
+  request_upload_links: {
+    name: 'request_upload_links',
+    kind: 'catalog',
+    phase: 'aws',
+    faces: ['web'],
+    where: 'hosted',
+    // It claims every stored file it's asked about (§1.1), so a publish in the next day takes it.
+    effect: 'writes_catalog',
+    run: 'uploadLinks',
+    output: UPLOAD_LINKS_OUTPUT,
+    errors: ['unauthenticated', 'not_owner', 'invalid_name', 'too_large'],
+    input: {
+      type: 'object',
+      properties: {
+        name,
+        files: { type: 'array', items: { type: 'object', properties: { sha256, size: { type: 'integer', minimum: 0 } }, required: ['sha256', 'size'] }, maxItems: MAX_UPLOAD_LINKS },
+      },
+      required: ['name', 'files'],
+    },
   },
   fetch_version: {
     name: 'fetch_version',
@@ -253,6 +300,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     effect: 'reads',
     run: 'fetch',
     output: FETCH_OUTPUT,
+    hostedOutput: FETCH_OUTPUT_HOSTED,
     errors: ['invalid_name', 'not_found'],
     input: { type: 'object', properties: { name, version, fingerprint: { type: 'string', maxLength: 80 } } },
   },

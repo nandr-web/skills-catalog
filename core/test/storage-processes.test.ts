@@ -6,6 +6,7 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { inlineFiles } from '../src/catalog.ts';
 import { openLocalCatalog } from '../src/local/index.ts';
 import { sandbox } from './sandbox.ts';
 
@@ -53,7 +54,7 @@ describe('nothing lost (histories.concurrent)', () => {
       for (const r of results) {
         const got = await catalog.fetch({ name: 'concurrent-skill', version: r.version });
         expect(got.fingerprint).toBe(r.fingerprint);
-        expect(Buffer.from(got.files.find((f) => f.path === 'SKILL.md')!.content_base64, 'base64').toString()).toContain(`Variant ${r.n}.`);
+        expect(Buffer.from(inlineFiles(got).find((f) => f.path === 'SKILL.md')!.content_base64, 'base64').toString()).toContain(`Variant ${r.n}.`);
       }
       expect((await catalog.versions({ name: 'concurrent-skill' })).latest).toBe(20);
     } finally {

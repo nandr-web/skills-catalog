@@ -14,6 +14,7 @@ import { actAs } from '../src/local/index.ts';
 import { filesOf, historyVersion, loadGolden } from './golden.ts';
 import { conforms } from './conforms.ts';
 import { errorOf, openTest, request } from './helpers.ts';
+import { openHostedStandIn, sha256Of } from './hosted-stand-in.ts';
 
 const histories = loadGolden('histories.yaml');
 const skills = loadGolden('skills.yaml');
@@ -46,6 +47,7 @@ const FACES: Record<string, readonly string[]> = {
   diff_shared_skill_versions: ['mcp', 'cli', 'web'],
   publish_version: ['web'],
   fetch_version: ['web'],
+  request_upload_links: ['web'], // hosted only
   publish_skill_to_catalog: ['mcp'], // its CLI command is on a branch
   install_shared_skill: ['mcp', 'cli'],
   update_installed_skills: ['mcp', 'cli'],
@@ -60,6 +62,7 @@ const EFFECT: Record<string, string> = {
   diff_shared_skill_versions: 'reads',
   publish_version: 'writes_catalog',
   fetch_version: 'reads',
+  request_upload_links: 'writes_catalog', // it claims each stored file it's asked about
   publish_skill_to_catalog: 'writes_catalog',
   install_shared_skill: 'writes_machine',
   update_installed_skills: 'writes_machine',
@@ -75,6 +78,7 @@ const RUN: Record<string, string> = {
   diff_shared_skill_versions: 'diff',
   publish_version: 'publish',
   fetch_version: 'fetch',
+  request_upload_links: 'uploadLinks',
   publish_skill_to_catalog: 'publishFolder',
   install_shared_skill: 'install',
   update_installed_skills: 'update',
@@ -255,7 +259,8 @@ describe('each operation\'s output (contract §1)', () => {
       for (const [k, v] of Object.entries(s.properties)) walk(v, `${at}.${k}`);
     };
     for (const def of Object.values(OPERATIONS)) if (def.output !== 'text') walk(def.output, def.name);
-    expect(open).toEqual(['read_shared_skill.skills[]|0.manifest.frontmatter', 'read_shared_skill.skills[]|1.error']);
+    // An upload link's headers are named by the link's issuer (the storage's own), so any header name goes.
+    expect(open).toEqual(['read_shared_skill.skills[]|0.manifest.frontmatter', 'read_shared_skill.skills[]|1.error', 'request_upload_links.files[]|0.headers']);
   });
 
   it('what each catalog operation really returns fits its schema, every shape it takes', async () => {
@@ -291,7 +296,24 @@ describe('each operation\'s output (contract §1)', () => {
     await run('fetch_version', () => catalog.fetch({ fingerprint: fetched.fingerprint }));
     catalog.close();
     for (const [op, r] of seen) expect([op, conforms(out(op), r)]).toEqual([op, []]);
-    expect(new Set(seen.map(([op]) => op))).toEqual(new Set(Object.values(OPERATIONS).filter((o) => o.kind === 'catalog').map((o) => o.name)));
+
+    // hosted: the upload links' three answers, a publish by sha256, and a fetch's links, against the hosted schemas
+    const hosted = await openHostedStandIn({ removing: { [sha256Of('going')]: '2026-09-28T13:00:00.000Z' } });
+    const hostedOut = (op: string) => OPERATIONS[op]!.hostedOutput ?? out(op);
+    const seenHosted: [string, unknown][] = [];
+    const md = '---\nname: up\ndescription: Uploaded.\n---\nBody.\n';
+    const have = hosted.upload(md);
+    seenHosted.push(['request_upload_links', await hosted.catalog.uploadLinks({ name: 'up', files: [{ sha256: sha256Of('new'), size: 3 }, { sha256: have, size: md.length }, { sha256: sha256Of('going'), size: 5 }] })]);
+    seenHosted.push(['publish_version', await hosted.catalog.publish({ name: 'up', files: [{ path: 'SKILL.md', mode: '0644', sha256: have }] })]);
+    seenHosted.push(['fetch_version', await hosted.catalog.fetch({ name: 'up', version: 1 })]);
+    hosted.close();
+    expect((seenHosted[0]![1] as { files: { kind: string }[] }).files.map((f) => f.kind)).toEqual(['upload', 'stored', 'removing']);
+    for (const [op, r] of seenHosted) expect([op, conforms(hostedOut(op), r)]).toEqual([op, []]);
+    // the local fetch's answer isn't the hosted one's, nor the other way round
+    expect(conforms(hostedOut('fetch_version'), fetched)).not.toEqual([]);
+    expect(conforms(out('fetch_version'), seenHosted[2]![1])).not.toEqual([]);
+
+    expect(new Set([...seen, ...seenHosted].map(([op]) => op))).toEqual(new Set(Object.values(OPERATIONS).filter((o) => o.kind === 'catalog').map((o) => o.name)));
     // and the check itself: a field the schema doesn't list, or a missing one, fails
     const [, one] = seen.find(([op]) => op === 'fetch_version')!;
     expect(conforms(out('fetch_version'), { ...(one as object), extra: 1 })).toEqual(['$.extra: not in the schema']);

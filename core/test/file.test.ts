@@ -112,7 +112,7 @@ describe('Catalog.file where storage or a link port answers otherwise (hosted)',
 
   it('a named file is a link when a BlobLinks port is wired, and its bytes are never read', async () => {
     const asked: string[] = [];
-    const links: BlobLinks = { downloadLink: async (s) => (asked.push(s), `https://files.example.invalid/${s}?signed`) };
+    const links: BlobLinks = { uploadLinks: async () => [], downloadLink: async (s) => (asked.push(s), `https://files.example.invalid/${s}?signed`) };
     reads.length = 0;
     const c = await open('named', links);
     expect(await c.file(sha)).toEqual({ kind: 'link', url: `https://files.example.invalid/${sha}?signed` });
@@ -126,7 +126,7 @@ describe('Catalog.file where storage or a link port answers otherwise (hosted)',
   });
 
   it('on its way is passed through, with no link and no bytes', async () => {
-    const links: BlobLinks = { downloadLink: async () => { throw new Error('no link for a file on its way'); } };
+    const links: BlobLinks = { uploadLinks: async () => [], downloadLink: async () => { throw new Error('no link for a file on its way'); } };
     expect(await (await open('on_its_way', links)).file(sha)).toEqual({ kind: 'on_its_way' });
     expect(await (await open('unknown', links)).file(sha)).toEqual({ kind: 'unknown' });
   });

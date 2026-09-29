@@ -10,6 +10,7 @@ import { Words } from '../src/words-file.ts';
 import { DEFAULT_LIMITS } from '../src/skill-tree/index.ts';
 import { catalogNameOf, filesOf, generated, loadGolden, rawFilesOf, type RawFile } from './golden.ts';
 import { counterIds, errorOf, openTest, request, snapshot } from './helpers.ts';
+import { openHostedStandIn } from './hosted-stand-in.ts';
 
 const skills = loadGolden('skills.yaml');
 const ana = actAs('ana');
@@ -110,6 +111,8 @@ describe('path rules, table-driven, in the pinned order (golden path_cases)', ()
 describe('request fields are the operation\'s own (golden request_fields)', () => {
   it('each refused name, on every operation, is invalid_request naming it', async () => {
     const { catalog } = await openTest();
+    // A hosted-only operation, on a hosted catalog.
+    const hosted = await openHostedStandIn();
     const call: Record<string, (req: unknown) => Promise<unknown>> = {
       search_shared_skills: (r) => catalog.search(r),
       read_shared_skill: (r) => catalog.read(r),
@@ -117,6 +120,7 @@ describe('request fields are the operation\'s own (golden request_fields)', () =
       diff_shared_skill_versions: (r) => catalog.diff(r),
       publish_version: (r) => catalog.publish(r, ana),
       fetch_version: (r) => catalog.fetch(r),
+      request_upload_links: (r) => hosted.catalog.uploadLinks(r),
     };
     expect(Object.keys(call).sort()).toEqual(Object.values(OPERATIONS).filter((o) => o.kind === 'catalog').map((o) => o.name).sort());
     for (const [op, fn] of Object.entries(call)) {
@@ -125,6 +129,8 @@ describe('request fields are the operation\'s own (golden request_fields)', () =
         expect([e.code, e.data['field']], `${op} ${field}`).toEqual(['invalid_request', field]);
       }
     }
+    catalog.close();
+    hosted.close();
   });
 });
 

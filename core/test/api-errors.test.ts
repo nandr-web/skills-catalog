@@ -32,6 +32,12 @@ const MISSING_GOLDENS: [op: string, code: string, where: string][] = [
   ['accept_held_update', 'invalid_name', 'installer.ts fetchChecked → checkName'],
   ['accept_held_update', 'invalid_path', 'installer.ts fetchChecked → checkTree'],
   ['accept_held_update', 'too_large', 'installer.ts fetchChecked → checkTree'],
+  // A hosted-only operation, new with the hosted catalog: each code is proved on the in-process stand-in
+  // (hosted-publish.test.ts, "checks who is asking, the name and the sizes"); golden rows asked for.
+  ['request_upload_links', 'unauthenticated', 'catalog.uploadLinks → checkActor'],
+  ['request_upload_links', 'not_owner', 'catalog.uploadLinks: a name someone else owns'],
+  ['request_upload_links', 'invalid_name', 'catalog.uploadLinks → checkName'],
+  ['request_upload_links', 'too_large', 'catalog.uploadLinks → checkSizes'],
   ['accept_held_update', 'fingerprint_mismatch', 'installer.ts fetchChecked'],
   ['accept_held_update', 'exists_untracked', 'installer.ts writeSkill'],
   ['accept_held_update', 'name_in_use', 'installer.ts checkTarget'],

@@ -5,7 +5,7 @@
 // stdio and check what the catalog stored, read back through the core.
 import { mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { actAs, CatalogError, renderError, Words, type Catalog } from '@skills-catalog/core';
+import { actAs, CatalogError, inlineFiles, renderError, Words, type Catalog } from '@skills-catalog/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { open, request, seed, skillMd } from './seed.ts';
 import { PROCESS_TEST_MS, place, startServer, type Place, type Server } from './server.ts';
@@ -62,7 +62,7 @@ async function versionsOf(c: Catalog, name: string): Promise<number[]> {
 /** The files a version holds, read back through the core, as {path: text}. */
 async function stored(c: Catalog, name: string, version: number): Promise<Record<string, string>> {
   const f = await c.fetch({ name, version });
-  return Object.fromEntries(f.files.map((x) => [x.path, Buffer.from(x.content_base64, 'base64').toString('utf8')]));
+  return Object.fromEntries(inlineFiles(f).map((x) => [x.path, Buffer.from(x.content_base64, 'base64').toString('utf8')]));
 }
 
 async function setup(env: Record<string, string> = { SKILLS_AS: 'dev2' }) {
