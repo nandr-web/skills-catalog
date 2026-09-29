@@ -144,9 +144,8 @@ describe('versions and diff', () => {
     expect(noTo.err).toContain('invalid_request');
   });
 
-  // Not yet true, in the core's renderer (fixed in its next update): paths shown outside the fence are JSON-quoted
-  // strings (contract §5.2). Trips when the core quotes them: then make it a plain `it`.
-  it.fails('a diff shows each changed path JSON-quoted outside the fence', async () => {
+  // Paths shown outside the fence are JSON-quoted strings (contract §5.2).
+  it('a diff shows each changed path JSON-quoted outside the fence', async () => {
     const p = place();
     await seed(p);
     const r = await cli(p, ['diff', 'release-notes-kit', '--from', '1', '--to', '2']);

@@ -204,7 +204,7 @@ describe('the stand-in assistant', () => {
     const { panes } = await playAll(scenes, sandbox(scenes));
     const orange = panes.bob!.split('\n').filter((l) => l.includes('\x1b[38;5;208m')).map(plain);
     expect(orange.some((l) => l.includes('Can run something new on this machine: yes'))).toBe(true);
-    expect(orange.some((l) => l.includes('- added: scripts/collect.sh (can run)'))).toBe(true);
+    expect(orange.some((l) => l.includes('- added: "scripts/collect.sh" (can run)'))).toBe(true);
     expect(orange.some((l) => l.includes('not_owner: release-note-draft belongs to ana'))).toBe(true);
     expect(orange.some((l) => l.includes('Shared catalog'))).toBe(false);
     expect(panes.bob).toContain(`\x1b[32m● ${surface.names.search}`);

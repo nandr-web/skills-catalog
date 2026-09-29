@@ -72,7 +72,7 @@ steps:
           - {op: versions, name: release-note-draft}
           - {op: diff, name: release-note-draft, from: 1, to: 2}
     expect:
-      bob: ['release-note-draft: 2 version(s), latest v2', 'Can run something new on this machine: yes', '- added: scripts/collect.sh (can run)']
+      bob: ['release-note-draft: 2 version(s), latest v2', 'Can run something new on this machine: yes', '- added: "scripts/collect.sh" (can run)']
       log: [listed, adds something that can run, release-note-draft v1 → v2]
 
   - id: 6

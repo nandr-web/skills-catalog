@@ -190,7 +190,7 @@ describe('the stand-in on an MCP server (a fake one)', () => {
     await answer(st, 'what changed in release-note-draft v2?');
     expect(orange(pane.text)).toEqual([
       '  │ release-note-draft v1 -> v2: 3 file(s) changed. Can run something new on this machine: yes, because it adds scripts/collect.sh, which can run.',
-      '  │ - added: scripts/collect.sh (can run)',
+      '  │ - added: "scripts/collect.sh" (can run)',
       '  │ - added: scripts/lint.py (a script)',
     ]);
   });

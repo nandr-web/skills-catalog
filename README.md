@@ -113,7 +113,7 @@ Lines marked │ are what an AI assistant, such as Claude, would read back: the 
 
 6. bob compares version 1 with version 2
    │ release-note-draft v1 -> v2: 1 file(s) changed. Can run something new on this machine: yes, because it adds or changes scripts/collect.sh, which can run on this machine.
-   │ - added: scripts/collect.sh (can run)
+   │ - added: "scripts/collect.sh" (can run)
    │ …
 
 7. bob tries to publish over release-note-draft (only ana, who published it first, may)

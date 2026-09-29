@@ -49,7 +49,7 @@ const answers = {
   diff_shared_skill_versions: (a) => ({
     text: [
       `${a.name} v${a.from} -> v${a.to}: 3 file(s) changed. Can run something new on this machine: yes, because it adds scripts/collect.sh, which can run.`,
-      '- added: scripts/collect.sh (can run)',
+      '- added: "scripts/collect.sh" (can run)',
       '- changed: SKILL.md',
       '- added: scripts/lint.py (a script)',
       'Line by line:',
