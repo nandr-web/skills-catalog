@@ -994,9 +994,26 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
     { file: 'config.json', why: 'wrong_shape', bytes: () => '{"update_policy": null}' },
     { file: 'config.json', why: 'wrong_shape', bytes: () => '{"update_policy": ["pin"]}' },
     { file: 'config.json', why: 'unknown_policy', bytes: () => '{"update_policy": "Pin"}' },
+    // The setup keys (§6): a budget that isn't a number, a switch that isn't true or false, or a key list that isn't a list
+    // of names has the wrong shape; a number that isn't a positive whole one below 2^53 isn't a budget.
+    ...['"5000"', 'true', 'null', '[5000]'].map((b) => ({ file: 'config.json' as const, why: 'wrong_shape', bytes: () => `{"context_cost_budget": ${b}}` })),
+    ...['0', '-1', '1.5', '1e400', '9007199254740992'].map((b) => ({ file: 'config.json' as const, why: 'not_a_budget', bytes: () => `{"context_cost_budget": ${b}}` })),
+    ...['"true"', '1', 'null'].map((b) => ({ file: 'config.json' as const, why: 'wrong_shape', bytes: () => `{"accept_flagged_updates": ${b}}` })),
+    ...['safe_frontmatter_keys', 'non_granting_keys'].flatMap((k) => ['"name"', '[1]', '["model", null]', '{}'].map((b) => ({ file: 'config.json' as const, why: 'wrong_shape', bytes: () => `{"${k}": ${b}}` }))),
   ];
 
-  // Every damage runs a publish, an install and each installer call (about 2 s alone, over 6 s in a loaded full run).
+  it('the setup keys, well formed, are read as they are (a whole budget written as 5000.0, the largest safe one, empty lists)', async () => {
+    for (const bytes of ['{"context_cost_budget": 5000.0, "accept_flagged_updates": false}', '{"context_cost_budget": 9007199254740991, "safe_frontmatter_keys": [], "non_granting_keys": ["model"]}']) {
+      const p = place();
+      await publish(p, 'runner', plain('runner'));
+      mkdirSync(p.home, { recursive: true, mode: 0o700 });
+      writeFileSync(join(p.home, 'config.json'), bytes);
+      expect((await install(ctxFor(p), { name: 'runner' })).outcome).toBe('installed');
+      expect(readFileSync(join(p.home, 'config.json'), 'utf8')).toBe(bytes);
+    }
+  });
+
+  // Every damage runs a publish, an install and each installer call (about 14 s alone for all of them, more in a loaded full run).
   it('every installer call refuses it with the file and why, and nothing changes', async () => {
     for (const d of damages) {
       const p = place();
@@ -1028,7 +1045,7 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
       expect(existsSync(join(projectSkills(p), 'other'))).toBe(false);
       expect(nothingStaged(p)).toBe(true);
     }
-  }, 30_000);
+  }, 90_000);
 
   it('a mistyped pin never applies an update', async () => {
     const p = place();

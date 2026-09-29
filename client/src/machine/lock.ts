@@ -43,9 +43,10 @@ export type Config = { update_policy?: Policy; [key: string]: unknown };
 const lockFile = (home: string) => join(home, 'lock.json');
 const configFile = (home: string) => join(home, 'config.json');
 
-// A file that isn't JSON, has the wrong shape (a wrong-typed field anywhere) or names an unknown policy is refused with
-// invalid_local_file {file, why, path}: never repaired or rewritten, and an unknown policy never taken as automatic.
-type Why = 'wrong_shape' | 'unknown_policy';
+// A file that isn't JSON, has the wrong shape (a wrong-typed field anywhere), names an unknown policy or holds a budget
+// that isn't one is refused with invalid_local_file {file, why, path}: never repaired or rewritten, and an unknown policy
+// never taken as automatic.
+type Why = 'wrong_shape' | 'unknown_policy' | 'not_a_budget';
 const POLICIES: readonly string[] = ['auto', 'notify', 'pin'];
 const TARGETS: readonly string[] = ['user', 'project'];
 
@@ -75,7 +76,24 @@ function lockWhy(x: unknown): Why | undefined {
   return whys.includes('wrong_shape') ? 'wrong_shape' : whys.find((w) => w !== undefined);
 }
 
-const configWhy = (x: unknown): Why | undefined => (isObject(x) ? policyWhy(x['update_policy']) : 'wrong_shape');
+/** Why the setup keys (§6) are refused, if they are: accept_flagged_updates is true or false, the key lists are lists of
+ *  names, and context_cost_budget is a number (else the wrong shape) that is a positive whole one below 2^53 (else not a
+ *  budget; 5000.0 is 5000 once parsed). */
+function setupKeysWhy(x: Record<string, unknown>): Why | undefined {
+  const flag = x['accept_flagged_updates'];
+  if (flag !== undefined && typeof flag !== 'boolean') return 'wrong_shape';
+  for (const k of ['safe_frontmatter_keys', 'non_granting_keys']) if (x[k] !== undefined && !isStrings(x[k])) return 'wrong_shape';
+  const budget = x['context_cost_budget'];
+  if (budget === undefined) return undefined;
+  if (typeof budget !== 'number') return 'wrong_shape';
+  return Number.isSafeInteger(budget) && budget >= 1 ? undefined : 'not_a_budget';
+}
+
+function configWhy(x: unknown): Why | undefined {
+  if (!isObject(x)) return 'wrong_shape';
+  const whys = [policyWhy(x['update_policy']), setupKeysWhy(x)];
+  return whys.includes('wrong_shape') ? 'wrong_shape' : whys.find((w) => w !== undefined);
+}
 
 function readJson<T>(home: string, name: 'lock.json' | 'config.json', empty: T, why: (x: unknown) => Why | undefined): T {
   const path = join(home, name);
