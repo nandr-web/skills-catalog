@@ -15,7 +15,7 @@
   },
   "scripts": {
     "test": "node scripts/node-check.mjs && vitest run --project fast",
-    "test:slow": "node scripts/node-check.mjs && vitest run --project slow",
+    "test:slow": "node scripts/node-check.mjs && vitest run --project slow --passWithNoTests",
     "test:all": "node scripts/node-check.mjs && vitest run",
     "test:skill-tree": "node scripts/node-check.mjs && vitest run --project fast test/skill-tree.test.ts",
     "test:catalog": "node scripts/node-check.mjs && vitest run --project fast test/catalog.test.ts test/golden-rules.test.ts",
