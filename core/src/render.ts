@@ -11,7 +11,7 @@ import type { Surface } from './surface.ts';
 
 // Words the agent-facing surface doesn't have yet (asked for). A test fails when one of them appears in the surface,
 // so each is wired as soon as it lands.
-export const WORD_GAPS: readonly string[] = ['errors.target_changed', 'errors.target_not_private', 'errors.why.not_a_catalog', 'errors.why.catalog_unreadable'];
+export const WORD_GAPS: readonly string[] = ['errors.why.not_a_catalog', 'errors.why.catalog_unreadable'];
 
 function asData(code: string, data: Record<string, unknown>): string {
   return `${code}: ` + Object.entries(data).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ');
@@ -245,6 +245,16 @@ export function renderError(s: Surface, e: CatalogError): string {
       // A damaged lock or config file: what removing it would do depends on which file it is.
       const effect = w.local_file_effect?.[String(d['file'])];
       return effect === undefined ? asData(e.code, d) : fill(w.invalid_local_file, { ...d, effect });
+    }
+    case 'target_changed': {
+      // Whether the folder moved aside is back or sits in staging, and whether a copy may have gone elsewhere.
+      const base = d['staging'] === undefined ? fill(w.target_changed, d) : fill(w.target_changed_staging, d);
+      return d['elsewhere'] === true ? base + fill(w.target_changed_elsewhere, {}) : base;
+    }
+    case 'target_not_private': {
+      // The sentence by what the folder is: the person's home, a project, or a folder inside; the path goes into a chmod.
+      const t = d['home'] === true ? w.target_not_private_home : d['target'] === 'project' ? w.target_not_private_project : w.target_not_private;
+      return fill(t, { ...d, path: shellQuote(String(d['path'])) });
     }
     case 'invalid_developer_setting': {
       // A bad developer name from a setting (SKILLS_AS, the MCP server's config, setup's `me`): fix it there.

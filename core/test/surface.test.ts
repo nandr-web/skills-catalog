@@ -8,7 +8,7 @@ import { parse } from 'yaml';
 import { readFileSync } from 'node:fs';
 import { DEFAULT_SEARCH_LIMIT, MAX_READ_NAMES, MAX_READ_PATHS, MAX_SEARCH_LIMIT, OPERATIONS, validateInput } from '../src/registry.ts';
 import { MAX_TAGS, SECRET_KINDS, TAG_MAX_LENGTH, checkTree, diffTrees, type RiskFlag, type RiskKind } from '../src/skill-tree/index.ts';
-import { WORD_GAPS, reasons, renderDiff, renderError, renderRead, renderSearch, renderVersions } from '../src/render.ts';
+import { WORD_GAPS, reasons, renderDiff, renderError, renderRead, renderSearch, renderVersions, shellQuote } from '../src/render.ts';
 import { SURFACE_FILE, Surface } from '../src/surface.ts';
 import { toCatalogError } from '../src/internal-error.ts';
 import { CatalogError } from '../src/errors.ts';
@@ -137,8 +137,8 @@ describe('the surface (vendored, recommended variant)', () => {
     expect(props('install_shared_skill')).toEqual(['name', 'version', 'target']);
     expect(tools['install_shared_skill']!.inputSchema.properties!['target']).toMatchObject({ enum: ['user', 'project'] });
     expect(props('update_installed_skills')).toEqual(['names', 'dry_run']);
-    expect(props('accept_held_update')).toEqual(['name', 'confirm', 'flags']);
-    expect(tools['accept_held_update']!.inputSchema.required).toEqual(['name', 'confirm', 'flags']);
+    expect(props('accept_held_update')).toEqual(['name', 'target', 'version', 'confirm', 'flags']);
+    expect(tools['accept_held_update']!.inputSchema.required).toEqual(['name', 'target', 'version', 'confirm', 'flags']);
     expect(props('list_installed_skills')).toEqual([]);
     expect(props('set_skill_update_policy')).toEqual(['policy', 'name']);
     expect(tools['set_skill_update_policy']!.inputSchema.properties!['policy']).toMatchObject({ enum: ['auto', 'notify', 'pin'] });
@@ -357,6 +357,29 @@ describe('the surface (vendored, recommended variant)', () => {
     const w = s.word('update.reason');
     const flags = [{ kind: 'runs_at_load' as const, path: 'SKILL.md', line: 6, detail: 'echo hi' }, { kind: 'runnable_file' as const, path: 'run.sh', detail: 'executable' }];
     expect(reasons(s, flags)).toBe([s.format(w.runs_at_load, { path: 'SKILL.md', line: 6 }), s.format(w.runnable_file, { path: 'run.sh' })].join('; '));
+  });
+
+  it('a folder that changed mid-install says whether its copy is back or where it is, and whether a copy may be elsewhere', () => {
+    const s = Surface.load();
+    const w = s.word('errors');
+    const path = '/work/app/.claude/skills/alpha';
+    const staging = '/work/app/.claude/.skills-catalog-staging/install-x-replaced';
+    const r = (data: Record<string, unknown>) => renderError(s, new CatalogError('target_changed', data));
+    expect(r({ path })).toBe(s.format(w.target_changed, { path }));
+    expect(r({ path, staging })).toBe(s.format(w.target_changed_staging, { path, staging }));
+    expect(r({ path, elsewhere: true })).toBe(s.format(w.target_changed, { path }) + s.format(w.target_changed_elsewhere));
+    expect(r({ path, staging, elsewhere: true })).toBe(s.format(w.target_changed_staging, { path, staging }) + s.format(w.target_changed_elsewhere));
+  });
+
+  it('a folder that isn\'t private picks its sentence by what it is: the home folder, a project, or a folder inside', () => {
+    const s = Surface.load();
+    const w = s.word('errors');
+    const r = (data: Record<string, unknown>) => renderError(s, new CatalogError('target_not_private', data));
+    expect(r({ path: '/home/ana', target: 'user', home: true })).toBe(s.format(w.target_not_private_home, { path: '/home/ana' }));
+    expect(r({ path: '/work/app', target: 'project' })).toBe(s.format(w.target_not_private_project, { path: '/work/app' }));
+    expect(r({ path: '/home/ana/.claude', target: 'user' })).toBe(s.format(w.target_not_private, { path: '/home/ana/.claude' }));
+    // The path goes into a chmod the person may run: shell-quoted.
+    expect(r({ path: '/work/team app/.claude', target: 'user' })).toContain(`chmod go-w ${shellQuote('/work/team app/.claude')}`);
   });
 
   it('a damaged lock or config file names the file by its path, says why, and what removing it would do', () => {
