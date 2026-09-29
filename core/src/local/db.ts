@@ -125,22 +125,30 @@ export class LocalDb {
       return;
     }
     this.db = new DatabaseSync(file, { timeout: BUSY_MS });
+    // An open that fails at any step closes its connection, so it holds nothing (a lock, the WAL) after it throws.
     try {
       this.db.exec(`PRAGMA busy_timeout = ${BUSY_MS}`);
       distrust(this.db);
       checkOwnTables(this.db, []);
+      this.walMode();
+      this.db.exec('PRAGMA synchronous = NORMAL');
+      this.indexReset = this.schema(opts);
     } catch (e) {
       this.db.close();
       throw e;
     }
-    this.walMode();
-    this.db.exec('PRAGMA synchronous = NORMAL');
-    this.indexReset = this.immediate(() => {
+  }
+
+  // The catalog's tables, made if missing; a search index built with another tokenizer is dropped (the catalog rebuilds
+  // it). A catalog from before the table of which versions name a file gets it made and filled here, in this same
+  // transaction, so a crash leaves neither and the next writing open does it again. That fill is paid once per older
+  // catalog, under the write lock: a few seconds at a very large one (about 7 s cold at 200,000 files), while readers go
+  // on and other writers wait within the busy timeout.
+  private schema(opts: LocalDbOptions): boolean {
+    return this.immediate(() => {
       const fts = this.db.prepare("SELECT sql FROM sqlite_master WHERE name = 'search_fts'").get() as { sql: string } | undefined;
       const stale = fts !== undefined && !fts.sql.includes(`'${TOKENIZE}'`);
       if (stale) this.db.exec('DROP TABLE search_fts; DELETE FROM search_cards;');
-      // A catalog from before the table gets it made and filled here, in this same transaction, so a crash leaves
-      // neither and the next writing open does it again.
       const indexed = this.hasTable('version_files');
       this.db.exec(SCHEMA);
       if (!indexed) {
