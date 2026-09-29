@@ -559,29 +559,47 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   const from = existing ? await installedSide(catalog, existing) : null;
   const flags = gate(from, to).risk_flags;
   const confirm = encode({ name: req.name, target, version, fingerprint: to.fingerprint, latest: v.latest });
-  const held = { name: req.name, target, version, confirm, flags: JSON.stringify(kinds(flags)), command: acceptCommand(s, req.name, target) };
+  // Held over `entry` (none: a first install), with the flags from the gate against it, or undefined when it goes through.
   // Another version over an installed copy follows that skill's rows, as an update does (the owner's decision): another
   // catalog first, then pin, then notify, then the flags. The held result names the installed version.
-  const reason = existing && (otherCatalog || existing.version !== version) ? holdOf(ctx, existing, config) : undefined;
-  if (existing && reason) {
-    recordHold(ctx, req.name, version, reason, flags, version - existing.version);
-    const also = flags.length ? s.format(s.word('update.held_also'), { reasons: reasons(s, flags) }) : '';
-    const text = s.format(w[ctx.face === 'cli' ? `held_${reason}_cli` : `held_${reason}`], { ...held, from: existing.version, also, was: existing.catalog, now: ctx.settings.catalog });
-    return { text, target: `${req.name} v${version}`, result: log.result('install', `held_${reason}`), outcome: 'held' };
-  }
-  if (flags.length) {
-    recordHold(ctx, req.name, version, 'flagged', flags, existing ? version - existing.version : 0);
-    // Over an installed copy the sentence names the version installed now.
-    const over = existing ? { word: 'held_over', from: existing.version } : { word: 'held' };
-    const text = s.format(w[ctx.face === 'cli' ? `${over.word}_cli` : over.word], { ...held, ...over, reasons: reasons(s, flags) });
-    return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held' };
-  }
-  // Written while this run holds the lock, from the lock's entry as it is now (another run may have changed it).
-  const { written, entry } = await withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
+  const heldOver = (entry: LockEntry | undefined, flags: readonly RiskFlag[]): Done | undefined => {
+    const held = { name: req.name, target, version, confirm, flags: JSON.stringify(kinds(flags)), command: acceptCommand(s, req.name, target) };
+    const reason = entry && (entry.catalog !== ctx.settings.catalog || entry.version !== version) ? holdOf(ctx, entry, config) : undefined;
+    if (entry && reason) {
+      recordHold(ctx, req.name, version, reason, flags, version - entry.version);
+      const also = flags.length ? s.format(s.word('update.held_also'), { reasons: reasons(s, flags) }) : '';
+      const text = s.format(w[ctx.face === 'cli' ? `held_${reason}_cli` : `held_${reason}`], { ...held, from: entry.version, also, was: entry.catalog, now: ctx.settings.catalog });
+      return { text, target: `${req.name} v${version}`, result: log.result('install', `held_${reason}`), outcome: 'held' };
+    }
+    if (flags.length) {
+      recordHold(ctx, req.name, version, 'flagged', flags, entry ? version - entry.version : 0);
+      // Over an installed copy the sentence names the version installed now.
+      const over = entry ? { word: 'held_over', from: entry.version } : { word: 'held' };
+      const text = s.format(w[ctx.face === 'cli' ? `${over.word}_cli` : over.word], { ...held, ...over, reasons: reasons(s, flags) });
+      return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held' };
+    }
+    return undefined;
+  };
+  const held = heldOver(existing, flags);
+  if (held) return held;
+  // Written while this run holds the lock. The decision is taken again from the entry as it is now (§4.5): another run may
+  // have pinned, moved, updated or removed it since it was read. The fresh decision stands, with the version already
+  // fetched and checked; the flags are taken again against another installed version, read from the catalog.
+  const done = await withLock(ctx.settings.home, clockOf(ctx), async (fresh): Promise<Done | { written: ReturnType<typeof writeSkill>; entry: LockEntry }> => {
     const now = fresh.skills[dest];
+    if (!sameDecision(existing, now)) {
+      if (now && now.catalog === ctx.settings.catalog && now.version >= version) {
+        return { text: s.format(w.unchanged, { name: req.name, version: now.version }), target: `${req.name} v${now.version}`, result: log.result('install', 'unchanged'), outcome: 'unchanged' };
+      }
+      const sameSide = now && existing && now.version === existing.version && now.catalog === existing.catalog;
+      const again = heldOver(now, sameSide ? flags : gate(now ? await installedSide(catalog, now) : null, to).risk_flags);
+      if (again) return again;
+    }
     const written = writeSkill(dest, target, to.files, now);
     return { written, entry: record(ctx, fresh, dest, { name: req.name, target }, to, req.policy ?? now?.policy, now?.accepted ?? [], toLock(written.copy)) };
   });
+  if (!('written' in done)) return done;
+  const { written, entry } = done;
   const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + keptLine(s, req.name, written.kept) + '\n' + s.format(w.live, { name: req.name });
   return { text, target: `${req.name} v${version}`, result: log.result('install', 'installed'), outcome: 'installed' };
 }

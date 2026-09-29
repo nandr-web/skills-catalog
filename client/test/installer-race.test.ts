@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { CatalogError, actAs, renderError } from '@skills-catalog/core';
 import { describe, expect, it, vi } from 'vitest';
 import { cliSurface } from '../src/cli/words.ts';
+import { logWords } from '../src/activity.ts';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
 import { pendingHold } from '../src/machine/installer.ts';
 import { contextFor, perform } from '../src/operations.ts';
@@ -825,6 +826,113 @@ describe('the lock entry a decision used, changed by another run before the lock
       );
     });
   }
+
+  // An install decides again under the lock from the entry as it is now, with the version it already fetched and checked
+  // (contract §4.5, "Decisions are taken under the lock"): the fresh decision stands, and no new error is made.
+  const RUN = { path: 'run.sh', text: '#!/bin/sh\n', mode: '0755' as const };
+  const versionsOf = async (p: Place, ...files: { path: string; text: string; mode?: '0644' | '0755' }[][]) => {
+    const c = await open(p);
+    try {
+      for (const f of files) await c.publish(request('alpha', [{ path: 'SKILL.md', text: skillMd('alpha', 'The alpha skill.') }, ...f]), actAs('ana'));
+    } finally {
+      c.close();
+    }
+  };
+  const NOTES = (text: string) => ({ path: 'notes.md', text });
+  // The other run's change, made after the install read lock.json, at its first look at the skill's folder.
+  const meanwhile = (p: Place, change: (e: Entry | undefined, dest: string) => Entry | undefined) => {
+    const lockFile = join(p.home, 'lock.json');
+    const dest = join(p.osHome, '.claude', 'skills', 'alpha');
+    race.onLstat = (path) => {
+      if (path !== dest) return;
+      race.onLstat = undefined;
+      const lock = JSON.parse(race.fs.readFileSync(lockFile, 'utf8')) as { skills: Record<string, Entry> };
+      const next = change(lock.skills[dest], dest);
+      if (next) lock.skills[dest] = next;
+      else delete lock.skills[dest];
+      race.fs.writeFileSync(lockFile, JSON.stringify(lock));
+    };
+    return dest;
+  };
+  const installing = async (ctx: ReturnType<typeof ctxFor>) => {
+    try {
+      return await install(ctx, { name: 'alpha' });
+    } finally {
+      clearHooks();
+    }
+  };
+
+  it('install, pinned meanwhile: held as pinned, nothing written', async () => {
+    const p = place();
+    await versionsOf(p, [NOTES('One.\n')]);
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha' });
+    await versionsOf(p, [NOTES('Two.\n')]);
+    const dest = meanwhile(p, (e) => ({ ...e!, policy: 'pin' }));
+    const r = await installing(ctx);
+    expect([r.outcome, r.result]).toEqual(['held', logWords(S).result('install', 'held_pin')]);
+    expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('One.\n');
+  });
+
+  it('install, moved to another catalog meanwhile: held as from another catalog, nothing written', async () => {
+    const p = place();
+    await versionsOf(p, [NOTES('One.\n')]);
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha' });
+    await versionsOf(p, [NOTES('Two.\n')]);
+    const dest = meanwhile(p, (e) => ({ ...e!, catalog: 'file:///elsewhere/catalog' }));
+    const r = await installing(ctx);
+    expect([r.outcome, r.result]).toEqual(['held', logWords(S).result('install', 'held_other_catalog')]);
+    expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('One.\n');
+  });
+
+  it('install, the same or a newer version installed meanwhile: unchanged, nothing written', async () => {
+    const p = place();
+    await versionsOf(p, [NOTES('One.\n')]);
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha' });
+    await versionsOf(p, [NOTES('Two.\n')]);
+    const dest = meanwhile(p, (e) => ({ ...e!, version: 2 }));
+    const r = await installing(ctx);
+    expect(r.outcome).toBe('unchanged');
+    expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('One.\n');
+  });
+
+  it('install, removed meanwhile with its folder: a first install\'s decision (a runnable file held), nothing written', async () => {
+    const p = place();
+    await versionsOf(p, [RUN, NOTES('One.\n')]);
+    const ctx = ctxFor(p);
+    const first = await install(ctx, { name: 'alpha' });
+    const held = await pendingHold(ctx, 'alpha');
+    const { target, version, confirm, flags } = held as { target: 'user'; version: number; confirm: string; flags: string[] };
+    expect(first.outcome).toBe('held');
+    await accept(ctx, { name: 'alpha', target, version, confirm, flags });
+    // v1 → v2 changes only a note: nothing flagged over v1, but a first install of v2 has a runnable file.
+    await versionsOf(p, [RUN, NOTES('Two.\n')]);
+    const dest = meanwhile(p, (_e, at) => {
+      race.fs.rmSync(at, { recursive: true });
+      return undefined;
+    });
+    const r = await installing(ctx);
+    expect([r.outcome, r.result]).toEqual(['held', logWords(S).result('install', 'held')]);
+    expect(race.fs.existsSync(dest)).toBe(false);
+  });
+
+  it('install, an older version installed meanwhile: flagged against that version, held, nothing written', async () => {
+    const p = place();
+    // v1 plain; v2 adds a runnable file; v3 changes only a note over v2.
+    await versionsOf(p, [NOTES('One.\n')], [RUN, NOTES('One.\n')]);
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha', version: 1 });
+    const held = await pendingHold(ctx, 'alpha');
+    const { target, version, confirm, flags } = held as { target: 'user'; version: number; confirm: string; flags: string[] };
+    await accept(ctx, { name: 'alpha', target, version, confirm, flags });
+    await versionsOf(p, [RUN, NOTES('Three.\n')]);
+    const dest = meanwhile(p, (e) => ({ ...e!, version: 1 }));
+    const r = await installing(ctx);
+    expect(r.outcome).toBe('held');
+    expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('One.\n');
+  });
 });
 
 // Inode numbers past 2^53 (overlay and some network file systems): compared exactly, and kept in the lock as decimal

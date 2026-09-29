@@ -279,17 +279,18 @@ async function take(path: string, now: () => number): Promise<Stats> {
 
 /** One run's changes to lock.json (§4.5, one writer at a time): the lock file is taken at the first change and held until
  *  `release`, so a run with several changes (an update of several skills) holds it from its first write to its end, and
- *  lock_busy always means nothing was changed. Each change reads lock.json afresh, changes it, and writes it back whole (a
- *  temp file renamed over it, so a reader sees the whole old or new file). `now` is the clock a wait is measured by. */
-export function holdLock(home: string, now: () => number): { change<T>(fn: (lock: Lock) => T): Promise<T>; release(): void } {
+ *  lock_busy always means nothing was changed. Each change reads lock.json afresh, changes it (it may wait, for a read of
+ *  the catalog: no other run or call of this process writes meanwhile), and writes it back whole (a temp file renamed over
+ *  it, so a reader sees the whole old or new file). `now` is the clock a wait is measured by. */
+export function holdLock(home: string, now: () => number): { change<T>(fn: (lock: Lock) => T | Promise<T>): Promise<T>; release(): void } {
   const path = join(home, 'lock.json.lock');
   let mine: Stats | undefined;
   return {
-    async change<T>(fn: (lock: Lock) => T): Promise<T> {
+    async change<T>(fn: (lock: Lock) => T | Promise<T>): Promise<T> {
       mkdirSync(home, { recursive: true, mode: 0o700 });
       mine ??= await take(path, now);
       const lock = readLock(home);
-      const out = fn(lock);
+      const out = await fn(lock);
       writeLock(home, lock);
       return out;
     },
@@ -303,7 +304,7 @@ export function holdLock(home: string, now: () => number): { change<T>(fn: (lock
 }
 
 /** One change to lock.json under the lock, which is removed afterwards whether the change succeeded or not. */
-export async function withLock<T>(home: string, now: () => number, change: (lock: Lock) => T): Promise<T> {
+export async function withLock<T>(home: string, now: () => number, change: (lock: Lock) => T | Promise<T>): Promise<T> {
   const hold = holdLock(home, now);
   try {
     return await hold.change(change);
