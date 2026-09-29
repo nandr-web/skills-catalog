@@ -29,15 +29,18 @@ const lstatOr = (path: string): BigIntStats | undefined => {
   }
 };
 
-/** The bytes' sha256 of the file at `path`, read without following a link, or undefined when it can't be read as one. */
-function sha256Of(path: string, size: bigint): string | undefined {
+/** The bytes' sha256 of the file at `path`, the one `was` names, read without following a link or waiting on a fifo, or
+ *  undefined when it can't be read as that file. */
+function sha256Of(path: string, size: bigint, was: Snapshot): string | undefined {
   let fd: number;
   try {
-    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   } catch {
     return undefined;
   }
   try {
+    const opened = fstatSync(fd, { bigint: true });
+    if (!opened.isFile() || opened.dev !== was.dev || opened.ino !== was.ino) return undefined;
     const cap = Number(size);
     const buf = Buffer.alloc(cap + 1);
     let n = 0;
@@ -53,13 +56,17 @@ function unchanged(path: string, was: Snapshot): boolean {
   const st = lstatOr(path);
   if (!st || !st.isFile() || st.nlink !== 1n) return false;
   if (st.dev !== was.dev || st.ino !== was.ino || st.size !== was.size || st.mtimeNs !== was.mtimeNs || st.uid !== was.uid || st.mode !== was.mode) return false;
-  return sha256Of(path, st.size) === was.sha256;
+  return sha256Of(path, st.size, was) === was.sha256;
 }
 
 /** Writes `text` over the file at `path`, read as `was` (or found absent), in the folder `parent` was when it was
- *  checked. "changed" means someone wrote it (or made it) in between, and nothing was placed. */
+ *  checked. "changed" means someone wrote it (or made it) in between, and nothing was placed. Only the user who owns a
+ *  file writes it, and a new file only in a folder that user owns, so no file ever changes owner (target_not_private). */
 export function writeFileText(path: string, text: string, was: Snapshot | 'absent', parent: FolderIdentity): 'written' | 'changed' {
   const dir = dirname(path);
+  const me = BigInt(process.getuid?.() ?? -1);
+  if (was !== 'absent' && was.uid !== me) throw new CatalogError('target_not_private', { path, own: false });
+  if (was === 'absent' && lstatOr(dir)?.uid !== me) throw new CatalogError('target_not_private', { path: dir, own: false });
   const temp = join(dir, `.${basename(path)}.skills-catalog-${randomBytes(6).toString('hex')}.tmp`);
   const fd = openSync(temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
   const made = fstatSync(fd, { bigint: true });

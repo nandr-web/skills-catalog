@@ -1,6 +1,7 @@
 // Writing a file of the person's (setup build notes §3): a temp file beside it with the old file's permission bits
 // (0600 for a new one), checked again right before it's placed; a file someone wrote in between, or one that appeared, is
 // "changed" and left as they left it; a folder swapped after the place is target_changed, never success; no temp left.
+import { constants } from 'node:fs';
 import { join } from 'node:path';
 import { CatalogError } from '@skills-catalog/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -119,6 +120,69 @@ describe('writing a file of the person\'s', () => {
     expect(writeFileText(path, '{"a": 1}', was, folderId(d))).toBe('changed');
     expect(race.fs.lstatSync(path).isSymbolicLink()).toBe(true);
     expect(race.fs.readFileSync(join(d, 'target.json'), 'utf8')).toBe('mine');
+    expect(temps(d)).toEqual([]);
+  });
+
+  it('the temp file is made new and never through a link; the file read again before the place is no-follow and non-blocking', () => {
+    const d = folder();
+    const path = join(d, 'settings.json');
+    race.fs.writeFileSync(path, '{}');
+    const opens: [string, number][] = [];
+    race.onOpen = (p, f) => void (p.startsWith(d) && opens.push([p, Number(f)]));
+    expect(writeFileText(path, '{"a": 1}', snapshotOf(path), folderId(d))).toBe('written');
+    const has = (f: number, bits: number) => (f & bits) === bits;
+    const temp = opens.filter(([p]) => p.endsWith('.tmp'));
+    const again = opens.filter(([p]) => p === path);
+    expect(temp.length).toBe(1);
+    expect(has(temp[0]![1], constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW)).toBe(true);
+    // The snapshot's own read, then the check right before the place: each one no-follow and non-blocking.
+    expect(again.length).toBeGreaterThanOrEqual(2);
+    for (const [, f] of again) expect(has(f, constants.O_NOFOLLOW | constants.O_NONBLOCK)).toBe(true);
+  });
+
+  it('a disk that fills mid-write: the error is thrown, the file is as it was, no temp left', () => {
+    const d = folder();
+    const path = join(d, 'settings.json');
+    race.fs.writeFileSync(path, '{"a": 1}');
+    const was = snapshotOf(path);
+    race.onWrite = () => {
+      throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
+    };
+    let e: unknown;
+    try {
+      writeFileText(path, '{"a": 2}', was, folderId(d));
+    } catch (x) {
+      e = x;
+    }
+    clearHooks();
+    expect((e as NodeJS.ErrnoException).code).toBe('ENOSPC');
+    expect(race.fs.readFileSync(path, 'utf8')).toBe('{"a": 1}');
+    expect(temps(d)).toEqual([]);
+  });
+
+  it('never writes a file another user owns, or a new file in a folder another user owns: target_not_private, nothing made', () => {
+    const me = process.getuid?.() ?? 0;
+    const d = folder();
+    const path = join(d, 'settings.json');
+    race.fs.writeFileSync(path, '{"a": 1}');
+    const was = { ...snapshotOf(path), uid: BigInt(me + 1) };
+    const refusal = (f: () => unknown) => {
+      try {
+        f();
+      } catch (x) {
+        return x as CatalogError;
+      }
+      return undefined;
+    };
+    const theirs = refusal(() => writeFileText(path, '{"a": 2}', was, folderId(d)));
+    expect([theirs?.code, theirs?.data]).toEqual(['target_not_private', { path, own: false }]);
+    expect(race.fs.readFileSync(path, 'utf8')).toBe('{"a": 1}');
+    race.stats = (p) => (p === d ? { uid: me + 1 } : undefined);
+    const fresh = join(d, '.claude.json');
+    const folderTheirs = refusal(() => writeFileText(fresh, '{}\n', 'absent', folderId(d)));
+    clearHooks();
+    expect([folderTheirs?.code, folderTheirs?.data]).toEqual(['target_not_private', { path: d, own: false }]);
+    expect(race.fs.existsSync(fresh)).toBe(false);
     expect(temps(d)).toEqual([]);
   });
 });
