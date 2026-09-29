@@ -332,6 +332,15 @@ function cardOf(v: VersionRecord): SearchCard {
   return { name: v.name, description: v.description, latest_version: v.version, tags: v.tags, publisher: v.publisher, updated_at: v.published_at };
 }
 
+/** One skill re-indexed after version_published: its latest version's card, read from storage rather than taken from
+ *  the event, so a repeated or late delivery can't put an old card back. A name storage has no skill for indexes
+ *  nothing. The catalog's own subscriber and a hosted indexer both run this. */
+export async function indexSkill(p: { storage: Pick<Storage, 'skill' | 'version'>; index: Pick<SearchIndex, 'upsert'> }, name: string): Promise<void> {
+  const s = await p.storage.skill(name);
+  const v = s && (await p.storage.version(name, s.latest));
+  if (v) await p.index.upsert(cardOf(v));
+}
+
 // ---------- the catalog ----------
 
 export class Catalog {
@@ -343,9 +352,8 @@ export class Catalog {
     this.p = ports;
     this.config = { ...DEFAULT_CONFIG, ...ports.config };
     this.signInList = signInEntries(this.config.signInLogins);
-    // The search index is the first listener on version_published (§5.1 step 4). It reads the latest version rather
-    // than trusting the event's order, so a repeated or late delivery can't put an old card back.
-    ports.events.subscribe((e) => this.indexSkill(e.name));
+    // The search index is the first listener on version_published (§5.1 step 4).
+    ports.events.subscribe((e) => indexSkill(ports, e.name));
   }
 
   // Opens the catalog over its ports and delivers any events a crashed process left pending.
@@ -366,12 +374,6 @@ export class Catalog {
 
   close(): void {
     this.p.close?.();
-  }
-
-  private async indexSkill(name: string): Promise<void> {
-    const s = await this.p.storage.skill(name);
-    const v = s && (await this.p.storage.version(name, s.latest));
-    if (v) await this.p.index.upsert(cardOf(v));
   }
 
   async rebuildIndex(): Promise<void> {
