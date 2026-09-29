@@ -35,6 +35,16 @@ describe('qa trace-check', () => {
     expect(r.counts.backlog).toBe(38);
   });
 
+  it('a check with a key outside layer, name, golden, auto and automate_by is a problem (a comma in an unquoted name makes one)', () => {
+    const c = copy();
+    const file = join(c.qa, 'traceability.yaml');
+    const text = readFileSync(file, 'utf8');
+    expect(text).toContain('    checks:\n');
+    writeFileSync(file, text.replace('    checks:\n', '    checks:\n      - {layer: unit, name: a, b, auto: true}\n'));
+    const first = parse(text).requirements[0].id;
+    expect(traceCheck({ qa: c.qa, backlog: c.backlog }).problems).toEqual([`${first}: check "a" has the key b, outside layer, name, golden, auto and automate_by (quote a name that holds a comma)`]);
+  });
+
   it('passes on a copy (the backlog made from traceability\'s own references)', () => {
     const c = copy();
     const r = traceCheck({ qa: c.qa, backlog: c.backlog });

@@ -15,6 +15,8 @@ const load = (p: string): Doc => parse(readFileSync(p, 'utf8'));
 
 /** The exported requirement list (exported from the design's requirement files), next to the qa package. */
 export const DEFAULT_BACKLOG = fileURLToPath(new URL('../../requirements', import.meta.url));
+/** The keys a traceability check may have. */
+export const CHECK_KEYS = ['layer', 'name', 'golden', 'auto', 'automate_by'];
 
 export function traceCheck({ qa, backlog = DEFAULT_BACKLOG }: { qa: string; backlog?: string }): { problems: string[]; counts: Record<string, number> } {
   const g = Object.fromEntries(['skills', 'histories', 'queries', 'agent-scenarios', 'policy'].map((n) => [n, load(join(qa, 'golden', `${n}.yaml`))]));
@@ -43,6 +45,9 @@ export function traceCheck({ qa, backlog = DEFAULT_BACKLOG }: { qa: string; back
   for (const r of trace.requirements) {
     if (!r.checks.some((c: Doc) => c.auto)) problems.push(`${r.id}: no automated check`);
     for (const c of r.checks) {
+      // A comma in an unquoted flow-mapping name splits it into stray keys: {name: a, b} is {name: a, b: null}.
+      const stray = Object.keys(c).filter((k) => !CHECK_KEYS.includes(k));
+      if (stray.length) problems.push(`${r.id}: check ${JSON.stringify(c.name)} has the key${stray.length > 1 ? 's' : ''} ${stray.join(', ')}, outside ${CHECK_KEYS.slice(0, -1).join(', ')} and ${CHECK_KEYS.at(-1)} (quote a name that holds a comma)`);
       if (!c.auto && !c.automate_by) problems.push(`${r.id}: manual check without automate_by`);
       for (const ref of c.golden ? String(c.golden).split(/,\s*/) : []) if (!resolves(ref)) problems.push(`${r.id}: golden '${ref}' does not resolve`);
     }
