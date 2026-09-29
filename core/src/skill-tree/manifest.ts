@@ -161,7 +161,8 @@ export function checkManifest(files: readonly TreeFile[], catalogName?: string):
 }
 
 export const MAX_TAGS = 10;
-const TAG_RE = /^[a-z0-9-]{1,32}$/;
+export const TAG_MAX_LENGTH = 32;
+const TAG_RE = new RegExp(`^[a-z0-9-]{1,${TAG_MAX_LENGTH}}$`);
 
 // Tags live in the Agent Skills spec's extension point, `metadata` (string values only), as one comma-separated
 // string: `metadata: {tags: "docs, release"}` (contract §4.1). Up to 10, each 1-32 lowercase letters, digits and

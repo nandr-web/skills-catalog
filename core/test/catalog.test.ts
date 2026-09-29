@@ -349,6 +349,14 @@ describe('limits on reads are errors, never clamped (contract §9)', () => {
     expect((await catalog.read({ names: names.slice(0, 20) })).skills).toHaveLength(20);
   });
 
+  it('a search filter takes up to 10 tags of up to 32 characters, a skill\'s own tag rule', async () => {
+    const { catalog } = await openTest();
+    const tags = Array.from({ length: 11 }, (_, i) => `t${i}`);
+    expect((await errorOf(() => catalog.search({ filters: { tags } }))).data).toMatchObject({ field: 'filters.tags', why: 'too_many_items', limit: 10, value: 11 });
+    expect((await errorOf(() => catalog.search({ filters: { tags: ['a'.repeat(33)] } }))).data).toMatchObject({ field: 'filters.tags[0]', why: 'too_long', limit: 32, value: 33 });
+    expect((await catalog.search({ filters: { tags: [...tags.slice(0, 9), 'a'.repeat(32)] } })).match).toBe('none');
+  });
+
   it('reads only the request\'s own fields: constructor, __proto__ and inherited fields never count', async () => {
     const { catalog } = await openTest();
     expect((await errorOf(() => catalog.search({ constructor: 1 }))).data).toMatchObject({ field: 'constructor', why: 'unknown_field' });

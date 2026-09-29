@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { readFileSync } from 'node:fs';
-import { OPERATIONS } from '../src/registry.ts';
+import { DEFAULT_SEARCH_LIMIT, MAX_READ_NAMES, MAX_READ_PATHS, MAX_SEARCH_LIMIT, OPERATIONS } from '../src/registry.ts';
+import { MAX_TAGS, TAG_MAX_LENGTH } from '../src/skill-tree/index.ts';
 import { WORD_GAPS, renderDiff, renderError, renderRead, renderSearch, renderVersions } from '../src/render.ts';
 import { SURFACE_FILE, Surface } from '../src/surface.ts';
 import { toCatalogError } from '../src/internal-error.ts';
@@ -112,7 +113,7 @@ describe('the surface (vendored, recommended variant)', () => {
     const search = tools['search_shared_skills']!.inputSchema;
     expect(search.additionalProperties).toBe(false);
     expect(search.properties!['limit']).toMatchObject({ type: 'integer', minimum: 1, maximum: 50 });
-    expect(search.properties!['filters']!.properties!['tags']).toMatchObject({ type: 'array', maxItems: 20, items: { type: 'string' } });
+    expect(search.properties!['filters']!.properties!['tags']).toMatchObject({ type: 'array', maxItems: 10, items: { type: 'string', maxLength: 32 } });
     expect(search.properties!['filters']!.properties!['tags']!.description).toBeTruthy();
     expect(tools['read_shared_skill']!.inputSchema.properties!['names']).toMatchObject({ maxItems: 20 });
     expect(tools['diff_shared_skill_versions']!.inputSchema.required).toEqual(['name', 'from', 'to']);
@@ -172,6 +173,36 @@ describe('the surface (vendored, recommended variant)', () => {
   it('lists the words it is still waiting for; each fails here the moment it appears', async () => {
     const s = Surface.load();
     for (const path of WORD_GAPS) expect(s.word(path), `the surface now has ${path}: wire it in render.ts and drop it from WORD_GAPS`).toBeUndefined();
+  });
+});
+
+describe('every limit the words quote has one source: the registry or the manifest rules', () => {
+  const s = Surface.load();
+  const numbers = (text: string, re: RegExp) => (re.exec(text) ?? []).slice(1).map(Number);
+  const search = s.toolDefs().find((t) => t.op === 'search_shared_skills')!.inputSchema.properties!;
+
+  it('the default page is the registry\'s default search limit, in each variant the product ships', async () => {
+    for (const v of Object.keys(doc.variants).filter((v) => v.startsWith(doc.recommended))) expect(Surface.load(v).page, v).toBe(DEFAULT_SEARCH_LIMIT);
+    expect(search['limit']!.description).toContain(`Default ${DEFAULT_SEARCH_LIMIT};`);
+  });
+
+  it('a search asks for 1 to the registry\'s maximum cards', async () => {
+    expect(numbers(search['limit']!.description!, /(\d+)-(\d+)/)).toEqual([search['limit']!.minimum, MAX_SEARCH_LIMIT]);
+  });
+
+  it('a read takes up to the registry\'s number of names and of paths', async () => {
+    const get = doc.tools.get;
+    expect(numbers(get.description.guided, /\(up to (\d+)\)/)).toEqual([MAX_READ_NAMES]);
+    expect(numbers(get.params.names.guided, /\(up to (\d+)\)/)).toEqual([MAX_READ_NAMES]);
+    expect(numbers(get.params.paths.guided, /\(up to (\d+)\)/)).toEqual([MAX_READ_PATHS]);
+    expect(numbers(s.word('get.omitted'), /up to (\d+) at a time/)).toEqual([MAX_READ_PATHS]);
+  });
+
+  it('tags: the manifest\'s words and the search filter both quote the manifest\'s rule', async () => {
+    expect(numbers(s.word('errors.invalid_manifest_problem.bad_tag'), /(\d+)-(\d+)/)).toEqual([1, TAG_MAX_LENGTH]);
+    expect(numbers(s.word('errors.invalid_manifest_problem.too_many_tags'), /more than (\d+)/)).toEqual([MAX_TAGS]);
+    expect(numbers(s.word('errors.invalid_manifest_fix.too_many_tags'), /which (\d+) tags/)).toEqual([MAX_TAGS]);
+    expect(search['filters']!.properties!['tags']).toMatchObject({ maxItems: MAX_TAGS, items: { maxLength: TAG_MAX_LENGTH } });
   });
 });
 

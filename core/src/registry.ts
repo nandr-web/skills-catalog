@@ -2,6 +2,7 @@
 // later HTTP) are generated from it. Slice 1 holds the catalog operations; the machine operations join in slice 2.
 
 import { CatalogError } from './errors.ts';
+import { MAX_TAGS, TAG_MAX_LENGTH } from './skill-tree/index.ts';
 
 export type Schema =
   | { type: 'string'; enum?: readonly string[]; maxLength?: number; minLength?: number }
@@ -43,7 +44,8 @@ export const OPERATIONS: Record<string, OperationDef> = {
         filters: {
           type: 'object',
           properties: {
-            tags: { type: 'array', items: { type: 'string', maxLength: 100 }, maxItems: 20 },
+            // A skill's own tag rule (contract §4.1, §9): more tags or longer ones can't match anything.
+            tags: { type: 'array', items: { type: 'string', maxLength: TAG_MAX_LENGTH }, maxItems: MAX_TAGS },
             publisher: { type: 'string', maxLength: 200 },
             updated_since: { type: 'string', maxLength: 40 },
           },
