@@ -2,7 +2,7 @@
 
 Every requirement, in the PRD's or the owner's words, confirmed by the owner; where it lives in the design; and the
 automated checks that hold it. Generated from the requirement list and the QA plan's traceability file, so it can't drift.
-Contract sections (§) are in [contract.md](contract.md); the test layers are in [qa-plan.md](qa-plan.md).
+Contract sections (§) are in [contract.md](contract.md); the test layers are in [the QA plan](../qa/qa-plan.md).
 
 ## Phase 1: built, local
 
