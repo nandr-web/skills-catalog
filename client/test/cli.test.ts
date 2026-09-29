@@ -154,6 +154,46 @@ describe('the CLI face', () => {
     expect(readFileSync(join(skills(p), 'sql-migration-helper', 'SKILL.md'), 'utf8')).toContain('Second.');
   });
 
+  // Why the hold waits picks the words: a pinned skill, or a copy from another catalog (contract §5.3's order).
+  const second = async (p: Place) => {
+    const c = await open(p);
+    try {
+      await c.publish(request('sql-migration-helper', [{ path: 'SKILL.md', text: skillMd('sql-migration-helper', 'Write and review SQL schema migrations.', 'Second.\n') }]), actAs('ben'));
+    } finally {
+      c.close();
+    }
+  };
+  const helper = (p: Place) => join(skills(p), 'sql-migration-helper');
+
+  it('a pinned skill: update <name> --accept says it is pinned, and a yes takes the new version and keeps the pin', async () => {
+    const p = place();
+    await seed(p);
+    await cli(p, ['install', 'sql-migration-helper']);
+    expect((await cli(p, ['policy', 'pin', 'sql-migration-helper'])).code).toBe(0);
+    await second(p);
+    const yes = await cli(p, ['update', 'sql-migration-helper', '--accept'], { tty: true, answers: ['y'] });
+    expect(yes.code).toBe(0);
+    expect(yes.out).toContain(S.format(S.word('update.accept_intro_pin'), { name: 'sql-migration-helper', from: 1, to: 2, also: '' }));
+    expect(readFileSync(join(helper(p), 'SKILL.md'), 'utf8')).toContain('Second.');
+    expect(readLock(p.home).skills[helper(p)]).toMatchObject({ version: 2, policy: 'pin' });
+  });
+
+  it('a copy from another catalog: update <name> --accept says where each comes from, and a yes records the catalog in use', async () => {
+    const p = place();
+    await seed(p);
+    await cli(p, ['install', 'sql-migration-helper']);
+    const now = readLock(p.home).skills[helper(p)]!.catalog;
+    const was = join(p.dir, 'other-catalog');
+    const lock = JSON.parse(readFileSync(join(p.home, 'lock.json'), 'utf8'));
+    lock.skills[helper(p)].catalog = was;
+    writeFileSync(join(p.home, 'lock.json'), JSON.stringify(lock, null, 2) + '\n');
+    await second(p);
+    const yes = await cli(p, ['update', 'sql-migration-helper', '--accept'], { tty: true, answers: ['y'] });
+    expect(yes.code).toBe(0);
+    expect(yes.out).toContain(S.format(S.word('update.accept_intro_other_catalog'), { name: 'sql-migration-helper', from: 1, to: 2, was, now, also: '' }));
+    expect(readLock(p.home).skills[helper(p)]).toMatchObject({ version: 2, catalog: now });
+  });
+
   it('--target goes only with --accept, and only as user or project; --as in either form stays out of the command given', async () => {
     const p = place();
     await seed(p);

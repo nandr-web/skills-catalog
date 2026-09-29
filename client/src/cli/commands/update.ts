@@ -69,9 +69,12 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
     return 0;
   }
   const first = hold.installed === undefined;
-  const at = { name, from: hold.installed, to: hold.version, reasons: hold.reasons, path: hold.path };
-  // A first install names where it goes; a "tell me first" update with nothing flagged has no reasons to give.
-  const intro = first ? 'update.accept_intro_install' : hold.notify && !hold.flags.length ? 'update.accept_intro_notify' : 'update.accept_intro';
+  // Why it waits picks the words: a first install names where it goes; a copy from another catalog says where each comes
+  // from; a pinned skill says so; a "tell me first" update with nothing flagged has no reasons to give. Flags, if any,
+  // are added to the first two.
+  const also = hold.flags.length ? said(s, 'update.accept_also', { reasons: hold.reasons }) : '';
+  const at = { name, from: hold.installed, to: hold.version, reasons: hold.reasons, path: hold.path, was: hold.was, now: hold.now, also };
+  const intro = first ? 'update.accept_intro_install' : hold.reason === 'other_catalog' ? 'update.accept_intro_other_catalog' : hold.reason === 'pin' ? 'update.accept_intro_pin' : hold.notify && !hold.flags.length ? 'update.accept_intro_notify' : 'update.accept_intro';
   io.stdout(said(s, intro, at) + '\n' + said(s, first ? 'update.accept_look_install' : 'update.accept_look', at) + '\n');
   // Showing the person the reasons is a look (usage metrics); their no is an answer. Their yes is an answer too, for the
   // installer to record where a held update is taken, on every face: not recorded yet (usage-look.test.ts says so).
