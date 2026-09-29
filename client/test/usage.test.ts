@@ -2,11 +2,12 @@
 // UTC day, kept 90 days and never sent anywhere. A skill's name is stored only as a keyed hash made with a secret this
 // machine keeps, and each event keeps only its own fields, so nothing a person or a publisher typed is ever written.
 // Recording never fails or slows what it records.
+import { execFileSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sandbox } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
-import { holdWithinADay, readUsage, recordUsage, USAGE_DAYS } from '../src/usage/record.ts';
+import { holdWithinADay, readUsage, recordUsage, USAGE_DAYS, USAGE_READ_MAX_BYTES } from '../src/usage/record.ts';
 
 const day = (iso: string) => new Date(`${iso}T12:00:00Z`);
 const home = () => join(sandbox(), 'skills-home');
@@ -66,13 +67,34 @@ describe('recording usage', () => {
     ]);
   });
 
-  it(`keeps ${USAGE_DAYS} days:a day's file goes once it's older, and nothing else in the folder is touched`, () => {
+  it(`keeps ${USAGE_DAYS} days: the day ${USAGE_DAYS} days back is kept and read, the day before it goes; nothing else in the folder is touched`, () => {
     const h = home();
+    // 2026-09-29 less 90 days is 2026-07-01.
     recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-06-30'));
-    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-07-01'));
+    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 2 }, new Date('2026-07-01T00:00:00Z'));
     writeFileSync(join(h, 'usage', 'notes.txt'), 'the person\'s own file\n');
-    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'));
+    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 3 }, day('2026-09-29'));
     expect(readdirSync(join(h, 'usage')).sort()).toEqual(['2026-07-01.jsonl', '2026-09-29.jsonl', 'notes.txt']);
+    expect(readUsage(h, day('2026-09-29')).map((e) => (e.event === 'notice' ? e.waiting : 0))).toEqual([2, 3]);
+    expect(readUsage(h, day('2026-09-30')).map((e) => (e.event === 'notice' ? e.waiting : 0))).toEqual([3]);
+  });
+
+  it('tightens its own folder to 0700 and a day file to 0600 when they were looser', () => {
+    const h = home();
+    mkdirSync(join(h, 'usage'), { recursive: true, mode: 0o755 });
+    chmodSync(join(h, 'usage'), 0o755);
+    writeFileSync(join(h, 'usage', '2026-09-29.jsonl'), '', { mode: 0o644 });
+    chmodSync(join(h, 'usage', '2026-09-29.jsonl'), 0o644);
+    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'));
+    expect(statSync(join(h, 'usage')).mode & 0o777).toBe(0o700);
+    expect(statSync(join(h, 'usage', '2026-09-29.jsonl')).mode & 0o777).toBe(0o600);
+    expect(lines(h, '2026-09-29')).toHaveLength(1);
+  });
+
+  it('a hold may be for a skill from another catalog', () => {
+    const h = home();
+    recordUsage(h, { event: 'hold', skill: 'a', version: 1, reason: 'other_catalog', flags: [], behind: 0 }, day('2026-09-29'));
+    expect(lines(h, '2026-09-29')[0]).toMatchObject({ event: 'hold', reason: 'other_catalog' });
   });
 
   it('never follows a link in its folder\'s place, and never fails what it records', () => {
@@ -118,6 +140,17 @@ describe('reading usage back', () => {
       ['2026-09-28T12:00:00.000Z', 'notice', 3],
       ['2026-09-29T12:00:00.000Z', 'notice', 1],
     ]);
+  });
+
+  it('reads only plain day files of a sane size: a link, a pipe or an oversized file is skipped, never waited on', () => {
+    const h = home();
+    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'));
+    const elsewhere = join(sandbox(), 'elsewhere.jsonl');
+    writeFileSync(elsewhere, JSON.stringify({ v: 1, at: '2026-09-28T12:00:00.000Z', event: 'notice', surface: 'mcp', waiting: 9 }) + '\n');
+    symlinkSync(elsewhere, join(h, 'usage', '2026-09-28.jsonl'));
+    execFileSync('mkfifo', [join(h, 'usage', '2026-09-27.jsonl')]);
+    writeFileSync(join(h, 'usage', '2026-09-26.jsonl'), Buffer.alloc(USAGE_READ_MAX_BYTES + 1, 0x20));
+    expect(readUsage(h, day('2026-09-29')).map((e) => (e.event === 'notice' ? e.waiting : 0))).toEqual([1]);
   });
 
   it('reads nothing past the kept days, and nothing when there is no folder', () => {

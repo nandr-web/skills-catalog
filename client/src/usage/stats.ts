@@ -2,7 +2,7 @@
 // person and whether they changed an answer, and §5.3's four rules that ask for the flag-only approvals to be reviewed.
 // A pure function of the kept events. A hold is one skill version held for one reason, however many syncs report it; a
 // look and an answer join their hold by skill (the hash) and version.
-import { USAGE_DAYS, type StoredEvent } from './record.ts';
+import { USAGE_DAYS, type HoldReason, type StoredEvent } from './record.ts';
 
 /** The review's starting thresholds, from the friction research (contract §5.3), to be tuned. */
 export const REVIEW = {
@@ -17,8 +17,10 @@ export const REVIEW = {
   load_wait_days: 14,
 } as const;
 
-type Reason = 'flagged' | 'notify' | 'pin' | 'cooldown';
+type Reason = HoldReason;
 type Answer = 'yes' | 'no' | 'pin' | 'superseded';
+// The holds that wait for the person's yes; pinned ones and new versions still cooling ask nothing (contract §5.3).
+const WAITS: readonly Reason[] = ['other_catalog', 'notify', 'flagged'];
 
 export type ReviewRule =
   | { rule: 'avoidance'; days_after_hold: number; to: string; scope: string }
@@ -53,7 +55,7 @@ type Held = { skill: string; version: number; first: number; reasons: Set<Reason
 export function usageStats(all: readonly StoredEvent[], now: Date = new Date()): UsageStats {
   const end = now.getTime();
   const events = all.filter((e) => ms(e.at) >= end - USAGE_DAYS * DAY_MS && ms(e.at) <= end).sort((a, b) => ms(a.at) - ms(b.at));
-  const byReason: Record<Reason, number> = { flagged: 0, notify: 0, pin: 0, cooldown: 0 };
+  const byReason: Record<Reason, number> = { other_catalog: 0, pin: 0, notify: 0, flagged: 0, cooldown: 0 };
   const answers: Record<Answer, number> = { yes: 0, no: 0, pin: 0, superseded: 0 };
   const held = new Map<string, Held>();
   const seenHold = new Set<string>();
@@ -118,9 +120,8 @@ export function usageStats(all: readonly StoredEvent[], now: Date = new Date()):
   const answered = holds.filter((h) => h.answer && h.answer.answer !== 'superseded');
   const lookToAnswer = answered.filter((h) => h.looks.length).map((h) => (h.answer!.at - h.looks.at(-1)!) / 1000);
   const decided = answers.yes + answers.no + answers.pin;
-  // Waiting for the person: held to be asked (flagged, or tell me first) and not answered; pinned and cooling holds ask
-  // nothing.
-  const open = holds.filter((h) => !h.answer && (h.reasons.has('flagged') || h.reasons.has('notify')));
+  // Waiting for the person: held to be asked and not answered.
+  const open = holds.filter((h) => !h.answer && WAITS.some((r) => h.reasons.has(r)));
   const oldest = open.length ? Math.floor((end - Math.min(...open.map((h) => h.first))) / DAY_MS) : null;
   const off = policies.filter((p) => p.to === 'pin' || p.to === 'notify');
   const sessionShare = sessions ? withNotice / sessions : null;

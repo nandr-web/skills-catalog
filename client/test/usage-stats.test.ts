@@ -3,13 +3,13 @@
 // holds left waiting or updates turned off) and the four rules that ask for a review (avoidance, a habit of yes, no
 // value yet, load). A hold is one skill version held for one reason, however many syncs report it.
 import { describe, expect, it } from 'vitest';
-import type { StoredEvent, UsageEvent } from '../src/usage/record.ts';
+import type { HoldReason, StoredEvent, UsageEvent } from '../src/usage/record.ts';
 import { REVIEW, usageStats } from '../src/usage/stats.ts';
 
 const NOW = new Date('2026-09-29T12:00:00Z');
 const ago = (days: number, seconds = 0) => new Date(NOW.getTime() - days * 86_400_000 + seconds * 1000).toISOString();
 const ev = (at: string, e: UsageEvent) => ({ v: 1, at, ...e }) as StoredEvent;
-const hold = (at: string, skill: string, version: number, reason: 'flagged' | 'notify' | 'pin' | 'cooldown' = 'flagged') =>
+const hold = (at: string, skill: string, version: number, reason: HoldReason = 'flagged') =>
   ev(at, { event: 'hold', skill, version, reason, flags: reason === 'flagged' ? ['runnable_file'] : [], behind: 1 });
 const answer = (at: string, skill: string, version: number, a: 'yes' | 'no' | 'pin' | 'superseded') => ev(at, { event: 'answer', skill, version, answer: a, together: 1 });
 const look = (at: string, skill: string, version: number) => ev(at, { event: 'look', skill, version, surface: 'cli' });
@@ -25,7 +25,7 @@ describe('the measures', () => {
 
   it('counts a hold once per skill version and reason, however many syncs report it; the week is by first report', () => {
     const s = usageStats([hold(ago(10), 'a', 2), hold(ago(9), 'a', 2), hold(ago(3), 'a', 2), hold(ago(3), 'b', 5, 'pin'), hold(ago(2), 'c', 1, 'notify'), hold(ago(1), 'c', 1, 'notify')], NOW);
-    expect(s.holds).toEqual({ total: 3, last_7_days: 2, by_reason: { flagged: 1, notify: 1, pin: 1, cooldown: 0 } });
+    expect(s.holds).toEqual({ total: 3, last_7_days: 2, by_reason: { other_catalog: 0, pin: 1, notify: 1, flagged: 1, cooldown: 0 } });
   });
 
   it('sessions that open with a notice: the hook\'s syncs are sessions, its notices those that opened with one', () => {
@@ -60,6 +60,12 @@ describe('the measures', () => {
     );
     expect(s.waiting).toEqual({ open_holds: 2, oldest_days: 20 });
     expect(s.turned_off).toEqual({ policy_changes_to_pin_or_notify: 2, within_a_day_of_a_hold: 1 });
+  });
+
+  it('a skill held because it came from another catalog waits for the person too', () => {
+    const s = usageStats([hold(ago(3), 'a', 1, 'other_catalog'), hold(ago(2), 'b', 1, 'cooldown')], NOW);
+    expect(s.waiting).toEqual({ open_holds: 1, oldest_days: 3 });
+    expect(s.holds.by_reason).toMatchObject({ other_catalog: 1, cooldown: 1 });
   });
 
   it('a newer version held for the same skill supersedes the older hold: it no longer waits, and counts as superseded', () => {
