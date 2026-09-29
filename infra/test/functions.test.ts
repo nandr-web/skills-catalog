@@ -41,9 +41,9 @@ function badActions(t: Template): string[] {
   }
   return bad.map((b) => b.replace(/^([A-Za-z]+?)[0-9A-F]{8}:/, '$1:')).sort();
 }
-// Throwaway empties its bucket when the stack goes: the bucket policy lets the CDK's own auto-delete provider list and
+// Throwaway empties its buckets when the stack goes: each bucket policy lets the CDK's own auto-delete provider list and
 // delete every object. That's the stack's teardown, never a request path, and demo has none of it.
-const THROWAWAY_ONLY = ['StorageFilesPolicy: s3:DeleteObject*', 'StorageFilesPolicy: s3:GetBucket*', 'StorageFilesPolicy: s3:List*'];
+const THROWAWAY_ONLY = ['SitePagesPolicy', 'StorageFilesPolicy'].flatMap((b) => ['s3:DeleteObject*', 's3:GetBucket*', 's3:List*'].map((a) => `${b}: ${a}`)).sort();
 const dynamo = (actions: string[]) => actions.filter((a) => a.startsWith('dynamodb:')).sort();
 
 describe('functions', () => {

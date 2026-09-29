@@ -60,9 +60,12 @@ describe('the edge is the only way in', () => {
     expect(api.OriginCustomHeaders).toEqual([{ HeaderName: 'x-skills-catalog-origin', HeaderValue: expect.stringMatching(/^\{\{resolve:ssm:\/skills-catalog\/throwaway\/origin-secret\}\}$/) }]);
   });
 
-  it('the API function is told which parameter holds it, and may read that one parameter', () => {
-    t.hasResourceProperties('AWS::Lambda::Function', { Environment: { Variables: Match.objectLike({ ORIGIN_SECRET_PARAMETER: '/skills-catalog/throwaway/origin-secret' }) } });
-    t.hasResourceProperties('AWS::IAM::Policy', { PolicyDocument: { Statement: Match.arrayWith([Match.objectLike({ Action: 'ssm:GetParameter', Resource: Match.objectLike({ 'Fn::Join': Match.arrayWith([Match.arrayWith([':parameter/skills-catalog/throwaway/origin-secret'])]) }) })]) } });
+  it('the API function is told which parameters hold it (current and previous, for rotation) and may read exactly those and the GitHub one', () => {
+    t.hasResourceProperties('AWS::Lambda::Function', { Environment: { Variables: Match.objectLike({ ORIGIN_SECRET_PARAMETER: '/skills-catalog/throwaway/origin-secret', ORIGIN_SECRET_PREVIOUS_PARAMETER: '/skills-catalog/throwaway/origin-secret-previous' }) } });
+    const ssm = Object.values(t.findResources('AWS::IAM::Policy')).flatMap((p: any) => p.Properties.PolicyDocument.Statement).filter((s: any) => s.Action === 'ssm:GetParameter');
+    expect(ssm.length).toBe(1);
+    const names = (ssm[0].Resource as any[]).map((r) => JSON.stringify(r).match(/:parameter(\/[^"]+)/)![1]);
+    expect(names).toEqual(['/skills-catalog/throwaway/github-oauth-secret', '/skills-catalog/throwaway/origin-secret', '/skills-catalog/throwaway/origin-secret-previous']);
   });
 });
 
