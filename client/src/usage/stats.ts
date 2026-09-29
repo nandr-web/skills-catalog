@@ -74,7 +74,7 @@ export function usageStats(all: readonly StoredEvent[], now: Date = new Date()):
         const h = held.get(key) ?? { skill: e.skill, version: e.version, first: at, reasons: new Set<Reason>(), looks: [] };
         // A newer version held for the same skill supersedes an older hold the person hasn't answered.
         for (const older of held.values()) {
-          if (older.skill === e.skill && older.version < e.version && !older.answer) {
+          if (older.skill === e.skill && older.version < e.version && !older.answer && WAITS.some((r) => older.reasons.has(r))) {
             older.answer = { answer: 'superseded', at };
             answers.superseded++;
           }
@@ -159,7 +159,8 @@ export function usageStats(all: readonly StoredEvent[], now: Date = new Date()):
 
   const from = events[0]?.at ?? null;
   return {
-    empty: events.length === 0,
+    // Counting starts with the first hold or notice (the words say so); uses and syncs alone count as nothing yet.
+    empty: !events.some((e) => e.event === 'hold' || e.event === 'notice'),
     window: { days: from === null ? 0 : Math.max(1, Math.round((end - ms(from)) / DAY_MS)), from, to: now.toISOString() },
     holds: { total: holdsTotal, last_7_days: holdsWeek, by_reason: byReason },
     sessions: { count: sessions, with_notice: withNotice, share: sessionShare },

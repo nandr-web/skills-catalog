@@ -337,7 +337,7 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const text = existing
     ? s.format(s.word('update.accepted'), { name: req.name, from: existing.version, to: to.version, path: quoted(dest) })
     : s.format(s.word('install.installed_after_yes'), { name: req.name, version: to.version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) });
-  return { text, target: `${req.name} v${to.version}`, result: logWords(s).result('accept'), outcome: 'accepted' };
+  return { text, target: `${req.name} v${to.version}`, result: logWords(s).result('accept'), outcome: existing ? 'updated' : 'installed' };
 }
 
 /** The lock's entries for this machine's user folder and this project, by name. */

@@ -17,10 +17,17 @@ const session = (at: string) => ev(at, { event: 'mode', surface: 'hook' });
 const notice = (at: string) => ev(at, { event: 'notice', surface: 'hook', waiting: 1 });
 
 describe('the measures', () => {
-  it('nothing counted yet: empty measures and no review', () => {
+  it('nothing counted yet: empty measures and no review; counting starts with the first hold or notice, as its words say', () => {
     const s = usageStats([], NOW);
     expect(s.empty).toBe(true);
     expect(s.review).toEqual([]);
+    expect(usageStats([ev(ago(1), { event: 'use', op: 'search_shared_skills', result: 'all' }), session(ago(1))], NOW).empty).toBe(true);
+    expect(usageStats([notice(ago(1))], NOW).empty).toBe(false);
+  });
+
+  it('only a hold that waits for the person is superseded by a newer one: pinned and cooling ones asked nothing', () => {
+    const s = usageStats([hold(ago(9), 'a', 2, 'pin'), hold(ago(8), 'a', 3, 'pin'), hold(ago(7), 'b', 1, 'cooldown'), hold(ago(6), 'b', 2, 'cooldown')], NOW);
+    expect(s.answers.superseded).toBe(0);
   });
 
   it('counts a hold once per skill version and reason, however many syncs report it; the week is by first report', () => {

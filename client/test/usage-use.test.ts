@@ -57,7 +57,7 @@ describe('the use event', () => {
       ['install_shared_skill', 'held'],
       ['update_installed_skills', 'unchanged'],
       ['update_installed_skills', 'updated'],
-      ['accept_held_update', 'accepted'],
+      ['accept_held_update', 'installed'],
     ]);
   });
 
@@ -69,10 +69,34 @@ describe('the use event', () => {
     await cli(p, ['update', 'release-notes-kit', '--accept']);
     await cli(p, ['update', 'release-notes-kit', '--accept'], { tty: true, answers: ['n'] });
     await cli(p, ['update', 'sql-migration-helper', '--accept'], { tty: true, answers: ['y'] });
+    await cli(p, ['update', 'demo-skill-01', '--accept'], { tty: true, answers: ['y'] });
     expect(uses(p).slice(2)).toEqual([
       ['accept_held_update', 'person_only'],
       ['accept_held_update', 'declined'],
       ['accept_held_update', 'nothing_held'],
+      ['accept_held_update', 'not_installed'],
+    ]);
+  });
+
+  it('the assistant\'s tools count installs, updates and a held install taken the same way', async () => {
+    const p = place();
+    await seed(p);
+    const { ctx, close } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, p.dir), Surface.load(), 'mcp');
+    try {
+      await perform(ctx, 'install_shared_skill', 'install', { name: 'sql-migration-helper' });
+      const held = await perform(ctx, 'install_shared_skill', 'install', { name: 'release-notes-kit' });
+      await perform(ctx, 'update_installed_skills', 'update', {});
+      const confirm = /confirm "([^"]+)"/.exec(held.text)![1];
+      const flags = JSON.parse(/flags (\[[^\]]*\])/.exec(held.text)![1]!);
+      await perform(ctx, 'accept_held_update', 'accept', { name: 'release-notes-kit', confirm, flags });
+    } finally {
+      close();
+    }
+    expect(uses(p)).toEqual([
+      ['install_shared_skill', 'installed'],
+      ['install_shared_skill', 'held'],
+      ['update_installed_skills', 'unchanged'],
+      ['accept_held_update', 'installed'],
     ]);
   });
 
