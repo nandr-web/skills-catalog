@@ -201,9 +201,10 @@ function decodeCursor(cursor: string | undefined): number {
   throw new CatalogError('invalid_request', { field: 'cursor', why: 'not_a_cursor' });
 }
 
-export function checkActor(actor: unknown): string {
+// `field` names where the name came from: the --as flag by default, or a request's own field.
+export function checkActor(actor: unknown, field = '--as'): string {
   if (actor === undefined || actor === null || actor === '') throw new CatalogError('unauthenticated', {});
-  if (typeof actor !== 'string' || !ACTOR.test(actor)) throw new CatalogError('invalid_request', { field: 'as', why: 'not_a_developer_name' });
+  if (typeof actor !== 'string' || !ACTOR.test(actor)) throw new CatalogError('invalid_request', { field, why: 'not_a_developer_name' });
   return actor;
 }
 

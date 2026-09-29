@@ -494,7 +494,8 @@ describe('search: discoverable, any word, and says how it matched (contract §2)
       expect((await errorOf(() => catalog.versions({ name: 'note-1', cursor: cursor(o) }))).data, String(o)).toMatchObject({ field: 'cursor', why: 'not_a_cursor' });
     }
     expect(checkActor('dev2')).toBe('dev2');
-    expect((await errorOf(() => checkActor('Dev 2\n'))).data).toMatchObject({ field: 'as' });
+    expect((await errorOf(() => checkActor('Dev 2\n'))).data).toMatchObject({ field: '--as' });
+    expect((await errorOf(() => checkActor('dev.2', 'publisher'))).data).toMatchObject({ field: 'publisher', why: 'not_a_developer_name' });
     expect((await errorOf(() => checkActor(undefined))).code).toBe('unauthenticated');
   });
 
