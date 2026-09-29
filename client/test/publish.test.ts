@@ -6,9 +6,11 @@
 import { mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { actAs, CatalogError, renderError, Surface, type Catalog } from '@skills-catalog/core';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { open, request, seed, skillMd } from './seed.ts';
-import { place, startServer, type Place, type Server } from './server.ts';
+import { PROCESS_TEST_MS, place, startServer, type Place, type Server } from './server.ts';
+
+vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start the server as a process (see PROCESS_TEST_MS)
 
 const S = Surface.load();
 const P = S.names['publish']!;

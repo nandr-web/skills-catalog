@@ -4,11 +4,13 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CatalogError, OPERATIONS, Surface, openCatalog, renderDiff, renderError, renderRead, renderSearch, renderVersions, type Catalog } from '@skills-catalog/core';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MAX_LINE } from '../src/mcp/server.ts';
 import { CLIENT_WORD_GAPS, RUNS } from '../src/operations.ts';
 import { open, seed } from './seed.ts';
-import { place, startServer, type Place, type Server } from './server.ts';
+import { PROCESS_TEST_MS, place, startServer, type Place, type Server } from './server.ts';
+
+vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start the server as a process (see PROCESS_TEST_MS)
 
 const S = Surface.load();
 const N = S.names as Record<'search' | 'get' | 'versions' | 'diff', string>;

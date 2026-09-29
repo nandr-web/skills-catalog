@@ -9,6 +9,11 @@ import { onTestFinished } from 'vitest';
 
 const CLI = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
 
+/** The budget for a test that starts the server as a process: on a busy machine a reply can take several seconds (it
+ *  is waited for up to 20 s, below), past vitest's default 5 s. Set per file (vi.setConfig) in the files that start a
+ *  server, so a plain unit test keeps the default and still fails fast if it hangs. */
+export const PROCESS_TEST_MS = 30_000;
+
 /** A place for one test: the server's SKILLS_HOME, the local catalog's folder and an OS home, all in one sandbox. */
 export type Place = { dir: string; home: string; catalogDir: string; catalogUrl: string; osHome: string };
 

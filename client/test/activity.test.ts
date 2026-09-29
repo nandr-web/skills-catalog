@@ -7,10 +7,12 @@ import { execFileSync } from 'node:child_process';
 import { chmodSync, closeSync, constants, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { actAs, Surface } from '@skills-catalog/core';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CLIENT_WORD_GAPS } from '../src/operations.ts';
 import { open, request, seed, skillMd } from './seed.ts';
-import { place, startServer, type Place, type Server } from './server.ts';
+import { PROCESS_TEST_MS, place, startServer, type Place, type Server } from './server.ts';
+
+vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start the server as a process (see PROCESS_TEST_MS)
 
 const S = Surface.load();
 const N = S.names as Record<'search' | 'get' | 'versions' | 'diff', string>;
