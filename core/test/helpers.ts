@@ -25,17 +25,17 @@ export interface Opened {
   catalog: Catalog;
 }
 
-export function openTest(opts: LocalOptions = {}, dir = sandbox()): Opened {
-  return { dir, catalog: openLocalCatalog(join(dir, 'catalog'), { clock: fixedClock(), ids: counterIds(), ...opts }) };
+export async function openTest(opts: LocalOptions = {}, dir = sandbox()): Promise<Opened> {
+  return { dir, catalog: await openLocalCatalog(join(dir, 'catalog'), { clock: fixedClock(), ids: counterIds(), ...opts }) };
 }
 
 export function request(name: string, files: RawFile[], extra: Record<string, unknown> = {}) {
   return { name, files: files.map((f) => ({ path: f.path, mode: f.mode, content_base64: Buffer.from(f.bytes).toString('base64') })), ...extra };
 }
 
-export function errorOf(fn: () => unknown): CatalogError {
+export async function errorOf(fn: () => unknown): Promise<CatalogError> {
   try {
-    fn();
+    await fn();
   } catch (e) {
     if (e instanceof CatalogError) return e;
     throw e;

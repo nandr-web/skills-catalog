@@ -1,6 +1,6 @@
-// The local budgets (the QA plan §7) on a generated 10,000-skill catalog: publish, search and read, p95 over
-// 200 calls each, in-process (the MCP server adds its own transport on top). Builds the catalog in a fresh
-// folder under the OS temp folder and removes it after.
+// The local budgets (the QA plan §7) on a generated 10,000-skill catalog: open, publish, search and read, p95 over
+// 200 calls each, in-process (the MCP server adds its own transport on top). Builds the catalog in a fresh folder
+// under the OS temp folder and removes it after.
 //
 //   node scripts/perf-search.ts [--skills 10000] [--calls 200] [--keep]
 
@@ -8,7 +8,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { openLocalCatalog } from '../src/local/index.ts';
+import { actAs, openLocalCatalog } from '../src/local/index.ts';
 import { scaleCorpus } from '../test/corpus.ts';
 import { loadGolden } from '../test/golden.ts';
 
@@ -25,47 +25,35 @@ function p95(ms: number[]): number {
   return s[Math.min(s.length - 1, Math.ceil(0.95 * s.length) - 1)]!;
 }
 
+async function timed(times: number[], fn: () => Promise<unknown>): Promise<void> {
+  const t = performance.now();
+  await fn();
+  times.push(performance.now() - t);
+}
+
 const dir = mkdtempSync(join(tmpdir(), 'skills-catalog-perf-'));
-let catalog = openLocalCatalog(join(dir, 'catalog'));
+const ana = actAs('ana');
+let catalog = await openLocalCatalog(join(dir, 'catalog'));
 try {
   const corpus = scaleCorpus(SKILLS);
   const publishMs: number[] = [];
   const t0 = performance.now();
-  for (const s of corpus) {
-    const t = performance.now();
-    catalog.publish({ name: s.name, files: s.files }, 'ana');
-    publishMs.push(performance.now() - t);
-  }
+  for (const s of corpus) await timed(publishMs, () => catalog.publish({ name: s.name, files: s.files }, ana));
   const buildS = (performance.now() - t0) / 1000;
   // Every CLI call opens the catalog (schema check, outbox delivery, the orphan-blob sweep).
   const openMs: number[] = [];
   for (let i = 0; i < 20; i++) {
     catalog.close();
-    const t = performance.now();
-    catalog = openLocalCatalog(join(dir, 'catalog'));
-    openMs.push(performance.now() - t);
+    await timed(openMs, async () => (catalog = await openLocalCatalog(join(dir, 'catalog'))));
   }
-
   const q = loadGolden('queries.yaml');
   const terms: string[] = q.queries.flatMap((x: any) => x.keywords);
   const searchMs: number[] = [];
-  for (let i = 0; i < CALLS; i++) {
-    const t = performance.now();
-    catalog.search({ query: terms[i % terms.length] });
-    searchMs.push(performance.now() - t);
-  }
+  for (let i = 0; i < CALLS; i++) await timed(searchMs, () => catalog.search({ query: terms[i % terms.length] }));
   const listMs: number[] = [];
-  for (let i = 0; i < 20; i++) {
-    const t = performance.now();
-    catalog.search({});
-    listMs.push(performance.now() - t);
-  }
+  for (let i = 0; i < 20; i++) await timed(listMs, () => catalog.search({}));
   const readMs: number[] = [];
-  for (let i = 0; i < CALLS; i++) {
-    const t = performance.now();
-    catalog.read({ name: corpus[(i * 37) % corpus.length]!.name, include: 'contents' });
-    readMs.push(performance.now() - t);
-  }
+  for (let i = 0; i < CALLS; i++) await timed(readMs, () => catalog.read({ name: corpus[(i * 37) % corpus.length]!.name, include: 'contents' }));
   const rows = [
     ['open (a CLI call pays this once)', p95(openMs), BUDGET.search],
     ['publish', p95(publishMs), BUDGET.publish],

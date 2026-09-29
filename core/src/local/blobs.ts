@@ -1,13 +1,14 @@
-// BlobStore, local adapter: a folder of files named by their sha256. Each is written to a temp file and renamed into
-// place (contract §7), so a reader never sees half a file, and two processes writing the same blob both succeed.
+// The local storage's blob half (the contract's BlobStore row): a folder of files named by their sha256. Each is
+// written to a temp file and renamed into place (contract §7), so a reader never sees half a file, and two processes
+// writing the same blob both succeed. Synchronous, used only inside the local Storage adapter (storage.ts).
 
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
-import type { BlobStore, Clock, Ids } from '../ports.ts';
+import type { Clock, Ids } from '../ports.ts';
 
 const HEX = /^[0-9a-f]{64}$/;
 
-export class FolderBlobStore implements BlobStore {
+export class FolderBlobStore {
   private readonly dir: string;
   private readonly tmp: string;
   private readonly ids: Ids;

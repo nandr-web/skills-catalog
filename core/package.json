@@ -4,6 +4,10 @@
   "description": "The skills catalog's core: the skill-tree module (SKILL.md rules, fingerprint, path safety, diff), the catalog operations, and the local adapters (SQLite and a folder of files)",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./skill-tree": "./src/skill-tree/index.ts"
+  },
   "engines": {
     "node": ">=24.15"
   },

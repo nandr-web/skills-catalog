@@ -1,5 +1,5 @@
-// The ports (contract §7): where a choice can change. Phase 1 has the local adapters (src/local/); the hosted ones
-// plug in behind the same interfaces.
+// The ports (contract §7): where a choice can change. Every port is async, so a hosted adapter (DynamoDB and S3,
+// a remote index, a sign-in) drops in behind the same interfaces. Phase 1 has the local adapters (src/local/).
 
 import type { FileEntry } from './skill-tree/index.ts';
 
@@ -22,6 +22,8 @@ export interface VersionRecord {
   frontmatter: Record<string, unknown>;
 }
 
+export type NewVersion = Omit<VersionRecord, 'version'>;
+
 export interface VersionPublished {
   type: 'version_published';
   name: string;
@@ -31,43 +33,33 @@ export interface VersionPublished {
   at: string;
 }
 
-export type AppendResult =
+export type CommitResult =
   | { kind: 'created'; record: VersionRecord }
   | { kind: 'identical'; record: VersionRecord }
   | { kind: 'conflict'; latest: number }
   | { kind: 'not_owner'; owners: string[] };
 
-// Versions and the latest pointer. `append` is the commit point of a publish (§5.1 step 3): one atomic
-// compare-and-append that also records the version_published event, so an event is never lost or invented.
-export interface MetadataStore {
-  skill(name: string): SkillRecord | undefined;
-  version(name: string, version: number): VersionRecord | undefined;
-  byFingerprint(fingerprint: string): VersionRecord | undefined;
-  versions(name: string, offset: number, limit: number): VersionRecord[]; // newest first
-  latestVersions(): Iterable<VersionRecord>; // every skill's latest, for rebuilding the index
-  names(): string[];
-  count(): number;
-  referencesBlob(sha256: string): boolean;
-  referencedBlobs(): Set<string>;
-  // Runs fn while no other writer can append (locally: one BEGIN IMMEDIATE; nested calls join it).
-  withWriteLock<T>(fn: () => T): T;
-  append(
-    v: Omit<VersionRecord, 'version'>,
+// Storage: the contract's MetadataStore (versions, the latest pointer) and BlobStore (bytes by sha256), with the
+// publish's commit point behind them (§5.1 steps 2-3). How the two stay consistent is the adapter's business:
+// locally one SQLite lock and a folder; hosted, create-only S3 puts then one conditional DynamoDB write.
+export interface Storage {
+  skill(name: string): Promise<SkillRecord | undefined>;
+  version(name: string, version: number): Promise<VersionRecord | undefined>;
+  byFingerprint(fingerprint: string): Promise<VersionRecord | undefined>;
+  versions(name: string, offset: number, limit: number): Promise<VersionRecord[]>; // newest first
+  latestVersions(): Promise<VersionRecord[]>; // every skill's latest, for rebuilding the index
+  names(): Promise<string[]>;
+  count(): Promise<number>; // names, not versions
+  blob(sha256: string): Promise<Uint8Array | undefined>;
+  // Stores the bytes, then compare-and-appends the version with its version_published event, atomically.
+  // Refused (conflict, not_owner, identical): storage is left exactly as it was. Never: a version that points at
+  // a missing blob.
+  commit(
+    v: NewVersion,
+    files: readonly { sha256: string; bytes: Uint8Array }[],
     cond: { expectedLatest?: number | undefined },
     event: (version: number) => VersionPublished,
-  ): AppendResult;
-}
-
-// File bytes by sha256: put-if-absent, safe to repeat. `put` says whether this call created the blob, so a publish
-// that is refused at its commit point can remove exactly the blobs it added.
-export interface BlobStore {
-  put(sha256: string, bytes: Uint8Array): boolean;
-  get(sha256: string): Uint8Array | undefined;
-  has(sha256: string): boolean;
-  delete(sha256: string): void;
-  list(): Iterable<string>; // every stored sha256
-  storedAt(sha256: string): Date | undefined;
-  sweepTemp(before: Date): void; // half-written files a crashed put left behind
+  ): Promise<CommitResult>;
 }
 
 export interface SearchCard {
@@ -90,18 +82,22 @@ export interface SearchHit {
   matched_words: string[];
 }
 
-// Keyword search (any word, ranked): may lag the versions, and is rebuildable from them at any time.
+// Keyword search (any word, stemmed, ranked): may lag the versions, and is rebuildable from them at any time.
 export interface SearchIndex {
-  upsert(card: SearchCard): void;
-  query(words: string[], filters: SearchFilters): SearchHit[]; // all hits, best first, with the words each matched; no words = all cards by name
-  rebuild(cards: Iterable<SearchCard>): void;
-  count(): number;
+  upsert(card: SearchCard): Promise<void>;
+  query(words: string[], filters: SearchFilters): Promise<SearchHit[]>; // all hits, best first, with the words each matched; no words = all cards by name
+  rebuild(cards: readonly SearchCard[]): Promise<void>;
 }
 
 // Publish events, delivered at least once, in order. Locally an outbox table next to the versions.
 export interface Events {
-  subscribe(handler: (e: VersionPublished) => void): void;
-  deliver(): number; // delivers what's pending; returns how many
+  subscribe(handler: (e: VersionPublished) => Promise<void>): void;
+  deliver(): Promise<number>; // delivers what's pending; returns how many
+}
+
+// Who is asking (§7 "Who may publish"). Locally "act as" a developer; hosted, a verified sign-in or token.
+export interface Identity {
+  actor(): Promise<string | undefined>;
 }
 
 export interface Clock {

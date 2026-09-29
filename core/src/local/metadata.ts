@@ -1,6 +1,7 @@
-// MetadataStore, local adapter: versions and the latest pointer in SQLite. `append` is the publish's commit point.
+// The local storage's metadata half (the contract's MetadataStore row): versions and the latest pointer in SQLite.
+// Synchronous, used only inside the local Storage adapter (storage.ts); `append` is the publish's commit point.
 
-import type { AppendResult, MetadataStore, SkillRecord, VersionPublished, VersionRecord } from '../ports.ts';
+import type { CommitResult, NewVersion, SkillRecord, VersionPublished, VersionRecord } from '../ports.ts';
 import type { LocalDb } from './db.ts';
 
 interface VersionRow {
@@ -31,7 +32,7 @@ function toRecord(r: VersionRow): VersionRecord {
   };
 }
 
-export class SqliteMetadataStore implements MetadataStore {
+export class SqliteMetadataStore {
   private readonly local: LocalDb;
 
   constructor(local: LocalDb) {
@@ -64,9 +65,9 @@ export class SqliteMetadataStore implements MetadataStore {
     return rows.map(toRecord);
   }
 
-  *latestVersions(): Iterable<VersionRecord> {
+  latestVersions(): VersionRecord[] {
     const rows = this.db.prepare('SELECT v.* FROM versions v JOIN skills s ON s.name = v.name AND s.latest = v.version ORDER BY v.name').all() as unknown as VersionRow[];
-    for (const r of rows) yield toRecord(r);
+    return rows.map(toRecord);
   }
 
   names(): string[] {
@@ -93,8 +94,8 @@ export class SqliteMetadataStore implements MetadataStore {
     return this.local.immediate(fn);
   }
 
-  append(v: Omit<VersionRecord, 'version'>, cond: { expectedLatest?: number | undefined }, event: (version: number) => VersionPublished): AppendResult {
-    return this.local.immediate((): AppendResult => {
+  append(v: NewVersion, cond: { expectedLatest?: number | undefined }, event: (version: number) => VersionPublished): CommitResult {
+    return this.local.immediate((): CommitResult => {
       const s = this.skill(v.name);
       if (s && !s.owners.includes(v.publisher)) return { kind: 'not_owner', owners: s.owners };
       const latest = s?.latest ?? 0;

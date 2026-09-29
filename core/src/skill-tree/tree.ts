@@ -2,7 +2,7 @@
 // the installer, so a tree is checked and fingerprinted the same way on both sides.
 
 import { createHash } from 'node:crypto';
-import { CatalogError } from '../errors.ts';
+import { CatalogError } from './errors.ts';
 
 export type Mode = '0644' | '0755';
 export const MODES: readonly Mode[] = ['0644', '0755'];
@@ -77,6 +77,13 @@ export function checkMode(path: string, mode: unknown): Mode {
   throw new CatalogError('invalid_path', { path, why: `mode ${String(mode)}; only 0644 or 0755` });
 }
 
+// Two paths that a case-insensitive file system (macOS APFS, Windows) would store as one file fold to the same key:
+// "ſKILL.md" and "SKILL.md", "straße" and "STRASSE", "ﬁle" and "file", "aς" and "aσ". toLowerCase alone misses
+// these, which would let a second file overwrite SKILL.md on disk with no risk flag.
+export function foldKey(path: string): string {
+  return path.normalize('NFKC').toUpperCase().toLowerCase().normalize('NFKC');
+}
+
 // A whole file list: each path, no duplicates (after NFC), no two equal ignoring case, no file that is also a folder
 // of another, then the size limits. Returns the files sorted, with NFC paths.
 export function checkTree(files: readonly { path: unknown; mode: unknown; bytes: Uint8Array }[], limits: Limits = DEFAULT_LIMITS): TreeFile[] {
@@ -85,7 +92,7 @@ export function checkTree(files: readonly { path: unknown; mode: unknown; bytes:
   for (const f of files) {
     const path = checkPath(f.path);
     const mode = checkMode(path, f.mode);
-    const key = path.toLowerCase();
+    const key = foldKey(path);
     const clash = folded.get(key);
     if (clash !== undefined) {
       throw new CatalogError('invalid_path', { path, why: clash === path ? 'duplicate path' : `same as ${clash} ignoring case` });
@@ -94,7 +101,7 @@ export function checkTree(files: readonly { path: unknown; mode: unknown; bytes:
     out.push({ path, mode, bytes: f.bytes });
   }
   for (const f of out) {
-    const segs = f.path.toLowerCase().split('/');
+    const segs = foldKey(f.path).split('/');
     for (let i = 1; i < segs.length; i++) {
       const folder = segs.slice(0, i).join('/');
       if (folded.has(folder)) throw new CatalogError('invalid_path', { path: f.path, why: `${folded.get(folder)} is a file, not a folder` });

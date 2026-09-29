@@ -1,7 +1,8 @@
-// The catalog operations (contract §2), over the ports (§7). Local or hosted is only a choice of adapters.
+// The catalog operations (contract §2), over the ports (§7). Local or hosted is only a choice of adapters: nothing
+// here knows how versions and bytes are stored or kept consistent.
 
 import { CatalogError } from './errors.ts';
-import type { BlobStore, Clock, Events, Ids, MetadataStore, SearchCard, SearchIndex, VersionRecord } from './ports.ts';
+import type { Clock, Events, Identity, Ids, SearchCard, SearchIndex, Storage, VersionRecord } from './ports.ts';
 import { DEFAULT_SEARCH_LIMIT, VERSIONS_PAGE, validateInput } from './registry.ts';
 import {
   DEFAULT_CAPABILITY_KEYS,
@@ -34,10 +35,10 @@ export interface CatalogConfig {
 export const DEFAULT_CONFIG: CatalogConfig = { limits: DEFAULT_LIMITS, capabilityKeys: DEFAULT_CAPABILITY_KEYS, commonWords: COMMON_WORDS };
 
 export interface CatalogPorts {
-  meta: MetadataStore;
-  blobs: BlobStore;
+  storage: Storage;
   index: SearchIndex;
   events: Events;
+  identity: Identity;
   clock: Clock;
   ids: Ids;
   config?: Partial<CatalogConfig>;
@@ -150,8 +151,6 @@ export interface FetchResult {
 
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 const ACTOR = /^[a-z0-9][a-z0-9._-]{0,63}$/;
-const APPEND_TRIES = 5;
-export const ORPHAN_AGE_MS = 60 * 60 * 1000;
 
 function encodeCursor(offset: number): string {
   return Buffer.from(JSON.stringify({ o: offset })).toString('base64url');
@@ -165,13 +164,32 @@ function decodeCursor(cursor: string | undefined): number {
   } catch {
     // falls through
   }
-  throw new CatalogError('invalid_request', { field: 'cursor', why: 'not a cursor this catalog gave out' });
+  throw new CatalogError('invalid_request', { field: 'cursor', why: 'not_a_cursor' });
 }
 
 function checkActor(actor: unknown): string {
-  if (actor === undefined || actor === null || actor === '') throw new CatalogError('unauthenticated', { why: 'no acting developer' });
-  if (typeof actor !== 'string' || !ACTOR.test(actor)) throw new CatalogError('invalid_request', { field: 'as', why: 'a developer name: lowercase letters, digits, . _ -' });
+  if (actor === undefined || actor === null || actor === '') throw new CatalogError('unauthenticated', {});
+  if (typeof actor !== 'string' || !ACTOR.test(actor)) throw new CatalogError('invalid_request', { field: 'as', why: 'not_a_developer_name' });
   return actor;
+}
+
+// The decoded size of a base64 string, without decoding it.
+function decodedSize(b64: string): number {
+  const pad = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
+  return (b64.length / 4) * 3 - pad;
+}
+
+// Size limits checked on the request itself, before any byte is decoded (a huge request never reaches memory twice).
+function checkRequestSize(files: PublishInput['files'], limits: Limits): void {
+  if (files.length > limits.files) throw new CatalogError('too_large', { limit: 'files', max: limits.files, value: files.length });
+  let total = 0;
+  for (const [i, f] of files.entries()) {
+    if (!BASE64.test(f.content_base64)) throw new CatalogError('invalid_request', { field: `files[${i}].content_base64`, why: 'not_base64' });
+    const size = decodedSize(f.content_base64);
+    if (size > limits.file_bytes) throw new CatalogError('too_large', { limit: 'file_bytes', max: limits.file_bytes, value: size, path: f.path });
+    total += size;
+    if (total > limits.skill_bytes) throw new CatalogError('too_large', { limit: 'skill_bytes', max: limits.skill_bytes, value: total });
+  }
 }
 
 function cardOf(v: VersionRecord): SearchCard {
@@ -184,83 +202,69 @@ export class Catalog {
   readonly config: CatalogConfig;
   private readonly p: CatalogPorts;
 
-  constructor(ports: CatalogPorts) {
+  private constructor(ports: CatalogPorts) {
     this.p = ports;
     this.config = { ...DEFAULT_CONFIG, ...ports.config };
     // The search index is the first listener on version_published (§5.1 step 4). It reads the latest version rather
     // than trusting the event's order, so a repeated or late delivery can't put an old card back.
     ports.events.subscribe((e) => this.indexSkill(e.name));
-    ports.events.deliver();
-    this.sweepBlobs();
   }
 
-  // After a publish that failed part-way (a crash, a full disk), blobs no version references may remain (§5.1).
-  // Opening the catalog removes those older than an hour by the clock, so another process's publish in flight is
-  // never touched; a blob any version references is never removed.
-  sweepBlobs(maxAgeMs = ORPHAN_AGE_MS): number {
-    const before = new Date(this.p.clock.now().getTime() - maxAgeMs);
-    let removed = 0;
-    this.p.meta.withWriteLock(() => {
-      const referenced = this.p.meta.referencedBlobs();
-      for (const sha of this.p.blobs.list()) {
-        if (referenced.has(sha)) continue;
-        const at = this.p.blobs.storedAt(sha);
-        if (at && at < before) {
-          this.p.blobs.delete(sha);
-          removed++;
-        }
-      }
-    });
-    this.p.blobs.sweepTemp(before);
-    return removed;
+  // Opens the catalog over its ports and delivers any events a crashed process left pending.
+  static async open(ports: CatalogPorts): Promise<Catalog> {
+    const catalog = new Catalog(ports);
+    await ports.events.deliver();
+    return catalog;
   }
 
   close(): void {
     this.p.close?.();
   }
 
-  private indexSkill(name: string): void {
-    const s = this.p.meta.skill(name);
-    const v = s && this.p.meta.version(name, s.latest);
-    if (v) this.p.index.upsert(cardOf(v));
+  private async indexSkill(name: string): Promise<void> {
+    const s = await this.p.storage.skill(name);
+    const v = s && (await this.p.storage.version(name, s.latest));
+    if (v) await this.p.index.upsert(cardOf(v));
   }
 
-  rebuildIndex(): void {
-    this.p.index.rebuild([...this.p.meta.latestVersions()].map(cardOf));
+  async rebuildIndex(): Promise<void> {
+    await this.p.index.rebuild((await this.p.storage.latestVersions()).map(cardOf));
   }
 
-  private notFound(name: string, extra: Record<string, unknown> = {}): CatalogError {
-    return new CatalogError('not_found', { name, suggestions: spelledLike(name, this.p.meta.names()), ...extra });
+  private async notFound(name: string): Promise<CatalogError> {
+    return new CatalogError('not_found', { name, suggestions: spelledLike(name, await this.p.storage.names()) });
   }
 
-  private versionOf(name: string, version?: number): { record: VersionRecord; latest: number } {
+  private async versionOf(name: string, version?: number): Promise<{ record: VersionRecord; latest: number }> {
     checkName(name);
-    const s = this.p.meta.skill(name);
-    if (!s) throw this.notFound(name);
-    const record = this.p.meta.version(name, version ?? s.latest);
+    const s = await this.p.storage.skill(name);
+    if (!s) throw await this.notFound(name);
+    const record = await this.p.storage.version(name, version ?? s.latest);
     if (!record) throw new CatalogError('not_found', { name, version, latest: s.latest, suggestions: [] });
     return { record, latest: s.latest };
   }
 
   // A version's files, each checked against its sha256 on the way out.
-  private tree(v: VersionRecord): TreeFile[] {
-    return v.files.map((f) => {
-      const bytes = this.p.blobs.get(f.sha256);
-      if (!bytes) throw new Error(`storage: ${v.name} v${v.version} is missing the bytes of ${f.path} (${f.sha256})`);
-      if (sha256Hex(bytes) !== f.sha256) throw new Error(`storage: ${v.name} v${v.version} ${f.path} does not match its sha256`);
-      return { path: f.path, mode: f.mode, bytes };
-    });
+  private async tree(v: VersionRecord): Promise<TreeFile[]> {
+    return Promise.all(
+      v.files.map(async (f) => {
+        const bytes = await this.p.storage.blob(f.sha256);
+        if (!bytes) throw new Error(`storage: ${v.name} v${v.version} is missing the bytes of ${f.path} (${f.sha256})`);
+        if (sha256Hex(bytes) !== f.sha256) throw new Error(`storage: ${v.name} v${v.version} ${f.path} does not match its sha256`);
+        return { path: f.path, mode: f.mode, bytes };
+      }),
+    );
   }
 
   // search_shared_skills
-  search(input: unknown): SearchResult {
+  async search(input: unknown): Promise<SearchResult> {
     const req = validateInput<SearchInput>('search_shared_skills', input);
     const offset = decodeCursor(req.cursor);
     const limit = req.limit ?? DEFAULT_SEARCH_LIMIT;
-    this.p.events.deliver();
+    await this.p.events.deliver();
     const query = req.query?.trim() ?? '';
     const words = query ? contentWords(query, this.config.commonWords) : [];
-    const hits = this.p.index.query(words, req.filters ?? {});
+    const hits = await this.p.index.query(words, req.filters ?? {});
     const page = hits.slice(offset, offset + limit);
     const out: SearchResult = {
       results: page.map(({ card, matched_words }) => ({
@@ -274,22 +278,22 @@ export class Catalog {
       match: hits.length === 0 ? 'none' : words.length === 0 || hits.some((h) => h.matched_words.length === words.length) ? 'all' : 'partial',
       ranking: words.length === 0 ? 'none' : 'lexical',
       total_matches: hits.length,
-      catalog_size: this.p.meta.count(), // names, not versions
+      catalog_size: await this.p.storage.count(),
     };
     if (offset + limit < hits.length) out.next_cursor = encodeCursor(offset + limit);
     return out;
   }
 
   // read_shared_skill
-  read(input: unknown): { skills: ReadEntry[] } {
+  async read(input: unknown): Promise<{ skills: ReadEntry[] }> {
     const req = validateInput<ReadInput>('read_shared_skill', input);
-    if (req.name !== undefined && req.names !== undefined) throw new CatalogError('invalid_request', { field: 'names', why: 'give name or names, not both' });
+    if (req.name !== undefined && req.names !== undefined) throw new CatalogError('invalid_request', { field: 'names', why: 'name_and_names' });
     const wanted = req.names ?? (req.name !== undefined ? [req.name] : []);
     if (wanted.length === 0) throw new CatalogError('invalid_request', { field: 'name', why: 'required' });
     const include = req.include ?? 'manifest';
-    const one = (name: string): ReadItem => {
-      const { record, latest } = this.versionOf(name, req.version);
-      const tree = this.tree(record);
+    const one = async (name: string): Promise<ReadItem> => {
+      const { record, latest } = await this.versionOf(name, req.version);
+      const tree = await this.tree(record);
       const md = checkManifest(tree, name);
       const item: ReadItem = {
         name,
@@ -311,25 +315,25 @@ export class Catalog {
       }
       return item;
     };
-    if (req.names === undefined) return { skills: [one(wanted[0]!)] };
-    return {
-      skills: wanted.map((name) => {
-        try {
-          return one(name);
-        } catch (e) {
-          if (e instanceof CatalogError) return { name, error: e.toJSON() as Record<string, unknown> & { code: string } };
-          throw e;
-        }
-      }),
-    };
+    if (req.names === undefined) return { skills: [await one(wanted[0]!)] };
+    const skills: ReadEntry[] = [];
+    for (const name of wanted) {
+      try {
+        skills.push(await one(name));
+      } catch (e) {
+        if (!(e instanceof CatalogError)) throw e;
+        skills.push({ name, error: e.toJSON() as Record<string, unknown> & { code: string } });
+      }
+    }
+    return { skills };
   }
 
   // list_shared_skill_versions
-  versions(input: unknown): VersionsResult {
+  async versions(input: unknown): Promise<VersionsResult> {
     const req = validateInput<{ name: string; cursor?: string }>('list_shared_skill_versions', input);
     const offset = decodeCursor(req.cursor);
-    const { latest } = this.versionOf(req.name);
-    const rows = this.p.meta.versions(req.name, offset, VERSIONS_PAGE);
+    const { latest } = await this.versionOf(req.name);
+    const rows = await this.p.storage.versions(req.name, offset, VERSIONS_PAGE);
     const out: VersionsResult = {
       name: req.name,
       latest,
@@ -340,38 +344,37 @@ export class Catalog {
   }
 
   // diff_shared_skill_versions
-  diff(input: unknown): DiffResult {
+  async diff(input: unknown): Promise<DiffResult> {
     const req = validateInput<{ name: string; from: number; to: number }>('diff_shared_skill_versions', input);
-    const a = this.versionOf(req.name, req.from).record;
-    const b = this.versionOf(req.name, req.to).record;
-    const d = diffTrees({ files: this.tree(a), publisher: a.publisher }, { files: this.tree(b), publisher: b.publisher }, this.config.capabilityKeys);
+    const a = (await this.versionOf(req.name, req.from)).record;
+    const b = (await this.versionOf(req.name, req.to)).record;
+    const d = diffTrees({ files: await this.tree(a), publisher: a.publisher }, { files: await this.tree(b), publisher: b.publisher }, this.config.capabilityKeys);
     return { name: req.name, from: a.version, to: b.version, ...d };
   }
 
-  // publish_version: validate, put the bytes, compare-and-append (the commit point), then the event (§5.1).
-  publish(input: unknown, actor: unknown): PublishResult {
+  // publish_version: check, then the storage's commit point, then the event (§5.1). The publisher is the acting
+  // identity (the given one, else the catalog's), never a field in the request or the front matter.
+  async publish(input: unknown, identity: Identity = this.p.identity): Promise<PublishResult> {
     const req = validateInput<PublishInput>('publish_version', input);
-    const publisher = checkActor(actor);
+    const publisher = checkActor(await identity.actor());
     const name = checkName(req.name);
 
     // One order of refusals, dry run or not: not_owner, then conflict, then the files. Owner and latest are checked
-    // before any byte is stored, so a refused publish leaves storage exactly as it was; the append checks again,
-    // atomically, for a publish that raced this one.
-    const skill = this.p.meta.skill(name);
+    // before any byte is stored, so a refused publish leaves storage exactly as it was; the storage's commit
+    // checks again, atomically, for a publish that raced this one.
+    const skill = await this.p.storage.skill(name);
     if (skill && !skill.owners.includes(publisher)) throw new CatalogError('not_owner', { name, owners: skill.owners });
     const latestNo = skill?.latest ?? 0;
     if (req.expected_latest !== undefined && req.expected_latest !== latestNo) throw new CatalogError('conflict', { name, latest: latestNo, expected_latest: req.expected_latest });
 
-    const raw = req.files.map((f, i) => {
-      if (!BASE64.test(f.content_base64)) throw new CatalogError('invalid_request', { field: `files[${i}].content_base64`, why: 'not base64' });
-      return { path: f.path, mode: f.mode, bytes: Buffer.from(f.content_base64, 'base64') };
-    });
+    checkRequestSize(req.files, this.config.limits);
+    const raw = req.files.map((f) => ({ path: f.path, mode: f.mode, bytes: Buffer.from(f.content_base64, 'base64') }));
     const tree = checkTree(raw, this.config.limits);
     const md = checkManifest(tree, name);
     const entries = tree.map(entryOf);
     const fingerprint = fingerprintOf(entries);
-    const latest = skill ? this.p.meta.version(name, latestNo) : undefined;
-    const diff = diffTrees(latest ? { files: this.tree(latest), publisher: latest.publisher } : null, { files: tree, publisher }, this.config.capabilityKeys);
+    const latest = skill ? await this.p.storage.version(name, latestNo) : undefined;
+    const diff = diffTrees(latest ? { files: await this.tree(latest), publisher: latest.publisher } : null, { files: tree, publisher }, this.config.capabilityKeys);
     const result = (version: number, created: boolean): PublishResult => ({
       name,
       version,
@@ -382,91 +385,48 @@ export class Catalog {
       diff_from_latest: latest ? diff : null,
       risk_flags: created || req.dry_run ? diff.risk_flags : [],
     });
-    if (latest && latest.fingerprint === fingerprint) return { ...result(latest.version, false), diff_from_latest: { ...diff, files: [] }, risk_flags: [] };
+    const unchanged = (version: number): PublishResult => ({ ...result(version, false), diff_from_latest: { ...diff, files: [] }, risk_flags: [] });
+    if (latest && latest.fingerprint === fingerprint) return unchanged(latest.version);
     if (req.dry_run) return result(latestNo + 1, false);
 
-    const added = new Set<string>();
-    const putAll = () => {
-      for (const f of tree) if (this.p.blobs.put(sha256Hex(f.bytes), f.bytes)) added.add(sha256Hex(f.bytes));
-    };
-    // A refused or failed commit takes back the blobs this publish added that no version references, under the write
-    // lock, so storage is exactly as it was (rows and blobs) even when another publish won the race.
-    const takeBack = () => {
-      try {
-        this.p.meta.withWriteLock(() => {
-          for (const sha of added) if (!this.p.meta.referencesBlob(sha)) this.p.blobs.delete(sha);
-        });
-      } catch {
-        // Left for a later cleanup; no version points at them.
-      }
-    };
-    putAll();
-    const record: Omit<VersionRecord, 'version'> = {
-      name,
-      fingerprint,
-      publisher,
-      message: req.message ?? '',
-      published_at: this.p.clock.now().toISOString(),
-      files: entries,
-      description: md.description,
-      tags: md.tags,
-      frontmatter: md.frontmatter,
-    };
-    const event = (version: number) => ({ type: 'version_published' as const, name, version, fingerprint, publisher, at: record.published_at });
-    for (let attempt = 1; ; attempt++) {
-      let r;
-      try {
-        // No version ever points at a missing blob (§5.1): under the same lock as the cleanup, every blob this
-        // version references must exist; one that was cleaned away (a stalled publish, a raced take-back) is put
-        // again from the bytes held here before the append. If that put fails, the publish fails, retryable.
-        r = this.p.meta.withWriteLock(() => {
-          for (const f of tree) {
-            const sha = sha256Hex(f.bytes);
-            if (!this.p.blobs.has(sha) && this.p.blobs.put(sha, f.bytes)) added.add(sha);
-          }
-          return this.p.meta.append(record, { expectedLatest: req.expected_latest }, event);
-        });
-      } catch (e) {
-        // A clash on the version number or a busy lock: try again.
-        if (attempt < APPEND_TRIES && /UNIQUE|constraint|busy|locked/i.test(String((e as Error).message))) continue;
-        takeBack();
-        throw e;
-      }
-      switch (r.kind) {
-        case 'not_owner':
-          takeBack();
-          throw new CatalogError('not_owner', { name, owners: r.owners });
-        case 'conflict':
-          takeBack();
-          throw new CatalogError('conflict', { name, latest: r.latest, expected_latest: req.expected_latest });
-        case 'identical':
-          takeBack();
-          return { ...result(r.record.version, false), diff_from_latest: { ...diff, files: [] }, risk_flags: [] };
-        case 'created':
-          try {
-            this.p.events.deliver();
-          } catch {
-            // The version is committed; its event stays in the outbox and the next delivery (a search, the next
-            // process to open the catalog) retries it. The search index may lag; it never loses a version.
-          }
-          return result(r.record.version, true);
-      }
+    const at = this.p.clock.now().toISOString();
+    const r = await this.p.storage.commit(
+      { name, fingerprint, publisher, message: req.message ?? '', published_at: at, files: entries, description: md.description, tags: md.tags, frontmatter: md.frontmatter },
+      tree.map((f) => ({ sha256: sha256Hex(f.bytes), bytes: f.bytes })),
+      { expectedLatest: req.expected_latest },
+      (version) => ({ type: 'version_published', name, version, fingerprint, publisher, at }),
+    );
+    switch (r.kind) {
+      case 'not_owner':
+        throw new CatalogError('not_owner', { name, owners: r.owners });
+      case 'conflict':
+        throw new CatalogError('conflict', { name, latest: r.latest, expected_latest: req.expected_latest });
+      case 'identical':
+        return unchanged(r.record.version);
+      case 'created':
+        try {
+          await this.p.events.deliver();
+        } catch {
+          // The version is committed; its event stays in the outbox and the next delivery (a search, the next
+          // process to open the catalog) retries it. The search index may lag; it never loses a version.
+        }
+        return result(r.record.version, true);
     }
   }
 
   // fetch_version: the bytes, by name and version or by fingerprint; cacheable by fingerprint.
-  fetch(input: unknown): FetchResult {
+  async fetch(input: unknown): Promise<FetchResult> {
     const req = validateInput<FetchInput>('fetch_version', input);
     let record: VersionRecord | undefined;
     if (req.fingerprint !== undefined) {
-      if (req.name !== undefined || req.version !== undefined) throw new CatalogError('invalid_request', { field: 'fingerprint', why: 'give a fingerprint, or a name and version' });
-      record = this.p.meta.byFingerprint(req.fingerprint);
+      if (req.name !== undefined || req.version !== undefined) throw new CatalogError('invalid_request', { field: 'fingerprint', why: 'fingerprint_or_name_and_version' });
+      record = await this.p.storage.byFingerprint(req.fingerprint);
       if (!record) throw new CatalogError('not_found', { fingerprint: req.fingerprint, suggestions: [] });
     } else {
       if (req.name === undefined || req.version === undefined) throw new CatalogError('invalid_request', { field: req.name === undefined ? 'name' : 'version', why: 'required' });
-      record = this.versionOf(req.name, req.version).record;
+      record = (await this.versionOf(req.name, req.version)).record;
     }
-    const files = this.tree(record).map((f) => ({ path: f.path, mode: f.mode, content_base64: Buffer.from(f.bytes).toString('base64') }));
+    const files = (await this.tree(record)).map((f) => ({ path: f.path, mode: f.mode, content_base64: Buffer.from(f.bytes).toString('base64') }));
     return { name: record.name, version: record.version, fingerprint: record.fingerprint, files };
   }
 }

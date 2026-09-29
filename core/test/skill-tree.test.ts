@@ -115,6 +115,14 @@ describe('hostile file lists are refused (golden/skills.yaml hostile, the raw re
     });
   }
 
+  it('two paths one case-insensitive file system would store as one file are refused (Unicode case folding)', () => {
+    const md = { path: 'SKILL.md', mode: '0644', bytes: Buffer.from('---\nname: x\ndescription: y\n---\nz\n') };
+    for (const [a, b] of [['SKILL.md', 'ſKILL.md'], ['aς.md', 'aσ.md'], ['straße.md', 'strasse.md'], ['ﬁle.md', 'file.md'], ['Notes.md', 'notes.md']]) {
+      const files = a === 'SKILL.md' ? [md, { path: b!, mode: '0644', bytes: Buffer.from('evil') }] : [md, { path: a!, mode: '0644', bytes: Buffer.from('1') }, { path: b!, mode: '0644', bytes: Buffer.from('2') }];
+      expect(errorOf(() => checkTree(files)).code, `${a} / ${b}`).toBe('invalid_path');
+    }
+  });
+
   it('more path shapes: empty segments, ".", backslashes, control characters, a file that is also a folder', () => {
     const md = { path: 'SKILL.md', mode: '0644', bytes: Buffer.from('---\nname: x\ndescription: y\n---\nz\n') };
     for (const path of ['a//b.md', './a.md', 'a/./b.md', 'a\\b.md', 'a\u0000.md', 'C:/x.md', '', 'a/']) {

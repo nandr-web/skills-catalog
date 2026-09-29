@@ -4,54 +4,60 @@
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { Catalog, type CatalogConfig } from '../catalog.ts';
-import { CatalogError } from '../errors.ts';
-import type { BlobStore, Clock, Ids, MetadataStore } from '../ports.ts';
+import type { Clock, Identity, Ids, Storage } from '../ports.ts';
 import { FolderBlobStore } from './blobs.ts';
 import { LocalDb } from './db.ts';
+import { actAs } from './identity.ts';
 import { SqliteMetadataStore } from './metadata.ts';
 import { LocalOutbox } from './outbox.ts';
 import { SqliteSearchIndex } from './search-index.ts';
+import { LocalStorage } from './storage.ts';
 
 export const DB_FILE = 'catalog.sqlite';
 
 export interface LocalOptions {
   clock?: Clock;
   ids?: Ids;
+  identity?: Identity;
   config?: Partial<CatalogConfig>;
-  // Test seams: wrap an adapter (fault injection) without changing the catalog.
-  wrapMeta?: (m: MetadataStore) => MetadataStore;
-  wrapBlobs?: (b: BlobStore) => BlobStore;
+  // Test seams, without changing the catalog: wrap the local storage's halves (fault injection, a cleanup between
+  // the blob puts and the append), or the whole Storage port (another publish landing before this one's commit).
+  wrapMeta?: (m: SqliteMetadataStore) => SqliteMetadataStore;
+  wrapBlobs?: (b: FolderBlobStore) => FolderBlobStore;
+  wrapStorage?: (s: Storage) => Storage;
 }
 
 export const systemClock: Clock = { now: () => new Date() };
 export const randomIds: Ids = { next: () => randomUUID() };
 
-export function openLocalCatalog(dir: string, opts: LocalOptions = {}): Catalog {
+export async function openLocalCatalog(dir: string, opts: LocalOptions = {}): Promise<Catalog> {
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const clock = opts.clock ?? systemClock;
   const ids = opts.ids ?? randomIds;
   const db = new LocalDb(join(dir, DB_FILE));
   const meta = new SqliteMetadataStore(db);
   const blobs = new FolderBlobStore(dir, ids, clock);
-  const catalog = new Catalog({
-    meta: opts.wrapMeta ? opts.wrapMeta(meta) : meta,
-    blobs: opts.wrapBlobs ? opts.wrapBlobs(blobs) : blobs,
-    index: new SqliteSearchIndex(db),
-    events: new LocalOutbox(db, clock),
-    clock,
-    ids,
-    ...(opts.config ? { config: opts.config } : {}),
-    close: () => db.close(),
-  });
-  if (db.indexReset) catalog.rebuildIndex();
-  return catalog;
+  const storage = new LocalStorage(opts.wrapMeta ? opts.wrapMeta(meta) : meta, opts.wrapBlobs ? opts.wrapBlobs(blobs) : blobs, clock);
+  try {
+    storage.sweep();
+    const catalog = await Catalog.open({
+      storage: opts.wrapStorage ? opts.wrapStorage(storage) : storage,
+      index: new SqliteSearchIndex(db),
+      events: new LocalOutbox(db, clock),
+      identity: opts.identity ?? actAs(undefined),
+      clock,
+      ids,
+      ...(opts.config ? { config: opts.config } : {}),
+      close: () => db.close(),
+    });
+    if (db.indexReset) await catalog.rebuildIndex();
+    return catalog;
+  } catch (e) {
+    db.close();
+    throw e;
+  }
 }
 
-// SKILLS_CATALOG (contract §8): file:///… is the local adapter; https://… is the hosted one (not built in phase 1).
-export function openCatalog(url: string, opts: LocalOptions = {}): Catalog {
-  if (url.startsWith('file://')) return openLocalCatalog(fileURLToPath(url), opts);
-  if (url.startsWith('https://')) throw new CatalogError('forbidden', { catalog: url, why: 'a hosted catalog is not part of this version; use a local folder' });
-  throw new CatalogError('invalid_request', { field: 'catalog', why: 'a file:// or https:// URL' });
-}
+export { actAs } from './identity.ts';
+export { LocalStorage, ORPHAN_AGE_MS } from './storage.ts';

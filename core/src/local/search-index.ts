@@ -37,7 +37,7 @@ export class SqliteSearchIndex implements SearchIndex {
     return this.local.db;
   }
 
-  upsert(card: SearchCard): void {
+  async upsert(card: SearchCard): Promise<void> {
     this.local.immediate(() => this.write(card));
   }
 
@@ -49,18 +49,14 @@ export class SqliteSearchIndex implements SearchIndex {
       .run(card.name, card.description, card.latest_version, JSON.stringify(card.tags), card.publisher, card.updated_at);
   }
 
-  rebuild(cards: Iterable<SearchCard>): void {
+  async rebuild(cards: readonly SearchCard[]): Promise<void> {
     this.local.immediate(() => {
       this.db.exec('DELETE FROM search_fts; DELETE FROM search_cards;');
       for (const c of cards) this.write(c);
     });
   }
 
-  count(): number {
-    return (this.db.prepare('SELECT count(*) AS n FROM search_cards').get() as { n: number }).n;
-  }
-
-  query(words: string[], filters: SearchFilters): SearchHit[] {
+  async query(words: string[], filters: SearchFilters): Promise<SearchHit[]> {
     let hits: SearchHit[];
     if (words.length === 0) {
       const rows = this.db.prepare('SELECT * FROM search_cards ORDER BY name').all() as unknown as CardRow[];

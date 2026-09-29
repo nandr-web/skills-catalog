@@ -8,22 +8,18 @@ import type { LocalDb } from './db.ts';
 export class LocalOutbox implements Events {
   private readonly local: LocalDb;
   private readonly clock: Clock;
-  private readonly handlers: ((e: VersionPublished) => void)[] = [];
+  private readonly handlers: ((e: VersionPublished) => Promise<void>)[] = [];
 
   constructor(local: LocalDb, clock: Clock) {
     this.local = local;
     this.clock = clock;
   }
 
-  subscribe(handler: (e: VersionPublished) => void): void {
+  subscribe(handler: (e: VersionPublished) => Promise<void>): void {
     this.handlers.push(handler);
   }
 
-  pending(): number {
-    return (this.local.db.prepare('SELECT count(*) AS n FROM outbox WHERE delivered_at IS NULL').get() as { n: number }).n;
-  }
-
-  deliver(): number {
+  async deliver(): Promise<number> {
     const db = this.local.db;
     let delivered = 0;
     for (;;) {
@@ -31,7 +27,7 @@ export class LocalOutbox implements Events {
       if (rows.length === 0) return delivered;
       for (const row of rows) {
         const event = JSON.parse(row.event) as VersionPublished;
-        for (const h of this.handlers) h(event);
+        for (const h of this.handlers) await h(event);
         this.local.immediate(() => db.prepare('UPDATE outbox SET delivered_at = ? WHERE id = ?').run(this.clock.now().toISOString(), row.id));
         delivered++;
       }

@@ -1,7 +1,7 @@
 // SKILL.md: YAML front matter, then a markdown body (contract §4.1, the Agent Skills format).
 
 import { parseDocument } from 'yaml';
-import { CatalogError } from '../errors.ts';
+import { CatalogError } from './errors.ts';
 import { decodeText, isText, type TreeFile } from './tree.ts';
 
 export const MANIFEST = 'SKILL.md';
