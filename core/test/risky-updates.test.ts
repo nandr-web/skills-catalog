@@ -7,7 +7,7 @@ import { injections } from '../src/skill-tree/diff.ts';
 import { checkTree, diffTrees, type RiskFlag } from '../src/skill-tree/index.ts';
 import { injections15f3e65 } from './fixtures/injections-15f3e65.ts';
 import { filesOf, loadGolden } from './golden.ts';
-import { expectLinear, times } from './linear.ts';
+import { cpuMs, expectLinear, times } from './linear.ts';
 
 // Characters that are hard to see in source: a line separator, a no-break space, a zero-width space.
 const LS = String.fromCharCode(0x2028);
@@ -238,18 +238,40 @@ describe('a changed fence line in a file with a ```! block counts as running a c
     const got = loads(text('x', '~~~\n~~~\n'), text('y', '')).map((f) => [f.line, f.detail]);
     expect(got).toEqual([[1, '```!'], [4104, '```']]);
   }, 60_000);
-  it('about 3,900 fence lines removed all through a megabyte, in linear time (the removals grow with the file)', () => {
-    // every 52nd line of 200,000 is a removed fence: 3,847 removals, under the line diff's 4,000, so it doesn't give up
-    const versions = (scale: number) => {
-      const n = Math.round(200_000 * scale);
-      const lines = Array.from({ length: n }, (_, i) => (i % 2 ? `text ${i % 997}` : '```'));
-      const body = (l: string[]) => `\`\`\`!\necho a\n\`\`\`\n${l.join('\n')}\n`;
-      return [body(lines), body(lines.filter((_, i) => i % 52 !== 0))] as const;
-    };
-    const [before, after] = versions(1);
+  // A megabyte of alternating fence and text lines, with `k` of its fence lines removed, spread evenly through it.
+  const fencesRemoved = (n: number, k: number) => {
+    const lines = Array.from({ length: n }, (_, i) => (i % 2 ? `text ${i % 997}` : '```'));
+    const gone = new Set(Array.from({ length: k }, (_, t) => 2 * Math.floor((t * (n / 2)) / k)));
+    const body = (l: string[]) => `\`\`\`!\necho a\n\`\`\`\n${l.join('\n')}\n`;
+    return [body(lines), body(lines.filter((_, i) => !gone.has(i)))] as const;
+  };
+  const removals = (flags: RiskFlag[]) => flags.filter((f) => f.detail.startsWith('fence removed')).length;
+  it('40 fence lines removed all through a megabyte, in linear time', () => {
+    // The fence rule's own cost, with the line diff's differences held at 40: its alignment costs the file's length
+    // times the differences, and those are bounded by the cap below, not claimed linear here.
+    const [before, after] = fencesRemoved(200_000, 40);
     expect(Buffer.byteLength(before)).toBeGreaterThan(1_000_000);
-    expect(loads(before, after).filter((f) => f.detail.startsWith('fence removed')).length).toBeGreaterThan(3_800);
-    expectLinear('3,900 removals through a megabyte', versions, ([a, b]) => loads(a, b));
+    expect(removals(loads(before, after))).toBe(40);
+    expectLinear('40 removals through a megabyte', (scale) => fencesRemoved(Math.round(200_000 * scale), 40), ([a, b]) => loads(a, b));
+  }, 120_000);
+  // The line diff's worst case (diff.ts MAX_EDIT): a megabyte whose differences are just under the cap is aligned, and
+  // one just over it gives up aligning (every new fence line counts as changed); both within a CPU ceiling with room for a
+  // slow machine (about 0.36 s measured at load 25).
+  const CEILING_MS = 2_000;
+  it('3,999 fence lines removed through a megabyte, just under the line diff\'s cap: aligned, within its CPU ceiling', () => {
+    const [before, after] = fencesRemoved(200_000, 3_999);
+    let flags: RiskFlag[] = [];
+    const ms = cpuMs(() => (flags = loads(before, after)));
+    expect(removals(flags)).toBe(3_999);
+    expect(ms).toBeLessThan(CEILING_MS);
+  }, 120_000);
+  it('4,001 fence lines removed through a megabyte, just over the cap: the whole file counts as changed, within the same ceiling', () => {
+    const [before, after] = fencesRemoved(200_000, 4_001);
+    let flags: RiskFlag[] = [];
+    const ms = cpuMs(() => (flags = loads(before, after)));
+    expect(removals(flags)).toBe(0);
+    expect(flags.length).toBeGreaterThan(90_000);
+    expect(ms).toBeLessThan(CEILING_MS);
   }, 120_000);
   it('fence lines removed in a megabyte of them, each where it was, in linear time', () => {
     const lines = (scale: number) => Array.from({ length: Math.round(100_000 * scale) }, (_, i) => (i % 2 ? 'text' : '```'));
