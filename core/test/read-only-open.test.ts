@@ -156,6 +156,7 @@ describe('a catalog file made to mislead', () => {
     ['search_fts is a plain table', 'DROP TABLE search_fts; CREATE TABLE search_fts (name, words, description)'],
     ['it has a view by another name', 'CREATE VIEW anything AS SELECT 1'],
     ['it has a trigger', "CREATE TRIGGER t AFTER INSERT ON versions BEGIN DELETE FROM skills; END"],
+    ['it has another virtual table', 'CREATE VIRTUAL TABLE other USING fts5 (x)'],
   ];
   for (const [what, sql] of cases) {
     it(`where ${what}, a read-only open refuses with catalog_unreadable and writes nothing`, async () => {
@@ -292,7 +293,7 @@ describe.skipIf(asRoot)('a read-only open of a WAL catalog in a folder that isn\
     const dir = await published();
     writeFileSync(join(dir, DB_FILE), 'not a database');
     const e = await errorOf(() => readOnly(dir));
-    expect(e.toJSON()).toEqual({ code: 'invalid_request', field: 'catalog', why: 'catalog_unreadable', path: dir });
+    expect(e.toJSON()).toEqual({ code: 'invalid_request', field: 'catalog', why: 'catalog_unreadable', path: dir, sqlite_code: 26 });
   });
 
   it('whose -wal appears after the plain open failed, refuses with catalog_unreadable: the -wal check comes last', async () => {
@@ -305,7 +306,7 @@ describe.skipIf(asRoot)('a read-only open of a WAL catalog in a folder that isn\
         chmodSync(dir, 0o555);
       };
       const e = await errorOf(() => openLocalCatalog(dir, { readOnly: true, named: true, beforeImmutable }));
-      expect(e.toJSON()).toEqual({ code: 'invalid_request', field: 'catalog', why: 'catalog_unreadable', path: dir });
+      expect(e.toJSON()).toEqual({ code: 'invalid_request', field: 'catalog', why: 'catalog_unreadable', path: dir, sqlite_code: 1544 });
     } finally {
       done();
     }

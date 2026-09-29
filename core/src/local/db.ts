@@ -51,6 +51,44 @@ const BUSY_MS = 15_000;
 const isBusy = (e: unknown) => (e as { errcode?: number }).errcode === 5 || /database is locked/.test(String((e as Error).message));
 const sleep = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
+// A catalog file in someone else's folder is untrusted input (contract §6), so every open, reading or writing, first
+// turns off SQLite's trust in the file's own schema (trusted_schema off: nothing in it may call a function or virtual
+// table SQLite hasn't marked safe) and turns on its defensive mode where the runtime has it. Node 24.15's node:sqlite may
+// lack enableDefensive; there, the table checks below are what hold.
+function distrust(db: DatabaseSync): void {
+  db.exec('PRAGMA trusted_schema = OFF');
+  (db as { enableDefensive?: (active: boolean) => void }).enableDefensive?.(true);
+}
+
+// Then, from sqlite_master and before any other read, the tables must be the catalog's own: its tables real ones, the
+// search's full-text table an fts5 one and the only virtual table, and no view or trigger anywhere in the file (a view
+// could stand in for a table, FTS5's own included, and never end; a trigger would run on a write). Names are compared
+// as SQLite does, without regard to case. `required` must be there (the read-only open's); any other of the catalog's
+// tables may be missing (the writing open makes it) but never wrong.
+export class NotCatalogTables extends Error {}
+const OWN_TABLES = ['skills', 'versions', 'outbox', 'search_cards'];
+const FTS_TABLE = 'search_fts';
+const REAL_TABLE = /^CREATE\s+TABLE\s/i;
+const FTS5_TABLE = /^CREATE\s+VIRTUAL\s+TABLE\s+("?)search_fts\1\s+USING\s+fts5\s*\(/i;
+function checkOwnTables(db: DatabaseSync, required: readonly string[]): void {
+  const rows = db.prepare('SELECT type, name, sql FROM sqlite_master').all() as { type: string; name: string; sql: string | null }[];
+  const byName = new Map<string, { type: string; sql: string }>();
+  for (const r of rows) {
+    if (r.type === 'view' || r.type === 'trigger') throw new NotCatalogTables(`a ${r.type}`);
+    const sql = r.sql ?? '';
+    if (r.type === 'table' && !REAL_TABLE.test(sql) && r.name.toLowerCase() !== FTS_TABLE) throw new NotCatalogTables('a virtual table');
+    byName.set(r.name.toLowerCase(), { type: r.type, sql });
+  }
+  for (const name of [...OWN_TABLES, FTS_TABLE]) {
+    const r = byName.get(name);
+    if (!r) {
+      if (required.includes(name)) throw new NotCatalogTables(`no ${name}`);
+      continue;
+    }
+    if (r.type !== 'table' || !(name === FTS_TABLE ? FTS5_TABLE : REAL_TABLE).test(r.sql)) throw new NotCatalogTables(`${name} isn't the catalog's`);
+  }
+}
+
 export class LocalDb {
   readonly db: DatabaseSync;
   // True when the search index was dropped because its tokenizer changed: the catalog rebuilds it from the versions.
@@ -65,7 +103,14 @@ export class LocalDb {
       return;
     }
     this.db = new DatabaseSync(file, { timeout: BUSY_MS });
-    this.db.exec(`PRAGMA busy_timeout = ${BUSY_MS}`);
+    try {
+      this.db.exec(`PRAGMA busy_timeout = ${BUSY_MS}`);
+      distrust(this.db);
+      checkOwnTables(this.db, []);
+    } catch (e) {
+      this.db.close();
+      throw e;
+    }
     this.walMode();
     this.db.exec('PRAGMA synchronous = NORMAL');
     this.indexReset = this.immediate(() => {
@@ -117,12 +162,15 @@ export class LocalDb {
 // it (SQLITE_READONLY); closed cleanly, with no -wal beside it (checked again right before, since a writer may open it in
 // between), no writer of this user's can change it, so it's read as unchanging (immutable=1). Anything else that can't
 // be read throws, for the caller to name. `beforeImmutable` is a test seam that runs just before that last check.
-// Every table a read queries is checked here, so a file that lacks one fails now rather than on the first read.
+// Every table a read queries must be there and the catalog's own, so a file that lacks one fails now rather than on the
+// first read.
 const SQLITE_READONLY = 8;
 const READ_TABLES = ['skills', 'versions', 'search_cards', 'search_fts'];
 export function openReadOnly(file: string, beforeImmutable?: () => void): DatabaseSync {
   const readable = (db: DatabaseSync) => {
     try {
+      distrust(db);
+      checkOwnTables(db, READ_TABLES);
       for (const table of READ_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
       return db;
     } catch (e) {

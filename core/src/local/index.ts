@@ -8,7 +8,7 @@ import { Catalog, type CatalogConfig } from '../catalog.ts';
 import { CatalogError } from '../errors.ts';
 import type { Clock, Events, Identity, Ids, Storage } from '../ports.ts';
 import { FolderBlobStore } from './blobs.ts';
-import { LocalDb, openReadOnly } from './db.ts';
+import { LocalDb, NotCatalogTables, openReadOnly } from './db.ts';
 import { actAs } from './identity.ts';
 import { SqliteMetadataStore } from './metadata.ts';
 import { LocalOutbox } from './outbox.ts';
@@ -53,8 +53,24 @@ function readOnlyDb(dir: string, opts: LocalOptions): LocalDb {
   }
   try {
     return new LocalDb(openReadOnly(file, opts.beforeImmutable));
-  } catch {
-    throw new CatalogError('invalid_request', { field: 'catalog', why: 'catalog_unreadable', path: dir });
+  } catch (e) {
+    throw unreadable(dir, e);
+  }
+}
+
+// A catalog that can't be opened: its path and, from SQLite, its error code, never its message (contract §6).
+function unreadable(dir: string, e: unknown): CatalogError {
+  const code = (e as { errcode?: unknown }).errcode;
+  return new CatalogError('invalid_request', { field: 'catalog', why: 'catalog_unreadable', path: dir, ...(typeof code === 'number' ? { sqlite_code: code } : {}) });
+}
+
+// The writing open's database; a file whose tables aren't the catalog's own is refused like an unreadable one.
+function writingDb(dir: string): LocalDb {
+  try {
+    return new LocalDb(join(dir, DB_FILE));
+  } catch (e) {
+    if (e instanceof NotCatalogTables) throw unreadable(dir, e);
+    throw e;
   }
 }
 
@@ -63,7 +79,7 @@ export async function openLocalCatalog(dir: string, opts: LocalOptions = {}): Pr
   if (!readOnly) mkdirSync(dir, { recursive: true, mode: 0o700 });
   const clock = opts.clock ?? systemClock;
   const ids = opts.ids ?? randomIds;
-  const db = readOnly ? readOnlyDb(dir, opts) : new LocalDb(join(dir, DB_FILE));
+  const db = readOnly ? readOnlyDb(dir, opts) : writingDb(dir);
   const meta = new SqliteMetadataStore(db);
   const blobs = new FolderBlobStore(dir, ids, clock, readOnly);
   const storage = new LocalStorage(opts.wrapMeta ? opts.wrapMeta(meta) : meta, opts.wrapBlobs ? opts.wrapBlobs(blobs) : blobs, clock);
