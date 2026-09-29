@@ -17,6 +17,7 @@ import {
   isText,
   decodeText,
   sha256Hex,
+  scanSecrets,
   type FileChange,
   type Limits,
   type Mode,
@@ -140,6 +141,7 @@ export interface PublishInput {
   message?: string;
   expected_latest?: number;
   dry_run?: boolean;
+  allow_suspected_secrets?: boolean;
 }
 
 export interface PublishResult {
@@ -430,6 +432,9 @@ export class Catalog {
     const raw = req.files.map((f) => ({ path: f.path, mode: f.mode, bytes: Buffer.from(f.content_base64, 'base64') }));
     const tree = checkTree(raw, this.config.limits);
     const md = checkManifest(tree, name);
+    // The secret scan: a hit refuses the publish, dry run or not, unless the person allowed it for this one (§2).
+    const secret = req.allow_suspected_secrets === true ? null : scanSecrets(tree);
+    if (secret) throw new CatalogError('secret_suspected', { ...secret });
     const entries = tree.map(entryOf);
     const fingerprint = fingerprintOf(entries);
     const latest = skill ? await this.p.storage.version(name, latestNo) : undefined;

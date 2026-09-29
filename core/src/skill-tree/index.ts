@@ -6,3 +6,4 @@ export * from './errors.ts';
 export * from './tree.ts';
 export * from './manifest.ts';
 export * from './diff.ts';
+export * from './secrets.ts';

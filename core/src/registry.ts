@@ -107,6 +107,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
         message: { type: 'string', maxLength: 1000 },
         expected_latest: { type: 'integer', minimum: 0 },
         dry_run: { type: 'boolean' },
+        allow_suspected_secrets: { type: 'boolean' }, // a person's override, per publish; never in an MCP schema
       },
       required: ['name', 'files'],
     },

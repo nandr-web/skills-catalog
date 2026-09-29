@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { ReadItem } from '../src/catalog.ts';
 import { actAs } from '../src/local/index.ts';
 import { OPERATIONS } from '../src/registry.ts';
-import { renderRead } from '../src/render.ts';
+import { renderError, renderRead } from '../src/render.ts';
 import { Surface } from '../src/surface.ts';
 import { DEFAULT_LIMITS } from '../src/skill-tree/index.ts';
 import { catalogNameOf, filesOf, generated, loadGolden, rawFilesOf, type RawFile } from './golden.ts';
@@ -26,7 +26,6 @@ function refused(): [string, any, RawFile[]][] {
   for (const group of ['invalid', 'hostile'] as const) {
     for (const [key, fx] of Object.entries<any>(skills[group])) {
       if (!fx.error) continue;
-      if (fx.error === 'secret_suspected') continue; // the secret scan in the core's publish comes next (round 2, item F)
       const files = fx.generate ? generated(key) : fx.raw_files ? rawFilesOf(fx.raw_files.map((f: any) => ({ ...f, path: String(f.path).replace('$RUN', '/sandbox') }))) : filesOf(fx.files);
       if (!files) continue; // links, hardlinks and fifos exist only on disk (the folder reader)
       out.push([`${group}.${key}`, fx, files]);
@@ -36,7 +35,6 @@ function refused(): [string, any, RawFile[]][] {
 }
 
 describe('every refused fixture gives its golden code and reason, and stores nothing', () => {
-  it.todo('secret_suspected fixtures: the secret scan in the core\'s publish (round 2, item F)');
   it.each(refused().map(([k, fx, files]) => [k, fx, files] as const))('%s', async (key, fx, files) => {
     const { dir, catalog } = await openTest();
     const before = snapshot(dir);
@@ -46,6 +44,15 @@ describe('every refused fixture gives its golden code and reason, and stores not
       if (fx[field] !== undefined) expect(e.data[field], field).toEqual(typeof fx[field] === 'string' ? fx[field].replace('$RUN', '/sandbox') : fx[field]);
     }
     if (fx.feature_one_of) expect(fx.feature_one_of).toContain(e.data['feature']);
+    if (fx.at) {
+      expect(e.data['path']).toBe(fx.at.path);
+      expect(e.data['line']).toBe(fx.at.line);
+      if (fx.at.kind === 'present') expect(e.data['kind']).toBeTruthy();
+    }
+    if (fx.error_text_must_not_contain) {
+      expect(JSON.stringify(e.toJSON())).not.toContain(fx.error_text_must_not_contain);
+      expect(renderError(Surface.load(), e)).not.toContain(fx.error_text_must_not_contain);
+    }
     for (const field of ['max', 'value'] as const) if (fx[field] !== undefined) expect(e.data[field], field).toEqual(limitValue(fx[field]));
     expect(snapshot(dir)).toBe(before);
   });

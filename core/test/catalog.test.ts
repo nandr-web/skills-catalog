@@ -228,6 +228,39 @@ describe('histories (golden/histories.yaml)', () => {
   });
 });
 
+describe('the secret scan in the core\'s publish (contract §2)', () => {
+  const md = '---\nname: keys\ndescription: Calls an API.\n---\nRun scripts/call.sh.\n';
+  const withScript = (script: string) => [
+    { path: 'SKILL.md', mode: '0644', bytes: Buffer.from(md) },
+    { path: 'scripts/call.sh', mode: '0755', bytes: Buffer.from(script) },
+  ];
+
+  it('refuses a secret in a script, names the file and line, never the value, and stores nothing, dry run or not', async () => {
+    const { dir, catalog } = await openTest();
+    const key = 'ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8';
+    const before = snapshot(dir);
+    for (const dry of [false, true]) {
+      const e = await errorOf(() => catalog.publish(request('keys', withScript(`#!/bin/sh\n\ncurl -H "Authorization: ${key}" x\n`), { dry_run: dry }), actAs('ana')));
+      expect(e.toJSON()).toEqual({ code: 'secret_suspected', path: 'scripts/call.sh', line: 3, kind: 'github_token' });
+      expect(JSON.stringify(e.toJSON())).not.toContain(key);
+    }
+    expect(snapshot(dir)).toBe(before);
+  });
+
+  it('flags AWS\'s documented example key by its shape, and lets it through only on the person\'s override', async () => {
+    const { catalog } = await openTest();
+    const files = withScript('#!/bin/sh\nexport AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\n');
+    expect((await errorOf(() => catalog.publish(request('keys', files), actAs('ana')))).data).toMatchObject({ kind: 'aws_access_key', line: 2 });
+    expect(await catalog.publish(request('keys', files, { allow_suspected_secrets: true }), actAs('ana'))).toMatchObject({ created: true, version: 1 });
+  });
+
+  it('leaves ordinary text alone', async () => {
+    const { catalog } = await openTest();
+    const files = withScript('#!/bin/sh\n# the token comes from the environment\necho "$API_TOKEN" > /dev/null\n');
+    expect((await catalog.publish(request('keys', files), actAs('ana'))).created).toBe(true);
+  });
+});
+
 describe('only owners publish (contract §7)', () => {
   it('the first publisher owns the name; anyone else gets not_owner and nothing is stored', async () => {
     const { dir, catalog } = (await openTest());
