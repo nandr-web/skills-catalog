@@ -72,10 +72,10 @@ export const httpCases: readonly HttpCase[] = [
   { name: 'POST on a file: 405', request: { method: 'POST', path: `/api/v1/files/${SHA}`, body: '{}' }, expect: { status: 405, headers: { allow: 'GET', ...NO_STORE } } },
   // The guards' refusals: one table of numbers.
   { name: 'no token or a wrong one: 401', refuse: 'no_token', expect: { status: 401, text: '', headers: NO_STORE } },
-  { name: 'no sign-in on a catalog that has one: 401, unauthenticated in the envelope, WWW-Authenticate: Bearer', refuse: 'no_token', challenge: 'Bearer', expect: { status: 401, json: { ok: false, error: { code: 'unauthenticated' } }, words: ['error'], headers: { 'www-authenticate': 'Bearer' } } },
+  { name: 'no sign-in on a catalog that has one: 401, unauthenticated in the envelope, WWW-Authenticate: Bearer', refuse: 'no_token', challenge: 'Bearer', expect: { status: 401, json: { ok: false, error: { code: 'unauthenticated' } }, words: ['error'], headers: { 'www-authenticate': 'Bearer', ...NO_STORE } } },
   { name: 'a Host, Origin or Sec-Fetch-Site not its own: 403', refuse: 'refused', expect: { status: 403, headers: NO_STORE } },
   { name: 'a body that isn\'t JSON by its Content-Type: 415', refuse: 'not_json', expect: { status: 415, headers: NO_STORE } },
-  { name: 'the local act-as header on a hosted catalog: 400 invalid_request {field: X-Skills-Catalog-As, why: token_only}', refuse: 'token_only', expect: { status: 400, json: { ok: false, error: { code: 'invalid_request', field: 'X-Skills-Catalog-As', why: 'token_only' } } } },
+  { name: 'the local act-as header on a hosted catalog: 400 invalid_request {field: X-Skills-Catalog-As, why: token_only}', refuse: 'token_only', expect: { status: 400, json: { ok: false, error: { code: 'invalid_request', field: 'X-Skills-Catalog-As', why: 'token_only' } }, headers: NO_STORE } },
 ];
 
 /** Whether `actual` holds everything `expected` names (objects key by key, arrays element by element, values exactly). */
