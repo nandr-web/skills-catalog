@@ -491,6 +491,12 @@ describe('the secret scan finds a secret by its shape, in any variable name or q
     // a JWT is a secret's value, never a dotted name (jwt.io's shape: its header, a sub, a 32-byte signature). Joined here,
     // since a real-looking token in a public repo trips GitHub's push protection.
     [['token = ', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9', '.', 'eyJzdWIiOiJRQUZBS0UifQ', '.', 'QAFAKE0000QAFAKE0000QAFAKE0000QAFAKE0000QAF'].join(''), 'password_or_token'],
+    // a reference is the whole value, never only its start (contract §2); the OAuth-shaped value is joined like the JWT
+    [['token = ', 'ya29', '.a0AfH6SMBx3Qw9e8r7t6y5u4i3o2p1'].join(''), 'password_or_token'],
+    ['password=Summer.Time2024!xyz', 'password_or_token'],
+    ['password: $uperSecretPassw0rd', 'password_or_token'],
+    ['password: <x>realsecretvalue123', 'password_or_token'],
+    ['token = ${A}realsecretvalue123', 'password_or_token'],
     ['KEY_ID=prefix_AKIAIOSFODNN7EXAMPLE', 'aws_access_key'],
   ];
   for (const [line, kind] of flagged) {
@@ -520,6 +526,9 @@ describe('the secret scan finds a secret by its shape, in any variable name or q
     'password: <your-password-here>',
     'token: $env:GITHUB_TOKEN_VALUE',
     'password: $DB_PASSWORD_VALUE',
+    // the longest word wins, and the part after it decides (contract §2)
+    'SECRET_KEY_FILE=/run/secrets/secret_key_base',
+    'SECRET_KEY_PATH=/etc/app/secret_key_base.txt',
   ];
   for (const line of passed) {
     it(`leaves alone ${line}`, () => expect(scan(line)).toBeNull());
@@ -527,7 +536,7 @@ describe('the secret scan finds a secret by its shape, in any variable name or q
 
   // The scan never backtracks badly: a line of a megabyte is scanned in well under a second, whatever it holds.
   it('scans a megabyte-long line in well under a second', () => {
-    for (const line of ['password_'.repeat(110_000) + '=' + 'x'.repeat(20), 'ghp_' + 'a'.repeat(1_000_000), 'AKIA'.repeat(250_000), 'a: '.repeat(330_000), 'x'.repeat(200) + '='.repeat(1_000_000)]) {
+    for (const line of ['password_'.repeat(110_000) + '=' + 'x'.repeat(20), 'ghp_' + 'a'.repeat(1_000_000), 'AKIA'.repeat(250_000), 'a: '.repeat(330_000), 'x'.repeat(200) + '='.repeat(1_000_000), 'k='.repeat(500_000), 'k:'.repeat(500_000), 'password='.repeat(110_000)]) {
       const start = performance.now();
       scan(line);
       expect(performance.now() - start, line.slice(0, 30)).toBeLessThan(1000);

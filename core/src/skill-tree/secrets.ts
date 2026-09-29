@@ -21,38 +21,47 @@ const END = '(?![A-Za-z0-9])';
 
 // The words a key names a secret with, as a whole part of it (contract §2): each joined by _, -, a space or nothing, and
 // a part may end in the word (MYPASSWORD, apiKey). A part right after the word that names something else about it
-// (password_hint, DB_PASSWORD_FILE) means the key isn't the secret itself.
+// (password_hint, DB_PASSWORD_FILE, SECRET_KEY_FILE) means the key isn't the secret itself; the longest word decides.
 const WORDS: readonly (readonly string[])[] = [
-  ['password'], ['passwd'], ['secret'], ['token'],
   ['secret', 'key'], ['private', 'key'], ['api', 'key'], ['access', 'key'], ['access', 'token'], ['auth', 'token'],
+  ['password'], ['passwd'], ['secret'], ['token'],
 ];
 const ABOUT = new Set(['hint', 'length', 'len', 'min', 'max', 'policy', 'prompt', 'label', 'field', 'name', 'file', 'path', 'type', 'count', 'expiry', 'expires', 'ttl', 'url']);
 
 export function namesSecret(key: string): boolean {
   const parts = key.toLowerCase().split(/[_.\- ]+/).filter(Boolean);
   for (let i = 0; i < parts.length; i++) {
+    let end = -1;
     for (const w of WORDS) {
-      const end = parts[i]!.endsWith(w.join('')) ? i : w.length === 2 && parts[i]!.endsWith(w[0]!) && parts[i + 1] === w[1] ? i + 1 : -1;
-      if (end >= 0 && !ABOUT.has(parts[end + 1] ?? '')) return true;
+      const e = parts[i]!.endsWith(w.join('')) ? i : w.length === 2 && parts[i]!.endsWith(w[0]!) && parts[i + 1] === w[1] ? i + 1 : -1;
+      end = Math.max(end, e);
     }
+    if (end >= 0 && !ABOUT.has(parts[end + 1] ?? '')) return true;
   }
   return false;
 }
 
 // A value that refers to a secret instead of holding one (contract §2): a placeholder, a read of the environment, a call,
-// or a dotted name.
+// or a dotted name. Each is the whole value (a trailing ; , or ) allowed), never only its start, so a secret that merely
+// begins like one (Summer.Time2024!, $uperSecret, <x>secret) is still flagged. An environment variable's name is upper
+// case. A call is a name followed by `(`.
+const TAIL = '[;,)]*$';
 const REFERENCE = [
-  /^<[^>]*>/,
-  /^\$\{/,
-  /^\$env:/i,
-  /^\$[A-Za-z_]/,
-  /^(?:process\.env\b|os\.environ\b|os\.getenv\b|ENV\[|System\.getenv\b)/,
+  new RegExp(`^<[^<>\\s]*>${TAIL}`),
+  new RegExp(`^\\$\\{[^}]*\\}${TAIL}`),
+  new RegExp(`^\\$env:[A-Za-z_][A-Za-z0-9_]*${TAIL}`),
+  new RegExp(`^\\$[A-Z_][A-Z0-9_]*${TAIL}`),
+  new RegExp(`^(?:process\\.env(?:\\.[A-Za-z_][A-Za-z0-9_]*|\\[(["'])[^"']*\\1\\])|os\\.environ(?:\\[(["'])[^"']*\\2\\]|\\.get\\([^)]*\\))|os\\.getenv\\([^)]*\\)|ENV\\[(["'])[^"']*\\3\\]|System\\.getenv\\([^)]*\\))${TAIL}`),
   /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\(/,
-  /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+/,
+  new RegExp(`^[A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)+${TAIL}`),
 ];
-// A JWT (three base64url parts, the first starting eyJ) is a secret's value, though it reads like a dotted name.
-const JWT = /^eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/;
-export const refersToSecret = (value: string) => !JWT.test(value) && REFERENCE.some((re) => re.test(value));
+// A JWT (three base64url parts, the first starting eyJ) and a Google OAuth token (ya29.) are a secret's value, though
+// they read like a dotted name.
+const NEVER_A_REFERENCE = /^(?:eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.|ya29\.)/;
+export const refersToSecret = (raw: string) => {
+  const value = raw.replace(/^(["'])(.*)\1([;,)]*)$/, '$2$3');   // the reference as written, inside its quotes
+  return !NEVER_A_REFERENCE.test(value) && REFERENCE.some((re) => re.test(value));
+};
 
 // Every walk is bounded, so a line of any length is scanned in linear time: no pattern here can backtrack.
 const MAX_KEY = 200;
@@ -63,17 +72,26 @@ const isKeyChar = (c: string) => /[A-Za-z0-9_.\- ]/.test(c);
 const isQuote = (c: string | undefined) => c === '"' || c === "'";
 const isSpace = (c: string | undefined) => c !== undefined && /\s/.test(c);
 
-// The value after a separator: optional spaces, an optional opening quote, then characters that aren't spaces or quotes.
-function valueAt(line: string, from: number): string {
+// The value after a separator: optional spaces, an optional opening quote, then characters that aren't spaces or quotes;
+// and the raw word as written (quotes, brackets and all), to tell a reference from a secret.
+function valueAt(line: string, from: number): { value: string; raw: string } {
   let i = from;
   for (let n = 0; n < MAX_GAP && isSpace(line[i]); n++) i++;
+  let k = i;
+  while (k < line.length && k - i < MAX_VALUE && !isSpace(line[k])) k++;
+  const raw = line.slice(i, k);
   if (isQuote(line[i])) i++;
   let j = i;
   while (j < line.length && j - i < MAX_VALUE && !isSpace(line[j]) && !isQuote(line[j])) j++;
-  return line.slice(i, j);
+  return { value: line.slice(i, j), raw };
 }
 
-const holdsSecret = (key: string, value: string) => value.length >= MIN_VALUE && namesSecret(key) && !refersToSecret(value);
+// The key is checked first, so a line of many separators only reads the values of keys that name a secret.
+const holdsSecret = (key: string, line: string, from: number) => {
+  if (!namesSecret(key)) return false;
+  const { value, raw } = valueAt(line, from);
+  return value.length >= MIN_VALUE && !refersToSecret(raw);
+};
 
 // A key, then an optional closing quote, `:`, `=`, `:=` or `=>` with spaces around it (MYPASSWORD=, "api key": "…",
 // token := …, :password => …); or a --flag, then a space or `=` (--password …).
@@ -87,9 +105,9 @@ function setting(line: string): boolean {
     let i = j;
     while (i >= 0 && j - i < MAX_KEY && isKeyChar(line[i]!)) i--;
     const key = line.slice(i + 1, j + 1).trim();
-    if (key && holdsSecret(key, valueAt(line, m.index + m[0].length))) return true;
+    if (key && holdsSecret(key, line, m.index + m[0].length)) return true;
   }
-  for (const m of line.matchAll(FLAG)) if (holdsSecret(m[1]!, valueAt(line, m.index + m[0].length))) return true;
+  for (const m of line.matchAll(FLAG)) if (holdsSecret(m[1]!, line, m.index + m[0].length)) return true;
   return false;
 }
 

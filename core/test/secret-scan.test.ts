@@ -13,14 +13,18 @@ const skillMd: TreeFile = { path: 'SKILL.md', mode: '0644', bytes: Buffer.from('
 const scanLine = (line: string) => scanSecrets([skillMd, { path: 'notes.md', mode: '0644', bytes: Buffer.from(`${line}\n`) }]);
 
 // The kinds the scan gets with the new shapes (stripe_key, google_api_key, jwt, url_credentials), and the files it
-// decodes from UTF-16 and Latin-1, aren't built yet: these rows fail until they are, and flag the day they pass.
+// decodes from UTF-16 and Latin-1, aren't built yet: these rows fail until they are, and flag the day they pass. What
+// the scan gives for each of them today is pinned too, so a regression can't hide behind an expected failure.
 const NOT_YET = new Set(['stripe_key', 'google_api_key', 'jwt', 'url_credentials']);
+const TODAY: Record<string, string> = { 'order-stripe-first': 'password_or_token' };
 
 describe('each golden line gives its kind, or nothing (golden secret_scan.lines)', () => {
   for (const row of golden.lines as { id: string; line: Line; expect: string }[]) {
     const run = () => expect(scanLine(text(row.line))).toEqual(row.expect === 'none' ? null : { path: 'notes.md', line: 1, kind: row.expect });
-    if (NOT_YET.has(row.expect)) it.fails(row.id, run);
-    else it(row.id, run);
+    if (NOT_YET.has(row.expect)) {
+      it.fails(row.id, run);
+      it(`${row.id}, today`, () => expect(scanLine(text(row.line))?.kind ?? null).toBe(TODAY[row.id] ?? null));
+    } else it(row.id, run);
   }
 });
 
@@ -43,7 +47,9 @@ describe('files in other encodings are scanned as decoded text (golden secret_sc
       const f: TreeFile = { path: row.path, mode: '0644', bytes: Buffer.from(row.content.base64, 'base64') };
       expect(scanSecrets([skillMd, f])).toEqual(row.expect === 'none' ? null : { path: row.path, ...row.expect });
     };
-    if (row.expect !== 'none') it.fails(row.id, run);
-    else it(row.id, run);
+    if (row.expect !== 'none') {
+      it.fails(row.id, run);
+      it(`${row.id}, today: not decoded yet`, () => expect(scanSecrets([skillMd, { path: row.path, mode: '0644', bytes: Buffer.from(row.content.base64, 'base64') }])).toBeNull());
+    } else it(row.id, run);
   }
 });
