@@ -3,7 +3,7 @@
 // the sign-in list are the deploy's parameters, never in code. cdk-nag's findings the stack answers rather than fixes
 // are answered where they arise (nag.ts).
 
-import { CfnParameter, Stack } from 'aws-cdk-lib';
+import { CfnOutput, CfnParameter, Stack } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
 import type { StageConfig } from './config.ts';
 import type { CodeEntries } from './constructs/function.ts';
@@ -54,6 +54,7 @@ export class CatalogStack extends Stack {
       alertEmail: config.alertEmail,
       freePlan: config.freePlan ? { distributionArn: this.site.distribution.distributionArn, webAclArn: this.site.webAcl.attrArn } : undefined,
     });
+    new CfnOutput(this, 'CatalogUrl', { value: `https://${this.site.distribution.distributionDomainName}`, description: 'SKILLS_CATALOG for the client' });
     answerNag(this, config.preset);
   }
 }

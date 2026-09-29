@@ -1,7 +1,7 @@
 {
   "name": "@skills-catalog/infra",
   "version": "0.1.0",
-  "description": "The hosted catalog's AWS stack in CDK: synthesized and checked in tests only, never deployed from here",
+  "description": "The hosted catalog's AWS stack in CDK: synthesized and checked in tests; deployed only by hand, from the printed deploy plan (npm run deploy-plan)",
   "private": true,
   "type": "module",
   "engines": {
@@ -10,7 +10,8 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "deploy-plan": "node --disable-warning=ExperimentalWarning scripts/deploy-plan.ts"
   },
   "dependencies": {
     "aws-cdk-lib": "2.271.0",

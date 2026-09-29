@@ -1669,6 +1669,25 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
       }
     }
   },
+  "Outputs": {
+    "CatalogUrl": {
+      "Description": "SKILLS_CATALOG for the client",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "https://",
+            {
+              "Fn::GetAtt": [
+                "SiteEdge06AD6D73",
+                "DomainName"
+              ]
+            }
+          ]
+        ]
+      }
+    }
+  },
   "Rules": {
     "CheckBootstrapVersion": {
       "Assertions": [
@@ -3502,6 +3521,25 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
               }
             ]
           }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "CatalogUrl": {
+      "Description": "SKILLS_CATALOG for the client",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "https://",
+            {
+              "Fn::GetAtt": [
+                "SiteEdge06AD6D73",
+                "DomainName"
+              ]
+            }
+          ]
         ]
       }
     }

@@ -1,0 +1,3 @@
+{
+  "app": "node --disable-warning=ExperimentalWarning bin/app.ts"
+}
