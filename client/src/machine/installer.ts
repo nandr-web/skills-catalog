@@ -7,9 +7,9 @@
 // first install is an update from nothing. Any flag holds the change, with a confirm tied to the name and the new
 // version's fingerprint, until accept_held_update. Files are written to a temp folder in SKILLS_HOME (outside every
 // skills folder, which the assistant watches) and renamed in. Where a skill goes is computed from its target and name,
-// never read from the lock. It never overwrites or shadows a skill it didn't install. A link found on the way in is
-// refused; a link swapped in while it runs is detected and the call refused, except in a narrow timing race (a link
-// swapped in and back again between two checks) that the next change closes.
+// never read from the lock. It never overwrites or shadows a skill it didn't install. A link present when the call starts
+// is refused. A link swapped in while the call runs, by another program running as the same person, isn't reliably
+// caught yet; the next change closes that.
 
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -57,8 +57,8 @@ function checkTarget(ctx: Context, target: Target, name: string, lock: Lock): st
 }
 
 // The skills folder under the target's root, made one folder at a time, each checked for a link: a link that appeared
-// since checkTarget is refused, not followed. The skill's own folder is checked last. A link swapped in after these
-// checks is caught by writeSkill's identity checks, except in the narrow race noted at the top of this file.
+// since checkTarget is refused, not followed. The skill's own folder is checked last. writeSkill's identity checks
+// catch some links swapped in after these checks, not all (see the top of this file).
 function skillsFolderFor(dest: string): Id {
   const skills = dirname(dest);
   const claude = dirname(skills);
