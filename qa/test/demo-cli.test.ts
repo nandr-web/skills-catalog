@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { afterEach, describe, expect, it, onTestFinished } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { Surface } from '../../core/src/index.ts';
 import { answer, cliCommand, mcpBackend, serverEnv, type Stage, type Terminal } from '../src/demo/assistant.ts';
@@ -19,7 +19,18 @@ const FAKE_CLI = [process.execPath, here('fixtures/demo/fake-cli.mjs')];
 const plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
 const OS_ADDED = ['__CF_USER_TEXT_ENCODING'];
 const surface = Surface.load();
-afterEach(() => cleanup());
+const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+const until = async (f: () => boolean, ms = 5000) => { for (let i = 0; i < ms / 25 && !f(); i++) await new Promise((r) => setTimeout(r, 25)); return f(); };
+// Each server a test started is stopped, and has exited, before the test's folders are removed: close() only signals it,
+// and a server still starting writes into the developer's folder (its SKILLS_HOME) while cleanup deletes it. (vitest runs
+// afterEach before onTestFinished, so the stop has to be here, not in a hook of the test's own.)
+const servers: ReturnType<typeof mcpBackend>[] = [];
+const stop = async (b: ReturnType<typeof mcpBackend>) => { b.close(); const pid = b.pid(); return pid === undefined || until(() => !alive(pid)); };
+afterEach(async () => {
+  const stopped = await Promise.all(servers.splice(0).map(stop));
+  cleanup();
+  expect(stopped, 'every server the test started has exited').not.toContain(false);
+});
 
 const settings = (root: string, who: string) => ({ root, who, catalog: pathToFileURL(join(root, 'catalog')).href, activityLog: join(root, 'demo', 'activity.log') });
 const cliCalls = (root: string, who: string) => {
@@ -36,9 +47,9 @@ function sandbox() {
 function stage(scenes: Scenes, root: string, who: string, terminal?: Terminal) {
   const pane = { text: '' };
   const backend = mcpBackend({ command: FAKE_SERVER, cli: FAKE_CLI, ...settings(root, who), surface, ...(terminal ? { terminal } : {}) });
-  onTestFinished(() => backend.close());
+  servers.push(backend);
   const st: Stage = { who, scenes, backend, surface, out: (s) => { pane.text += s; }, demoDir: join(root, 'demo'), pace: 0 };
-  return { st, pane };
+  return { st, pane, backend };
 }
 
 describe('the scene file: the command line steps', () => {
@@ -133,6 +144,29 @@ describe('the stand-in on the server runs the command line as the developer', ()
     expect((await answer(st, 'skills-catalog update release-note-draft --accept')).ok).toBe(true);
     expect(plain(pane.text)).toContain('  │ fake cli: update release-note-draft --accept');
     expect(plain(pane.text)).not.toContain('●');
+  });
+});
+
+describe("a test's server is gone before its folder is removed", () => {
+  let last: { pid: number; root: string } | undefined;
+
+  it('a test that ends while its server is still starting', () => {
+    const root = sandbox();
+    const { backend } = stage(loadScenes(SCENES_FILE), root, 'bob');
+    last = { pid: backend.pid()!, root };
+    expect(alive(last.pid)).toBe(true);
+  });
+
+  it('after it, that server has exited and its folder is removed, nothing left behind', () => {
+    expect(last).toBeDefined();
+    let err: unknown;
+    try {
+      process.kill(last!.pid, 0);
+    } catch (e) {
+      err = e;
+    }
+    expect((err as NodeJS.ErrnoException | undefined)?.code).toBe('ESRCH');
+    expect(existsSync(last!.root)).toBe(false);
   });
 });
 
