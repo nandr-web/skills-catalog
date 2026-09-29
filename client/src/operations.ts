@@ -14,8 +14,9 @@ import { recordUsage } from './usage/record.ts';
 export type { Face };
 
 /** Everything an operation needs, the same on every face. `face` says which one asks: an input only a person may give
- *  (the CLI's) is refused from the assistant's (MCP). `ids` makes the fence tokens around a publisher's text. */
-export type Context = { catalog: () => Promise<Catalog>; words: Words; settings: Settings; face: Face; now: () => Date; ids: Ids };
+ *  (the CLI's) is refused from the assistant's (MCP). `ids` makes the fence tokens around a publisher's text. `refuse`:
+ *  a face's own refusal of this call (e.g. the local page's read-only rule), raised like any error, so it's logged too. */
+export type Context = { catalog: () => Promise<Catalog>; words: Words; settings: Settings; face: Face; now: () => Date; ids: Ids; refuse?: (op: string, args: unknown) => void };
 
 /** What a run gives: its data, and the activity log's target and result (the result in the words file's log words:
  *  logWords(ctx.words).result). `outcome`, a code, where the operation has one worth counting or acting on (a search's
@@ -126,6 +127,7 @@ export async function perform(ctx: Context, op: string, name: string, args: unkn
   try {
     // SKILLS_AS that isn't a developer's name is a setting to fix, not a call to retry.
     if (settings.developerInvalid) throw new CatalogError('invalid_developer_setting', { setting: 'SKILLS_AS' });
+    ctx.refuse?.(op, args);
     const ran = await run(ctx, op, args);
     ({ target, result } = ran);
     answer = { text: web ? '' : present(ctx, op, ran.data, args), isError: false, outcome: ran.outcome ?? 'ok', data: ran.data };

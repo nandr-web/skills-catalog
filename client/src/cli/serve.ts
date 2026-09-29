@@ -3,7 +3,7 @@
 // words otherwise; a backstop, since a command can fake one), then a local catalog (a hosted or malformed one is the
 // core's own error, exit 1). Only then the pairing code, the server, and its one printed line. It runs until `stopped`.
 import { parseArgs } from 'node:util';
-import { isCatalogError, openCatalog, renderError, type Words } from '@skills-catalog/core';
+import { CatalogError, renderError, type Words } from '@skills-catalog/core';
 import { settingsFrom } from '../settings.ts';
 import { serve, type Serving } from '../web/serve.ts';
 
@@ -42,15 +42,13 @@ export async function runServe(argv: readonly string[], s: Words, io: ServeIo, u
   }
   const settings = settingsFrom(io.env, io.cwd);
   if (!settings.catalog.startsWith('file:')) {
-    // The core's own refusal for a catalog it can't open here, made without touching anything.
-    const err = await openCatalog(settings.catalog, { readOnly: true }).then(
-      (c) => (c.close(), undefined),
-      (e: unknown) => e,
-    );
-    if (isCatalogError(err)) {
-      io.stderr(renderError(s, err) + '\n');
-      return 1;
-    }
+    // A local catalog only, whatever else could open it: nothing is opened here, and the refusal is in the core's own
+    // words (a hosted catalog, or something that isn't a catalog's address).
+    const err = settings.catalog.startsWith('https://')
+      ? new CatalogError('forbidden', { catalog: settings.catalog, why: 'hosted_not_available' })
+      : new CatalogError('invalid_request', { field: 'catalog', why: 'not_a_catalog_url' });
+    io.stderr(renderError(s, err) + '\n');
+    return 1;
   }
   let serving: Serving;
   try {

@@ -5,10 +5,10 @@
 // this page's and the session token), reading the body cut at its limit, who is acting (setup's developers), pairing, and
 // publishing only under --publish.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { CatalogError, checkActor, openCatalog, randomIds, toCatalogError, type Catalog, type Words } from '@skills-catalog/core';
-import { API_HEADERS, BODY_LIMIT, NOT_FOUND, SECURITY_HEADERS, envelope, fileResponse, operationResponse, refuse, route, type HttpResponse } from '@skills-catalog/core/http';
+import { API_HEADERS, BODY_LIMIT, NOT_FOUND, SECURITY_HEADERS, effectOf, envelope, fileResponse, operationResponse, refuse, route, type FileAnswer, type HttpResponse } from '@skills-catalog/core/http';
 import { readConfig } from '../machine/lock.ts';
 import { perform, type Context } from '../operations.ts';
 import type { Settings } from '../settings.ts';
@@ -58,6 +58,12 @@ export function createHandler(o: HandlerOptions): { handle(req: WebRequest): Pro
     return Buffer.concat(chunks);
   }
 
+  /** An error as the page gets it: a bug's log named by its file alone, never a path on this machine. */
+  function forPage(err: CatalogError): CatalogError {
+    const log = err.data['log'];
+    return err.code === 'internal_error' && typeof log === 'string' ? new CatalogError(err.code, { ...err.data, log: basename(log) }) : err;
+  }
+
   /** The developer acting on this request (contract §7): a name setup knows, `me` or one of `demo_developers`. */
   function actor(as: string | undefined): string {
     // Until setup's own config lands (P1b), config.json's `me` and `demo_developers` are read here.
@@ -74,14 +80,14 @@ export function createHandler(o: HandlerOptions): { handle(req: WebRequest): Pro
     try {
       developer = actor(req.headers['x-skills-catalog-as']);
     } catch (e) {
-      return envelope({ error: toCatalogError(e, o.settings.home, now()) }, sentences);
+      return envelope({ error: forPage(toCatalogError(e, o.settings.home, now())) }, sentences);
     }
     const raw = await readBody(req.body, BODY_LIMIT);
     let writing: Promise<Catalog> | undefined;
     // Through perform, so the web's calls are in the activity log and the usage metrics like every face's.
     const run = async (name: string, input: Record<string, unknown>) => {
-      const real = name === 'publish_version' && input['dry_run'] !== true;
-      if (real && !o.publish) throw new CatalogError('forbidden', { why: 'read_only' });
+      // Read-only by what the operation does, not by its name: any write to the catalog, unless it's a dry run.
+      const real = effectOf(name, 'local') === 'writes_catalog' && input['dry_run'] !== true;
       const ctx: Context = {
         catalog: real ? () => (writing ??= openCatalog(o.settings.catalog)) : readCatalog,
         words,
@@ -89,15 +95,19 @@ export function createHandler(o: HandlerOptions): { handle(req: WebRequest): Pro
         face: 'web',
         now,
         ids: randomIds,
+        // Refused inside perform, so it's in the activity log like any other error.
+        refuse: () => {
+          if (real && !o.publish) throw new CatalogError('forbidden', { why: 'read_only' });
+        },
       };
       const a = await perform(ctx, name, name, input);
-      if (a.isError) throw a.error!;
+      if (a.isError) throw forPage(a.error!);
       return a.data;
     };
     try {
       return await operationResponse({ op, raw, developer, run, where: 'local', ...sentences });
     } catch (e) {
-      return envelope({ error: toCatalogError(e, o.settings.home, now()) }, sentences);
+      return envelope({ error: forPage(toCatalogError(e, o.settings.home, now())) }, sentences);
     } finally {
       void writing?.then((c) => c.close()).catch(() => {});
     }
@@ -124,8 +134,13 @@ export function createHandler(o: HandlerOptions): { handle(req: WebRequest): Pro
     const site = req.headers['sec-fetch-site'];
     if (site !== undefined && site !== 'same-origin') return refuse('refused', sentences);
     if (!same(req.headers['x-skills-catalog-token'], token)) return refuse('no_token', sentences);
-    // Opened only for a well-formed fingerprint (the core checks it first).
-    return fileResponse({ file: async (sha) => (await readCatalog()).file(sha) }, sha256);
+    // Opened only for a well-formed fingerprint (the core checks it first). A catalog that can't be opened (missing,
+    // unreadable) names no file: the fixed 404, never a failure.
+    const file = async (sha: string): Promise<FileAnswer> => {
+      const catalog = await readCatalog().catch(() => undefined);
+      return catalog ? catalog.file(sha) : { kind: 'unknown' };
+    };
+    return fileResponse({ file }, sha256);
   }
 
   async function handle(req: WebRequest): Promise<WebResponse> {
