@@ -13,7 +13,8 @@ export type Target = 'user' | 'project';
 export const POLICY_DEFAULT: Policy = 'auto';
 
 /** One acceptance of a held install or update: the version and the kinds of flag the person let through. */
-export type Accepted = { version: number; flags: string[] };
+// `by`: set when the person's accept_flagged_updates let it through (§5.3), absent for their yes to a hold.
+export type Accepted = { version: number; flags: string[]; by?: 'accept_flagged_updates' };
 
 export type LockEntry = {
   name: string;

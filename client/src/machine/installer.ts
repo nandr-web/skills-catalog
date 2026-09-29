@@ -891,7 +891,9 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
           saw('held_notify');
           return true;
         }
-        if (d.risk_flags.length) {
+        // accept_flagged_updates (only ever `true` from the person's own setup) lets a flagged update through, never an
+        // install; the lock records each one it let through (§5.3).
+        if (d.risk_flags.length && config.accept_flagged_updates !== true) {
           recordHold(ctx, e.name, to.version, 'flagged', d.risk_flags, to.version - entry.version);
           item('held_flagged', at, d.risk_flags, s.format(w.held_flagged, { ...at, reasons: reasons(s, d.risk_flags) }), s.format(ctx.face === 'cli' ? w.held_next_cli : w.held_next, take));
           saw('held_flagged');
@@ -924,7 +926,8 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
           const entry = now ?? e;
           if (heldOver(entry, dNow)) return 'held';
           const w = writeSkill(dest, e.target, to.files, entry, standsIn(ctx, e.target));
-          record(ctx, fresh, dest, entry, to, entry.policy, entry.accepted, toLock(w.copy));
+          const accepted = dNow.risk_flags.length ? [...entry.accepted, { version: to.version, flags: kinds(dNow.risk_flags), by: 'accept_flagged_updates' as const }] : entry.accepted;
+          record(ctx, fresh, dest, entry, to, entry.policy, accepted, toLock(w.copy));
           return { written: w, from: entry.version, d: dNow };
         });
       } catch (err) {
