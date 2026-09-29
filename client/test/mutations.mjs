@@ -46,6 +46,8 @@ const MUTATIONS = [
   ['core:http/index.ts', 'a 405 names no method the path takes', '...(s.allow ? { allow: s.allow } : {})', ''],
   ['core:http/index.ts', 'a 405 may be stored by a cache', 'headers: { ...SECURITY_HEADERS, ...API_HEADERS, ...(s.allow', 'headers: { ...SECURITY_HEADERS, ...(s.allow'],
   ['core:http/index.ts', 'a refusal may be stored by a cache', "  return { status, headers: { ...SECURITY_HEADERS, ...API_HEADERS }, body: '' };", "  return { status, headers: { ...SECURITY_HEADERS }, body: '' };"],
+  ['core:http/index.ts', 'a hosted 401 may be stored by a cache', "headers: { ...e.headers, 'www-authenticate': s.challenge }", "headers: { ...e.headers, 'cache-control': 'private', 'www-authenticate': s.challenge }"],
+  ['core:http/index.ts', 'a token_only 400 may be stored by a cache', "why: 'token_only' }) }, s), status };", "why: 'token_only' }) }, s), status, headers: { ...SECURITY_HEADERS } };"],
   ['core:http/index.ts', 'a file\'s bytes open as a page', "'content-disposition': 'attachment', ", ''],
   ['core:http/index.ts', 'a file\'s bytes may run when opened', "`${SECURITY_HEADERS['content-security-policy']}; sandbox`", "SECURITY_HEADERS['content-security-policy']"],
   ['core:http/index.ts', 'a person-only input is taken on the web', "validateInput<Record<string, unknown>>(op, parsed, 'web', where)", "validateInput<Record<string, unknown>>(op, parsed, 'cli', where)"],
@@ -82,6 +84,8 @@ const MUTATIONS = [
   ['web/serve.ts', 'serve listens on every address', "server.listen({ host: '127.0.0.1', port: o.port, exclusive: true }", "server.listen({ host: '0.0.0.0', port: o.port, exclusive: true }"],
   ['web/serve.ts', 'a slow request or a flood of connections holds the server', '  Object.assign(server, LIMITS);\n', ''],
   ['web/serve.ts', 'a bug\'s 500 may be stored by a cache', "res.writeHead(500, { ...SECURITY_HEADERS, ...API_HEADERS, connection: 'close' })", 'res.writeHead(500, {})'],
+  ['web/serve.ts', 'a bug\'s 500 keeps its connection open', "res.writeHead(500, { ...SECURITY_HEADERS, ...API_HEADERS, connection: 'close' })", 'res.writeHead(500, { ...SECURITY_HEADERS, ...API_HEADERS })'],
+  ['web/serve.ts', 'a bug\'s 500 has no security headers', "res.writeHead(500, { ...SECURITY_HEADERS, ...API_HEADERS, connection: 'close' })", "res.writeHead(500, { ...API_HEADERS, connection: 'close' })"],
   ['web/serve.ts', 'a refused connection is kept alive for the next request', "unread ? { ...r.headers, connection: 'close' } : r.headers", 'r.headers'],
   // Not listed: dropping `req.destroy()` after a refusal. Equivalent while the answer says Connection: close (Node's
   // server closes that connection itself once the answer is sent); the destroy is kept so an unread body is never waited on.

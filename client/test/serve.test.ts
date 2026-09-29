@@ -191,7 +191,9 @@ describe('the server itself (web/serve.ts)', () => {
     const s = await serve({ port: 0, publish: false, settings: settingsOf(p), words: S, handle: async () => Promise.reject(new TypeError('a bug')) });
     try {
       const r = await call(s.port, { path: '/api/v1/search_shared_skills', headers: page(s.port), body: '{}' });
-      expect([r.status, r.body, r.headers['cache-control'], r.headers['x-content-type-options'], r.headers['content-security-policy']]).toEqual([500, '', 'no-store', 'nosniff', POLICY.headers['content-security-policy']]);
+      expect([r.status, r.body, r.headers['cache-control'], r.headers['connection']]).toEqual([500, '', 'no-store', 'close']);
+      expect(Object.keys(POLICY.headers)).toHaveLength(5);
+      for (const [k, v] of Object.entries(POLICY.headers)) expect(r.headers[k], k).toBe(v);
     } finally {
       await s.close();
     }

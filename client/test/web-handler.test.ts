@@ -26,6 +26,29 @@ const W = Words.load();
 async function* bytes(text: string): AsyncIterable<Buffer> {
   yield Buffer.from(text);
 }
+/**
+ * A body that never ends, bounded: a reader that goes past its cut gets an error at 4x the limit (`overran` set), so a
+ * test fails at once instead of filling memory or hanging (a generator that never yields to the event loop starves any
+ * timer).
+ */
+function endless(): AsyncIterable<Buffer> & { pulled: number; overran: boolean } {
+  const b = {
+    pulled: 0,
+    overran: false,
+    async *[Symbol.asyncIterator]() {
+      for (;;) {
+        if (b.pulled >= 4 * POLICY.bodyLimit) {
+          b.overran = true;
+          throw new Error('the body was read past its cut');
+        }
+        const chunk = Buffer.alloc(64 * 1024, 0x20);
+        b.pulled += chunk.length;
+        yield chunk;
+      }
+    },
+  };
+  return b;
+}
 /** A body that fails the test if anything reads it. */
 function untouched(): AsyncIterable<Buffer> & { read: boolean } {
   const b = {
@@ -155,11 +178,9 @@ describe('the shared cases, through the local handler', () => {
     it(c.name, async () => {
       const { h, token } = await sharedServed();
       const req = c.request!;
-      const body: AsyncIterable<Buffer> =
-        req.body === 'cut'
-          ? { async *[Symbol.asyncIterator]() { for (;;) yield Buffer.alloc(64 * 1024, 0x20); } }
-          : bytes(req.body ?? '');
+      const body = req.body === 'cut' ? endless() : bytes(req.body ?? '');
       const r = await h.handle({ method: req.method, path: req.path, headers: base({ 'x-skills-catalog-token': token, 'x-skills-catalog-as': HTTP_DEVELOPER }), body });
+      expect('overran' in body && body.overran, 'the body was read past its cut').toBe(false);
       expect(checkHttpCase(c, r)).toEqual([]);
     });
   }
@@ -186,24 +207,13 @@ describe('the fixed headers', () => {
 describe('the body', () => {
   it('a body that never ends is cut at the limit: too_large in the envelope, never a 413, never held whole', async () => {
     const { h, token } = await served();
-    let pulled = 0;
-    const endless = {
-      async *[Symbol.asyncIterator]() {
-        for (;;) {
-          const chunk = Buffer.alloc(64 * 1024, 0x20);
-          pulled += chunk.length;
-          yield chunk;
-        }
-      },
-    };
-    // Bounded: a handler that reads without its cut never answers, and this fails in 10 s instead of hanging the run.
-    const r = await Promise.race([
-      h.handle({ ...api(token, 'search_shared_skills', {}), body: endless }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('the body was read without its cut: no answer in 10 s')), 10_000).unref()),
-    ]);
+    const body = endless();
+    const r = await h.handle({ ...api(token, 'search_shared_skills', {}), body }).catch((e: Error) => e);
+    expect(body.overran, 'the body was read past its cut').toBe(false);
+    if (r instanceof Error) throw r;
     expect(r.status).toBe(200);
     expect(json(r).error.code).toBe('too_large');
-    expect(pulled).toBeLessThanOrEqual(POLICY.bodyLimit + 64 * 1024);
+    expect(body.pulled).toBeLessThanOrEqual(POLICY.bodyLimit + 64 * 1024);
   });
 
 });
