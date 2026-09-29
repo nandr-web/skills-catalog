@@ -165,6 +165,39 @@ describe('the surface (vendored, recommended variant)', () => {
     for (const text of shown) expect(ours(text), text.slice(0, 200)).not.toMatch(UNFILLED);
   });
 
+  it('says what a read left out, in sizes from the words: a body with paths ["SKILL.md"], a text over the budget on its own', async () => {
+    const s = Surface.load();
+    const { catalog } = await openTest();
+    const texts = new Map<string, string>();
+    const publish = async (name: string, body: string, extra: Record<string, string> = {}) => {
+      const md = `---\nname: ${name}\ndescription: Around the read budget.\n---\n${body}\n`;
+      texts.set(name, md);
+      await catalog.publish(request(name, [{ path: 'SKILL.md', mode: '0644', bytes: Buffer.from(md) }, ...Object.entries(extra).map(([path, t]) => ({ path, mode: '0644', bytes: Buffer.from(t) }))]), actAs('ana'));
+    };
+    await publish('one', 'a'.repeat(10_000));
+    await publish('two', 'b'.repeat(10_000));
+    await publish('three', 'c'.repeat(10_000), { 'notes.md': 'n'.repeat(30_000), 'small.md': 's' });
+    const size = (bytes: number) => s.format(s.word('get.size'), { kb: Math.ceil(bytes / 1024) });
+    const token = 'k3y';
+    const fence = s.format(s.word('get').fence[0], { token });
+
+    // Three 10 KB bodies: the third doesn't fit; it gets no fence, and the sentence sends to paths ["SKILL.md"].
+    const r = await catalog.read({ names: ['one', 'two', 'three'] });
+    const text = renderRead(s, r, (item) => texts.get(item.name)!, { next: () => token });
+    const [, , third] = text.split('\n\n');
+    expect(third).not.toContain(fence);
+    expect(third).not.toContain('c'.repeat(100));
+    expect(third).toContain(s.format(s.word('get.body_omitted'), { used: size(r.inline_budget.used), limit: size(24 * 1024), name: 'three' }));
+    expect(text.split(fence)).toHaveLength(3);
+
+    // A file over the whole budget can only be read on its own; a smaller one left out, with paths[].
+    const c = await catalog.read({ name: 'three', include: 'contents' });
+    const ctext = renderRead(s, c, (item) => texts.get(item.name)!, { next: () => token });
+    expect(ctext).toContain(s.format(s.word('get.too_big'), { limit: size(24 * 1024), files: '"notes.md"', name: 'three' }));
+    expect(ctext).not.toContain(s.word('get.omitted').slice(0, 20));
+    expect(ctext).toContain(s.format(s.word('get').file_fence[0], { path: '"small.md"', token }));
+  });
+
   it('shows a publisher change as the old publisher, then the new one', async () => {
     const s = Surface.load();
     const md = { path: 'SKILL.md', mode: '0644', bytes: Buffer.from('---\nname: x\ndescription: y\n---\nz\n') };

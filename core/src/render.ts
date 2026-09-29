@@ -5,7 +5,7 @@
 import type { DiffResult, InlineBudget, ReadItem, ReadResult, SearchResult, VersionsResult } from './catalog.ts';
 import { CatalogError } from './errors.ts';
 import type { Ids } from './ports.ts';
-import type { RiskFlag } from './skill-tree/index.ts';
+import { MANIFEST, parseFrontmatter, type RiskFlag } from './skill-tree/index.ts';
 import type { Surface } from './surface.ts';
 
 // Words the agent-facing surface doesn't have yet (asked for). A test fails when one of them appears in the surface,
@@ -49,29 +49,31 @@ export function renderSearch(s: Surface, r: SearchResult, query: string, offset 
 
 // A path shown outside a fence is JSON-quoted, so a publisher's file name reads as a name and nothing else.
 const quoted = (path: string) => JSON.stringify(path);
-const kb = (bytes: number) => `${Math.ceil(bytes / 1024)} KB`;
 
 // A skill's text sits between markers that carry a token made for this read (contract §5.2), so text inside can't
-// close the fence by planting a marker in any spelling: it can't know the token.
-function renderItem(s: Surface, item: ReadItem, body: string, token: string, budget?: InlineBudget): string {
+// close the fence by planting a marker in any spelling: it can't know the token. `skillMd` is its SKILL.md as
+// published: shown whole when the read inlined its body; a skill whose body was left out shows no fence at all.
+function renderItem(s: Surface, item: ReadItem, skillMd: string, token: string, budget: InlineBudget): string {
   const w = s.word('get');
-  const lines = [
-    s.format(w.header, { name: item.name, version: item.version, latest_mark: item.version === item.latest_version ? w.latest_mark.latest : s.format(w.latest_mark.older, { latest: item.latest_version }), publisher: item.publisher, published_at: item.published_at }),
-    s.format(w.data_note, { publisher: item.publisher }),
-    s.format(w.fence[0], { token }),
-    body.trimEnd(),
-    s.format(w.fence[1], { token }),
-  ];
+  const size = (bytes: number) => s.format(w.size, { kb: Math.ceil(bytes / 1024) });
+  const lines = [s.format(w.header, { name: item.name, version: item.version, latest_mark: item.version === item.latest_version ? w.latest_mark.latest : s.format(w.latest_mark.older, { latest: item.latest_version }), publisher: item.publisher, published_at: item.published_at })];
+  const shown = item.manifest.body !== undefined;
+  if (shown) lines.push(s.format(w.data_note, { publisher: item.publisher }), s.format(w.fence[0], { token }), skillMd.trimEnd(), s.format(w.fence[1], { token }));
   if (item.files) lines.push(s.format(w.files, { files: list(item.files.map((f) => `${quoted(f.path)} (${f.size} B)`)) }));
   for (const f of item.files ?? []) {
-    if (f.content !== undefined && f.path !== 'SKILL.md') {
+    if (f.content !== undefined && f.path !== MANIFEST) {
       lines.push(s.format(w.file_fence[0], { path: quoted(f.path), token }), f.content.trimEnd(), s.format(w.file_fence[1], { path: quoted(f.path), token }));
     }
   }
-  const omitted = (item.files ?? []).filter((f) => f.content_omitted);
-  if (omitted.length && budget) {
-    lines.push(s.format(w.omitted, { used: kb(budget.used), limit: kb(budget.limit), files: list(omitted.map((f) => quoted(f.path))), name: item.name }));
-  }
+  // What was left out: a text bigger than the whole budget can only be read on its own; the rest with paths[].
+  const left = (item.files ?? []).filter((f) => f.content_omitted && !(shown && f.path === MANIFEST)).map((f) => ({ path: f.path, bytes: f.size }));
+  const bodyBytes = item.manifest.body_omitted ? Buffer.byteLength(parseFrontmatter(skillMd).body, 'utf8') : 0;
+  const bodyTooBig = bodyBytes > budget.limit;
+  if (item.manifest.body_omitted && !bodyTooBig) lines.push(s.format(w.body_omitted, { used: size(budget.used), limit: size(budget.limit), name: item.name }));
+  const tooBig = [...new Set([...(bodyTooBig ? [MANIFEST] : []), ...left.filter((f) => f.bytes > budget.limit).map((f) => f.path)])];
+  const omitted = left.filter((f) => f.bytes <= budget.limit).map((f) => f.path);
+  if (omitted.length) lines.push(s.format(w.omitted, { used: size(budget.used), limit: size(budget.limit), files: list(omitted.map(quoted)), name: item.name }));
+  if (tooBig.length) lines.push(s.format(w.too_big, { limit: size(budget.limit), files: list(tooBig.map(quoted)), name: item.name }));
   lines.push(s.format(w.next, { name: item.name }));
   return lines.join('\n');
 }

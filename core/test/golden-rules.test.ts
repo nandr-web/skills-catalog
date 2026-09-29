@@ -2,14 +2,14 @@
 // reason, the path rules in their pinned order, request fields, the read's inline budget and the fence.
 
 import { describe, expect, it } from 'vitest';
-import type { ReadItem } from '../src/catalog.ts';
+import type { Catalog, ReadItem } from '../src/catalog.ts';
 import { actAs } from '../src/local/index.ts';
 import { OPERATIONS } from '../src/registry.ts';
 import { renderError, renderRead } from '../src/render.ts';
 import { Surface } from '../src/surface.ts';
 import { DEFAULT_LIMITS } from '../src/skill-tree/index.ts';
 import { catalogNameOf, filesOf, generated, loadGolden, rawFilesOf, type RawFile } from './golden.ts';
-import { errorOf, openTest, request, snapshot } from './helpers.ts';
+import { counterIds, errorOf, openTest, request, snapshot } from './helpers.ts';
 
 const skills = loadGolden('skills.yaml');
 const ana = actAs('ana');
@@ -136,11 +136,22 @@ describe('the read\'s inline budget (golden reads)', () => {
     return opened;
   };
   const label = (multi: boolean, item: ReadItem, path: string) => (multi ? `${item.name}/${path}` : path);
+  // "20 generated skills, each SKILL.md body exactly 9,000 bytes": the golden's words, built here.
+  const GENERATED_20 = /^20 generated skills, each SKILL\.md body exactly 9,000 bytes/;
+  const generated20 = async (catalog: Catalog) => {
+    const names = Array.from({ length: 20 }, (_, i) => `budget-${String(i + 1).padStart(2, '0')}`);
+    for (const n of names) await catalog.publish(request(n, [{ path: 'SKILL.md', mode: '0644', bytes: Buffer.from(`---\nname: ${n}\ndescription: A median-sized skill.\n---\n${'x'.repeat(8999)}\n`) }]), ana);
+    return names;
+  };
 
   it.each(skills.reads.cases.map((c: any, i: number) => [String(i), c]) as any[])('case %s', async (_i, c: any) => {
     const { catalog } = await seed();
     const req = { ...c.read };
     if (req.paths === '21 distinct paths') req.paths = Array.from({ length: 21 }, (_, i) => `f${i}.md`);
+    if (typeof req.names === 'string') {
+      expect(req.names).toMatch(GENERATED_20);
+      req.names = await generated20(catalog);
+    }
     if (c.expect.error) {
       const e = await errorOf(() => catalog.read(req));
       expect(e.code).toBe(c.expect.error);
@@ -149,13 +160,31 @@ describe('the read\'s inline budget (golden reads)', () => {
     }
     const r = await catalog.read(req);
     const multi = req.names !== undefined;
-    const files = (r.skills as ReadItem[]).flatMap((item) => (item.files ?? []).map((f) => ({ f, label: label(multi, item, f.path) })));
-    if (c.expect.order) expect(files.filter(({ f }) => f.type === 'text').map((x) => x.label)).toEqual(c.expect.order);
-    expect(files.filter(({ f }) => f.content !== undefined).map((x) => x.label).sort()).toEqual([...c.expect.inlined].sort());
+    const items = r.skills as ReadItem[];
+    const files = items.flatMap((item) => (item.files ?? []).map((f) => ({ f, label: label(multi, item, f.path) })));
+    const bodies = items.map((item) => ({ item, label: label(multi, item, 'body') }));
+    // The budget's order: every body the read carries, then the text files (catalog.ts walks the same order).
+    const order = [...bodies.filter(({ item }) => 'body' in item.manifest || item.manifest.body_omitted).map((b) => b.label), ...files.filter(({ f }) => f.type === 'text').map((x) => x.label)];
+    if (c.expect.order) expect(order).toEqual(c.expect.order);
+    const inlined = [...bodies.filter(({ item }) => item.manifest.body !== undefined).map((b) => b.label), ...files.filter(({ f }) => f.content !== undefined).map((x) => x.label)];
+    if (c.expect.inlined) expect(inlined.sort()).toEqual([...c.expect.inlined].sort());
+    if (c.expect.inlined_bodies !== undefined) expect(items.filter((i) => i.manifest.body !== undefined)).toHaveLength(c.expect.inlined_bodies);
     expect(files.filter(({ f }) => f.content_omitted).map((x) => x.label)).toEqual(c.expect.content_omitted ?? []);
     for (const p of c.expect.no_content ?? []) expect(files.find((x) => x.label === p)!.f).not.toHaveProperty('content_omitted');
     if (c.expect.files_returned) expect(files.map((x) => x.label)).toEqual(c.expect.files_returned);
+    const bodyOmitted = items.filter((i) => i.manifest.body_omitted === true).length;
+    if (c.expect.body_omitted !== undefined) expect(bodyOmitted).toBe(c.expect.body_omitted === true ? 1 : c.expect.body_omitted);
+    if (c.expect.no_body_omitted_flag) expect(items.every((i) => !('body_omitted' in i.manifest))).toBe(true);
+    const withFrontmatter = items.filter((i) => Object.keys(i.manifest.frontmatter).length > 0).length;
+    if (c.expect.frontmatter_returned !== undefined) expect(withFrontmatter).toBe(c.expect.frontmatter_returned === true ? items.length : c.expect.frontmatter_returned);
     expect(r.inline_budget).toEqual(c.expect.inline_budget);
+    if (c.expect.tool_result_tokens_max !== undefined) {
+      // About 4 bytes a token (contract §2), on the words an assistant gets.
+      const md = new Map<string, string>();
+      for (const item of items) md.set(item.name, Buffer.from((await catalog.fetch({ name: item.name, version: item.version })).files.find((f) => f.path === 'SKILL.md')!.content_base64, 'base64').toString());
+      const text = renderRead(Surface.load(), r, (item) => md.get(item.name)!, counterIds());
+      expect(Buffer.byteLength(text, 'utf8') / 4).toBeLessThanOrEqual(c.expect.tool_result_tokens_max);
+    }
   });
 });
 

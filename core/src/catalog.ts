@@ -110,7 +110,9 @@ export interface ReadItem {
   fingerprint: string;
   published_at: string;
   publisher: string;
-  manifest: { frontmatter: Record<string, unknown>; body: string };
+  // The front matter always comes; the body only when it fits the read's budget (body_omitted otherwise), and with
+  // paths[] only when SKILL.md is one of them (no body_omitted then).
+  manifest: { frontmatter: Record<string, unknown>; body?: string; body_omitted?: true };
   reviews: unknown[];
   files?: ReadFile[];
 }
@@ -119,7 +121,7 @@ export type ReadEntry = ReadItem | { name: string; error: Record<string, unknown
 
 export interface ReadResult {
   skills: ReadEntry[];
-  inline_budget?: InlineBudget; // with include: contents
+  inline_budget: InlineBudget;
 }
 
 export interface VersionsResult {
@@ -321,6 +323,8 @@ export class Catalog {
     if (wanted.length === 0) throw new CatalogError('invalid_request', { field: 'name', why: 'required' });
     // Asking for particular files means reading them.
     const include = req.include ?? (req.paths !== undefined ? 'contents' : 'manifest');
+    // What this read may inline (contract §2): each skill's body, and with contents its text files.
+    const bodies = new Map<ReadItem, string>();
     const texts = new Map<ReadFile, Uint8Array>();
     const one = async (name: string): Promise<ReadItem> => {
       const { record, latest } = await this.versionOf(name, req.version);
@@ -333,9 +337,10 @@ export class Catalog {
         fingerprint: record.fingerprint,
         published_at: record.published_at,
         publisher: record.publisher,
-        manifest: { frontmatter: md.frontmatter, body: md.body },
+        manifest: { frontmatter: md.frontmatter },
         reviews: [],
       };
+      if (req.paths === undefined || req.paths.some((p) => p.normalize('NFC') === MANIFEST)) bodies.set(item, md.body);
       let shown = tree;
       if (req.paths !== undefined) {
         const byPath = new Map(tree.map((f) => [f.path, f]));
@@ -367,29 +372,48 @@ export class Catalog {
         }
       }
     }
-    if (include !== 'contents') return { skills };
-    return { skills, inline_budget: this.inline(skills, texts) };
+    return { skills, inline_budget: this.inline(skills, bodies, texts, req.paths) };
   }
 
-  // A read inlines at most the configured budget of text (contract §2), each file whole or not at all: first every
-  // skill's SKILL.md in the order asked, then the other text files by path. A file that doesn't fit is marked
-  // content_omitted, and later smaller files may still fit.
-  private inline(skills: ReadEntry[], texts: Map<ReadFile, Uint8Array>): InlineBudget {
+  // A read inlines at most the configured budget of text (contract §2), each text whole or not at all, in this order:
+  // every skill's body in the order asked, then each skill's text files, skill by skill, SKILL.md first and then by
+  // path. With paths[], only the named files in the order asked, the body just before SKILL.md when it is named, and
+  // a single named path is inlined whatever its size (every stored file is within the file limit). A body or file
+  // that doesn't fit is marked omitted (a body only without paths[]), and later smaller ones may still fit.
+  private inline(skills: ReadEntry[], bodies: Map<ReadItem, string>, texts: Map<ReadFile, Uint8Array>, paths?: readonly string[]): InlineBudget {
     const limit = this.config.readInlineBudget;
     const items = skills.filter((e): e is ReadItem => !('error' in e));
-    const order = [
-      ...items.flatMap((i) => (i.files ?? []).filter((f) => f.path === MANIFEST)),
-      ...items.flatMap((i) => (i.files ?? []).filter((f) => f.path !== MANIFEST)),
-    ].filter((f) => texts.has(f));
+    interface Slot {
+      bytes: number;
+      put(): void;
+      omit(): void;
+    }
+    const body = (i: ReadItem): Slot[] => {
+      const text = bodies.get(i);
+      if (text === undefined) return [];
+      return [{ bytes: Buffer.byteLength(text, 'utf8'), put: () => (i.manifest.body = text), omit: () => paths === undefined && (i.manifest.body_omitted = true) }];
+    };
+    const file = (f: ReadFile): Slot[] => {
+      const bytes = texts.get(f);
+      if (bytes === undefined) return [];
+      return [{ bytes: bytes.byteLength, put: () => (f.content = decodeText(bytes)), omit: () => (f.content_omitted = true) }];
+    };
+    const byPath = (i: ReadItem) => [...(i.files ?? []).filter((f) => f.path === MANIFEST), ...(i.files ?? []).filter((f) => f.path !== MANIFEST)];
+    const order =
+      paths !== undefined
+        ? items.flatMap((i) => (i.files ?? []).flatMap((f) => [...(f.path === MANIFEST ? body(i) : []), ...file(f)]))
+        : [...items.flatMap(body), ...items.flatMap((i) => byPath(i).flatMap(file))];
+    // With paths[] but without include: files or contents there are no files to walk: the body still comes for SKILL.md.
+    if (paths !== undefined && order.length === 0) for (const i of items) order.push(...body(i));
+    const alone = paths?.length === 1;
     let used = 0;
     let omitted = 0;
-    for (const f of order) {
-      const bytes = texts.get(f)!;
-      if (used + bytes.byteLength <= limit) {
-        f.content = decodeText(bytes);
-        used += bytes.byteLength;
+    for (const slot of order) {
+      if (alone || used + slot.bytes <= limit) {
+        slot.put();
+        used += slot.bytes;
       } else {
-        f.content_omitted = true;
+        slot.omit();
         omitted++;
       }
     }
