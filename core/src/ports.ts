@@ -131,3 +131,31 @@ export interface BlobLinks {
   uploadLinks(files: readonly { sha256: string; size: number }[]): Promise<UploadAnswer[]>;
   downloadLink(sha256: string): Promise<string>;
 }
+
+// Who holds a hosted catalog's Bearer token (§1.1): a GitHub sign-in session or a personal token, with a scope.
+export type TokenScope = 'read' | 'publish';
+export type TokenKind = 'session' | 'personal';
+export interface TokenHolder {
+  owner: string;
+  scope: TokenScope;
+  kind: TokenKind;
+}
+
+// A token as its owner sees it listed (§1.1 "Getting a token, hosted"): by its public id, never the token or its hash.
+export interface TokenInfo extends TokenHolder {
+  id: string;
+  created_at: string;
+  expires_at: string;
+  last_used_at?: string;
+  revoked_at?: string;
+}
+
+// The hosted catalog's tokens, hosted only: stored hashed, each with a public id; unknown, revoked or expired is nobody.
+// A token's last use is recorded at most once an hour. Revoking is by its owner only (another's id changes nothing) and
+// deletes nothing.
+export interface TokenStore {
+  issue(t: TokenHolder & { expiresAt: Date }): Promise<{ id: string; token: string }>;
+  verify(token: string): Promise<TokenHolder | undefined>;
+  list(owner: string): Promise<TokenInfo[]>; // oldest first
+  revoke(owner: string, id: string): Promise<boolean>; // false: no token of theirs has that id
+}

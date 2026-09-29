@@ -122,8 +122,12 @@ describe('tokens', () => {
     const a = await w.tokens.issue({ owner: 'ana', scope: 'read', kind: 'session', expiresAt: new Date(w.clock.now().getTime() + 3_600_000) });
     const send = w.ddb.send.bind(w.ddb);
     w.ddb.send = ((cmd: { constructor: { name: string } }, ...rest: unknown[]) =>
-      cmd.constructor.name === 'UpdateItemCommand' ? Promise.reject(Object.assign(new Error('throttled'), { name: 'ProvisionedThroughputExceededException' })) : (send as any)(cmd, ...rest)) as typeof w.ddb.send;
+      /Update|TransactWrite|Put/.test(cmd.constructor.name) ? Promise.reject(Object.assign(new Error('throttled'), { name: 'ProvisionedThroughputExceededException' })) : (send as any)(cmd, ...rest)) as typeof w.ddb.send;
+    const logged: string[] = [];
+    (w.tokens as unknown as { p: { log: (l: string) => void } }).p.log = (l) => logged.push(l);
     expect(await w.tokens.verify(a.token)).toEqual({ owner: 'ana', scope: 'read', kind: 'session' });
+    // Logged by the error's name only, never the token.
+    expect(logged).toEqual(['token last use: write failed (ProvisionedThroughputExceededException)']);
   });
 
   it('only a read or publish scope, and an expiry in the future, can be issued', async () => {
