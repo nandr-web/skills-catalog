@@ -170,4 +170,39 @@ export function storageSuite(a: TestAdapter): void {
       for (const f of v1.files) expect(await storage.blob(f.sha256)).toBeDefined();
     });
   });
+
+  // A file's state (§1.1, the files route), through the catalog: named once a version names it (its bytes locally, a link
+  // hosted); otherwise unknown, or on its way where the adapter has that state (hosted: uploaded, not named yet).
+  describe(`a file by its sha256 [${a.name}]`, () => {
+    const named = (k: string) => k === 'bytes' || k === 'link';
+    const notNamed = a.hasOnItsWay ? ['unknown', 'on_its_way'] : ['unknown'];
+
+    it('a published file is named; one never stored, a malformed sha256 and a file only mentioned in a SKILL.md are unknown', async () => {
+      const { catalog } = await openOn(a);
+      const mentioned = new TextEncoder().encode('# Notes\n');
+      const skill = new TextEncoder().encode('---\nname: mentions-notes\ndescription: Points at notes.md, which it does not hold.\n---\nSee notes.md.\n');
+      await catalog.publish(request('mentions-notes', [{ path: 'SKILL.md', mode: '0644', bytes: skill }]), ana);
+      const answer = await catalog.file(sha(skill));
+      expect(named(answer.kind), answer.kind).toBe(true);
+      if (answer.kind === 'bytes') expect(sha(answer.bytes)).toBe(sha(skill));
+      for (const s of [sha('never stored\n'), 'A'.repeat(64), 'a'.repeat(63), 'not hex', sha(mentioned)]) expect((await catalog.file(s)).kind, s).toBe('unknown');
+    });
+
+    it('a file only a refused publish stored is not named', async () => {
+      const store = a.store();
+      const catalog = await store.open({
+        wrapStorage: raceBeforeCommit(async () => {
+          const bo = await store.open();
+          await bo.publish(request('pr-review-checklist', historyVersion(histories.versions['prc.v2'])), actAs('bo'));
+          bo.close();
+        }),
+      });
+      const v3 = historyVersion(histories.versions['prc.v3']);
+      expect((await errorOf(() => catalog.publish(request('pr-review-checklist', v3), ana))).code).toBe('not_owner');
+      const bos = new Set(historyVersion(histories.versions['prc.v2']).map((f) => sha(f.bytes)));
+      const onlyRefused = v3.map((f) => sha(f.bytes)).filter((s) => !bos.has(s));
+      expect(onlyRefused.length).toBeGreaterThan(0);
+      for (const s of onlyRefused) expect(notNamed, s).toContain((await catalog.file(s)).kind);
+    });
+  });
 }

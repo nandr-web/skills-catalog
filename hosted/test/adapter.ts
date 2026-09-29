@@ -40,6 +40,7 @@ export function hostedAdapter(endpoint: () => string): TestAdapter {
   return {
     name: 'hosted',
     takesBackRefusedFiles: false,
+    hasOnItsWay: true,
     store(): TestStore {
       const n = ++stores;
       const place: Place = { table: `skills-${n}`, bucket: `skills-catalog-${n}` };

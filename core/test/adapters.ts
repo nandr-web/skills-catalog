@@ -39,6 +39,8 @@ export interface TestAdapter {
   /** A refused commit removes the files it added (local); an adapter that can't delete leaves them unreferenced for its
    *  sweep (hosted), so the suites check exact file sets only where this is true. */
   takesBackRefusedFiles: boolean;
+  /** A file can be on its way (hosted: uploaded, not yet named by a version); locally a file is named or unknown. */
+  hasOnItsWay: boolean;
   store(): TestStore;
 }
 
@@ -51,6 +53,7 @@ export async function openOn(a: TestAdapter, opts: StoreOptions = {}): Promise<{
 export const localAdapter: TestAdapter = {
   name: 'local',
   takesBackRefusedFiles: true,
+  hasOnItsWay: false,
   store() {
     const dir = sandbox();
     return {
