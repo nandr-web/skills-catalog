@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="d d-sequence" viewBox="0 0 872 456" width="872" height="456" role="img" aria-label="Who did what, in what order? The owner's notes came first, and every slice was reviewed before the next.">
+<title>How we worked</title>
+<style>.d { --d-page: #ECF0F3; --d-canvas: #F9FBFC; --d-ink: #13202A; --d-ink2: #3A4A56; --d-line: #B7C4CD; --d-grid: #D5DDE3; --d-shade: #E1E7EB; --d-accent: #137052; --d-accent-soft: #D9EDE3; --d-hot: #B23A0A; --d-hot-soft: #F8E2D5; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .d, svg.d:root { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+}
+:root[data-theme="dark"] .d { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+
+.d { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 12px; fill: var(--d-ink); }
+.d text { dominant-baseline: central; }
+.d-bg { fill: var(--d-canvas); }
+
+/* nodes */
+.d-node { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1.2; }
+.d-node--external { fill: var(--d-shade); stroke: var(--d-ink2); stroke-dasharray: 4 3; }
+.d-node--focus { fill: var(--d-accent-soft); stroke: var(--d-accent); stroke-width: 1.6; }
+.d-node--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); stroke-width: 1.6; }
+.d-node-detail { fill: none; stroke: var(--d-ink); stroke-width: 1; }
+.d-node--focus + .d-node-detail { stroke: var(--d-accent); }
+.d-node--alert + .d-node-detail { stroke: var(--d-hot); }
+.d-node--external + .d-node-detail { stroke: var(--d-ink2); }
+.d-node--proposed { stroke-width: 1.4; stroke-dasharray: 2 3; }
+.d-node--removed { fill: var(--d-canvas); stroke: var(--d-hot); stroke-width: 1.4; stroke-dasharray: 5 3; }
+.d-label { fill: var(--d-ink); text-anchor: middle; }
+.d-label--strong { font-weight: 600; }
+.d-label--removed { fill: var(--d-ink2); text-decoration: line-through; }
+.d-tag--proposed { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1; stroke-dasharray: 2 2; }
+.d-tag--removed { fill: var(--d-hot); stroke: var(--d-hot); stroke-width: 1; }
+.d-tag-text { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-anchor: middle; }
+.d-tag-text--proposed { fill: var(--d-ink); }
+.d-tag-text--removed { fill: var(--d-canvas); }
+.d-legend-text { font-size: 10.5px; fill: var(--d-ink2); }
+.d-compare-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; fill: var(--d-ink2); }
+.d-callout { fill: var(--d-ink); }
+.d-callout-text { font-size: 10px; font-weight: 600; fill: var(--d-canvas); text-anchor: middle; }
+.d-note { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle; }
+.d-note--focus { fill: var(--d-accent); }
+.d-note--alert { fill: var(--d-hot); }
+
+/* edges */
+.d-edge { fill: none; stroke: var(--d-ink); stroke-width: 1.3; stroke-linejoin: round; }
+.d-edge--async { stroke-dasharray: 5 4; }
+.d-edge--proposed { stroke-dasharray: 2 3; }
+.d-edge--removed { stroke: var(--d-hot); stroke-dasharray: 5 3; }
+.d-edge--return { stroke: var(--d-ink2); stroke-width: 1.1; stroke-dasharray: 4 3; }
+.d-edge--focus { stroke: var(--d-accent); stroke-width: 2; }
+.d-edge--alert { stroke: var(--d-hot); stroke-width: 2; }
+.d-edge-label { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle;
+  paint-order: stroke; stroke: var(--d-canvas); stroke-width: 4px; stroke-linejoin: round; }
+.d-edge-label--focus { fill: var(--d-accent); font-weight: 600; }
+.d-edge-label--alert { fill: var(--d-hot); font-weight: 600; }
+.d-arrow { fill: var(--d-ink); }
+.d-arrow--focus { fill: var(--d-accent); }
+.d-arrow--alert { fill: var(--d-hot); }
+.d-arrow--muted { fill: var(--d-ink2); }
+.d-arrow--open { fill: none; stroke: var(--d-ink); stroke-width: 1.4; stroke-linejoin: round; }
+.d-arrow--open.d-arrow--focus { stroke: var(--d-accent); }
+.d-arrow--open.d-arrow--alert { stroke: var(--d-hot); }
+.d-arrow--open.d-arrow--muted { stroke: var(--d-ink2); }
+
+/* sequence */
+.d-lifeline { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 3 4; }
+.d-activation { fill: var(--d-shade); stroke: var(--d-ink); stroke-width: 1; }
+.d-msg-label { font-size: 11px; fill: var(--d-ink); text-anchor: middle; }
+.d-msg-label--start { text-anchor: start; }
+.d-msg-label--return { fill: var(--d-ink2); }
+.d-msg-label--focus { fill: var(--d-accent); font-weight: 600; }
+.d-msg-label--alert { fill: var(--d-hot); font-weight: 600; }
+.d-memo { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1; }
+.d-memo--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); }
+.d-memo-text { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
+.d-frame { fill: none; stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-frame-tab { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-frame-kind { font-size: 10.5px; font-weight: 600; fill: var(--d-ink); }
+.d-frame-cond-bg { fill: var(--d-canvas); }
+.d-frame-cond { font-size: 10.5px; fill: var(--d-ink2); }
+.d-frame-sep { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+
+/* state */
+.d-pseudo { fill: var(--d-ink); }
+.d-choice-label { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
+.d-composite { fill: var(--d-grid); fill-opacity: 0.25; stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-composite-label { font-size: 11px; font-weight: 600; fill: var(--d-ink); }
+
+/* groups (boundaries) */
+.d-group { fill: var(--d-grid); fill-opacity: 0.35; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+.d-group-label { font-size: 10.5px; fill: var(--d-ink2); letter-spacing: 0.06em; font-weight: 500; }</style>
+<defs><marker id="how-we-worked-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="how-we-worked-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="how-we-worked-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="how-we-worked-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="how-we-worked-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="how-we-worked-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="how-we-worked-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="how-we-worked-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
+<rect class="d-bg" width="872" height="456"/>
+<rect class="d-frame" x="652.2" y="284" width="172.4" height="104" rx="3"/>
+<path class="d-lifeline" d="M68 58V436"/>
+<path class="d-lifeline" d="M216.2 58V436"/>
+<path class="d-lifeline" d="M412.2 58V436"/>
+<path class="d-lifeline" d="M554.2 58V436"/>
+<path class="d-lifeline" d="M674.2 58V436"/>
+<path class="d-lifeline" d="M802.6 58V436"/>
+<rect class="d-activation" x="212.2" y="90" width="8" height="46"/>
+<rect class="d-activation" x="216.2" y="164" width="8" height="42"/>
+<rect class="d-activation" x="64" y="198" width="8" height="42"/>
+<rect class="d-activation" x="670.2" y="266" width="8" height="156"/>
+<rect class="d-activation" x="798.6" y="330" width="8" height="42"/>
+<rect class="d-activation" x="64" y="414" width="8" height="24"/>
+<path class="d-edge" d="M68 94 L212.2 94" marker-end="url(#how-we-worked-arrow)"/>
+<path class="d-edge" d="M220.2 116 L246.2 116 L246.2 132 L220.2 132" marker-end="url(#how-we-worked-arrow)"/>
+<path class="d-edge" d="M412.2 168 L224.2 168" marker-end="url(#how-we-worked-arrow)"/>
+<path class="d-edge" d="M216.2 202 L72 202" marker-end="url(#how-we-worked-arrow)"/>
+<path class="d-edge d-edge--return" d="M72 236 L216.2 236" marker-end="url(#how-we-worked-arrow-muted)"/>
+<path class="d-edge d-edge--focus" d="M554.2 270 L670.2 270" marker-end="url(#how-we-worked-arrow-focus)"/>
+<path class="d-edge" d="M678.2 334 L798.6 334" marker-end="url(#how-we-worked-arrow)"/>
+<path class="d-edge d-edge--return" d="M798.6 368 L678.2 368" marker-end="url(#how-we-worked-arrow-muted)"/>
+<path class="d-edge" d="M670.2 418 L72 418" marker-end="url(#how-we-worked-arrow)"/>
+<rect class="d-node" x="20" y="20" width="96" height="38" rx="19"/>
+<text class="d-label" x="68" y="39">owner</text>
+<rect class="d-node" x="164.2" y="20" width="104" height="38" rx="3"/>
+<text class="d-label" x="216.2" y="39">architects</text>
+<rect class="d-node" x="338.2" y="20" width="148" height="38" rx="3"/>
+<text class="d-label" x="412.2" y="39">agent experience</text>
+<rect class="d-node" x="510.2" y="20" width="88" height="38" rx="3"/>
+<text class="d-label" x="554.2" y="39">QA</text>
+<rect class="d-node" x="629.2" y="20" width="90" height="38" rx="3"/>
+<text class="d-label" x="674.2" y="39">builders</text>
+<rect class="d-node" x="754.1" y="20" width="97" height="38" rx="3"/>
+<text class="d-label" x="802.6" y="39">reviewers</text>
+<path class="d-frame-tab" d="M652.2 284H691.4V296L686.4 301H652.2Z"/>
+<text class="d-frame-kind" x="659.2" y="292.5">loop</text>
+<rect class="d-frame-cond-bg" x="694.4" y="286" width="81.6" height="13"/>
+<text class="d-frame-cond" x="697.4" y="292.5">[each slice]</text>
+<text class="d-msg-label" x="142.1" y="80.5">notes on the PRD</text>
+<text class="d-msg-label d-msg-label--start" x="254.2" y="124">2 readings, compared</text>
+<text class="d-msg-label" x="314.2" y="154.5">measured trials</text>
+<text class="d-msg-label" x="142.1" y="188.5">decisions to make</text>
+<text class="d-msg-label d-msg-label--return" x="142.1" y="222.5">answers</text>
+<text class="d-msg-label d-msg-label--focus" x="614.2" y="256.5">tests first</text>
+<text class="d-msg-label" x="738.4" y="320.5">the slice</text>
+<text class="d-msg-label d-msg-label--return" x="738.4" y="354.5">pass, or fixes</text>
+<text class="d-msg-label" x="614.2" y="404.5">published</text>
+</svg>

@@ -2,6 +2,8 @@
 
 Each decision: what was chosen, what else was on the table, why, and who decided. "The owner" is the person this was built for; "the team" is the architects, QA and agent-experience work behind the design. Details live in [contract.md](contract.md); the owner's words are in [prd/notes.md](prd/notes.md).
 
+At a glance: 17 decisions, 8 decided by the owner and 9 by the team.
+
 ## Decided by the owner
 
 | Decision | Chosen | Alternatives | Why |

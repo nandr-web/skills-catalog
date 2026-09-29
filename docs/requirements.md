@@ -1,8 +1,8 @@
 # Requirements
 
-**39 requirements:** 5 built, 23 being built, 3 in phase 2, 3 for AWS, 4 later, 1 plan.
+**40 requirements:** 5 built, 23 being built, 4 in phase 2, 3 for AWS, 4 later, 1 plan.
 
-Every requirement, in the PRD's or the owner's words, confirmed by the owner (1 still awaiting the owner's confirmation, marked below); where it lives in the design; and the
+Every requirement, in the PRD's or the owner's words, confirmed by the owner (2 still awaiting the owner's confirmation, marked below); where it lives in the design; and the
 automated checks that hold it. Generated from the requirement list and the QA plan's traceability file, so it can't drift.
 Contract sections (§) are in [contract.md](contract.md); the test layers are in [the QA plan](../qa/qa-plan.md).
 
@@ -89,7 +89,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - interface: tags filter: [docs] returns exactly tagged, tags-deduped, tags-at-limit; [docs, release] only the skills with both; a top-level tags list is never a tag
   - unit: metadata.tags parsing: trimmed, deduplicated in order, ≤10 of 1-32 [a-z0-9-]; each bad form is invalid_manifest {fields: [metadata.tags]}
   - interface: read_shared_skill with 20 names works; 21 gives invalid_request {field: names, limit: 20}; search limit 51 gives invalid_request {field: limit, limit: 50}; each with a why
-  - interface: search's tags filter: 11 tags gives invalid_request {field: filters.tags, why: too_many, limit: 10}; a 33-character tag gives {why: too_long, limit: 32}; 10 tags with one of 32 characters is accepted; never clamped
+  - interface: search's tags filter: 11 tags gives invalid_request {field: filters.tags, why: too_many, limit: 10}; a 33-character tag gives {why: item_too_long, limit: 32}; 10 tags with one of 32 characters is accepted; never clamped
   - interface: cursor paging returns every skill once while publishes happen (being built)
 
 ### Only a skill's owners can publish it
@@ -231,7 +231,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 > As Developer 2, I want auto-updates as a user option, global and overridable per skill, as part of the initial delivery, so that my installed skills stay the same as the catalog.
 
 - **Source:** the owner's notes on the PRD
-- **Done when:** A global update policy with per-skill overrides; the update gate table (contract.md §5.3) passes the QA plan's policy goldens; an update replaces the installed copy (the owner's stance for now: local edits not shared upstream may be lost, as with other installed tools; handling them is an open question).
+- **Done when:** A global update policy with per-skill overrides; the update gate table (contract.md §5.3) passes the QA plan's policy goldens; an update replaces the installed copy (the owner's stance for now: local edits not shared upstream may be lost, as with other installed tools; handling them is an open question); with auto-updates on, every surface (session start, the assistant, the CLI) asks the person only when an update carries a flag, and while the assistant runs commands without asking (auto mode, bypass, the sandbox's auto-allow or a broad Bash rule), text that tells it to run commands, fetch and run, install packages or read secrets is flagged (the owner's decisions).
 - **Where it lives:** the installer; contract §3, §5.3
 - **Checked by:**
   - unit: update gate table
@@ -255,6 +255,10 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - interface: accept_held_update's flags[] is compared with the held flags as a set (order and repeats ignored); a missing or extra kind is conflict and changes nothing (the accept_cases)
   - interface: MCP schemas: install_shared_skill has no policy input (the CLI's --policy only), update_installed_skills has no latest, accept_held_update requires flags
   - unit: accept_flagged_updates never applies to a first install (the first-install row with accept: true stays held: flagged)
+  - unit: the permissive-mode hold: while auto mode, bypass, the sandbox's auto-allow or a broad Bash rule is in the assistant's settings, every update is held {reason: permissive_mode, mode}, flags or not (flags kept in risk_flags); order pin, notify, permissive_mode, flags; accept_flagged_updates never releases it; a first install isn't held by it (permissive_cases)
+  - unit: settings to mode as Claude Code reads them (permissive_settings): managed, the project's settings.local and settings, then the user's; one value from the highest file, allow lists merged; auto and bypass only from user or managed settings; the sandbox's auto-allow on by default; Bash, Bash(*), PowerShell(*) and a rule with a * whose first word holds the * or is a runner (interpreters, wrappers like env and sudo) count, Bash(git *) and one exact command don't; several modes give the first in order; fake home, project and managed root only
+  - interface: a hold with no risk flags (permissive_mode, notify) is taken with flags: [] and refused with any kind named
+  - setup: setup reads the assistant's permission settings, and its summary says when a permissive mode will hold every update, naming the mode; the session-start notice names it as the reason
   - interface: a newer version published between hold and accept gives conflict and changes nothing; a confirm for another name or version is refused
   - setup: setup's allowed tools never include accept_held_update, publish_skill_to_catalog or set_skill_update_policy; update_installed_skills is pre-allowed for MCP only (the CLI's update still asks)
   - setup: accept_flagged_updates is set only by the terminal wizard: true from --config, --yes or the no-terminal mode is refused (invalid_request {field: accept_flagged_updates}, nothing written, exit 1); while it's on, the session-start notice says so
@@ -308,6 +312,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - cleanup: assistant-run leftovers (projects, session-env, tmp, and the MCP-log cache ~/Library/Caches/claude-cli-nodejs/<working-folder slug>/) removed by session id and sandbox path; each server's log is first kept with the run's transcripts
   - cleanup: pre-flight starts the catalog's MCP server with exactly the runs' settings (environment, paths, MCP config), and a server that dies at start stops the round
   - agent: no_read_outside_sandbox holds in every run: reads are allowed only under the sandbox, and the MCP setups have no Bash
+  - unit: the runner and the pre-flight start Claude Code only by the full path from the run's settings (default ~/.local/bin/claude), never a bare claude: a stub named claude placed first on PATH is never started; the pre-flight prints the path and version and refuses a copy whose com.apple.quarantine flags lack the approved bit 0x40 (macOS would ask); an approved mark or none passes
   - unit: the child environment is exactly the allow-list (PATH, HOME, USER, LOGNAME, SHELL, TMPDIR, LANG, LC_*, TERM, SKILLS_*, QA_*): given a parent with AWS_*, GITHUB_TOKEN, GH_TOKEN, ANTHROPIC_API_KEY, NPM_TOKEN, SSH_AUTH_SOCK and an ordinary-named MY_NOTES carrying markers, none is kept
   - cleanup: a fake assistant and the MCP server started from the run's own mcp.json each record their environment: no planted marker, and only allow-listed names
   - agent: every live run: a marker planted in the runner's environment never appears in any tool result or answer
@@ -473,6 +478,19 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Where it lives:** the core, the web UI; contract §2, §5.3
 - **Checked by:**
   - interface: a bundle installs exactly its pinned versions
+
+### Usage metrics, kept on the machine
+
+> As the owner, I want the catalog to count how it's used (searches that find nothing, installs, updates held and how long each waits for a yes, updates declined), kept on the machine and summarised on request, so that friction and gaps show as numbers and decisions like holding updates can be reviewed.
+
+- **Status:** this wording awaits the owner's confirmation
+- **Source:** the owner's decision (`docs/decisions.md`)
+- **Done when:** The client counts searches that find nothing, installs, updates applied, updates held by reason with the time each waits for a yes, and held updates declined or never taken; the counts stay on the machine under the activity log's privacy rules (no query, skill text or anything a person or publisher typed); skills-catalog stats summarises them; the flag-only approvals can be reviewed from them.
+- **Where it lives:** the CLI, the installer, the MCP server; contract §3
+- **Checked by:**
+  - interface: a scripted sequence (a search with no match, a partial one, an install, an update applied, one held and taken later with the injected clock, one held and declined) gives exactly the expected counts and wait times in skills-catalog stats
+  - interface: the counts live under $SKILLS_HOME only and follow the activity log's rules: a sentinel planted in a query, a skill's text and a publish message never appears in them
+  - cleanup: the before/after check shows nothing written outside $SKILLS_HOME and no network use
 
 ### Web UI: see what changed between versions
 

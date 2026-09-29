@@ -2,20 +2,7 @@
 
 This catalog was planned and built by a small team of AI agents with distinct roles, working for one person (the owner) who reviewed proposals and made the decisions.
 
-```mermaid
-flowchart TD
-  owner([The owner]) -- "notes on the PRD, answers to decisions" --> coord[Coordinator]
-  coord --> archA[Architect A]
-  coord --> archB[Architect B]
-  archA <-- "compare, then one joint proposal" --> archB
-  archA & archB --> contract[(The contract)]
-  qa[QA] -- "oracles, golden sets, test tools" --> contract
-  ux[Agent experience] -- "measured trials with real assistants" --> contract
-  contract --> impl[Implementers]
-  impl -- "each slice, tests first" --> review{Independent reviews}
-  review -- "pass, or findings to fix" --> impl
-  review -- "decisions and risks, as short visual summaries" --> owner
-```
+![Who did what, in order: the owner's notes on the PRD go to the architects, who write two readings and compare them; agent experience adds measured trials; decisions go to the owner and answers come back; QA writes the tests first; each slice goes to reviewers and comes back as a pass or fixes; then it's published](pictures/how-we-worked.svg)
 
 ## The steps
 

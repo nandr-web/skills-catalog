@@ -1,4 +1,14 @@
-# Architecture
+# Architecture: today and planned
+
+What runs on your machine today, what comes next, and the hosted option designed for later. The README's picture shows only the system as it is.
+
+## Today, and next
+
+![Built today: the core catalog and its local store. Next, not built yet: the CLI and setup, the assistant's tools (MCP), the installer and the skills folder](pictures/today.svg)
+
+**Built today, and next.** The core catalog is built and tested. The CLI, the assistant's tools and the installer come next, each on the same contract ([contract.md](contract.md)).
+
+## Later: a hosted catalog (one contract, two homes)
 
 ![One contract, two homes: on your machine, the core catalog is built and the installer, CLI and assistant tools are planned; a hosted catalog in your AWS account is designed but not built](pictures/shape.svg)
 
@@ -17,6 +27,8 @@
 | **Web UI, hosted catalog, bundles, agent reviewers** | Designed; parked until phase 1 is done | Later |
 
 ## A retrieved skill stays the same skill
+
+![A new version is checked first: if it could change what runs, or the reviewer flags it, it waits for you with what changed; otherwise it's applied on its own](pictures/update-gate.svg)
 
 A retrieved skill is still a copy, so it remembers where it came from. The installer's list records name, version, fingerprint and catalog. On an update it compares versions. Text changes to a skill that can't run anything apply on their own. Anything that could change what runs on your machine stops and shows you first, including new instructions in a skill that is allowed to run commands. A first install goes through the same check.
 
