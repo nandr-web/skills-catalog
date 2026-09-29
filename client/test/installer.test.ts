@@ -145,12 +145,13 @@ describe('install (contract §3 install_shared_skill)', () => {
     }
   });
 
-  it('under a umask of 002 in a shared, setgid project folder, the .claude it makes takes the shared group but is not group-writable, so it installs', async () => {
+  // (A project folder the shared group can write is refused itself: the folder above .claude tests.)
+  it('under a umask of 002 in a setgid project folder of a shared group, the .claude it makes takes that group but is not group-writable, so it installs', async () => {
     const p = place();
     await publish(p, 'notes-helper', plain('notes-helper'));
     const project = join(p.dir, 'project');
     mkdirSync(project, { recursive: true });
-    chmodSync(project, 0o2775);
+    chmodSync(project, 0o2755);
     const was = process.umask(0o002);
     try {
       const r = await install(ctxFor(p), { name: 'notes-helper', target: 'project' });

@@ -457,9 +457,9 @@ describe('folders another user could control are refused (target_not_private)', 
     { what: 'the project folder world-writable without the sticky bit', at: (c) => join(c, '..'), change: { mode: 0o040777 }, own: true },
   ];
 
-  // The folder above .claude (§4.5, aeedabd): the person's assistant home is held to the same rule; a project folder may
-  // be group-writable (a team checkout), but not world-writable unless sticky (as /tmp is).
-  it('the folder above .claude: the assistant home must be private; a project may be group-writable, or world-writable only if sticky', async () => {
+  // The folder above .claude (§4.5): the person's assistant home is held to the same rule; a project folder may be anyone's,
+  // but writable by others only as the private-group convention allows, or with the sticky bit (as /tmp is).
+  it('the folder above .claude: the assistant home must be private; a project may be group- or world-writable only with the person\'s private group or the sticky bit', async () => {
     // `refused`: the data of the refusal, or false when it installs. The data says which folder it is (the home, on a
     // user install) and whether it's the person's own, so the words can pick the way on.
     const tries: { what: string; target: 'user' | 'project'; change: Partial<import('node:fs').Stats>; refused: false | { home?: true; own: boolean } }[] = [
@@ -467,7 +467,11 @@ describe('folders another user could control are refused (target_not_private)', 
       { what: 'assistant home group-writable with a shared group', target: 'user', change: { mode: 0o040775, gid: 20 }, refused: { home: true, own: true } },
       { what: 'assistant home world-writable, even with the sticky bit', target: 'user', change: { mode: 0o041777 }, refused: { home: true, own: true } },
       { what: 'assistant home group-writable with the person\'s private group', target: 'user', change: { mode: 0o040775, gid: uid }, refused: false },
-      { what: 'project group-writable', target: 'project', change: { mode: 0o040775, gid: 20 }, refused: false },
+      // A group-writable project is a path for every member of its group (on macOS usually staff, every account): allowed
+      // only with the person's private group, or the sticky bit.
+      { what: 'project group-writable with a shared group', target: 'project', change: { mode: 0o040775, gid: 20 }, refused: { own: true } },
+      { what: 'project group-writable with the person\'s private group', target: 'project', change: { mode: 0o040775, gid: uid }, refused: false },
+      { what: 'project group-writable and sticky', target: 'project', change: { mode: 0o041775, gid: 20 }, refused: false },
       { what: 'project owned by another user, not world-writable', target: 'project', change: { uid: uid + 1 }, refused: false },
       { what: 'project world-writable and sticky', target: 'project', change: { mode: 0o041777 }, refused: false },
       { what: 'project world-writable, not sticky, another user\'s', target: 'project', change: { mode: 0o040777, uid: uid + 1 }, refused: { own: false } },

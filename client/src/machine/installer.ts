@@ -70,10 +70,12 @@ function skillsFolderFor(dest: string, target: Target): Anchor[] {
   const missing: string[] = [];
   for (let at = root; !existsSync(at) && dirname(at) !== at; at = dirname(at)) missing.unshift(at);
   for (const at of missing) makeFolder(at, 0o755);
-  // The folder above .claude (§4.5): the assistant home is held to the same rule as .claude; a project folder may be
-  // group-writable (a team's checkout) but not world-writable unless sticky, as /tmp is. It may be reached through a link.
+  // The folder above .claude (§4.5), which may be reached through a link: whoever can write it can put their own .claude
+  // in its place. The assistant home is held to the same rule as .claude. A project folder may be anyone's, but writable
+  // by others only as that rule allows (a shared group, macOS's staff included, is every member's way in), unless it has
+  // the sticky bit, as /tmp does.
   const r = statSync(root, { bigint: true });
-  const open = target === 'user' ? !isPrivate(r) : process.getuid !== undefined && (r.mode & 0o002n) !== 0n && (r.mode & 0o1000n) === 0n;
+  const open = target === 'user' ? !isPrivate(r) : process.getuid !== undefined && (r.mode & 0o1000n) === 0n && !writableOnlyAsPrivate(r);
   if (open) throw notPrivate(root, target, r, target === 'user');
   return [claude, skills].map((path) => {
     makeFolder(path, 0o755);
@@ -134,9 +136,14 @@ function notPrivate(path: string, target: Target, s: Stats, home = false): Catal
 function isPrivate(s: Stats): boolean {
   const uid = process.getuid?.();
   if (uid === undefined) return true;
-  if (s.uid !== BigInt(uid) || (s.mode & 0o002n) !== 0n) return false;
-  // Group-write only with the user's private group (its gid is the uid); never a shared group such as macOS's staff (20).
-  return (s.mode & 0o020n) === 0n || (s.gid === BigInt(uid) && s.gid !== 20n);
+  return s.uid === BigInt(uid) && writableOnlyAsPrivate(s);
+}
+// Never world-writable, and group-writable only with the user's private group (its gid is the uid); never a shared group
+// such as macOS's staff (20).
+function writableOnlyAsPrivate(s: Stats): boolean {
+  const uid = BigInt(process.getuid?.() ?? -1);
+  if ((s.mode & 0o002n) !== 0n) return false;
+  return (s.mode & 0o020n) === 0n || (s.gid === uid && s.gid !== 20n);
 }
 
 // A folder's identity on disk, to tell whether a path still names the folder that was checked or installed: device,
