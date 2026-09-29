@@ -3,6 +3,7 @@
 // (the kernel frees it when the process ends, so no lock is ever left behind), and starts only once the ports waiting
 // to close are few.
 
+import { spawn } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { takeRunLock, waitForFreePorts } from './run-lock.ts';
 
@@ -20,6 +21,22 @@ describe('the run lock', () => {
     await waiting;
     expect(second).toBeDefined();
     await second!.release();
+  });
+
+  it('a holder that dies without letting go (SIGKILL) frees it: the kernel closes its port', async () => {
+    const holder = spawn(process.execPath, ['-e', `require('node:net').createServer().listen({ port: ${PORT}, host: '127.0.0.1', exclusive: true }, () => console.log('held'))`], { stdio: ['ignore', 'pipe', 'ignore'] });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        holder.stdout!.once('data', () => resolve());
+        holder.once('exit', () => reject(new Error('the holder ended before it held the port')));
+      });
+      await expect(takeRunLock({ port: PORT, timeoutMs: 100, pollMs: 20 })).rejects.toThrow(/another hosted test run/);
+      holder.kill('SIGKILL');
+      const lock = await takeRunLock({ port: PORT, timeoutMs: 5000, pollMs: 20 });
+      await lock.release();
+    } finally {
+      if (holder.exitCode === null && holder.signalCode === null) holder.kill('SIGKILL');
+    }
   });
 
   it('gives up after its timeout with a message that says what holds it', async () => {
