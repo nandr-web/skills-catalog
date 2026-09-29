@@ -24,7 +24,7 @@ describe('the secret override is a person\'s only, through the Catalog too (cont
     const { catalog } = await openTest();
     const secret = filesOf(skills.hostile['secret-in-body'].files)!;
     const allow = request('secret-in-body', secret, { allow_suspected_secrets: true });
-    expect('allow_suspected_secrets' in inputSchema('publish_version', 'web').properties).toBe(false);
+    expect('allow_suspected_secrets' in inputSchema('publish_version', 'web', 'local').properties).toBe(false);
     for (const face of ['web', undefined] as const) {
       expect((await errorOf(() => catalog.publish(allow, actAs('dev1'), face))).toJSON()).toMatchObject({ code: 'invalid_request', field: 'allow_suspected_secrets', why: 'unknown_field' });
     }
@@ -112,11 +112,11 @@ describe('each operation\'s definition (contract §1)', () => {
 
   it('the web face never gets an input only a person may give', () => {
     for (const def of Object.values(OPERATIONS)) {
-      for (const k of def.cliOnly ?? []) expect([def.name, k in inputSchema(def, 'web').properties]).toEqual([def.name, false]);
+      for (const k of def.cliOnly ?? []) expect([def.name, k in inputSchema(def, 'web', 'local').properties]).toEqual([def.name, false]);
     }
     const e = (() => {
       try {
-        validateInput('install_shared_skill', { name: 'x', policy: 'pin' }, 'web');
+        validateInput('install_shared_skill', { name: 'x', policy: 'pin' }, 'web', 'local');
       } catch (err) {
         return err as CatalogError;
       }

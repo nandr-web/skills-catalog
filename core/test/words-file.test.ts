@@ -153,8 +153,8 @@ describe('the words file (vendored, recommended variant)', () => {
     ];
     for (const [op, input] of cliOnly) {
       const field = Object.keys(input).at(-1)!;
-      expect((await errorOf(() => validateInput(op, input, 'mcp'))).data, op).toMatchObject({ field, why: 'unknown_field' });
-      expect(validateInput(op, input, 'cli'), op).toMatchObject(input);
+      expect((await errorOf(() => validateInput(op, input, 'mcp', 'local'))).data, op).toMatchObject({ field, why: 'unknown_field' });
+      expect(validateInput(op, input, 'cli', 'local'), op).toMatchObject(input);
     }
   });
 
@@ -167,9 +167,9 @@ describe('the words file (vendored, recommended variant)', () => {
 
   it('checks a publish\'s step-2 values like any request: version from 1, files from 0, flags a list', async () => {
     const step2 = { folder: 'x', confirm: 'c', name: 'n', version: 2, files: 1, flags: ['runnable_file'] };
-    expect(validateInput('publish_skill_to_catalog', step2, 'mcp')).toEqual(step2);
+    expect(validateInput('publish_skill_to_catalog', step2, 'mcp', 'local')).toEqual(step2);
     for (const [field, bad] of [['version', 0], ['files', -1], ['flags', 'runnable_file'], ['flags', ['made_up_kind']]] as const) {
-      expect((await errorOf(() => validateInput('publish_skill_to_catalog', { ...step2, [field]: bad }, 'mcp'))).data, field).toMatchObject({ field });
+      expect((await errorOf(() => validateInput('publish_skill_to_catalog', { ...step2, [field]: bad }, 'mcp', 'local'))).data, field).toMatchObject({ field });
     }
   });
 
