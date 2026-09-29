@@ -144,7 +144,7 @@ names:
     install: ${cli} install <name>
     update: ${cli} update
     status: ${cli} list
-    policy: ${cli} policy
+    policy: ${cli} policy <auto|notify|pin> [<name>]
     publish: ${cli} publish <folder>
     accept: ${cli} update <name> --accept
 tools:
@@ -727,6 +727,11 @@ results:
       google_api_key: a Google API key
       jwt: a sign-in token (a JWT)
       url_credentials: a URL with a password in it
+      gitlab_token: a GitLab token
+      huggingface_token: a Hugging Face token
+      sendgrid_key: a SendGrid API key
+      npm_token: an npm token
+      pgpass_line: a line of a PostgreSQL password file
       password_or_token: a password or token
     publish_conflict: "conflict: something the preview showed has changed since (the folder's files, the message or the latest version), so nothing was published. Preview again and show the person the new lists."
     conflict: "conflict: {name} has a newer version (v{latest}) than the one this change started from, so nothing was published. Read v{latest}, tell the person what changed, and ask how to go on."
