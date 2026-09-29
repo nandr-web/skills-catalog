@@ -44,6 +44,10 @@ const MUTATIONS = [
   ['core:http/index.ts', 'an uncut body over the limit is parsed', "raw === 'cut' || raw.byteLength > max", "raw === 'cut'"],
   ['core:http/index.ts', 'a 404 on /api may be stored by a cache', "headers: { ...SECURITY_HEADERS, ...API_HEADERS, 'content-type': 'text/plain; charset=utf-8' }, body: NOT_FOUND", "headers: { ...SECURITY_HEADERS, 'content-type': 'text/plain; charset=utf-8' }, body: NOT_FOUND"],
   ['core:http/index.ts', 'a 405 names no method the path takes', '...(s.allow ? { allow: s.allow } : {})', ''],
+  ['core:http/index.ts', 'a 405 may be stored by a cache', 'headers: { ...SECURITY_HEADERS, ...API_HEADERS, ...(s.allow', 'headers: { ...SECURITY_HEADERS, ...(s.allow'],
+  ['core:http/index.ts', 'a refusal may be stored by a cache', "  return { status, headers: { ...SECURITY_HEADERS, ...API_HEADERS }, body: '' };", "  return { status, headers: { ...SECURITY_HEADERS }, body: '' };"],
+  ['core:http/index.ts', 'a file\'s bytes open as a page', "'content-disposition': 'attachment', ", ''],
+  ['core:http/index.ts', 'a file\'s bytes may run when opened', "`${SECURITY_HEADERS['content-security-policy']}; sandbox`", "SECURITY_HEADERS['content-security-policy']"],
   ['core:http/index.ts', 'a person-only input is taken on the web', "validateInput<Record<string, unknown>>(op, parsed, 'web', where)", "validateInput<Record<string, unknown>>(op, parsed, 'cli', where)"],
   ['core:http/index.ts', 'a cut body is parsed as if whole', "  if (raw === 'cut' || raw.byteLength > max) throw new CatalogError('too_large', { limit: 'request_bytes', max });\n", ''],
   ['core:http/index.ts', 'a transport\'s own sentence replaces every error\'s', "err.code === 'unauthenticated' && s.unauthenticated !== undefined ? s.unauthenticated", 's.unauthenticated !== undefined ? s.unauthenticated'],
@@ -75,11 +79,19 @@ const MUTATIONS = [
   ['cli/serve.ts', 'serve starts on a catalog that isn\'t a local folder', "  if (!settings.catalog.startsWith('file:')) {", '  if (false) {'],
   ['cli/serve.ts', 'serve takes words it doesn\'t know', "    if (positionals.length) throw new Error('positional');", ''],
   ['cli/serve.ts', 'the command to give the person echoes what was typed', "const command = [s.cli, 'serve', ...(port ? ['--port', String(port)] : []), ...(publish ? ['--publish'] : [])].join(' ');", "const command = [s.cli, 'serve', ...argv].join(' ');"],
-  ['web/serve.ts', 'serve listens on every address', "server.listen({ host: '127.0.0.1', port: o.port, exclusive: true }", "server.listen({ host: '::', port: o.port, exclusive: true }"],
+  ['web/serve.ts', 'serve listens on every address', "server.listen({ host: '127.0.0.1', port: o.port, exclusive: true }", "server.listen({ host: '0.0.0.0', port: o.port, exclusive: true }"],
+  ['web/serve.ts', 'a slow request or a flood of connections holds the server', '  Object.assign(server, LIMITS);\n', ''],
+  ['web/serve.ts', 'a bug\'s 500 may be stored by a cache', "res.writeHead(500, { ...SECURITY_HEADERS, ...API_HEADERS, connection: 'close' })", 'res.writeHead(500, {})'],
   ['web/serve.ts', 'a refused connection is kept alive for the next request', "unread ? { ...r.headers, connection: 'close' } : r.headers", 'r.headers'],
   // Not listed: dropping `req.destroy()` after a refusal. Equivalent while the answer says Connection: close (Node's
   // server closes that connection itself once the answer is sent); the destroy is kept so an unread body is never waited on.
-  // Not listed: 'the body is read past its limit' (dropping the cut). The endless-body test then never ends: it would be
+  ['web/handler.ts', 'the body is read past its limit', "      if (size > limit) return 'cut';\n", ''],
+  ['web/handler.ts', 'the body is read before the token is checked', "    if (!same(req.headers['x-skills-catalog-token'], token)) return refuse('no_token', sentences);\n    // An operation", "    await readBody(req.body, BODY_LIMIT);\n    if (!same(req.headers['x-skills-catalog-token'], token)) return refuse('no_token', sentences);\n    // An operation"],
+  ['web/handler.ts', 'a catalog that can\'t be opened fails the files route', 'const catalog = await readCatalog().catch(() => undefined);', 'const catalog = await readCatalog();'],
+  ['web/handler.ts', 'a read-only refusal is raised before the log sees it', '      const a = await perform(ctx, name, name, input);', '      ctx.refuse!(name, input);\n      const a = await perform(ctx, name, name, input);'],
+  ['web/handler.ts', 'a bug\'s log path reaches the page', 'log: basename(log)', 'log'],
+  // Not listed: read-only going by the operation's name instead of its effect. Equivalent while publish_version is the
+  // web's only write; it counts once another operation writes the catalog. The endless-body test then never ends: it would be
   // caught only by the test's time limit, minutes later; the cut is shown by that test on every run.
   ['operations.ts', 'search is worded as a read', 'present: (ctx, r, args) => renderSearch(ctx.words, r, (args ?? {}) as SearchInput),', 'present: (ctx, r) => renderRead(ctx.words, r, ctx.ids),'],
   // the words an assistant reads

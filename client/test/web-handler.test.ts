@@ -2,11 +2,12 @@
 // handler: every guard refuses before anything is looked up and before any of the body is read; the routes are the
 // operations whose faces include web, as own keys; a result, error or not, is 200 in the envelope; pairing trades its
 // code once; files by fingerprint sit behind the same guards; every response carries the fixed headers.
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { actAs, Words } from '@skills-catalog/core';
 import { checkHttpCase, HTTP_DEVELOPER, HTTP_SEED, httpCases, skillMd as sharedSkillMd } from '@skills-catalog/core/testing/http';
 import { describe, expect, it } from 'vitest';
+import { logWords } from '../src/activity.ts';
 import { settingsFrom } from '../src/settings.ts';
 import { createHandler, POLICY, type WebRequest } from '../src/web/handler.ts';
 import { open, seed } from './seed.ts';
@@ -195,9 +196,11 @@ describe('the body', () => {
         }
       },
     };
-    const started = Date.now();
-    const r = await h.handle({ ...api(token, 'search_shared_skills', {}), body: endless });
-    expect(Date.now() - started).toBeLessThan(10_000);
+    // Bounded: a handler that reads without its cut never answers, and this fails in 10 s instead of hanging the run.
+    const r = await Promise.race([
+      h.handle({ ...api(token, 'search_shared_skills', {}), body: endless }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('the body was read without its cut: no answer in 10 s')), 10_000).unref()),
+    ]);
     expect(r.status).toBe(200);
     expect(json(r).error.code).toBe('too_large');
     expect(pulled).toBeLessThanOrEqual(POLICY.bodyLimit + 64 * 1024);
@@ -289,7 +292,35 @@ describe('pairing (outside the versioned API)', () => {
   });
 });
 
+describe('what the web face shows and logs of a failure', () => {
+  it('a real publish refused without --publish reaches the activity log, like any other error', async () => {
+    const { p, h, token } = await served();
+    const body = { name: 'web-skill', files: [{ path: 'SKILL.md', mode: '0644', content_base64: Buffer.from('---\nname: web-skill\ndescription: A web publish.\n---\nBody.\n').toString('base64') }] };
+    expect(json(await h.handle(api(token, 'publish_version', body))).error.why).toBe('read_only');
+    const last = readFileSync(join(p.home, 'activity.log'), 'utf8').trim().split('\n').at(-1)!;
+    expect(last).toContain('publish_version');
+    expect(last).toContain(logWords(W).error('forbidden'));
+  });
+
+  it('a bug names only its log\'s file, never a path on this machine', async () => {
+    // A folder where config.json should be: reading it fails in a way nothing expects, so it's internal_error.
+    const { p, h, token } = await served({ config: null });
+    mkdirSync(join(p.home, 'config.json'));
+    const r = json(await h.handle(api(token, 'search_shared_skills', {})));
+    expect(r.error.code).toBe('internal_error');
+    expect(String(r.error.log)).not.toContain('/');
+    expect(JSON.stringify(r)).not.toContain(p.dir);
+  });
+});
+
 describe('a version\'s files by fingerprint (GET /api/v1/files/<sha256>)', () => {
+  it('a catalog that can\'t be opened is the fixed 404, never a failure', async () => {
+    const { p, h, token } = await served();
+    writeFileSync(join(p.catalogDir, 'catalog.sqlite'), 'not a database\n'.repeat(200));
+    const r = await h.handle({ method: 'GET', path: `/api/v1/files/${'a'.repeat(64)}`, headers: { host: HOST, 'x-skills-catalog-token': token }, body: untouched() });
+    expect([r.status, String(r.body)]).toEqual([404, POLICY.notFound]);
+  });
+
   async function files() {
     const { p, h, token } = await served();
     const c = await open(p);

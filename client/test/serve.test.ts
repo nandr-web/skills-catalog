@@ -12,6 +12,9 @@ import { actAs, Words } from '@skills-catalog/core';
 import { describe, expect, it, vi } from 'vitest';
 import { cliWords } from '../src/cli/words.ts';
 import { runServe, type ServeIo } from '../src/cli/serve.ts';
+import { settingsFrom } from '../src/settings.ts';
+import { POLICY } from '../src/web/handler.ts';
+import { serve } from '../src/web/serve.ts';
 import { open, request as skillRequest, seed, skillMd } from './seed.ts';
 import { PROCESS_TEST_MS, place, type Place } from './server.ts';
 
@@ -169,6 +172,32 @@ describe('where it listens', () => {
   });
 });
 
+describe('the server itself (web/serve.ts)', () => {
+  const settingsOf = (p: Place) => settingsFrom(env(p), p.dir);
+
+  it('listens on 127.0.0.1 alone, with limits on slow requests and on connections', async () => {
+    const p = place();
+    const s = await serve({ port: 0, publish: false, settings: settingsOf(p), words: S });
+    try {
+      expect((s.server.address() as { address: string }).address).toBe('127.0.0.1');
+      expect([s.server.headersTimeout, s.server.requestTimeout, s.server.maxConnections]).toEqual([10_000, 30_000, 64]);
+    } finally {
+      await s.close();
+    }
+  });
+
+  it('a request the handler fails on is a bare 500 with the fixed headers, never stored, and its connection closed', async () => {
+    const p = place();
+    const s = await serve({ port: 0, publish: false, settings: settingsOf(p), words: S, handle: async () => Promise.reject(new TypeError('a bug')) });
+    try {
+      const r = await call(s.port, { path: '/api/v1/search_shared_skills', headers: page(s.port), body: '{}' });
+      expect([r.status, r.body, r.headers['cache-control'], r.headers['x-content-type-options'], r.headers['content-security-policy']]).toEqual([500, '', 'no-store', 'nosniff', POLICY.headers['content-security-policy']]);
+    } finally {
+      await s.close();
+    }
+  });
+});
+
 describe('a session over the socket', () => {
   it('pairs once, answers as the web face, and refuses a request without its token before reading its body', async () => {
     const p = place();
@@ -206,10 +235,10 @@ describe('a session over the socket', () => {
     }
   });
 
-  it('a planted code, token and skill marker are never in a file, a log or a later answer', async () => {
+  it('a planted code, token and marker are never in a file, a log or a later answer, wherever the marker was sent', async () => {
     const p = place();
     configure(p);
-    const MARKER = 'PLANTED-MARKER-7f3a9c';
+    const MARKER = 'planted-marker-7f3a9c';
     const CODE = 'PLANTEDCODE9d2e41b7c0aa';
     await seed(p, async (c) => void (await c.publish(skillRequest('marked-skill', [{ path: 'SKILL.md', text: skillMd('marked-skill', 'Carries a marker.', `${MARKER}\n`) }]), actAs('dev1'))));
     const before = catalogContent(p.catalogDir);
@@ -220,23 +249,32 @@ describe('a session over the socket', () => {
     try {
       token = await paired(port, CODE);
       const as = { ...page(port), 'x-skills-catalog-token': token, 'x-skills-catalog-as': 'dev1' };
+      const dryRun = { name: 'web-marked', message: MARKER, dry_run: true, files: [{ path: 'SKILL.md', mode: '0644', content_base64: Buffer.from(skillMd('web-marked', 'A dry run.', `${MARKER}\n`)).toString('base64') }] };
+      // The marker in a stored skill's body (served back: answer 0), a dry run's file and message, an unknown key, and
+      // the act-as header; the others are what fails: a body that isn't JSON, an operation no one serves, a second pairing.
       answers.push(await call(port, { path: '/api/v1/read_shared_skill', headers: as, body: JSON.stringify({ names: ['marked-skill'], include: 'contents' }) }));
+      answers.push(await call(port, { path: '/api/v1/publish_version', headers: as, body: JSON.stringify(dryRun) }));
+      answers.push(await call(port, { path: '/api/v1/search_shared_skills', headers: as, body: JSON.stringify({ query: 'x', [MARKER]: MARKER }) }));
+      answers.push(await call(port, { path: '/api/v1/search_shared_skills', headers: { ...as, 'x-skills-catalog-as': MARKER }, body: '{}' }));
       answers.push(await call(port, { path: '/api/v1/search_shared_skills', headers: as, body: '{not json' }));
-      answers.push(await call(port, { path: '/api/v1/publish_version', headers: as, body: JSON.stringify({ name: 'nope', files: [] }) }));
       answers.push(await call(port, { path: '/api/v1/nothing_here', headers: as, body: '{}' }));
       answers.push(await call(port, { path: '/api/pair', headers: page(port), body: JSON.stringify({ code: CODE }) }));
     } finally {
       await s.stop();
     }
     expect(answers[0]!.body).toContain(MARKER);   // it was served
+    expect(JSON.parse(answers[1]!.body)).toMatchObject({ ok: true, data: { dry_run: true } });
     for (const [i, a] of answers.entries()) {
-      for (const secret of [CODE, token]) expect(JSON.stringify(a.headers) + (i === 0 ? '' : a.body), `answer ${i}`).not.toContain(secret);
+      for (const secret of [CODE, token]) expect(JSON.stringify(a.headers) + a.body, `answer ${i}`).not.toContain(secret);
     }
-    // Files: only the catalog holds the marker (as it did before); nothing holds the code or the token.
+    // Every file under the place (the home, the assistant's home, the catalog): none holds the code or the token; only
+    // the catalog holds the marker, as it did before the session (the dry run stored nothing).
     const after = files(p.dir);
+    const catalog = relative(p.dir, p.catalogDir);
+    expect(after.size).toBeGreaterThan(0);
     for (const [f, bytes] of after) {
       for (const secret of [CODE, token]) expect(bytes.includes(secret), f).toBe(false);
-      if (!f.startsWith('catalog')) expect(bytes.includes(MARKER), f).toBe(false);
+      if (!f.startsWith(catalog)) expect(bytes.includes(MARKER), f).toBe(false);
     }
     expect(catalogContent(p.catalogDir)).toEqual(before);
     expect(s.out.join('').split(CODE).length - 1).toBe(1);
@@ -258,6 +296,8 @@ describe('what a session writes', () => {
       const as = { ...page(port), 'x-skills-catalog-token': await paired(port, codeOf(await s.line)), 'x-skills-catalog-as': 'dev1' };
       await call(port, { path: '/api/v1/search_shared_skills', headers: as, body: '{}' });
       await call(port, { path: '/api/v1/publish_version', headers: as, body: JSON.stringify({ name: 'web-skill', files: [{ path: 'SKILL.md', mode: '0644', content_base64: Buffer.from(skillMd('web-skill', 'A web publish.')).toString('base64') }] }) });
+      const dry = await call(port, { path: '/api/v1/publish_version', headers: as, body: JSON.stringify({ name: 'web-skill', dry_run: true, files: [{ path: 'SKILL.md', mode: '0644', content_base64: Buffer.from(skillMd('web-skill', 'A dry run.')).toString('base64') }] }) });
+      expect(JSON.parse(dry.body)).toMatchObject({ ok: true, data: { dry_run: true } });   // a dry run stores nothing either
     } finally {
       await s.stop();
     }
