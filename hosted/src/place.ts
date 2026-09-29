@@ -6,6 +6,7 @@
 //   v#<name> / <version, 10 digits>      data (the version's record as JSON), fingerprint
 //   fp#<fingerprint> / <name>#<version>  one per version, so the first by name and version answers a fingerprint
 //   events / <at>#<name>#<version>       event (JSON), delivered (true once handed to the index)
+//   file#<sha256> / <name>#<version>     one per file of a version, written by the indexer after the publish
 // The bucket's objects:
 //   blobs/<sha256>                       a file's bytes, put once (If-None-Match: *); tags `claimed` and `deleting`
 //   search/cards.json                    the search cards, rewritten with If-Match on its ETag

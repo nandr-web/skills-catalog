@@ -15,6 +15,8 @@ import {
 import { GetObjectCommand, type S3Client } from '@aws-sdk/client-s3';
 import type { Clock, CommitResult, NewVersion, SkillRecord, Storage, VersionPublished, VersionRecord } from '@skills-catalog/core';
 import { committable, inspect } from './blobs.ts';
+import { fileState, type FileState } from './api/files.ts';
+import { HostedFileNames } from './names.ts';
 import { blobKey, versionSk, type Place } from './place.ts';
 
 const S = (s: string): AttributeValue => ({ S: s });
@@ -26,9 +28,17 @@ export type HostedParts = { ddb: DynamoDBClient; s3: S3Client; place: Place; clo
 
 export class HostedStorage implements Storage {
   private readonly p: HostedParts;
+  private readonly fileNames: HostedFileNames;
 
   constructor(parts: HostedParts) {
     this.p = parts;
+    this.fileNames = new HostedFileNames({ ddb: parts.ddb, place: parts.place });
+  }
+
+  /** A file by fingerprint: named by a version the indexer has recorded, on its way (a fresh upload not named yet: the
+   *  files route answers 503 with Retry-After), or unknown. */
+  fileState(sha256: string): Promise<FileState> {
+    return fileState(sha256, { named: (s) => this.fileNames.named(s), inspect: (s) => inspect(this.p.s3, this.p.place, s) }, this.p.clock.now());
   }
 
   private get table() {
