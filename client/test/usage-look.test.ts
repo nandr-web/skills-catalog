@@ -51,6 +51,23 @@ describe('looks and answers', () => {
     expect(events(p, 'answer')).toEqual([{ event: 'answer', skill, version: 2, answer: 'no', together: 1 }]);
   });
 
+  // The same steps as the test below, which is expected to fail: here they must end well (a crash would make that one
+  // "fail" for the wrong reason): the held install, the person's no and their yes all exit 0, and only the yes installs.
+  it('a held install, then no, then yes: each exits 0, and only the yes installs it', async () => {
+    const p = place();
+    await seed(p);
+    const dest = join(p.osHome, '.claude', 'skills', 'release-notes-kit');
+    const held = await cli(p, ['install', 'release-notes-kit']);
+    expect(held.code).toBe(0);
+    expect(existsSync(dest)).toBe(false);
+    const no = await cli(p, ['update', 'release-notes-kit', '--accept'], { tty: true, answers: ['n'] });
+    expect(no.code).toBe(0);
+    expect(existsSync(dest)).toBe(false);
+    const yes = await cli(p, ['update', 'release-notes-kit', '--accept'], { tty: true, answers: ['y'] });
+    expect(yes.code).toBe(0);
+    expect(existsSync(join(dest, 'SKILL.md'))).toBe(true);
+  });
+
   // Not yet true: the installer records its holds and a yes where a held update is taken (its calls are specified to its
   // owner; until they land, `stats` isn't served). This passes while a held-then-accepted update counts as nothing, and
   // trips when it counts: then make it a plain `it` and put stats back in the CLI's commands.
