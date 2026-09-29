@@ -5,7 +5,7 @@
 
 import { createHash } from 'node:crypto';
 import { CreateTableCommand, DynamoDBClient, GetItemCommand, PutItemCommand, TransactWriteItemsCommand } from '@aws-sdk/client-dynamodb';
-import { CreateBucketCommand, GetObjectTaggingCommand, HeadObjectCommand, PutBucketPolicyCommand, PutObjectCommand, PutObjectTaggingCommand, S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { CreateBucketCommand, GetObjectAttributesCommand, GetObjectTaggingCommand, HeadObjectCommand, PutBucketPolicyCommand, PutObjectCommand, PutObjectTaggingCommand, S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FAKE, startEmulator, type Emulator } from './emulator.ts';
@@ -83,6 +83,17 @@ describe('the stand-in does what the hosted adapters rely on', () => {
     const r = await fetch(url, { method: 'PUT', body: 'other bytes\n', headers: { 'if-none-match': '*', 'x-amz-checksum-sha256': sha } });
     process.stderr.write(`presigned PUT checksum enforced: ${r.status >= 400} (status ${r.status})\n`);
     expect(r.status).toBeGreaterThan(0);
+  });
+
+  it('reports whether a put\'s SHA-256 is kept and given back (HeadObject, GetObjectAttributes, GetObject with ChecksumMode) (not relied on)', async () => {
+    await s3.send(new CreateBucketCommand({ Bucket: 'probe-head' }));
+    const bytes = 'checked bytes\n';
+    await s3.send(new PutObjectCommand({ Bucket: 'probe-head', Key: 'h', Body: bytes, IfNoneMatch: '*', ChecksumSHA256: b64sha(bytes) }));
+    const head = await s3.send(new HeadObjectCommand({ Bucket: 'probe-head', Key: 'h', ChecksumMode: 'ENABLED' }));
+    const attrs = await s3.send(new GetObjectAttributesCommand({ Bucket: 'probe-head', Key: 'h', ObjectAttributes: ['Checksum'] })).catch((e: unknown) => e);
+    const got = await s3.send(new GetObjectCommand({ Bucket: 'probe-head', Key: 'h', ChecksumMode: 'ENABLED' }));
+    process.stderr.write(`stored checksum: head ${head.ChecksumSHA256} attributes ${(attrs as { Checksum?: { ChecksumSHA256?: string } }).Checksum?.ChecksumSHA256 ?? String((attrs as Error).name ?? '-')} get ${got.ChecksumSHA256} want ${b64sha(bytes)}\n`);
+    expect(await got.Body?.transformToString()).toBe(bytes);
   });
 
   it('reports whether a bucket policy requiring s3:if-none-match is enforced (not relied on)', async () => {
