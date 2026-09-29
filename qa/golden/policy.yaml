@@ -58,6 +58,71 @@ cases:
   - {first_install: true, policy: auto,   override: none, flags: [runnable_file],          local: same, accept: false, mode: interactive, outcome: held:flagged}
   - {first_install: true, policy: auto,   override: none, flags: [runnable_file],          local: same, accept: true,  mode: unattended,  outcome: held:flagged, note: "accept_flagged_updates never applies to a first install (contract §5.3, 1803115)"}
 
+# Permissive modes (contract §5.3; detection pinned at ff9c881 and f1b7200; e22d154 replaced the blanket hold): while one is
+# detected, added or changed lines get command_instruction (histories.gate pairs with `permissive`).
+# permissive_settings: the assistant's settings files -> the mode the installer reads (null = not permissive). Files are
+# read as Claude Code reads them: managed, then the project's .claude/settings.local.json and .claude/settings.json, then
+# ~/.claude/settings.json; a single value comes from the highest file that sets it; permissions.allow lists merge.
+# A broad rule (f1b7200): Bash, Bash(*), PowerShell(*), or a rule with a * whose first word holds the * or, less a trailing
+# colon, is on broad_bash_runners (interpreters and wrappers).
+# defaultMode auto and bypassPermissions count only from user or managed settings. Tests write these files under a fake
+# home, project and managed root, never the real ones.
+permissive_settings:
+  - {files: {"user": {"permissions": {"defaultMode": "auto"}}}, mode: auto, note: "auto mode in the user's settings"}
+  - {files: {"managed": {"permissions": {"defaultMode": "bypassPermissions"}}}, mode: bypass, note: "bypass in managed settings"}
+  - {files: {"user": {"permissions": {"defaultMode": "bypassPermissions"}}}, mode: bypass}
+  - {files: {"project": {"permissions": {"defaultMode": "auto"}}}, mode: null, note: "Claude Code ignores auto in a project's settings"}
+  - {files: {"project_local": {"permissions": {"defaultMode": "bypassPermissions"}}}, mode: null, note: "and bypass in settings.local"}
+  - {files: {"user": {"permissions": {"defaultMode": "acceptEdits"}}}, mode: null, note: "accept-edits is not permissive"}
+  - {files: {"user": {"sandbox": {"enabled": true}}}, mode: sandbox_auto_allow, note: "autoAllowBashIfSandboxed defaults to true"}
+  - {files: {"user": {"sandbox": {"enabled": true, "autoAllowBashIfSandboxed": false}}}, mode: null, note: "auto-allow turned off"}
+  - {files: {"project": {"sandbox": {"enabled": true}}}, mode: sandbox_auto_allow, note: "a project's sandbox setting counts (only auto and bypass are ignored there)"}
+  - {files: {"user": {"sandbox": {"enabled": true}}, "project": {"sandbox": {"enabled": false}}}, mode: null, note: "the project's value is higher than the user's"}
+  - {files: {"project": {"sandbox": {"enabled": true}}, "project_local": {"sandbox": {"enabled": false}}}, mode: null, note: "settings.local is higher than the project's settings"}
+  - {files: {"user": {"permissions": {"allow": ["Bash"]}}}, mode: broad_bash_rule}
+  - {files: {"user": {"permissions": {"allow": ["Bash(*)"]}}}, mode: broad_bash_rule}
+  - {files: {"user": {"permissions": {"allow": ["PowerShell(*)"]}}}, mode: broad_bash_rule}
+  - {files: {"project": {"permissions": {"allow": ["Bash(python3 *)"]}}}, mode: broad_bash_rule, note: "allow lists merge across every file, the project's included"}
+  - {files: {"user": {"permissions": {"allow": ["Bash(python3:*)"]}}}, mode: broad_bash_rule, note: "':*' equals a trailing ' *'"}
+  - {files: {"user": {"permissions": {"allow": ["Bash(node*)"]}}}, mode: broad_bash_rule}
+  - {files: {"user": {"permissions": {"allow": ["Bash(uv run *)"]}}}, mode: broad_bash_rule}
+  - {files: {"user": {"permissions": {"allow": ["Bash(git *)"]}}}, mode: null, note: "a narrow rule"}
+  - {files: {"user": {"permissions": {"allow": ["Bash(sh -c *)"]}}}, mode: broad_bash_rule, note: "an interpreter with a flag before the *: its first word counts (f1b7200)"}
+  - {files: {"user": {"permissions": {"allow": ["Bash(python3 -c *)"]}}}, mode: broad_bash_rule}
+  - {files: {"user": {"permissions": {"allow": ["Bash(uv run python *)"]}}}, mode: broad_bash_rule}
+  - {files: {"user": {"permissions": {"allow": ["Bash(env *)"]}}}, mode: broad_bash_rule, note: "a wrapper that runs any command"}
+  - {files: {"user": {"permissions": {"allow": ["Bash(sudo:*)"]}}}, mode: broad_bash_rule, note: "a wrapper, ':*' form"}
+  - {files: {"user": {"permissions": {"allow": ["Bash(* --help *)"]}}}, mode: broad_bash_rule, note: "the first word holds the *: any program"}
+  - {files: {"user": {"permissions": {"allow": ["PowerShell(powershell -Command *)"]}}}, mode: broad_bash_rule}
+  - {files: {"user": {"permissions": {"allow": ["Bash(gitx *)"]}}}, mode: null, note: "not a runner, and no * in the first word"}
+  - {files: {"user": {"permissions": {"allow": ["Bash(npm run *)"]}}}, mode: null, note: "npm isn't an interpreter on the list"}
+  - {files: {"user": {"permissions": {"allow": ["Bash(python3 scripts/check.py)"]}}}, mode: null, note: "no wildcard: one exact command"}
+  - {files: {"user": {"permissions": {"allow": ["Read(**)", "Bash(git *)"]}}, "project": {"permissions": {"allow": ["Bash(ls *)"]}}}, mode: null, note: "merged, still narrow"}
+  - {files: {"user": {"permissions": {"defaultMode": "auto", "allow": ["Bash(*)"]}}}, mode: auto, note: "several: the first in the order auto, bypass, sandbox_auto_allow, broad_bash_rule"}
+  - {files: {"user": {"sandbox": {"enabled": true}, "permissions": {"allow": ["Bash(python3 *)"]}}}, mode: sandbox_auto_allow}
+  - {files: {"project": {"permissions": {"defaultMode": "auto", "allow": ["Bash(*)"]}}}, mode: broad_bash_rule, note: "the project's auto is ignored; its broad rule counts"}
+  - {files: {}, mode: null, note: "no settings at all"}
+
+# command_instruction in the policy table (contract e22d154): it's a flag like any other. With auto-updates on,
+# every surface asks only when an update is flagged; there is no blanket hold in a permissive mode. Order: pin, notify,
+# then the flags. A pinned skill and a version in its cooldown ask nothing and give no session-start notice.
+command_instruction_cases:
+  - {policy: auto,   override: none, flags: [command_instruction], accept: false, mode: interactive, outcome: "held:flagged"}
+  - {policy: auto,   override: none, flags: [command_instruction], accept: false, mode: unattended,  outcome: "held:flagged", notice: true}
+  - {policy: auto,   override: none, flags: [command_instruction], accept: true,  mode: unattended,  outcome: updated, note: "accept_flagged_updates lets it through like any flag; the lock records it"}
+  - {policy: auto,   override: none, flags: [],                    accept: false, mode: unattended,  outcome: updated, notice: false, note: "nothing flagged in a permissive mode: applied silently, no question on any surface"}
+  - {policy: auto,   override: pin,  flags: [command_instruction], accept: false, mode: unattended,  outcome: "held:pin", notice: false, note: "a pinned skill asks nothing and gives no notice"}
+  - {policy: notify, override: none, flags: [command_instruction], accept: false, mode: interactive, outcome: "held:notify"}
+  - {first_install: true, policy: auto, override: none, flags: [command_instruction], accept: true, mode: interactive, outcome: "held:flagged", note: "a first install is held when flagged; accept_flagged_updates never applies to it"}
+
+# not_installed (contract §3, §9, 0038bde): naming a skill that isn't installed on this machine is not_installed {name}, and
+# nothing changes. For update_installed_skills' names, the first such name in the order given, checked before any fetch.
+# Installed here: release-note-draft and pr-review-checklist.
+not_installed_cases:
+  - {call: set_skill_update_policy, args: {policy: pin, name: deploy-helper}, expect: {error: not_installed, name: deploy-helper}, config_unchanged: true}
+  - {call: update_installed_skills, args: {names: [release-note-draft, deploy-helper, sql-formatter]}, expect: {error: not_installed, name: deploy-helper}, installed_unchanged: true, no_fetch: true, note: "the first not-installed name in the order given, before any fetch: release-note-draft isn't updated either"}
+  - {call: update_installed_skills, args: {names: [pr-review-checklist]}, expect: {error: null}, note: "an installed name works as usual"}
+
 # accept_held_update (contract §3, 6532eba): its flags[] is compared with the held flags as a set of kinds (order and repeats
 # ignored); a missing or extra kind is conflict and changes nothing. Here the held update is prc v2 -> v3 in an MCP setup,
 # held: flagged with [runnable_file] (histories.prc), and each case sends the held result's confirm.
@@ -69,9 +134,48 @@ accept_cases:
     - {flags: [], outcome: conflict, installed_unchanged: true}
     - {flags: [runnable_file, runs_at_load], outcome: conflict, installed_unchanged: true, note: "an extra kind"}
     - {flags: [instructions_changed], outcome: conflict, installed_unchanged: true}
+  no_flags:
+    held_flags: []
+    note: "a hold with no risk flags (notify, or a cooldown) takes flags: [] (ff9c881)"
+    cases:
+      - {flags: [], outcome: updated}
+      - {flags: [runnable_file], outcome: conflict, installed_unchanged: true}
   two_kinds:
     held_flags: [capability_frontmatter, instructions_changed]
     note: "a first install of gate.g1 (histories.gate: null -> gate.g1), held: flagged"
     cases:
       - {flags: [instructions_changed, capability_frontmatter], outcome: installed, note: "order ignored"}
       - {flags: [capability_frontmatter], outcome: conflict, no_new_skill_dirs: true}
+
+# A damaged lock or config file (contract §4.5, §9; 4f3b878): invalid_local_file {file, why, path}. Each case starts from a
+# real install of prc.v1 (user target, so lock.json holds one entry written by the installer, keyed by its path) and a
+# config.json holding {"update_policy": "auto"}, then `damage` rewrites one of them. `entry.<field>` changes that field of
+# the one lock entry and nothing else. Then every command in `commands` refuses with the expected error, and afterwards:
+# the damaged file is byte-identical (never repaired or replaced), no skill folder changed, no other file in $SKILLS_HOME
+# changed, and no output (sentence, JSON, log line) contains QA-SENTINEL-$RUN_ID, planted inside each damaged file where
+# JSON allows it. path = the file's full path. teardown still runs (exit 0); the session-start hook exits 0 and prints
+# exactly one line, fixed words naming the file. `ok_cases` are not damage: the commands work as usual.
+local_files:
+  commands: [install_shared_skill, update_installed_skills, accept_held_update, list_installed_skills, set_skill_update_policy, setup]
+  expect_every_command: {error: invalid_local_file, same_file: true, path: "$SKILLS_HOME/<file>", file_byte_identical: true, skills_unchanged: true, output_never_contains: "QA-SENTINEL-$RUN_ID"}
+  teardown: {exit: 0}
+  session_start_hook: {exit: 0, stdout_lines: 1, names_file: true, output_never_contains: "QA-SENTINEL-$RUN_ID"}
+  cases:
+    - {id: lock-not-json, file: lock.json, damage: {bytes: "{\"skills\": QA-SENTINEL-$RUN_ID"}, why: not_json}
+    - {id: lock-empty, file: lock.json, damage: {bytes: ""}, why: not_json, note: "an empty file is not JSON; a missing file is fine (ok_cases)"}
+    - {id: lock-array, file: lock.json, damage: {bytes: "[\"QA-SENTINEL-$RUN_ID\"]"}, why: wrong_shape}
+    - {id: lock-skills-array, file: lock.json, damage: {bytes: "{\"skills\": [\"QA-SENTINEL-$RUN_ID\"]}"}, why: wrong_shape}
+    - {id: lock-version-text, file: lock.json, damage: {entry.version: "1"}, why: wrong_shape, note: "a field of the wrong type in a lock entry"}
+    - {id: lock-accepted-text, file: lock.json, damage: {entry.accepted: "QA-SENTINEL-$RUN_ID"}, why: wrong_shape}
+    - {id: lock-fingerprint-number, file: lock.json, damage: {entry.fingerprint: 7}, why: wrong_shape}
+    - {id: lock-policy-typo, file: lock.json, damage: {entry.policy: "pinn"}, why: unknown_policy, note: "a mistyped pin never falls back to auto: nothing updates"}
+    - {id: lock-policy-case, file: lock.json, damage: {entry.policy: "Pin"}, why: unknown_policy, note: "policies are lowercase"}
+    - {id: config-not-json, file: config.json, damage: {bytes: "update_policy: pin  # QA-SENTINEL-$RUN_ID\n"}, why: not_json, note: "YAML where JSON is expected"}
+    - {id: config-policy-number, file: config.json, damage: {bytes: "{\"update_policy\": 3}"}, why: wrong_shape}
+    - {id: config-policy-unknown, file: config.json, damage: {bytes: "{\"update_policy\": \"manual\", \"note\": \"QA-SENTINEL-$RUN_ID\"}"}, why: unknown_policy}
+    - {id: config-policy-case, file: config.json, damage: {bytes: "{\"update_policy\": \"Auto\"}"}, why: unknown_policy}
+    - {id: config-array, file: config.json, damage: {bytes: "[]"}, why: wrong_shape}
+  ok_cases:
+    - {id: lock-absent, remove: lock.json, expect: {list_installed_skills: {installed: []}}, note: "no lock yet: nothing installed, not an error"}
+    - {id: config-absent, remove: config.json, expect: {update_policy_effective: auto}, note: "no config: the default"}
+    - {id: config-extra-key, file: config.json, damage: {bytes: "{\"update_policy\": \"notify\", \"theme\": \"dark\"}"}, expect: {update_policy_effective: notify}, note: "a key the config doesn't define is kept and ignored"}
