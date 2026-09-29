@@ -93,12 +93,13 @@ guard(fs, 'createWriteStream', [0], 'sync');
 
 // Claude Code's real managed settings (contract §8, SKILLS_MANAGED_SETTINGS): a test never reads them either, so one that
 // forgets to point the setting into its sandbox fails instead of reading this machine's policy.
-const MANAGED = ['/Library/Application Support/ClaudeCode', '/etc/claude-code'];
+// /etc is a link to /private/etc on macOS: a path is compared as given and with its links resolved, as refusedPlace does.
+const MANAGED = ['/Library/Application Support/ClaudeCode', '/etc/claude-code', '/private/etc/claude-code'];
 function checkRead(arg: unknown, call: string): void {
   const path = typeof arg === 'string' ? arg : Buffer.isBuffer(arg) ? arg.toString() : arg instanceof URL ? fileURLToPath(arg) : undefined;
   if (path === undefined) return;
-  const p = resolve(path);
-  const place = MANAGED.find((m) => p === m || p.startsWith(m + sep));
+  const under = (p: string) => MANAGED.find((m) => p === m || p.startsWith(m + sep));
+  const place = under(resolve(path)) ?? under(real(path));
   if (place) throw new Error(`fail-safe: ${call}(${path}) is under ${place}; tests never read the machine's managed settings`);
 }
 function guardRead(target: Record<string, any>, name: string, kind: 'sync' | 'callback' | 'promise'): void {
@@ -114,12 +115,13 @@ function guardRead(target: Record<string, any>, name: string, kind: 'sync' | 'ca
     return fn.apply(this, args);
   };
 }
-for (const name of ['readFile', 'readdir', 'lstat', 'stat', 'open', 'access', 'opendir']) {
+for (const name of ['readFile', 'readdir', 'lstat', 'stat', 'open', 'access', 'opendir', 'readlink', 'realpath']) {
   guardRead(fs, `${name}Sync`, 'sync');
   guardRead(fs, name, 'callback');
   guardRead(fs.promises, name, 'promise');
 }
 guardRead(fs, 'existsSync', 'sync');
+guardRead(fs, 'createReadStream', 'sync');
 
 syncBuiltinESMExports(); // `import { writeFileSync } from 'node:fs'` sees the guarded call too
 

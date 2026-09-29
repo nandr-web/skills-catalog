@@ -22,7 +22,8 @@ describe('the fail-safe (contract §8)', () => {
   it('refuses reads of Claude Code\'s real managed settings, so a test that forgets SKILLS_MANAGED_SETTINGS fails', async () => {
     const fs = await import('node:fs');
     const { join } = await import('node:path');
-    for (const dir of ['/Library/Application Support/ClaudeCode', '/etc/claude-code']) {
+    // /etc is a link to /private/etc on macOS: the linked-through path is refused as well.
+    for (const dir of ['/Library/Application Support/ClaudeCode', '/etc/claude-code', '/private/etc/claude-code']) {
       const file = join(dir, 'managed-settings.json');
       expect(() => fs.readFileSync(file), file).toThrow(/fail-safe/);
       expect(() => fs.openSync(file, 'r'), file).toThrow(/fail-safe/);
@@ -30,6 +31,10 @@ describe('the fail-safe (contract §8)', () => {
       expect(() => fs.statSync(file), file).toThrow(/fail-safe/);
       expect(() => fs.readdirSync(join(dir, 'managed-settings.d')), dir).toThrow(/fail-safe/);
       expect(() => fs.existsSync(file), file).toThrow(/fail-safe/);
+      expect(() => fs.createReadStream(file), file).toThrow(/fail-safe/);
+      expect(() => fs.readlinkSync(file), file).toThrow(/fail-safe/);
+      await expect(fs.promises.readFile(file), file).rejects.toThrow(/fail-safe/);
+      expect(() => fs.readFile(file, () => {}), file).toThrow(/fail-safe/);
     }
     const standIn = join(sandbox(), 'managed-settings');
     expect(fs.existsSync(join(standIn, 'managed-settings.json'))).toBe(false);
