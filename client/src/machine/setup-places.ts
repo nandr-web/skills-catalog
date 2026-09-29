@@ -7,7 +7,7 @@
 import { accessSync, constants, lstatSync, statSync, type BigIntStats } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CatalogError } from '@skills-catalog/core';
-import { readJsonFile } from './json-file.ts';
+import { readJsonFile, type Snapshot } from './json-file.ts';
 import { isPrivate } from './private.ts';
 import { elsewhere, recordWhy, type SetupRecord } from './setup-record.ts';
 
@@ -31,7 +31,13 @@ export type PlacesInput = {
   /** The effective user. */
   uid: number;
 };
-export type Places = { places: SetupPlaces; missing: { claudeDir: boolean; skillsHome: boolean; backups: boolean }; record: SetupRecord | undefined };
+export type Places = {
+  places: SetupPlaces;
+  missing: { claudeDir: boolean; skillsHome: boolean; backups: boolean };
+  record: SetupRecord | undefined;
+  /** What the record file was when read, for writing it back. */
+  recordWas: Snapshot | 'absent';
+};
 
 const statOr = (path: string, follow: boolean): BigIntStats | undefined => {
   try {
@@ -97,6 +103,7 @@ export function checkPlaces({ assistantHome: A, skillsHome: H, env, uid }: Place
   const backups = h ? realFolder(places.backups, uid) : true;
 
   let record: SetupRecord | undefined;
+  let recordWas: Snapshot | 'absent' = 'absent';
   if (h) {
     const bad = (why: string) => new CatalogError('invalid_local_file', { file: 'setup-record.json', why, path: places.record });
     const f = readJsonFile(places.record, RECORD_CAP, { forWrite: true });
@@ -105,7 +112,8 @@ export function checkPlaces({ assistantHome: A, skillsHome: H, env, uid }: Place
       if (recordWhy(f.value)) throw bad('wrong_shape');
       record = f.value as unknown as SetupRecord;
       if (elsewhere(record, places).length) throw bad('wrong_shape');
+      recordWas = f.snapshot;
     }
   }
-  return { places, missing: { claudeDir, skillsHome: !h, backups }, record };
+  return { places, missing: { claudeDir, skillsHome: !h, backups }, record, recordWas };
 }

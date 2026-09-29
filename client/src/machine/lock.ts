@@ -373,6 +373,19 @@ export function holdLock(home: string, now: () => number): { change<T>(fn: (lock
   };
 }
 
+/** `fn` run holding the lock file at `path` by the same discipline (made only if absent, this process's id and start,
+ *  stale holders removed, lock_busy after 5 s), removed afterwards whether `fn` succeeded or not. Setup and teardown hold
+ *  $SKILLS_HOME/setup.lock with it. */
+export async function withLockFile<T>(path: string, now: () => number, fn: () => T | Promise<T>): Promise<T> {
+  const mine = await take(path, now);
+  try {
+    return await fn();
+  } finally {
+    heldHere.delete(path);
+    removeIfSame(path, mine);
+  }
+}
+
 /** One change to lock.json under the lock, which is removed afterwards whether the change succeeded or not. */
 export async function withLock<T>(home: string, now: () => number, change: (lock: Lock) => T | Promise<T>): Promise<T> {
   const hold = holdLock(home, now);
