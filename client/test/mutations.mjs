@@ -114,7 +114,9 @@ const MUTATIONS = [
   ['machine/installer.ts', 'accept writes over an entry another run changed', '    if (!sameDecision(existing, now)) throw conflict();\n', ''],
   ['machine/installer.ts', 'an install keeps its decision after another run changed the entry', '    if (!sameDecision(existing, now)) {', '    if (false) {'],
   ['machine/installer.ts', 'an update keeps its decision after another run changed the entry', '          if (!sameDecision(e, now)) {', '          if (false) {'],
-  ['machine/installer.ts', 'an update flags against the version it first read, not the one installed now', '            if (now.version !== e.version || now.catalog !== e.catalog) dNow = gate(await installedSide(catalog, now), to);\n', ''],
+  ['machine/installer.ts', 'an update flags against the version it first read, not the one installed now', '            if (now.catalog === ctx.settings.catalog && now.version !== e.version) dNow = gate(await installedSide(catalog, now), to);\n', ''],
+  ['machine/installer.ts', 'an update holds by what it read before the lock', "          if (heldOver(entry, dNow)) return 'held';", "          if (heldOver(e, d)) return 'held';"],
+  ['machine/installer.ts', 'an install flags against no copy when another catalog\'s copy appeared meanwhile', "        : heldOver(now, now.catalog !== ctx.settings.catalog || now.version === existing?.version ? flags", "        : heldOver(now, now.version === existing?.version ? flags"],
 ];
 
 // A mutant is caught by its first failing test, so mutant runs stop there (--bail 1); the baseline runs everything.
