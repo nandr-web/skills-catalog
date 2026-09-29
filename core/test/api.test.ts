@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { OPERATIONS, inputSchema, validateInput, type OutputSchema } from '../src/api.ts';
 import { Catalog } from '../src/catalog.ts';
 import { COMMON_ERRORS, CatalogError, ERROR_CODES } from '../src/errors.ts';
+import { WORD_GAPS } from '../src/render.ts';
 import { Words } from '../src/words-file.ts';
 import { actAs } from '../src/local/index.ts';
 import { filesOf, historyVersion, loadGolden } from './golden.ts';
@@ -142,7 +143,7 @@ describe('the error list at run time (contract §9)', () => {
   });
 
   // A code added anywhere else in §9 (a table, a later sentence) must be in the list too: every other backticked word
-  // there, outside a {…} or (…), is a why the words file has a sentence for, or one of these.
+  // there, outside a {…} or (…), is a why the words file has a sentence for (or one asked for: WORD_GAPS), or one of these.
   const NOT_CODES: Record<string, string> = {
     problem: 'a field of invalid_manifest',
     why: 'a field of invalid_request and others',
@@ -155,7 +156,8 @@ describe('the error list at run time (contract §9)', () => {
     let s9 = text.slice(text.indexOf('## 9. Error codes'), text.indexOf('## 10.'));
     for (let prev = ''; prev !== s9; ) [prev, s9] = [s9, s9.replace(/\{[^{}]*\}/g, '').replace(/\([^()]*\)/g, '')];
     const marked = new Set([...s9.matchAll(/`([a-z_]+)`/g)].map((m) => m[1]!));
-    const whys = Object.keys(Words.load().word('errors.why') as Record<string, string>);
+    const gaps = WORD_GAPS.filter((k) => k.startsWith('errors.why.')).map((k) => k.slice('errors.why.'.length));
+    const whys = [...Object.keys(Words.load().word('errors.why') as Record<string, string>), ...gaps];
     const known = new Set<string>([...ERROR_CODES, ...whys, ...Object.keys(NOT_CODES)]);
     expect([...marked].filter((w) => !known.has(w)).sort()).toEqual([]);
     for (const w of Object.keys(NOT_CODES)) expect([w, marked.has(w), (ERROR_CODES as readonly string[]).includes(w) || whys.includes(w)]).toEqual([w, true, false]);
