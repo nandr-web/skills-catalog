@@ -80,7 +80,8 @@ describe('the surface (vendored, recommended variant)', () => {
     const key = renderError(s, new CatalogError('invalid_manifest', { folder: 'x', problem: 'key_format', fields: ['allowed​-tools'] }));
     expect(key).toContain(JSON.stringify('allowed​-tools'));
     expect(key).not.toContain('invalid_manifest: problem');
-    expect(Object.keys(s.word('errors.secret_kind')).sort()).toEqual([...SECRET_KINDS].sort());
+    // Every kind the scanner raises has words (the surface may word kinds before the scanner raises them).
+    expect(Object.keys(s.word('errors.secret_kind'))).toEqual(expect.arrayContaining([...SECRET_KINDS]));
     for (const [kind, words] of Object.entries<string>(s.word('errors.secret_kind'))) {
       const secret = renderError(s, new CatalogError('secret_suspected', { path: 'scripts/call.sh', line: 3, kind, folder: 'keys' }));
       expect(secret, kind).toContain(`looks like ${words}.`);

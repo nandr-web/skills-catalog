@@ -537,6 +537,11 @@ results:
     held_cooldown: "- {name} v{to} waits until {until} before it updates automatically: new versions wait a few days, so a problem someone finds early stops them. It stays on v{from}. If the person wants it now, they can take it (${accept}, their yes) or run ${cli} update {name} --latest in their own terminal."
     refused: "- Not updated: {name} v{to} breaks the catalog's current rules ({reason}), so {name} stays on v{from}. Tell the person; only its publisher can fix it."
     refused_fingerprint: "- Not updated: the catalog's copy of {name} v{to} doesn't match its fingerprint (damaged or altered), so {name} stays on v{from}. Don't retry or work around it; tell the person, so whoever runs the catalog can check it."
+    refused_target: "- Not updated: {reason}, so nothing was written and {name} stays on v{from} (v{to} is available). Tell the person; they decide what to do about it. Don't change it yourself."
+    target_reason:
+      target_symlink: "{path} is now a link to somewhere else, and ${cli} won't write through a link"
+      exists_untracked: "{path} now holds something that wasn't installed from the catalog"
+      name_in_use: "{path} now holds another skill or command with the same name"
     reason:
       runnable_file: it adds or changes {path}, which can run on this machine
       runs_at_load: "{path} line {line} runs a command as soon as the skill loads, without asking"
@@ -603,6 +608,9 @@ results:
     not_found_path: "not_found: {name} v{version} has no file {path}. Nothing was changed; its files are listed in a read with include files."
     invalid_manifest: "invalid_manifest: {folder}/SKILL.md {problem}. Nothing was published. Fix: {fix} Then preview again."
     why:
+      not_json: isn't valid JSON
+      wrong_shape: doesn't have the fields skills-catalog expects
+      unknown_policy: names an update setting other than auto, notify or pin
       empty: is empty
       not_utf8: isn't valid UTF-8 text
       control_character: contains a line break or another control character (it must be one line)
@@ -703,6 +711,10 @@ results:
       slack_token: a Slack token
       anthropic_key: an Anthropic API key
       openai_key: an OpenAI API key
+      stripe_key: a Stripe API key
+      google_api_key: a Google API key
+      jwt: a sign-in token (a JWT)
+      url_credentials: a URL with a password in it
       password_or_token: a password or token
     publish_conflict: "conflict: something the preview showed has changed since (the folder's files, the message or the latest version), so nothing was published. Preview again and show the person the new lists."
     conflict: "conflict: {name} has a newer version (v{latest}) than the one this change started from, so nothing was published. Read v{latest}, tell the person what changed, and ask how to go on."
@@ -735,6 +747,10 @@ results:
     name_in_use_command: "name_in_use: {path} is a command with this name, and a skill with the same name would replace it for the assistant, so nothing was installed. Tell the person; they decide whether to rename or remove the command."
     person_only: "This step needs the person: it asks them to confirm in their own terminal, so nothing was done. Give them the command to run there: {command}"
     target_symlink: "target_symlink: {path} is a link to somewhere else, so ${cli} won't install through it. Nothing was changed. Tell the person; they decide whether to replace the link."
+    invalid_local_file: "invalid_local_file: {path} {why}, so nothing was changed. ${cli} never repairs or rewrites this file itself. Tell the person which file it is and why; they decide whether to fix it or remove it ({effect}). Change it only once they agree."
+    local_file_effect:
+      lock.json: "removing it makes ${cli} forget which skills it installed: their folders stay, but it no longer updates them"
+      config.json: removing it puts ${cli}'s settings back to their defaults
 setup:
   questions:
     - ask: Keep installed skills up to date automatically? Updates that could change what runs on this machine still wait for you.
@@ -899,6 +915,7 @@ log:
     exists_untracked: "refused: a folder with that name is already there"
     name_in_use: "refused: that name is already in use"
     target_symlink: "refused: the target is a link"
+    invalid_local_file: "refused: a local settings file is damaged"
     person_only: waiting for the person
     fingerprint_mismatch: "refused: the catalog's copy doesn't match its fingerprint"
     internal_error: bug in skills-catalog (see its log)
