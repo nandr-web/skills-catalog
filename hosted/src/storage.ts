@@ -109,10 +109,16 @@ export class HostedStorage implements Storage {
   ): Promise<CommitResult> {
     // One way in: files go up through their links first, so the commit never carries bytes.
     if (files.some((f) => f.bytes !== undefined)) throw new Error('the hosted commit takes files by sha256 alone; upload them through their links first');
-    const now = this.p.clock.now();
-    const missing: string[] = [];
-    for (const sha of [...new Set(files.map((f) => f.sha256))]) if (!committable(await inspect(this.p.s3, this.p.place, sha), now)) missing.push(sha);
-    if (missing.length) return { kind: 'not_uploaded', missing };
+    // Each named file is checked once, after the owner, conflict and identical answers (the refusal order): its bytes
+    // are read to hash them, so a retry of the transaction doesn't read them again.
+    let checked = false;
+    const filesUsable = async (): Promise<string[]> => {
+      const now = this.p.clock.now();
+      const missing: string[] = [];
+      for (const sha of [...new Set(files.map((f) => f.sha256))]) if (!committable(await inspect(this.p.s3, this.p.place, sha), now)) missing.push(sha);
+      checked = true;
+      return missing;
+    };
 
     for (let attempt = 1; ; attempt++) {
       const s = await this.skill(v.name);
@@ -122,6 +128,10 @@ export class HostedStorage implements Storage {
       if (s) {
         const current = await this.version(v.name, latest);
         if (current && current.fingerprint === v.fingerprint) return { kind: 'identical', record: current };
+      }
+      if (!checked) {
+        const missing = await filesUsable();
+        if (missing.length) return { kind: 'not_uploaded', missing };
       }
       const version = latest + 1;
       const record: VersionRecord = { ...v, version };
