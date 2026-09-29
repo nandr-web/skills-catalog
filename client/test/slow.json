@@ -1,4 +1,15 @@
 {
-  "about": "Test files that take over about 5 seconds. `npm run test:slow` runs them; `npm test`, `npm run check` and the per-part test:* scripts run every other file. Nothing here is skipped for good: each file keeps its measured time so it can move back once it is faster. None for now: the largest, mcp.test.ts, took 3.5 seconds alone and 4 to 10 inside the whole run, at a load of 10 to 16.",
-  "files": []
+  "about": "Test files that take over about 5 seconds. `npm run test:slow` runs them; `npm test`, `npm run check` and the per-part test:* scripts run every other file. Nothing here is skipped for good: each file keeps its measured time so it can move back once it is faster. Seconds on a busy machine at the load given: alone is the file run by itself, full_run its duration inside `npx vitest run`. The largest fast file, mcp.test.ts, took 3.5 seconds alone and 4 to 10 inside the whole run, at a load of 10 to 16.",
+  "files": [
+    {
+      "file": "test/installer-race-sweep.test.ts",
+      "covers": "links swapped in and out at every check an install or an update makes (up to the 64th; installer-race.test.ts runs the same sweeps to the 16th in the fast group)",
+      "seconds": {
+        "alone": 5.2,
+        "full_run": 11.9
+      },
+      "load": 12,
+      "measured": "2026-09-29"
+    }
+  ]
 }
