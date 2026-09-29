@@ -32,10 +32,7 @@ const MISSING_GOLDENS: [op: string, code: string, where: string][] = [
   ['install_shared_skill', 'target_unavailable', 'installer.ts skillsFolderFor: the target\'s root can\'t be made'],
   ['install_shared_skill', 'lock_busy', 'lock.ts: another run holds the lock'],
   ['update_installed_skills', 'not_found', 'installer.ts allVersions → catalog.versions: installed from a catalog that no longer has it'],
-  ['update_installed_skills', 'too_large', 'installer.ts fetchChecked → checkTree'],
-  ['update_installed_skills', 'exists_untracked', 'installer.ts writeSkill / realFolder'],
-  ['update_installed_skills', 'name_in_use', 'installer.ts checkTarget'],
-  ['update_installed_skills', 'target_unavailable', 'installer.ts skillsFolderFor'],
+  ['accept_held_update', 'not_installed', 'cli/commands/update.ts: update <name> --accept for a skill that isn\'t installed'],
   ['accept_held_update', 'not_found', 'installer.ts → catalog.fetch: the held version'],
   ['accept_held_update', 'invalid_manifest', 'installer.ts fetchChecked → checkManifest'],
   ['accept_held_update', 'invalid_name', 'installer.ts fetchChecked → checkName'],
@@ -70,6 +67,11 @@ const SECTION_OP: [section: string, op: string][] = [
 ];
 // Not errors a call raises: a version stored under older rules names the rule in its data; a fault row expects any failure.
 const NOT_RAISED = ['histories.histories.older_rules', 'histories.histories.fault'];
+// Rows whose `error` their harness doesn't drive as a raised error (by id, and why).
+const NOT_RAISED_ROWS: Record<string, string> = {
+  // lock-writer.test.ts checks only the lock files; the update itself answers with the skill refused (a line, not an error).
+  'failed-change-releases': 'update: the served files don\'t match, so the skill is refused in the answer',
+};
 // A row's own key says which call raised it (an install, an update and its refused skills, an accept), as does `call`.
 const KEY_OP: Record<string, string> = { install: 'install_shared_skill', update: 'update_installed_skills', accept: 'accept_held_update', then_accept: 'accept_held_update' };
 const CALL_OP: Record<string, string> = { update: 'update_installed_skills', install: 'install_shared_skill', accept: 'accept_held_update' };
@@ -82,11 +84,14 @@ function goldenErrors(): Map<string, Set<string>> {
     if (!node || typeof node !== 'object') return;
     const o = node as Record<string, unknown>;
     if ('pending' in o) return; // not built yet: its harness skips it
+    if (typeof o['id'] === 'string' && Object.hasOwn(NOT_RAISED_ROWS, o['id'])) return;
     if (typeof o['call'] === 'string') op = CALL_OP[o['call']] ?? o['call'];
     for (const [k, v] of Object.entries(o)) {
       // On this line the preview is publish_skill_to_catalog without a confirm; its harness reads preview_expect once the
       // preview is its own tool, so those rows aren't driven yet (MISSING_GOLDENS names them).
       if (k === 'preview_expect') continue;
+      // A skill an update refuses is a line in its successful answer (contract §3), not an error the call raises.
+      if (k === 'refused') continue;
       if (k === 'error' && typeof v === 'string') {
         const section = path.join('.');
         if (v === 'any' || NOT_RAISED.some((s) => section.startsWith(s))) continue;
@@ -126,6 +131,14 @@ describe('each operation\'s errors, proved by the golden error rows', () => {
     for (const [op, code] of MISSING_GOLDENS) {
       expect([op, code, OPERATIONS[op]?.errors.includes(code as never)]).toEqual([op, code, true]);
       expect([op, code, seen.get(op)?.has(code) ?? false]).toEqual([op, code, false]);
+    }
+  });
+
+  it('NOT_RAISED_ROWS names only rows that are there and still expect an error (drop one once it\'s reworded)', () => {
+    const rows = JSON.stringify(['skills', 'histories', 'policy'].map((f) => loadGolden(`${f}.yaml`)));
+    for (const id of Object.keys(NOT_RAISED_ROWS)) {
+      const at = rows.indexOf(`"id":"${id}"`);
+      expect([id, at >= 0 && /"error":/.test(rows.slice(at, rows.indexOf('"id":', at + 1)))]).toEqual([id, true]);
     }
   });
 
