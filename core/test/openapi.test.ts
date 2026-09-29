@@ -81,8 +81,20 @@ describe('the published schema is the definitions\' (contract §1.1)', () => {
       const op = hostedDoc.paths[`/api/v1/${d.name}`].post;
       expect([d.name, op.security, op.parameters]).toEqual([d.name, [{ bearer: [] }], undefined]);
       expect(deref(op.requestBody.content['application/json'].schema, hostedDoc)).toEqual(strict(inputSchema(d, 'web', 'hosted')));
-      expect([d.name, Object.keys(op.responses).sort()]).toEqual([d.name, ['200', '401', '404', '415']]);
+      expect([d.name, Object.keys(op.responses).sort()]).toEqual([d.name, ['200', '400', '401', '403', '404', '415']]);
     }
+    // The hosted guards (§1.1): not through the CDN (403), the local acting header (400, token_only, as an error in the
+    // envelope, not 401: the token may be fine), no or a bad token (401).
+    const tokenOnly = deref(hostedDoc.components.responses.TokenOnly, hostedDoc);
+    const body = deref(tokenOnly.content['application/json'].schema, hostedDoc);
+    expect(body.properties.error).toEqual({
+      type: 'object',
+      properties: { code: { const: 'invalid_request' }, field: { const: 'X-Skills-Catalog-As' }, why: { const: 'token_only' } },
+      required: ['code', 'field', 'why'],
+      additionalProperties: false,
+    });
+    expect(errorsOf(body, { ok: false, error: { code: 'invalid_request', field: 'X-Skills-Catalog-As', why: 'token_only' }, words: { error: 'x' } })).toEqual([]);
+    expect(errorsOf(body, { ok: false, error: { code: 'invalid_request', field: 'name', why: 'token_only' } })).not.toEqual([]);
     expect(hostedDoc.components.securitySchemes).toEqual({ bearer: expect.objectContaining({ type: 'http', scheme: 'bearer' }) });
     expect(hostedDoc.components.parameters).toBeUndefined();
   });
@@ -117,7 +129,7 @@ describe('the published schema is the definitions\' (contract §1.1)', () => {
     expect(Object.keys(local.responses['200'].content)).toEqual(['application/octet-stream']);
     expect(local.security).toEqual([{ localToken: [] }]);
     const hosted = hostedDoc.paths['/api/v1/files/{sha256}'].get;
-    expect(Object.keys(hosted.responses).sort()).toEqual(['302', '401', '404', '503']);
+    expect(Object.keys(hosted.responses).sort()).toEqual(['302', '400', '401', '403', '404', '503']);
     // A presigned link must never be cached, and the wait is the handler's: pinned by value, not only by name.
     expect(hosted.responses['302'].headers).toEqual({ Location: { schema: { type: 'string' } }, 'Cache-Control': { schema: { type: 'string', const: 'no-store' } } });
     expect(hosted.responses['503'].headers).toEqual({ 'Retry-After': { schema: { type: 'integer', const: 2 } } });
