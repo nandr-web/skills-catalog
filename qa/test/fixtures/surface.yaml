@@ -1,4 +1,4 @@
-# A small surface file for the runner's tests, shaped like the agent-experience trials' agent-ux/surface.yaml (variants, server,
+# A small surface file for the runner's tests, shaped like the agent-facing words file, surface.yaml (variants, server,
 # names, companion_skill). Not the real words: those come from --surface <path>#<variant>.
 variants:
   control:   {names: contract, descriptions: bare, instructions: none, results: json, page: 20, skill: none}

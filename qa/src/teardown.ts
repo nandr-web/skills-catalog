@@ -1,8 +1,11 @@
-// Teardown (qa-plan §6.4): runs on every ending. Kills each process group the run started, reads the run's session ids,
-// deletes the sandbox, and removes the assistant's leftovers for that sandbox and those sessions.
-import { rmSync } from 'node:fs';
-import { assistantLeftovers, realRoots, type Roots } from './leftovers.ts';
-import { sessionsOf } from './sandbox.ts';
+// Teardown (the QA plan §6.4): runs on every ending. Kills each process group the run started, removes the run's own
+// leftovers (exact names, session ids from the run's own stream, never a folder that existed before the run), then the
+// sandbox itself, last, so an interrupted teardown leaves the run folder for the janitor (§6.5a).
+import { dirname } from 'node:path';
+import { removeRunLeftovers, type Cleanup } from './leftovers.ts';
+import type { Machine } from './machine.ts';
+import { removeRun, verifyBase } from './safe-delete.ts';
+import type { Sandbox } from './sandbox.ts';
 
 const alive = (pgid: number) => { try { process.kill(-pgid, 0); return true; } catch { return false; } };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -16,12 +19,13 @@ export async function killGroups(pgids: number[], graceMs = 2000): Promise<void>
   for (let waited = 0; waited < 1000 && live.some(alive); waited += 20) await sleep(20);
 }
 
-/** Returns the session ids it cleaned up after (the before/after check watches them). */
-export async function teardown(sb: { root: string }, { roots = realRoots(), processGroups = [] as number[] }: { roots?: Roots; processGroups?: number[] } = {}): Promise<string[]> {
-  await killGroups(processGroups);
-  const sessions = sessionsOf(sb.root);
-  const leftovers = assistantLeftovers(sb.root, sessions, roots);
-  rmSync(sb.root, { recursive: true, force: true });
-  for (const p of leftovers) rmSync(p, { recursive: true, force: true });
-  return sessions;
+/** `sessions`: ids from the run's own stream, kept in memory by the runner (never read back from the sandbox);
+ *  `sessionEnvsBefore`: the session-env folder's names before the assistant started. */
+export async function teardown(sb: Pick<Sandbox, 'root' | 'runId' | 'preexisting'>, o: { machine: Machine; sessions?: string[]; sessionEnvsBefore?: ReadonlySet<string>; processGroups?: number[] }): Promise<Cleanup> {
+  await killGroups(o.processGroups ?? []);
+  const base = dirname(sb.root);
+  verifyBase(base);
+  const out = removeRunLeftovers(sb.root, o.machine, { preexisting: sb.preexisting, sessions: o.sessions, sessionEnvsBefore: o.sessionEnvsBefore });
+  out.removed.push(removeRun(base, sb.runId));
+  return out;
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The stand-in person (brief §2.2): a QA MCP server over stdio with one tool, `approve`, used as Claude Code's
+// The stand-in person (brief §2.2): a QA MCP server over stdio with one tool, `answer` (the QA plan §3.2), used as Claude Code's
 // `--permission-prompt-tool`. It approves only the tools the scenario agrees to (QA_PERSON_AGREES, a JSON list of tool
 // names), refuses the rest, and records every request (QA_PERSON_LOG, one JSON line each). No dependencies: newline-
 // delimited JSON-RPC 2.0, the MCP stdio transport.
@@ -11,7 +11,7 @@ const log = process.env.QA_PERSON_LOG;
 const send = (m: object) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n');
 
 const TOOL = {
-  name: 'approve',
+  name: 'answer',
   description: 'Answers a permission prompt on behalf of the person running this test.',
   inputSchema: { type: 'object', properties: { tool_name: { type: 'string' }, input: { type: 'object' }, tool_use_id: { type: 'string' } }, required: ['tool_name', 'input'] },
 };
@@ -37,7 +37,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     case 'tools/list':
       return send({ id: m.id, result: { tools: [TOOL] } });
     case 'tools/call':
-      if (m.params?.name !== 'approve') return send({ id: m.id, error: { code: -32602, message: `no tool ${m.params?.name}` } });
+      if (m.params?.name !== TOOL.name) return send({ id: m.id, error: { code: -32602, message: `no tool ${m.params?.name}` } });
       return send({ id: m.id, result: { content: [{ type: 'text', text: JSON.stringify(decide(m.params.arguments ?? {})) }] } });
     default:
       return send({ id: m.id, error: { code: -32601, message: `no method ${m.method}` } });

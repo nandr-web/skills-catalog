@@ -1,7 +1,7 @@
 // `qa trace-check` (qa-plan §9; brief §3): every requirement has an automated check; every golden, catalog, query, fixture
 // and backlog reference resolves; every backlog item maps to a requirement with a matching phase; every scenario names
 // known requirements; the query sets match the queries' own labels; and the hand-written diffs equal `diff -u` on the
-// version bytes. A port of the QA plan's preview (an earlier prototype's trace_check.py, check_goldens.py), which it replaces.
+// version bytes. A port of the QA plan's preview checker, which it replaces.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -13,7 +13,7 @@ import { parse } from 'yaml';
 type Doc = Record<string, any>;
 const load = (p: string): Doc => parse(readFileSync(p, 'utf8'));
 
-/** The exported requirement list (the architects' export_requirements.py), next to the qa package. */
+/** The exported requirement list (exported from the design's requirement files), next to the qa package. */
 export const DEFAULT_BACKLOG = fileURLToPath(new URL('../../requirements', import.meta.url));
 
 export function traceCheck({ qa, backlog = DEFAULT_BACKLOG }: { qa: string; backlog?: string }): { problems: string[]; counts: Record<string, number> } {

@@ -9,7 +9,7 @@ export type Trace = {
   sessions: string[];
   init?: { model: string; permissionMode: string; tools: string[] };
   steps: Step[];
-  result?: { isError: boolean; text: string; durationMs: number; costUsd: number; numTurns: number; permissionDenials: unknown[] };
+  result?: { isError: boolean; subtype?: string; text: string; durationMs: number; costUsd: number; numTurns: number; permissionDenials: unknown[] };
 };
 
 const textOf = (content: unknown): string =>
@@ -32,7 +32,7 @@ export function parseTrace(jsonl: string): Trace {
     } else if (e?.type === 'user' && Array.isArray(e.message?.content)) {
       for (const c of e.message.content) if (c.type === 'tool_result') t.steps.push({ kind: 'tool_result', id: c.tool_use_id, isError: !!c.is_error, text: textOf(c.content) });
     } else if (e?.type === 'result') {
-      t.result = { isError: !!e.is_error, text: e.result ?? '', durationMs: e.duration_ms ?? 0, costUsd: e.total_cost_usd ?? 0, numTurns: e.num_turns ?? 0, permissionDenials: e.permission_denials ?? [] };
+      t.result = { isError: !!e.is_error, subtype: e.subtype, text: e.result ?? '', durationMs: e.duration_ms ?? 0, costUsd: e.total_cost_usd ?? 0, numTurns: e.num_turns ?? 0, permissionDenials: e.permission_denials ?? [] };
     }
   }
   return t;

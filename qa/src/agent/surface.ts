@@ -1,4 +1,4 @@
-// A variant of the agent-experience trials' agent-facing surface (agent-ux/surface.yaml#<variant>): what the tools are called and the
+// A variant of the agent-facing words file (surface.yaml#<variant>): what the tools are called and the
 // companion skill's text. Scenarios name contract operations (any contract draft's name, or the surface's key); the
 // runner maps them to this variant's tool names, and back when scoring.
 import { readFileSync } from 'node:fs';

@@ -1,4 +1,4 @@
-// The phrasings the scorer matches in an answer (golden/phrases.yaml, the QA plan's; the runner only reads it).
+// The phrasings the scorer matches in an answer (golden/phrases.yaml, from the QA plan; the runner only reads it).
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 

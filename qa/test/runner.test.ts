@@ -21,7 +21,7 @@ describe('surface', () => {
     // a scenario may name an operation by any contract version's name, or by its key
     expect(s.tool('install_skill')).toBe('mcp__skills-catalog__install_shared_skill');
     expect(s.tool('get')).toBe('mcp__skills-catalog__read_shared_skill');
-    expect(s.key('read')).toBeUndefined();   // no alias: the goldens use the surface's keys (the QA plan, patch surface-keys)
+    expect(s.key('read')).toBeUndefined();   // no alias: the goldens use the surface's keys (the QA plan)
     expect(s.names().ops.install_shared_skill).toEqual(['mcp__skills-catalog__install_shared_skill', 'skills-catalog install']);
     expect(s.names().ops.search_shared_skills).toEqual(['mcp__skills-catalog__search_shared_skills', 'skills-catalog search']);
     expect(s.names().ops.setup).toEqual(['mcp__skills-catalog__setup', 'skills-catalog setup']);
@@ -68,7 +68,7 @@ describe('the claude -p command (qa-plan §3.2)', () => {
   it('built-in tools stay on; the setup\'s tools are allowed; the rest goes to the stand-in person', () => {
     expect(claudeCommand({ ...base, setup: setups.mcp })).toEqual(['claude', '-p', 'Is there a skill for writing release notes?',
       '--model', 'claude-haiku-4-5-20251001', '--no-session-persistence', '--setting-sources', 'project',
-      '--permission-prompt-tool', 'mcp__qa-person__approve', '--permission-prompts', 'host',
+      '--permission-prompt-tool', 'mcp__qa-person__answer', '--permission-prompts', 'host',
       '--max-budget-usd', '0.25', '--strict-mcp-config', '--mcp-config', '/run/mcp.json',
       '--allowedTools', 'mcp__skills-catalog__read_shared_skill,mcp__skills-catalog__search_shared_skills,mcp__skills-catalog__install_shared_skill',
       '--output-format', 'stream-json', '--verbose']);
@@ -91,6 +91,13 @@ describe('the claude -p command (qa-plan §3.2)', () => {
     expect(cfg.mcpServers['qa-person'].env).toMatchObject({ QA_PERSON_LOG: '/run/person.jsonl', QA_PERSON_AGREES: JSON.stringify(['mcp__skills-catalog__publish_skill_to_catalog']) });
     expect(Object.keys(mcpConfig({ setup: setups['skill+cli'], surface, catalog: ['x'], env, person: { agreesTo: [], log: '/l' } }).mcpServers)).toEqual(['qa-person']);
   });
+
+  it('the stand-in person may agree only to the catalog\'s MCP tools, never to a built-in tool or a shell command', () => {
+    const env = { SKILLS_HOME: '/run/home' };
+    for (const agreed of [['Bash(rm *)'], ['Write'], ['publish_skill_to_catalog', 'Edit']])
+      expect(() => mcpConfig({ setup: setups.mcp, surface, catalog: ['x'], env, person: { agreesTo: agreed, log: '/l' } }), agreed.join()).toThrow(/only .*catalog/);
+    expect(() => claudeCommand({ ...base, setup: setups.mcp, fallback: { agreesTo: ['Bash(rm *)'] } })).toThrow(/only .*catalog/);
+  });
 });
 
 describe('the stand-in person (a QA MCP server over stdio)', () => {
@@ -109,8 +116,8 @@ describe('the stand-in person (a QA MCP server over stdio)', () => {
     expect((await reply(1)).result.serverInfo.name).toBe('qa-person');
     send({ method: 'notifications/initialized' });
     send({ id: 2, method: 'tools/list' });
-    expect((await reply(2)).result.tools.map((t: any) => t.name)).toEqual(['approve']);
-    const ask = (id: number, tool_name: string) => { send({ id, method: 'tools/call', params: { name: 'approve', arguments: { tool_name, input: { folder: './x' } } } }); return reply(id); };
+    expect((await reply(2)).result.tools.map((t: any) => t.name)).toEqual(['answer']);
+    const ask = (id: number, tool_name: string) => { send({ id, method: 'tools/call', params: { name: 'answer', arguments: { tool_name, input: { folder: './x' } } } }); return reply(id); };
     expect(JSON.parse((await ask(3, 'mcp__skills-catalog__publish_skill_to_catalog')).result.content[0].text)).toEqual({ behavior: 'allow', updatedInput: { folder: './x' } });
     expect(JSON.parse((await ask(4, 'Bash')).result.content[0].text)).toMatchObject({ behavior: 'deny' });
     p.stdin.end();

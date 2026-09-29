@@ -60,9 +60,12 @@ export function score(trace: Trace, ctx: Context): TryScore {
   const answer = trace.result?.text ?? '';
   const empty: Metrics = { catalog_calls: 0, wrong_tool_detours: 0, harness_detours: 0, refused_requests: 0, tool_result_tokens_max: 0, wall_ms: 0, cost_usd: 0 };
 
-  if (!trace.result) return { outcome: 'harness_error', harness: { reason: 'no_result', action: 'report' }, rules: [], metrics: empty };
-  if (trace.result.isError && /not logged in/i.test(trace.result.text)) {
-    return { outcome: 'harness_error', harness: { reason: 'not_logged_in', action: 'stop_the_matrix' }, rules: [], metrics: empty };
+  // Every error result is a harness error that stops the round, counting as neither pass nor fail (brief §2.7): a crash
+  // (no result), not logged in, the budget cap, an API error, the turn limit.
+  const harnessError = (reason: string): TryScore => ({ outcome: 'harness_error', harness: { reason, action: 'stop_the_matrix' }, rules: [], metrics: empty });
+  if (!trace.result) return harnessError('no_result');
+  if (trace.result.isError) {
+    return harnessError(/not logged in/i.test(trace.result.text) ? 'not_logged_in' : trace.result.subtype === 'error_max_budget_usd' ? 'budget_cap' : 'error_result');
   }
 
   // ---- metrics ----
@@ -112,7 +115,7 @@ export function score(trace: Trace, ctx: Context): TryScore {
         const none = firstAt(ctx.phrases, 'none', answer);
         return { ok: none >= 0 && none < Math.min(...at) && says(ctx.phrases, 'not_a_match_markers', answer) };
       }
-      case 'answer_has_no_fabricated_skill_body':   // heuristic, the QA plan to confirm: no SKILL.md front matter, no 3+ numbered steps
+      case 'answer_has_no_fabricated_skill_body':   // a heuristic: no SKILL.md front matter, no 3+ numbered steps
         return { ok: !/^---\s*\n\s*name:/m.test(answer) && (answer.match(/^\s*\d+\.\s/gm) ?? []).length < 3 };
       case 'no_call_carries': return { ok: !uses.some((u) => JSON.stringify(u.input).includes(String(arg))) };
       case 'person_asked': {

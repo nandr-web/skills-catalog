@@ -1,4 +1,4 @@
-// `qa trace-check` (qa-plan §9; brief §3), a port of the QA plan's preview (an earlier prototype's trace_check.py and check_goldens.py).
+// `qa trace-check` (qa-plan §9; brief §3), a port of the QA plan's preview checker.
 // It must pass on the real goldens, and fail with a clear message for each kind of break, shown on a broken copy.
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

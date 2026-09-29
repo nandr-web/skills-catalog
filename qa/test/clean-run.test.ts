@@ -1,40 +1,33 @@
-// `qa run`'s clean-run machinery (qa-plan §6; brief §1): sandbox, fail-safe, teardown, janitor, before/after check.
-// Every test works under a temporary "home" of its own (fake ~/.claude, fake /private/tmp/claude-<uid>), except the
-// fail-safe tests, which only read the real home's path, and the self-check in qa-run.test.ts.
+// `qa run`'s clean-run machinery (qa-plan §6; brief §1): sandbox, fail-safe, teardown, before/after check. Every test works
+// on a fake machine of its own (test/machine.ts). Safe deletion's canaries and the janitor are in safe-delete.test.ts.
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { assistantLeftovers, slug } from '../src/leftovers.ts';
-import { createSandbox, DIRS, FailSafeError, failSafe, realHome, recordSession } from '../src/sandbox.ts';
+import { leftoverNames, slug } from '../src/leftovers.ts';
+import { createSandbox, DIRS, FailSafeError, failSafe, newRunId, realHome } from '../src/sandbox.ts';
 import { teardown } from '../src/teardown.ts';
-import { janitor } from '../src/janitor.ts';
-import { compare, PRODUCT_DEFAULTS, snapshot, type Watch } from '../src/check.ts';
+import { compare, PRODUCT_DEFAULTS, snapshot, watchOn, type Watch } from '../src/check.ts';
+import { cleanup, machine as fakeMachine, scratch, type TestMachine } from './machine.ts';
 
-const made: string[] = [];
-afterEach(() => { for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true }); });
-const scratch = () => { const d = realpathSync(mkdtempSync(join(tmpdir(), 'qa-test-'))); made.push(d); return d; };
+afterEach(cleanup);
 
-/** A fake machine: its own tmp (where sandboxes go), ~/.claude, ~/.claude.json and /private/tmp/claude-<uid>. */
+/** A fake machine, and the before/after check's watch on it for one sandbox. */
 function machine() {
-  const root = scratch();
-  const m = { tmp: join(root, 'tmp'), home: join(root, 'home'), claudeTmp: join(root, 'private-tmp-claude') };
-  for (const d of [m.tmp, join(m.home, '.claude', 'skills'), join(m.home, '.claude', 'projects'), join(m.home, '.claude', 'session-env'), m.claudeTmp]) mkdirSync(d, { recursive: true });
-  const roots = { claudeDir: join(m.home, '.claude'), claudeTmp: m.claudeTmp };
-  const watch = (sb: { root: string }, sessions: string[] = []): Watch => ({
-    ...roots, claudeJson: join(m.home, '.claude.json'), settingsJson: join(m.home, '.claude', 'settings.json'),
-    productDefaults: [join(m.home, '.skills-catalog')], sandboxRoot: sb.root, sessions, processGroups: [],
-  });
-  return { ...m, roots, watch };
+  const m = fakeMachine();
+  const watch = (sb: { root: string; runId?: string }, sessions: string[] = []): Watch => watchOn(m, { sandboxRoot: sb.root, runId: sb.runId, sessions });
+  return { ...m, claudeTmp: m.roots.claudeTmp, watch };
 }
+const sandbox = (m: TestMachine) => createSandbox({ runId: newRunId(), machine: m });
+const UUID1 = '00000000-0000-4000-8000-000000000001';
 
 describe('sandbox', () => {
   it('[1] makes the run folders and exports the SKILLS_* settings pointing into them', () => {
     const m = machine();
-    const sb = createSandbox({ runId: 'r1', tmp: m.tmp, home: m.home });
-    expect(sb.root).toBe(join(m.tmp, 'skills-catalog-qa', 'r1'));
+    const sb = sandbox(m);
+    expect(sb.root).toBe(join(m.tmp, 'skills-catalog-qa', sb.runId));
     for (const d of DIRS) expect(existsSync(join(sb.root, d)), d).toBe(true);
     expect(DIRS).toEqual(['catalog', 'home', 'install', 'assistant', 'work', 'outside', 'bin']);
     expect(sb.env).toMatchObject({
@@ -43,22 +36,22 @@ describe('sandbox', () => {
       SKILLS_INSTALL_DIR: join(sb.root, 'install'),
       SKILLS_ASSISTANT_HOME: join(sb.root, 'assistant'),
       SKILLS_SYNC_ON_START: '0',
-      SKILLS_AS: 'me',   // the acting developer (contract §7, Identity; the QA plan's 901aa2a)
+      SKILLS_AS: 'me',   // the acting developer (the contract §7, Identity)
     });
     expect(sb.env.PATH.split(':')[0]).toBe(join(sb.root, 'bin'));
-    expect(JSON.parse(readFileSync(join(sb.root, 'run.json'), 'utf8'))).toMatchObject({ runId: 'r1' });
+    expect(JSON.parse(readFileSync(join(sb.root, 'run.json'), 'utf8'))).toMatchObject({ run_id: sb.runId });
   });
 
   it('[2] the fail-safe refuses any run path under the real home', () => {
     const home = realHome();
     expect(home).toBe(userInfo().homedir);
-    expect(() => failSafe([join(home, 'some', 'catalog')], home)).toThrow(FailSafeError);
-    expect(() => failSafe([home], home)).toThrow(FailSafeError);
-    expect(() => failSafe([join(tmpdir(), 'x')], home)).not.toThrow();
+    expect(() => failSafe([join(home, 'some', 'catalog')])).toThrow(FailSafeError);
+    expect(() => failSafe([home])).toThrow(FailSafeError);
+    expect(() => failSafe([join(tmpdir(), 'x')])).not.toThrow();
     // a sandbox whose tmp is under the (given) home is refused before anything is created
     const m = machine();
     const inside = join(m.home, 'tmp');
-    expect(() => createSandbox({ runId: 'r2', tmp: inside, home: m.home })).toThrow(FailSafeError);
+    expect(() => createSandbox({ runId: newRunId(), machine: { ...m, tmp: inside } })).toThrow(FailSafeError);
     expect(existsSync(join(inside, 'skills-catalog-qa'))).toBe(false);
   });
 
@@ -81,20 +74,20 @@ describe('sandbox', () => {
 describe('teardown', () => {
   it('[3] slugs a path the way Claude Code names its folders', () => {
     expect(slug('/private/var/folders/x/T/skills-catalog-qa/r.1/work')).toBe('-private-var-folders-x-T-skills-catalog-qa-r-1-work');
-    expect(slug('/Users/me/ws/my_project')).toBe('-Users-me-ws-my-project');   // "_" too, as Claude Code does
+    expect(slug('/Users/me/ws/team_skills')).toBe('-Users-me-ws-team-skills');   // "_" too, as Claude Code does
   });
 
   it('[3] deletes the sandbox and the assistant leftovers keyed by the sandbox path and each session id, and nothing else', async () => {
     const m = machine();
-    const sb = createSandbox({ runId: 'r3', tmp: m.tmp, home: m.home });
-    recordSession(sb, 'sess-1');
+    const sb = sandbox(m);
     const s = slug(join(sb.root, 'work'));
-    const leftovers = [join(m.roots.claudeDir, 'projects', s, 'memory'), join(m.roots.claudeDir, 'session-env', 'sess-1'), join(m.claudeTmp, s, 'sess-1')];
+    expect(leftoverNames(sb.root)).toContain(s);
+    const leftovers = [join(m.roots.claudeDir, 'projects', s, 'memory'), join(m.roots.claudeDir, 'session-env', UUID1), join(m.claudeTmp, s, UUID1)];
     for (const d of leftovers) { mkdirSync(d, { recursive: true }); writeFileSync(join(d, 'f'), 'x'); }
     const others = [join(m.roots.claudeDir, 'projects', '-Users-me-other'), join(m.roots.claudeDir, 'session-env', 'someone-else'), join(m.claudeTmp, '-Users-me-other')];
     for (const d of others) mkdirSync(d, { recursive: true });
-    expect(assistantLeftovers(sb.root, ['sess-1'], m.roots).sort()).toEqual([join(m.roots.claudeDir, 'projects', s), join(m.roots.claudeDir, 'session-env', 'sess-1'), join(m.claudeTmp, s)].sort());
-    await teardown(sb, { roots: m.roots });
+    const r = await teardown(sb, { machine: m, sessions: [UUID1], sessionEnvsBefore: new Set(['someone-else']) });
+    expect(r.removed.sort()).toEqual([join(m.roots.claudeDir, 'projects', s), join(m.roots.claudeDir, 'session-env', UUID1), join(m.claudeTmp, s), sb.root].sort());
     expect(existsSync(sb.root)).toBe(false);
     for (const d of leftovers) expect(existsSync(d), d).toBe(false);
     for (const d of others) expect(existsSync(d), d).toBe(true);
@@ -102,43 +95,11 @@ describe('teardown', () => {
 
   it('[3] kills each process group the run started', async () => {
     const m = machine();
-    const sb = createSandbox({ runId: 'r4', tmp: m.tmp, home: m.home });
+    const sb = sandbox(m);
     const child = spawn('sh', ['-c', 'sleep 30 & sleep 30'], { detached: true, stdio: 'ignore' });
     const pgid = child.pid!;
-    await teardown(sb, { roots: m.roots, processGroups: [pgid] });
+    await teardown(sb, { machine: m, processGroups: [pgid] });
     expect(alive(pgid)).toBe(false);
-  });
-});
-
-describe('janitor', () => {
-  it('[4] removes runs older than the TTL, with their leftovers, and keeps fresh ones', () => {
-    const m = machine();
-    const old = createSandbox({ runId: 'old', tmp: m.tmp, home: m.home, now: () => Date.parse('2026-09-28T10:00:00Z') });
-    recordSession(old, 'old-sess');
-    const fresh = createSandbox({ runId: 'fresh', tmp: m.tmp, home: m.home, now: () => Date.parse('2026-09-28T11:50:00Z') });
-    const oldLeft = join(m.roots.claudeDir, 'session-env', 'old-sess');
-    const oldProject = join(m.roots.claudeDir, 'projects', slug(join(old.root, 'work')));
-    for (const d of [oldLeft, oldProject]) mkdirSync(d, { recursive: true });
-    const removed = janitor({ tmp: m.tmp, roots: m.roots, ttlMs: 60 * 60_000, now: () => Date.parse('2026-09-28T12:00:00Z') });
-    expect(removed).toContain(old.root);
-    expect(existsSync(old.root)).toBe(false);
-    expect(existsSync(oldLeft)).toBe(false);
-    expect(existsSync(oldProject)).toBe(false);
-    expect(existsSync(fresh.root)).toBe(true);
-  });
-
-  it('[4] removes orphaned leftovers by name prefix once they are older than the TTL', () => {
-    const m = machine();
-    const base = join(m.tmp, 'skills-catalog-qa');
-    mkdirSync(base, { recursive: true });
-    const orphan = join(m.roots.claudeDir, 'projects', slug(join(base, 'gone', 'work')));
-    const young = join(m.claudeTmp, slug(join(base, 'young', 'work')));
-    for (const d of [orphan, young]) mkdirSync(d, { recursive: true });
-    const hourAgo = (Date.now() - 2 * 3600_000) / 1000;
-    utimesSync(orphan, hourAgo, hourAgo);
-    janitor({ tmp: m.tmp, roots: m.roots, ttlMs: 60 * 60_000 });
-    expect(existsSync(orphan)).toBe(false);
-    expect(existsSync(young)).toBe(true);
   });
 });
 
@@ -149,7 +110,7 @@ describe('before/after check', () => {
 
   it('[5] sees a new folder, a new file and a changed file in the watched places', () => {
     const m = machine();
-    const sb = createSandbox({ runId: 'r5', tmp: m.tmp, home: m.home });
+    const sb = sandbox(m);
     const w = m.watch(sb);
     mkdirSync(join(m.home, '.skills-catalog'), { recursive: true });
     writeFileSync(join(m.home, '.skills-catalog', 'config.json'), '{}');
@@ -166,7 +127,7 @@ describe('before/after check', () => {
 
   it('[5] watches only what a run could create: other sessions\' entries under ~/.claude are ignored', () => {
     const m = machine();
-    const sb = createSandbox({ runId: 'r6', tmp: m.tmp, home: m.home });
+    const sb = sandbox(m);
     const before = snapshot(m.watch(sb, ['s-run']));
     mkdirSync(join(m.roots.claudeDir, 'projects', '-Users-me-other-project', 'memory'), { recursive: true });
     mkdirSync(join(m.roots.claudeDir, 'session-env', 'another-live-session'));
@@ -182,7 +143,7 @@ describe('before/after check', () => {
 
   it('[5] checks only the keys a run could add in ~/.claude.json and settings.json', () => {
     const m = machine();
-    const sb = createSandbox({ runId: 'r7', tmp: m.tmp, home: m.home });
+    const sb = sandbox(m);
     const w = m.watch(sb);
     writeFileSync(w.claudeJson, JSON.stringify({ numStartups: 1, mcpServers: {}, projects: { '/Users/me/x': {} } }));
     writeFileSync(w.settingsJson, JSON.stringify({ theme: 'dark' }));
@@ -200,7 +161,7 @@ describe('before/after check', () => {
 
   it('[5] fails on a process group the run left alive', async () => {
     const m = machine();
-    const sb = createSandbox({ runId: 'r8', tmp: m.tmp, home: m.home });
+    const sb = sandbox(m);
     const child = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' });
     const w = { ...m.watch(sb), processGroups: [child.pid!] };
     expect(compare(snapshot({ ...w, processGroups: [] }), snapshot(w)).map((d) => d.what)).toEqual([`process group ${child.pid} still running`]);
@@ -208,14 +169,40 @@ describe('before/after check', () => {
   });
 });
 
+describe('before/after check: processes and ports (plan §6.6)', () => {
+  const listener = (env: NodeJS.ProcessEnv) => {
+    const child = spawn(process.execPath, ['-e', "require('net').createServer().listen(0, '127.0.0.1', function () { console.log(this.address().port) })"], { detached: true, stdio: ['ignore', 'pipe', 'ignore'], env });
+    return { child, port: new Promise<string>((ok) => child.stdout!.once('data', (b) => ok(String(b).trim()))) };
+  };
+
+  it('sees a process from this run that left its process group, and the port it listens on; ignores everyone else\'s', async () => {
+    const m = machine();
+    const sb = sandbox(m);
+    const w = m.watch(sb);
+    const before = snapshot(w);
+    const ours = listener({ ...process.env, ...sb.env }), theirs = listener({ ...process.env });
+    try {
+      const port = await ours.port; await theirs.port;
+      const whats = compare(before, snapshot(w)).map((d) => d.what);
+      expect(whats).toHaveLength(2);
+      expect(whats).toEqual(expect.arrayContaining([
+        expect.stringMatching(new RegExp(`^process ${ours.child.pid} from this run still running`)),
+        expect.stringMatching(new RegExp(`^port 127\\.0\\.0\\.1:${port} still listening \\(process ${ours.child.pid}\\)`)),
+      ]));
+    } finally {
+      for (const c of [ours.child, theirs.child]) process.kill(-c.pid!, 'SIGKILL');
+    }
+  });
+});
+
 function alive(pgid: number): boolean {
   try { process.kill(-pgid, 0); return true; } catch { return false; }
 }
 
-describe('before/after check additions (brief §2.8, the agent-experience trials F12)', () => {
+describe('before/after check additions (brief §2.8; agent-experience.md, "Internal errors: no traceback")', () => {
   it('hashes the product repo checkout (not .git, node_modules or out) and the installed tool\'s files', () => {
     const m = machine();
-    const sb = createSandbox({ runId: 'r9', tmp: m.tmp, home: m.home });
+    const sb = sandbox(m);
     const repo = join(scratch(), 'repo'), tool = join(scratch(), 'tool');
     for (const d of [join(repo, 'src'), join(repo, 'node_modules', 'x'), join(repo, 'out'), join(repo, '.git'), tool]) mkdirSync(d, { recursive: true });
     writeFileSync(join(repo, 'src', 'cli.ts'), 'ok');
@@ -236,7 +223,7 @@ describe('before/after check additions (brief §2.8, the agent-experience trials
 
   it('watches every key of settings.json, and the assistant\'s own settings keys in ~/.claude.json', () => {
     const m = machine();
-    const sb = createSandbox({ runId: 'r10', tmp: m.tmp, home: m.home });
+    const sb = sandbox(m);
     const w = m.watch(sb);
     writeFileSync(w.claudeJson, JSON.stringify({ numStartups: 1 }));
     writeFileSync(w.settingsJson, JSON.stringify({ theme: 'dark' }));

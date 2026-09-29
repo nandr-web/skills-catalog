@@ -1,19 +1,20 @@
 // Pre-flight before any live run (brief §2.7): the unit tests pass; every variant renders with nothing unfilled; the
 // catalog server's self-test passes (MCP initialize and tools/list, every allowed tool there); one login probe works.
 // The unit-test step is skipped here (it would run this suite inside itself); `qa agent` runs it.
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parse, stringify } from 'yaml';
 import { readFileSync } from 'node:fs';
 import { preflight } from '../src/agent/preflight.ts';
+import { sandboxBase } from '../src/sandbox.ts';
+import { cleanup, machine, scratch, type TestMachine } from './machine.ts';
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
-const made: string[] = [];
-afterEach(() => { for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true }); delete process.env.FAKE_CLAUDE_TRACE; });
-const dir = () => { const d = realpathSync(mkdtempSync(join(tmpdir(), 'qa-pre-'))); made.push(d); return d; };
+afterEach(() => { cleanup(); delete process.env.FAKE_CLAUDE_TRACE; });
+const machines = new Map<string, TestMachine>();
+const dir = () => { const m = machine(); const d = scratch('qa-pre-'); machines.set(d, m); return d; };
 
 let written = 0;
 const TOOLS = ['search_shared_skills', 'read_shared_skill', 'list_shared_skill_versions', 'diff_shared_skill_versions', 'install_shared_skill', 'list_installed_skills'];
@@ -30,6 +31,7 @@ const opts = (d: string, extra: Record<string, unknown> = {}) => ({
   scenariosFile: scenarios(d), surfaceFile: here('./fixtures/surface.yaml'), variant: 'proposed',
   catalogCommand: ['env', `FAKE_MCP_TOOLS=${JSON.stringify(TOOLS)}`, process.execPath, here('./fixtures/fake-mcp.mjs')],
   claude: [process.execPath, here('./fixtures/fake-claude.mjs')],
+  machine: machines.get(d)!,
   ...extra,
 });
 const ok = () => { process.env.FAKE_CLAUDE_TRACE = here('../fixtures/traces/opus-direct.jsonl'); };
@@ -69,5 +71,6 @@ describe('pre-flight', () => {
     const d = dir();
     process.env.FAKE_CLAUDE_TRACE = here('../fixtures/traces/not-logged-in.jsonl');
     expect(await preflight(opts(d))).toEqual(['login probe: not_logged_in (run /login in Claude Code, then try again)']);
+    expect(readdirSync(sandboxBase(machines.get(d)!.tmp))).toEqual([]);   // its sandbox is gone, on the fake machine
   });
 });
