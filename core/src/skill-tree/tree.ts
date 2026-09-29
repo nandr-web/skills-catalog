@@ -2,9 +2,9 @@
 // the installer, so a tree is checked and fingerprinted the same way on both sides.
 
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CatalogError } from './errors.ts';
+import { CASE_FOLDING_TEXT, INVISIBLE_CHARACTERS_TEXT } from './config-data.ts';
 
 export type Mode = '0644' | '0755';
 export const MODES: readonly Mode[] = ['0644', '0755'];
@@ -63,8 +63,8 @@ const CONTROL = /[\u0000-\u001f\u007f]/;
 // by scripts/invisible-characters.py), never the runtime's Unicode properties: which code points are assigned depends on
 // the runtime's Unicode version, so a new letter would be refused on one machine and accepted on another.
 export const INVISIBLE_FILE = join(import.meta.dirname, '..', '..', 'config', 'invisible-characters.txt');
-function readInvisible(file = INVISIBLE_FILE): RegExp {
-  const ranges = readFileSync(file, 'utf8')
+function readInvisible(text = INVISIBLE_CHARACTERS_TEXT): RegExp {
+  const ranges = text
     .split('\n')
     .filter((line) => line !== '' && !line.startsWith('#'))
     .map((line) => line.split('..').map((hex) => `\\u{${hex}}`).join('-'));
@@ -140,9 +140,9 @@ export function checkMode(path: string, mode: unknown): Mode {
 // toUpperCase/toLowerCase alone miss some ("ẞ" never becomes "ss").
 export const CASE_FOLDING_FILE = join(import.meta.dirname, '..', '..', 'config', 'case-folding.txt');
 
-function readCaseFolding(file = CASE_FOLDING_FILE): ReadonlyMap<number, string> {
+function readCaseFolding(text = CASE_FOLDING_TEXT): ReadonlyMap<number, string> {
   const map = new Map<number, string>();
-  for (const line of readFileSync(file, 'utf8').split('\n')) {
+  for (const line of text.split('\n')) {
     if (line === '' || line.startsWith('#')) continue;
     const [from, ...to] = line.split(' ').map((h) => parseInt(h, 16));
     map.set(from!, String.fromCodePoint(...to));

@@ -1,9 +1,9 @@
 // SKILL.md: YAML front matter, then a markdown body (contract §4.1, the Agent Skills format).
 
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isMap, isScalar, isSeq, parseDocument, visit, type Document } from 'yaml';
 import { CatalogError } from './errors.ts';
+import { RESERVED_NAMES_TEXT } from './config-data.ts';
 import { decodeText, isText, type TreeFile } from './tree.ts';
 
 export const MANIFEST = 'SKILL.md';
@@ -29,12 +29,12 @@ export interface Manifest {
 
 // Names Claude Code already uses (bundled skills, built-in commands and their aliases, and this product's companion
 // skill): a skill with one of them would replace a command people trust (contract §4.1). Config, kept with its source
-// and date in config/reserved-names.txt.
+// and date in config/reserved-names.txt, and read from its module (config-data.ts), never from the file at load.
 export const RESERVED_NAMES_FILE = join(import.meta.dirname, '..', '..', 'config', 'reserved-names.txt');
 
-export function readReservedNames(file = RESERVED_NAMES_FILE): ReadonlySet<string> {
+export function readReservedNames(text = RESERVED_NAMES_TEXT): ReadonlySet<string> {
   return new Set(
-    readFileSync(file, 'utf8')
+    text
       .split('\n')
       .map((l) => l.trim())
       .filter((l) => l !== '' && !l.startsWith('#')),
