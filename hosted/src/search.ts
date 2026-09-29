@@ -57,7 +57,8 @@ export class S3SearchIndex implements SearchIndex {
     if (!this.ranked || this.ranked.etag === undefined || this.ranked.etag !== f.etag) {
       const index = memorySearchIndex();
       await index.rebuild(f.cards);
-      // The index for the file as it was goes: one in-memory database at a time.
+      // The index for the file as it was goes: one in-memory database at a time. This assumes one request at a time
+      // per process (a Lambda); a query still running on the old index in a shared process would fail.
       this.ranked?.index.close();
       this.ranked = { etag: f.etag, index };
     }
