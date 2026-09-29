@@ -174,7 +174,7 @@ permissive_settings:
 command_instruction_cases:
   - {policy: auto,   override: none, flags: [command_instruction], accept: false, mode: interactive, outcome: "held:flagged"}
   - {policy: auto,   override: none, flags: [command_instruction], accept: false, mode: unattended,  outcome: "held:flagged", notice: true}
-  - {policy: auto,   override: none, flags: [command_instruction], accept: true,  mode: unattended,  outcome: updated, note: "accept_flagged_updates lets it through like any flag; the lock records it"}
+  - {policy: auto,   override: none, flags: [command_instruction], accept: true,  mode: unattended,  outcome: updated, lock_accepted_last: {version: 2, flags: [command_instruction], by: accept_flagged_updates}, note: "accept_flagged_updates lets it through like any flag; the lock records it, by the setting (60b6532b)"}
   - {policy: auto,   override: none, flags: [],                    accept: false, mode: unattended,  outcome: updated, notice: false, note: "nothing flagged in a permissive mode: applied silently, no question on any surface"}
   - {policy: auto,   override: pin,  flags: [command_instruction], accept: false, mode: unattended,  outcome: "held:pin", notice: false, note: "a pinned skill asks nothing and gives no notice"}
   - {policy: notify, override: none, flags: [command_instruction], accept: false, mode: interactive, outcome: "held:notify"}
@@ -247,9 +247,18 @@ accept_cases:
 # changed, and no output (sentence, JSON, log line) contains QA-SENTINEL-$RUN_ID, planted inside each damaged file where
 # JSON allows it. path = the file's full path. teardown still runs (exit 0); the session-start hook exits 0 and prints
 # exactly one line, fixed words naming the file. `ok_cases` are not damage: the commands work as usual.
+# config.json's keys are exactly §6's (contract 80fc7a14): any other key is wrong_shape with `key` naming the first one in
+# JSON.parse's order (integer-like keys first, then the file's order), and so is a cooldown that isn't a whole number of
+# seconds from 0 to 31,536,000, targets that isn't a list from ["claude-code"], and a key added to safe_frontmatter_keys
+# or non_granting_keys (config can only remove; compared
+# case-sensitively; duplicates and an empty list are fine). wrong_shape wins over unknown_policy and not_a_budget. A case's
+# `key` is the error's `key` (absent: the error has none): every config.json refusal tied to one key names it, a known key
+# with a wrong value included (§9); lock.json and a config that isn't JSON or isn't an object have none. A refused config.json also leaves lock.json's bytes and mtime
+# unchanged. accepted[].by is absent or "accept_flagged_updates" (60b6532b); anything else is wrong_shape.
 local_files:
   commands: [install_shared_skill, update_installed_skills, accept_held_update, list_installed_skills, set_skill_update_policy, setup]
   expect_every_command: {error: invalid_local_file, same_file: true, path: "$SKILLS_HOME/<file>", file_byte_identical: true, skills_unchanged: true, output_never_contains: "QA-SENTINEL-$RUN_ID"}
+  expect_config_cases: {lock_json_byte_identical: true, lock_json_mtime_unchanged: true}
   teardown: {exit: 0}
   session_start_hook: {exit: 0, stdout_lines: 1, names_file: true, output_never_contains: "QA-SENTINEL-$RUN_ID"}
   cases:
@@ -268,12 +277,38 @@ local_files:
     - {id: lock-policy-typo, file: lock.json, damage: {entry.policy: "pinn"}, why: unknown_policy, note: "a mistyped pin never falls back to auto: nothing updates"}
     - {id: lock-policy-case, file: lock.json, damage: {entry.policy: "Pin"}, why: unknown_policy, note: "policies are lowercase"}
     - {id: config-not-json, file: config.json, damage: {bytes: "update_policy: pin  # QA-SENTINEL-$RUN_ID\n"}, why: not_json, note: "YAML where JSON is expected"}
-    - {id: config-policy-number, file: config.json, damage: {bytes: "{\"update_policy\": 3}"}, why: wrong_shape}
-    - {id: config-policy-unknown, file: config.json, damage: {bytes: "{\"update_policy\": \"manual\", \"note\": \"QA-SENTINEL-$RUN_ID\"}"}, why: unknown_policy}
-    - {id: config-policy-case, file: config.json, damage: {bytes: "{\"update_policy\": \"Auto\"}"}, why: unknown_policy}
+    - {id: config-policy-number, file: config.json, damage: {bytes: "{\"update_policy\": 3}"}, why: wrong_shape, key: update_policy}
+    - {id: config-policy-unknown, file: config.json, damage: {bytes: "{\"update_policy\": \"manual QA-SENTINEL-$RUN_ID\"}"}, why: unknown_policy, key: update_policy, note: "the sentinel is in the policy's own value (80fc7a14: \"note\" would be an unknown key)"}
+    - {id: config-policy-case, file: config.json, damage: {bytes: "{\"update_policy\": \"Auto\"}"}, why: unknown_policy, key: update_policy}
     - {id: config-array, file: config.json, damage: {bytes: "[]"}, why: wrong_shape}
+    # a key §6 doesn't define (80fc7a14), and a key added to a key list (60b6532b): wrong_shape {key}
+    - {id: config-unknown-key, file: config.json, damage: {bytes: "{\"update_policy\": \"auto\", \"theme\": \"QA-SENTINEL-$RUN_ID\"}"}, why: wrong_shape, key: theme, note: "was an ok case (kept and ignored) before 80fc7a14"}
+    - {id: config-misspelled-policy, file: config.json, damage: {bytes: "{\"update_polcy\": \"pin\"}"}, why: wrong_shape, key: update_polcy, note: "a misspelled update_policy set to pin never falls back to automatic updates"}
+    - {id: config-key-case, file: config.json, damage: {bytes: "{\"Update_policy\": \"pin\"}"}, why: wrong_shape, key: Update_policy, note: "keys are compared exactly"}
+    - {id: config-unknown-keys-file-order, file: config.json, damage: {bytes: "{\"update_policy\": \"auto\", \"zeta\": 1, \"alpha\": 2}"}, why: wrong_shape, key: zeta, note: "the first unknown key in JSON.parse's order, not sorted"}
+    - {id: config-unknown-key-beats-policy, file: config.json, damage: {bytes: "{\"update_policy\": \"manual\", \"theme\": \"dark\"}"}, why: wrong_shape, key: theme, note: "wrong_shape wins over unknown_policy"}
+    - {id: config-unknown-key-beats-budget, file: config.json, damage: {bytes: "{\"context_cost_budget\": 0, \"theme\": \"dark\"}"}, why: wrong_shape, key: theme, note: "wrong_shape wins over not_a_budget"}
+    - {id: config-safe-key-added, file: config.json, damage: {bytes: "{\"update_policy\": \"auto\", \"safe_frontmatter_keys\": [\"name\", \"description\", \"allowed-tools\"]}"}, why: wrong_shape, key: allowed-tools, note: "config can only remove from the safe list"}
+    - {id: config-safe-key-case, file: config.json, damage: {bytes: "{\"safe_frontmatter_keys\": [\"name\", \"Description\"]}"}, why: wrong_shape, key: Description, note: "compared case-sensitively: fails closed"}
+    - {id: config-non-granting-key-added, file: config.json, damage: {bytes: "{\"non_granting_keys\": [\"model\", \"hooks\"]}"}, why: wrong_shape, key: hooks, note: "hooks grants: config can only remove from the list"}
+    - {id: lock-accepted-by-other, file: lock.json, damage: {entry.accepted: [{version: 1, flags: [], by: "QA-SENTINEL-$RUN_ID"}]}, why: wrong_shape, note: "by is absent (the person's yes) or accept_flagged_updates (60b6532b)"}
+    - {id: lock-accepted-by-null, file: lock.json, damage: {entry.accepted: [{version: 1, flags: [], by: null}]}, why: wrong_shape, note: "null isn't absent"}
+    - {id: config-unknown-key-integer-first, file: config.json, damage: {bytes: "{\"theme\": \"x\", \"10\": \"y\"}"}, why: wrong_shape, key: "10", note: "a stated limit: JSON.parse puts integer-like keys first, so \"first\" is in its order, not the text's"}
+    # cooldown: a whole number of seconds, 0 to 31,536,000; targets: a list from ["claude-code"]; else wrong_shape {key}
+    - {id: config-cooldown-negative, file: config.json, damage: {bytes: "{\"cooldown\": -1}"}, why: wrong_shape, key: cooldown}
+    - {id: config-cooldown-fraction, file: config.json, damage: {bytes: "{\"cooldown\": 1.5}"}, why: wrong_shape, key: cooldown}
+    - {id: config-cooldown-over-a-year, file: config.json, damage: {bytes: "{\"cooldown\": 31536001}"}, why: wrong_shape, key: cooldown, note: "one second past 365 days"}
+    - {id: config-cooldown-string, file: config.json, damage: {bytes: "{\"cooldown\": \"3d\"}"}, why: wrong_shape, key: cooldown}
+    - {id: config-targets-unknown, file: config.json, damage: {bytes: "{\"targets\": [\"claude-code\", \"cursor\"]}"}, why: wrong_shape, key: targets, note: "phase 1 has one target"}
+    - {id: config-targets-not-a-list, file: config.json, damage: {bytes: "{\"targets\": \"claude-code\"}"}, why: wrong_shape, key: targets}
   ok_cases:
     - {id: lock-copy-big-ino, file: lock.json, damage: {entry.copy.ino: "9007199254740993"}, expect: {list_installed_skills: {installed: 1}}, note: "an ino past 2^53 is kept as a decimal string, read without error (e24f202); that it matches its folder by value is replace_safely's ino-past-safe-integer"}
     - {id: lock-absent, remove: lock.json, expect: {list_installed_skills: {installed: []}}, note: "no lock yet: nothing installed, not an error"}
     - {id: config-absent, remove: config.json, expect: {update_policy_effective: auto}, note: "no config: the default"}
-    - {id: config-extra-key, file: config.json, damage: {bytes: "{\"update_policy\": \"notify\", \"theme\": \"dark\"}"}, expect: {update_policy_effective: notify}, note: "a key the config doesn't define is kept and ignored"}
+    - {id: lock-accepted-by-setting, file: lock.json, damage: {entry.accepted: [{version: 1, flags: [runnable_file], by: accept_flagged_updates}]}, expect: {list_installed_skills: {installed: 1}}, note: "the setting let it through (60b6532b)"}
+    - {id: config-setup-keys, file: config.json, damage: {bytes: "{\"hosting\": \"local\", \"update_policy\": \"notify\", \"session_start_hook\": true}"}, expect: {update_policy_effective: notify}, note: "keys setup writes and the installer doesn't use are §6's, not unknown (80fc7a14)"}
+    - {id: config-safe-keys-narrowed, file: config.json, damage: {bytes: "{\"update_policy\": \"auto\", \"safe_frontmatter_keys\": [\"name\", \"description\"]}"}, expect: {list_installed_skills: {installed: 1}}, note: "removing keys works"}
+    - {id: config-key-lists-empty, file: config.json, damage: {bytes: "{\"safe_frontmatter_keys\": [], \"non_granting_keys\": []}"}, expect: {update_policy_effective: auto}, note: "an empty list removes every key: every key then counts"}
+    - {id: config-key-list-duplicates, file: config.json, damage: {bytes: "{\"non_granting_keys\": [\"model\", \"model\"]}"}, expect: {update_policy_effective: auto}}
+    - {id: config-cooldown-bounds, file: config.json, damage: {bytes: "{\"cooldown\": 31536000, \"targets\": [\"claude-code\"]}"}, expect: {update_policy_effective: auto}, note: "365 days exactly, and the one target"}
+    - {id: config-cooldown-zero, file: config.json, damage: {bytes: "{\"cooldown\": 0}"}, expect: {update_policy_effective: auto}}
