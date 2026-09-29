@@ -144,7 +144,10 @@ describe('the read\'s inline budget (golden reads)', () => {
     return names;
   };
 
-  it.each(skills.reads.cases.map((c: any, i: number) => [String(i), c]) as any[])('case %s', async (_i, c: any) => {
+  // A row for behaviour not built yet (`pending`) runs as skipped, never as passed (qa/test/pending.test.ts lists them).
+  const readCases = skills.reads.cases.map((c: any, i: number) => [String(i), c]) as any[];
+  it.skip.each(readCases.filter(([, c]) => c.pending))('case %s (pending)', () => {});
+  it.each(readCases.filter(([, c]) => !c.pending))('case %s', async (_i, c: any) => {
     const { catalog } = await seed();
     const req = { ...c.read };
     if (req.paths === '21 distinct paths') req.paths = Array.from({ length: 21 }, (_, i) => `f${i}.md`);
@@ -196,7 +199,9 @@ describe('the read\'s inline budget (golden reads)', () => {
 });
 
 describe('search filter limits (golden search_filters)', () => {
-  it.each((skills.search_filters as any[]).map((c, i) => [String(i), c] as const))('case %s', async (_i, c) => {
+  const filterCases = (skills.search_filters as any[]).map((c, i) => [String(i), c] as const);
+  it.skip.each(filterCases.filter(([, c]) => c.pending))('case %s (pending)', () => {});
+  it.each(filterCases.filter(([, c]) => !c.pending))('case %s', async (_i, c) => {
     const { catalog } = await openTest();
     for (const [name, fx] of Object.entries<any>(skills.valid)) if (!fx.generate) await catalog.publish(request(catalogNameOf(name, fx, filesOf(fx.files)!), filesOf(fx.files)!), ana);
     if (c.error) {

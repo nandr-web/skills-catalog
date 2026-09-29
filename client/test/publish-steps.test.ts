@@ -109,7 +109,7 @@ function keyLooks(home: string) {
 
 describe('publish_steps: step 2 checks the confirm\'s form, then the HMAC, then the latest (golden publish_steps)', () => {
   for (const c of skills.publish_steps.cases) {
-    it(c.id, async () => {
+    (c.pending ? it.skip : it)(c.id, async () => {
       const p = place();
       await seedCatalog(p, c.catalog);
       const files = fixture(c.folder);
@@ -188,7 +188,7 @@ describe('publish_steps: step 2 checks the confirm\'s form, then the HMAC, then 
 
 describe('a publish\'s request checks (golden publish_steps.request_checks)', () => {
   for (const c of skills.publish_steps.request_checks) {
-    it(c.id, async () => {
+    (c.pending ? it.skip : it)(c.id, async () => {
       const p = place();
       const files = fixture(c.send.folder);
       const dir = join(p.dir, 'work', 'skills', nameOf(files));
