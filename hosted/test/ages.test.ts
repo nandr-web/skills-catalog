@@ -83,13 +83,16 @@ describe('a commit takes a file only under a day old', () => {
     expect(await w.commit([s])).toMatchObject({ kind: 'created' });
   });
 
-  it('bytes that do not hash to their name are never taken, get no link, and the sweep removes them at once', async () => {
+  it('bytes that do not hash to their name are never taken, and the sweep removes them at once', async () => {
     const w = await world();
     const s = w.sha('what the name says\n');
     // Put straight into the bucket (the stand-in doesn't check a declared checksum; real S3 refuses at upload).
     await w.s3.send(new PutObjectCommand({ Bucket: w.place.bucket, Key: blobKey(s), Body: 'other bytes\n', IfNoneMatch: '*' }));
     expect(await w.commit([s])).toEqual({ kind: 'not_uploaded', missing: [s] });
-    expect((await w.links.uploadLinks([{ sha256: s, size: 19 }]))[0]).toMatchObject({ kind: 'removing', sha256: s });
+    // The upload links look by head, never bytes: real S3 gives the checksum it checked at the upload, a mismatch being
+    // removing (links.test.ts); the stand-in keeps none, so the signed upload is trusted. The commit's check stands.
+    expect((await w.links.uploadLinks([{ sha256: s, size: 19 }]))[0]).toMatchObject({ kind: 'stored', sha256: s });
+    expect(await w.commit([s])).toEqual({ kind: 'not_uploaded', missing: [s] });
     await w.sweep.run();
     expect(await w.stored(s)).toBe(false);
   });

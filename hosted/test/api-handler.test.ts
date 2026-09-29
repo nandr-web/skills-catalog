@@ -86,6 +86,23 @@ describe("the web API's shared cases, hosted", () => {
   }
 });
 
+describe('the operations whose method acts as someone, over HTTP', () => {
+  it('the upload links and the token list answer as the token holder', async () => {
+    const w = await world();
+    try {
+      const sha = createHash('sha256').update('over http').digest('hex');
+      const links = await w.handler.handle(req({ method: 'POST', path: '/api/v1/request_upload_links', body: JSON.stringify({ name: 'over-http', files: [{ sha256: sha, size: 9 }] }) }));
+      expect(JSON.parse(String(links.body))).toMatchObject({ ok: true, data: { name: 'over-http', files: [{ sha256: sha, kind: 'upload' }] } });
+      const listed = await w.handler.handle(req({ method: 'POST', path: '/api/v1/list_tokens', body: '{}' }));
+      expect(JSON.parse(String(listed.body))).toMatchObject({ ok: true, data: { tokens: [] } });
+      const revoke = await w.handler.handle(req({ method: 'POST', path: '/api/v1/revoke_token', body: '{"id":"nope"}' }));
+      expect(JSON.parse(String(revoke.body))).toMatchObject({ ok: false, error: { code: 'not_found', id: 'nope' } });
+    } finally {
+      w.close();
+    }
+  }, 30_000);
+});
+
 describe('the files route, hosted, answered by the catalog', () => {
   it('without a file part the handler asks the catalog: a published file is a link (302), an unknown one 404', async () => {
     const catalog = await hostedAdapter(() => emu!.endpoint).store().open();
@@ -198,7 +215,8 @@ describe('who is asking, hosted', () => {
     try {
       const ok = await w.handler.handle(req(search, { authorization: 'Bearer t-reader' }));
       expect(JSON.parse(String(ok.body))).toMatchObject({ ok: true });
-      const writes = Object.values(OPERATIONS).filter((o) => o.faces.includes('web') && o.effect === 'writes_catalog');
+      // Signing in takes no token, so no token's scope is asked of it (api-sign-in.test.ts).
+      const writes = Object.values(OPERATIONS).filter((o) => o.faces.includes('web') && o.effect === 'writes_catalog' && o.token !== 'none');
       expect(writes.length).toBeGreaterThan(0);
       for (const o of writes) {
         // A body that would fail the operation's own checks: forbidden comes first, so it never ran.

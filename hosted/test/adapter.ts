@@ -8,7 +8,7 @@ import { DynamoDBClient, ScanCommand, TransactWriteItemsCommand } from '@aws-sdk
 import { GetObjectCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3';
 import { Catalog, MAX_UPLOAD_LINKS, actAs, type Identity, type Storage } from '@skills-catalog/core';
 import { counterIds, fixedClock, type StoreOptions, type TestAdapter, type TestStore } from '@skills-catalog/core/testing/suites';
-import { createStores, HostedBlobLinks, HostedEvents, HostedFileNames, HostedStorage, S3SearchIndex, BLOB_PREFIX, namesClient, type Place } from '../src/index.ts';
+import { createStores, HostedBlobLinks, HostedEvents, HostedFileNames, HostedStorage, HostedTokenStore, S3SearchIndex, BLOB_PREFIX, namesClient, type Place } from '../src/index.ts';
 import { FAKE } from './emulator.ts';
 
 let stores = 0;
@@ -138,6 +138,9 @@ export function hostedAdapter(endpoint: () => string): TestAdapter {
           const catalog = await Catalog.open({
             where: 'hosted',
             links,
+            tokens: new HostedTokenStore({ ddb, place, clock }),
+            // GitHub is never asked here: its own tests (github.test.ts) use a stand-in of GitHub.
+            signIn: { login: async () => undefined },
             storage: uploading(naming(wrapStorage ? wrapStorage(storage) : storage, new HostedFileNames({ ddb: indexer, place })), links),
             index: new S3SearchIndex({ s3, place }),
             events: new HostedEvents({ ddb, place }),
