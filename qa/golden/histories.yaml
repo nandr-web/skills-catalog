@@ -428,7 +428,7 @@ histories:
       - {from: gate.g0, to: gate.g0-bang-line, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}]}
       - {from: gate.g0, to: gate.g0-bang-block, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}]}
       - {from: gate.g0, to: gate.g0-fork, risk_flags: [{kind: capability_frontmatter, path: SKILL.md, line: 4, field: context, from: null, to: fork}, {kind: capability_frontmatter, path: SKILL.md, line: 5, field: agent, from: null, to: Explore}]}
-      - {from: gate.g1, to: gate.g1-steps, risk_flags: [{kind: instructions_changed, path: SKILL.md}], note: "new body steps in a skill that pre-approves Bash(python3 *)"}
+      - {from: gate.g1, to: gate.g1-steps, risk_flags: [{kind: instructions_changed, path: SKILL.md, detail: "pre-approves Bash(python3 *)"}], note: "new body steps in a skill that pre-approves Bash(python3 *); the detail names the grant, and the flag reads 'its instructions changed while it pre-approves Bash(python3 *)' (6821771)"}
       - {from: gate.g1, to: gate.g1-widened, risk_flags: [{kind: capability_frontmatter, path: SKILL.md, line: 4, field: allowed-tools, from: "Bash(python3 *)", to: Bash}], note: "frontmatter-only change: not also instructions_changed"}
       - {from: gate.g0, to: gate.g0-desc, risk_flags: [], note: "description is on the safe list"}
       - {from: gate.g0, to: gate.g0-meta, risk_flags: [], note: "metadata is on the safe list"}
@@ -618,6 +618,128 @@ histories:
       - {installed: {version: 1, files: planted.stale-v1, catalog: other, lock_planted: true}, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], update: {held: other_catalog, was: "$OTHER_CATALOG", now: "$CATALOG", target: user, version: 2}, lock_unchanged: true, installed_unchanged: true, then_accept: {flags: [], expect: {installed_equals: planted.stale-clean, lock: {version: 2, catalog: "$CATALOG"}}}}
       - {installed: {version: 1, files: planted.stale-v1, catalog: other, lock_planted: true, policy: pin}, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], install: {held: other_catalog, was: "$OTHER_CATALOG", now: "$CATALOG", from: 1}, lock_unchanged: true, installed_unchanged: true, note: "other_catalog comes before pin"}
       - {installed: {version: 1, files: planted.stale-v1, policy: pin}, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], install: {held: pin, target: user, version: 2}, then_accept: {send: {target: project}, flags: [], expect: {error: conflict, lock_unchanged: true, installed_unchanged: true}}, note: "a hold is taken only for its own target"}
+
+  replace_safely:
+    name: stale-rules
+    note: >-
+      Replacing an installed copy safely (contract §4.5; 0aabf7c, 744fde9, 9b4d69c, 0620b19, 4ebc42b, 6b63ffd, 25e4c9a,
+      e24f202, d882510). Nothing is removed by its path unless its identity {dev, ino, birth} is one the installer recorded (birth: the
+      floor of birthtimeMs, left out where the file system reads 0; a {dev, ino} entry stays valid; each value a number when
+      it's a safe integer, else a decimal string, compared by value), and no removal follows a link. The old copy is deleted
+      only after every check passes, the write checks included; on a failure after placing it goes back if it can, else it's
+      kept in staging and named, so the lock never names a copy that's gone.
+      Paths: $A = $SKILLS_ASSISTANT_HOME, $P = the project folder, $S = $A/.claude/skills, $ST =
+      $A/.claude/.skills-catalog-staging (0700; a `.gitignore` of `*` written when it's made; removed when it holds nothing
+      but that .gitignore), `$ST/<fresh>` = any one new folder under $ST (the result names it), $RUN = the run's own folder.
+      These rows run with SKILLS_INSTALL_DIR unset (one row sets it: it stands in for $S, checked with its parent, and
+      staging goes beside it, d882510), and the runner's umask is 022 (with 002 a new folder on macOS would take
+      its parent's group, 20, and fail the installer's own check). Safety (§8): the runner refuses to start unless $A and $P
+      are inside the run's sandbox, a chmod counts as a write, and the harness's own chmod, rename, link and recreate go
+      through the same fail-safe as the core's writes.
+      Each case starts from `installed` (a real install of stale-v1, version 1, unless `none`; `lock_planted` as in
+      `installer`), plants the catalog, then runs `update` (update_installed_skills) or `install` (install_shared_skill).
+      Setup keys: `lock_copy` rewrites the lock entry's copy: `absent` (an entry recorded before copy existed),
+      `dev_ino_only` (the real dev and ino, no birth), `other_birth` (the real dev and ino, another birth: a reused inode);
+      `env` sets variables for the call; `stat` as in private_folders; `then` a second call after the first;
+      `no_writes_under` a folder the call must not create or change anything in; `stat_identity` makes the core's in-process file-system seam report that identity for the skill's folder;
+      `recreate: true` replaces the skill's folder before the call with a new real folder holding the same files: the harness
+      makes the new folder before removing the old one and checks that its ino differs (so a freed inode can't be reused);
+      `pre_existing` is made by the harness before the call (`folder` with its `files`, an empty `folder`, or `link` to a
+      folder under $RUN/outside/ holding one file).
+      Seams are in-process hooks of the core's installer (dependency injection in tests only; never an environment
+      variable, a flag or a face): `after_check` fires after the last path check, immediately before the move-aside rename;
+      `after_staging_made` right after $ST and its .gitignore are made, before the fresh folder inside it; `before_place`
+      after the move aside, before the new copy goes in; `after_place` right after the new copy goes in, before the write
+      check. A seam action is `swap_for_link: {path, keep_at}` (the real folder at `path` is renamed to `keep_at` under
+      $RUN/outside/, keeping its identity, and a link to `keep_at` is made at `path`), `swap_for_folder: {path, keep_at}`
+      (the same, but a new empty real folder is made at `path`) or `link: {path, to}` (a link made where nothing was).
+      `fault: move_back_fails` makes every rename that would put something back fail, for the whole call.
+      Result keys: `lock_unchanged` / `installed_unchanged` / `pre_existing_unchanged`: byte-identical after the call;
+      `outside_unchanged`: every file, folder and link under $RUN/outside/ as the harness left it (names, types, bytes, link
+      targets and modes; not times); `old_copy: deleted | kept_in_staging` (the old folder, byte-identical, in $ST/<fresh>,
+      named by the result's `staging`); `placed_copy: taken_back` (the new copy is out of the skill's path and deleted,
+      being still the copy just written); `staging_after: absent` ($ST doesn't exist after the call), `gitignore` (it exists
+      and its .gitignore holds `*`) or a description; `staging_mode: "0700"`; `nothing_moved`: no rename happened;
+      `no_lock_entry`: the lock has no entry for the skill; `never_reports_success`: the result is the error, never installed
+      or updated; `after_call`: a path's state after the call; `observe: {seam, …}`: a value the test reads at that seam;
+      `needs`: what the row can't run without (skipped and reported, never passed, where it's missing).
+      Stated limits, with no row: an empty folder appearing at a first install's path after the check is replaced silently by
+      the rename (it held nothing); after a remount or restore that changes `dev`, every skill looks recreated and its old
+      copy is kept and named on its next update.
+    cases:
+      # the lock records the copy's identity
+      - {id: install-records-copy, installed: none, plant: [{version: 1, files: planted.stale-v1}], install: {installed: {version: 1}}, lock: {copy: {dev: "the folder's dev", ino: "the folder's ino", birth: "its birth time in whole ms, left out when the file system reads 0"}}, staging_after: absent}
+      - {id: ino-past-safe-integer, installed: none, stat_identity: {ino: "9007199254740993"}, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], install: {installed: {version: 1}}, lock: {copy: {ino: "9007199254740993"}}, then: {update: {updated: {from: 1, to: 2}}, old_copy: deleted}, note: "an ino past 2^53 is recorded as a decimal string and still matches its folder by value (e24f202)"}
+      - {id: update-same-identity, installed: {version: 1, files: planted.stale-v1}, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], update: {updated: {from: 1, to: 2}}, old_copy: deleted, lock: {version: 2, copy: "the new folder's identity"}, staging_after: absent, note: "the moved-aside folder is the recorded one, deleted after every check passed; staging holding only its .gitignore is removed"}
+      - {id: dev-ino-only-stays-valid, installed: {version: 1, files: planted.stale-v1}, lock_copy: dev_ino_only, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], update: {updated: {from: 1, to: 2}}, old_copy: deleted, lock: {version: 2, copy: "the new folder's identity, birth included where the file system keeps one"}, staging_after: absent, note: "a {dev, ino} entry still matches (9b4d69c)"}
+      # an identity that isn't the recorded one is never deleted
+      - {id: entry-without-copy, installed: {version: 1, files: planted.stale-v1}, lock_copy: absent, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], update: {updated: {from: 1, to: 2, staging: "$ST/<fresh>"}}, old_copy: kept_in_staging, lock: {version: 2, copy: "the new folder's identity"}, staging_after: gitignore, staging_mode: "0700", note: "an older entry keeps its old folder, named in the result (6b63ffd: updated and installed carry staging?)"}
+      - {id: install-over-entry-without-copy, installed: {version: 1, files: planted.stale-v1}, lock_copy: absent, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], install: {installed: {version: 2, staging: "$ST/<fresh>"}}, old_copy: kept_in_staging, lock: {version: 2, copy: "the new folder's identity"}, staging_after: gitignore, note: "an install over an auto skill names the kept copy too"}
+      - {id: inode-reused, installed: {version: 1, files: planted.stale-v1}, lock_copy: other_birth, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], update: {updated: {from: 1, to: 2, staging: "$ST/<fresh>"}}, old_copy: kept_in_staging, lock: {version: 2, copy: "the new folder's identity"}, staging_after: gitignore, needs: "a file system that keeps birth times", note: "the same dev and ino, another birth: not the recorded folder"}
+      - {id: recreated-newer, installed: {version: 1, files: planted.stale-v1}, recreate: true, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], update: {updated: {from: 1, to: 2, staging: "$ST/<fresh>"}}, old_copy: kept_in_staging, lock: {version: 2, copy: "the new folder's identity"}, staging_after: gitignore, note: "a real folder recreated inside checked folders (a restore, a branch switch): kept, since it may hold the person's edits (4ebc42b)"}
+      - {id: recreated-nothing-newer, installed: {version: 1, files: planted.stale-v1}, recreate: true, plant: [{version: 1, files: planted.stale-v1}], update: {unchanged: true}, nothing_moved: true, lock: {version: 1, copy: "the recreated folder's identity"}, staging_after: absent, note: "complete and unchanged: only its identity is recorded again (4ebc42b)"}
+      - {id: recreated-checked-folders-fail, installed: {version: 1, files: planted.stale-v1}, recreate: true, plant: [{version: 1, files: planted.stale-v1}], seam: {after_check: {swap_for_link: {path: "$S", keep_at: "$RUN/outside/skills"}}}, update: {refused: {version: 1, error: target_changed, path: "$S"}}, lock_unchanged: true, outside_unchanged: true, nothing_moved: true, staging_after: absent, note: "an intact recreated folder whose checked folders fail is target_changed (6b63ffd); refused names the installed version when nothing newer was to be applied (d882510)"}
+      # something swapped in after the checks: moved back (or kept and named), nothing installed
+      - {id: skill-dir-swapped-for-link, installed: {version: 1, files: planted.stale-v1}, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], seam: {after_check: {swap_for_link: {path: "$S/stale-rules", keep_at: "$RUN/outside/victim"}}}, update: {refused: {version: 2, error: target_changed, path: "$S/stale-rules"}}, after_call: {link_at: "$S/stale-rules", pointing_to: "$RUN/outside/victim"}, lock_unchanged: true, outside_unchanged: true, staging_after: absent, note: "only a real folder counts as recreated: a link that appears is a swap, moved back and never followed (6b63ffd)"}
+      - {id: skills-dir-swapped-for-link, installed: {version: 1, files: planted.stale-v1}, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], seam: {after_check: {swap_for_link: {path: "$S", keep_at: "$RUN/outside/skills"}}}, update: {refused: {version: 2, error: target_changed, path: "$S"}}, lock_unchanged: true, outside_unchanged: true, staging_after: absent, note: "path names the first path that failed its check (6b63ffd)"}
+      - {id: claude-dir-swapped-for-link, installed: {version: 1, files: planted.stale-v1}, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], seam: {after_check: {swap_for_link: {path: "$A/.claude", keep_at: "$RUN/outside/claude"}}}, update: {refused: {version: 2, error: target_changed, path: "$A/.claude"}}, lock_unchanged: true, outside_unchanged: true, staging_after: "absent (the real .claude, holding no staging, is at $RUN/outside/claude)"}
+      - {id: move-back-fails, installed: {version: 1, files: planted.stale-v1}, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], seam: {after_check: {swap_for_link: {path: "$S/stale-rules", keep_at: "$RUN/outside/victim"}}}, fault: move_back_fails, update: {refused: {version: 2, error: target_changed, path: "$S/stale-rules", staging: "$ST/<fresh>"}}, after_call: {in_staging: "the link, still pointing to $RUN/outside/victim"}, lock_unchanged: true, outside_unchanged: true, staging_after: gitignore, note: "the seam fires right before the move aside, so the link is moved aside, then can't go back: it stays in staging, named so the person can recover it"}
+      - {id: staging-swapped-for-link, installed: {version: 1, files: planted.stale-v1}, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], seam: {after_staging_made: {swap_for_link: {path: "$ST", keep_at: "$RUN/outside/staging"}}}, update: {refused: {version: 2, error: target_changed, path: "$ST", temp: true}}, lock_unchanged: true, installed_unchanged: true, outside_unchanged: true, staging_after: "the swap's link stays at $ST; nothing written through it", note: "the staging folder's identity is checked before each write into it (6b63ffd 7a); temp: true when the failing path is a staging folder (25e4c9a)"}
+      # writes are checked as removals are (744fde9, 0620b19, 6b63ffd)
+      - {id: parent-replaced-before-place, installed: {version: 1, files: planted.stale-v1}, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], seam: {before_place: {swap_for_folder: {path: "$S", keep_at: "$RUN/outside/moved-skills"}}}, update: {refused: {version: 2, error: target_changed, path: "$S", staging: "$ST/<fresh>"}}, never_reports_success: true, placed_copy: taken_back, old_copy: kept_in_staging, lock_unchanged: true, outside_unchanged: true, staging_after: gitignore, note: "the new copy landed in a folder that isn't the checked one: taken back out; the old copy can't go back into that folder, so it's kept and named"}
+      - {id: copy-sent-elsewhere, installed: {version: 1, files: planted.stale-v1}, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], seam: {after_place: {swap_for_link: {path: "$S", keep_at: "$RUN/outside/moved-skills"}}}, update: {refused: {version: 2, error: target_changed, path: "$S", elsewhere: true, staging: "$ST/<fresh>"}}, never_reports_success: true, old_copy: kept_in_staging, after_call: {in: "$RUN/outside/moved-skills/stale-rules", holds: "the new copy, never deleted through the link"}, lock_unchanged: true, staging_after: gitignore, note: "the copy went with the skills folder behind a link, so it can't be taken back: elsewhere: true; the old copy can't go back through the link either, so it's kept and named"}
+      # a first install never moves what it finds
+      - {id: first-install-finds-folder, installed: none, pre_existing: {folder: "$S/stale-rules", files: {notes.md: "Mine.\n"}}, plant: [{version: 1, files: planted.stale-clean}], install: {error: exists_untracked, path: "$S/stale-rules"}, pre_existing_unchanged: true, no_lock_entry: true, staging_after: absent}
+      - {id: first-install-finds-empty-folder, installed: none, pre_existing: {folder: "$S/stale-rules", files: {}}, plant: [{version: 1, files: planted.stale-clean}], install: {error: exists_untracked, path: "$S/stale-rules"}, pre_existing_unchanged: true, no_lock_entry: true, staging_after: absent, note: "found by the check, even empty (a rename would replace it silently)"}
+      - {id: first-install-finds-link, installed: none, pre_existing: {link: "$S/stale-rules", to: "$RUN/outside/victim"}, plant: [{version: 1, files: planted.stale-clean}], install: {error: target_symlink, path: "$S/stale-rules"}, outside_unchanged: true, no_lock_entry: true, staging_after: absent}
+      - {id: first-install-link-appears, installed: none, plant: [{version: 1, files: planted.stale-clean}], seam: {after_check: {link: {path: "$S/stale-rules", to: "$RUN/outside/victim"}}}, install: {error: target_changed, path: "$S/stale-rules"}, never_reports_success: true, outside_unchanged: true, no_lock_entry: true, note: "a link found by the check is target_symlink; one that appears after is target_changed (6b63ffd)"}
+      # SKILLS_INSTALL_DIR (d882510): it stands in for $S; the checks run on it and its parent; staging goes beside it
+      - {id: install-dir-set, installed: none, env: {SKILLS_INSTALL_DIR: "$RUN/install/skills"}, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], install: {installed: {version: 1, path: "$RUN/install/skills/stale-rules"}}, then: {update: {updated: {from: 1, to: 2}}, old_copy: deleted}, observe: {seam: before_place, staging: "$RUN/install/.skills-catalog-staging"}, staging_after: "absent ($RUN/install/.skills-catalog-staging)", no_writes_under: "$A/.claude"}
+      - {id: install-dir-parent-world-writable, installed: none, env: {SKILLS_INSTALL_DIR: "$RUN/install/skills"}, stat: {path: "$RUN/install", mode: "0777"}, plant: [{version: 1, files: planted.stale-clean}], install: {error: target_not_private, path: "$RUN/install", target: user, own: true}, no_lock_entry: true, note: "its parent takes the checks .claude takes"}
+      # staging on the target's volume (9b4d69c): no EXDEV
+      - {id: project-on-another-volume, installed: none, target: project, plant: [{version: 1, files: planted.stale-clean}], install: {installed: {version: 1}}, observe: {seam: after_place, staging: "$P/.claude/.skills-catalog-staging, whose dev equals the project's"}, staging_after: absent, needs: "a second volume (the QA safety rules): on macOS a 20 MB APFS image file inside $RUN, attached with -nobrowse -noautoopen -mountpoint under $RUN, detached by its device in a finally and deleted, hdiutil info the same before and after (its first run announced to the safety reviewer); no network. On Linux a docker run --tmpfs mount is Linux-only, run in the Linux check with an image already on the machine, never pulled", note: "was internal_error (EXDEV) when staging lived under SKILLS_HOME"}
+
+  private_folders:
+    name: stale-rules
+    note: >-
+      target_not_private {path, target, home?, own} (contract §4.5; fd91737, 44bdd56, aeedabd, 63ea131, 0035673, 6b63ffd, 30be0c1, 0fd0ae6):
+      the staging folder, `.claude` and `.claude/skills` (a project's too) must be owned by this user and not writable by
+      others: group-writable only when the folder's gid equals the user's uid and isn't 20 (macOS's staff); the sticky bit
+      doesn't help them. The folder above `.claude` is checked too: for a user install the assistant's home (the same test;
+      `home: true`), for a project install the project (group-writable only for the person's private group, gid equal to the uid and not
+      20, or with the sticky bit; world-writable only with the sticky bit; owned by the person or root; 30be0c1, 0fd0ae6). The call refuses and changes nothing: `nothing_written` = no file or folder under $A, $P or $SKILLS_HOME
+      created or changed, and no lock entry. `own` is always present; the sentence suggests `chmod go-w` when own, else
+      SKILLS_ASSISTANT_HOME or a project install. `stat` sets the folder's mode with a real chmod inside the sandbox (§8: a
+      chmod is a write, never outside it; the harness makes the folder first when it doesn't exist); uid and gid, which need
+      an admin to change, are injected through the core's in-process file-system seam (tests only, never through a face). The
+      stat injection covers a root-owned home in every run; a real one is Linux-only, run in the Linux check in Docker as
+      a non-root user whose HOME is a root-owned folder inside the container, from an image already on the machine (never
+      pulled; the QA safety rules: root only inside the container, no host HOME mounted). No row's pass depends on a pull. Paths as in replace_safely
+      (SKILLS_INSTALL_DIR unset, umask 022). Each case installs planted.stale-clean as version 1, except update-checks-too,
+      which updates stale-v1 to stale-clean after the harness sets `stat_after_install`.
+    cases:
+      - {id: skills-world-writable, stat: {path: "$A/.claude/skills", mode: "0777"}, install: {error: target_not_private, path: "$A/.claude/skills", target: user, own: true}, nothing_written: true}
+      - {id: skills-group-own-uid, stat: {path: "$A/.claude/skills", mode: "0775", gid: "the user's uid (not 20)"}, install: {installed: {version: 1}}}
+      - {id: claude-group-own-uid, stat: {path: "$A/.claude", mode: "0775", gid: "the user's uid (not 20)"}, install: {installed: {version: 1}}, note: "the user-private-group convention"}
+      - {id: claude-group-staff, stat: {path: "$A/.claude", mode: "0775", gid: 20}, install: {error: target_not_private, path: "$A/.claude", target: user, own: true}, nothing_written: true, note: "macOS's staff is shared by every local user (44bdd56)"}
+      - {id: claude-group-other, stat: {path: "$A/.claude", mode: "0775", gid: "another group"}, install: {error: target_not_private, path: "$A/.claude", target: user, own: true}, nothing_written: true}
+      - {id: claude-sticky, stat: {path: "$A/.claude", mode: "1777"}, install: {error: target_not_private, path: "$A/.claude", target: user, own: true}, nothing_written: true, note: "the sticky bit helps only a project folder"}
+      - {id: staging-world-writable, pre_existing: {folder: "$A/.claude/.skills-catalog-staging"}, stat: {path: "$A/.claude/.skills-catalog-staging", mode: "0777"}, install: {error: target_not_private, path: "$A/.claude/.skills-catalog-staging", target: user, own: true}, nothing_written: true}
+      - {id: skills-other-owner, stat: {path: "$A/.claude/skills", mode: "0755", uid: "another user"}, install: {error: target_not_private, path: "$A/.claude/skills", target: user, own: false}, nothing_written: true}
+      - {id: home-group-staff, stat: {path: "$A", mode: "0775", gid: 20}, install: {error: target_not_private, path: "$A", target: user, home: true, own: true}, nothing_written: true, note: "whoever can write the home can rename .claude (aeedabd)"}
+      - {id: home-private, stat: {path: "$A", mode: "0700"}, install: {installed: {version: 1}}}
+      - {id: home-root-owned, stat: {path: "$A", mode: "0755", uid: 0}, install: {error: target_not_private, path: "$A", target: user, home: true, own: false}, nothing_written: true, note: "a container's root-owned home: the words offer SKILLS_ASSISTANT_HOME or a project install, not chmod (0035673)"}
+      - {id: project-group-shared, target: project, stat: {path: "$P", mode: "0775", gid: "a shared group"}, install: {error: target_not_private, path: "$P", target: project, own: true}, nothing_written: true, note: "group-writable only for the person's private group (30be0c1; the earlier any-group row is withdrawn)"}
+      - {id: project-group-staff, target: project, stat: {path: "$P", mode: "0775", gid: 20}, install: {error: target_not_private, path: "$P", target: project, own: true}, nothing_written: true}
+      - {id: project-group-own-uid, target: project, stat: {path: "$P", mode: "0775", gid: "the user's uid (not 20)"}, install: {installed: {version: 1}}}
+      - {id: project-group-sticky, target: project, stat: {path: "$P", mode: "1775", gid: "a shared group"}, install: {installed: {version: 1}}, note: "the sticky bit allows a shared group"}
+      - {id: project-other-owner, target: project, stat: {path: "$P", mode: "0755", uid: "another user"}, install: {error: target_not_private, path: "$P", target: project, own: false}, nothing_written: true, note: "a project folder must be the person's or root's (0fd0ae6, replacing 6b63ffd 7c)"}
+      - {id: project-root-owned, target: project, stat: {path: "$P", mode: "0755", uid: 0}, install: {installed: {version: 1}}, note: "root-owned is allowed when the group and world rule passes (0fd0ae6)"}
+      - {id: project-world-writable, target: project, stat: {path: "$P", mode: "0777"}, install: {error: target_not_private, path: "$P", target: project, own: true}, nothing_written: true}
+      - {id: project-sticky, target: project, stat: {path: "$P", mode: "1777"}, install: {installed: {version: 1}}, note: "world-writable with the sticky bit"}
+      - {id: project-claude-group-writable, target: project, stat: {path: "$P/.claude", mode: "0775", gid: "another group"}, install: {error: target_not_private, path: "$P/.claude", target: project, own: true}, nothing_written: true, note: "only the project folder itself is lenient; its .claude takes the strict test (6b63ffd 7b)"}
+      - {id: project-skills-group-writable, target: project, stat: {path: "$P/.claude/skills", mode: "0775", gid: "another group"}, install: {error: target_not_private, path: "$P/.claude/skills", target: project, own: true}, nothing_written: true}
+      - {id: update-checks-too, installed: {version: 1, files: planted.stale-v1}, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], stat_after_install: {path: "$A/.claude/skills", mode: "0777"}, update: {refused: {version: 2, error: target_not_private, path: "$A/.claude/skills", target: user, own: true}}, lock_unchanged: true, installed_unchanged: true}
 
   older_rules:
     name: older-rules

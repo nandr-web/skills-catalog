@@ -229,6 +229,11 @@ local_files:
     - {id: lock-version-text, file: lock.json, damage: {entry.version: "1"}, why: wrong_shape, note: "a field of the wrong type in a lock entry"}
     - {id: lock-accepted-text, file: lock.json, damage: {entry.accepted: "QA-SENTINEL-$RUN_ID"}, why: wrong_shape}
     - {id: lock-fingerprint-number, file: lock.json, damage: {entry.fingerprint: 7}, why: wrong_shape}
+    # the copy's identity (contract §4.5, e24f202): dev, ino and birth are each a number when it's a safe integer, else a
+    # decimal string of digits (no sign, no leading zeros), compared by value; `entry.copy.<field>` changes that one field
+    - {id: lock-copy-ino-leading-zeros, file: lock.json, damage: {entry.copy.ino: "007"}, why: wrong_shape}
+    - {id: lock-copy-ino-negative, file: lock.json, damage: {entry.copy.ino: "-1"}, why: wrong_shape}
+    - {id: lock-copy-ino-fraction, file: lock.json, damage: {entry.copy.ino: 1.5}, why: wrong_shape}
     - {id: lock-policy-typo, file: lock.json, damage: {entry.policy: "pinn"}, why: unknown_policy, note: "a mistyped pin never falls back to auto: nothing updates"}
     - {id: lock-policy-case, file: lock.json, damage: {entry.policy: "Pin"}, why: unknown_policy, note: "policies are lowercase"}
     - {id: config-not-json, file: config.json, damage: {bytes: "update_policy: pin  # QA-SENTINEL-$RUN_ID\n"}, why: not_json, note: "YAML where JSON is expected"}
@@ -237,6 +242,7 @@ local_files:
     - {id: config-policy-case, file: config.json, damage: {bytes: "{\"update_policy\": \"Auto\"}"}, why: unknown_policy}
     - {id: config-array, file: config.json, damage: {bytes: "[]"}, why: wrong_shape}
   ok_cases:
+    - {id: lock-copy-big-ino, file: lock.json, damage: {entry.copy.ino: "9007199254740993"}, expect: {list_installed_skills: {installed: 1}}, note: "an ino past 2^53 is kept as a decimal string, read without error (e24f202); that it matches its folder by value is replace_safely's ino-past-safe-integer"}
     - {id: lock-absent, remove: lock.json, expect: {list_installed_skills: {installed: []}}, note: "no lock yet: nothing installed, not an error"}
     - {id: config-absent, remove: config.json, expect: {update_policy_effective: auto}, note: "no config: the default"}
     - {id: config-extra-key, file: config.json, damage: {bytes: "{\"update_policy\": \"notify\", \"theme\": \"dark\"}"}, expect: {update_policy_effective: notify}, note: "a key the config doesn't define is kept and ignored"}
