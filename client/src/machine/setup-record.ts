@@ -2,7 +2,7 @@
 // written, so teardown removes only what deep-equals it; the files setup created from nothing; and the backups it made.
 // A record that isn't this shape proves nothing, so it's refused whole, never read in part.
 
-import { isAbsolute } from 'node:path';
+import { basename, isAbsolute, join } from 'node:path';
 import { isCopyIdentity } from './lock.ts';
 
 export const RECORD_VERSION = 1;
@@ -62,5 +62,40 @@ export function recordWhy(x: unknown): 'wrong_shape' | undefined {
   if (!Array.isArray(created) || !created.every((f) => isObject(f) && onlyKeys(f, ['file', 'sha256']) && isPath(f['file']) && isHash(f['sha256']))) return 'wrong_shape';
   const isBackup = (b: unknown) => isObject(b) && onlyKeys(b, ['file', 'path', 'sha256', 'dev', 'ino', 'birth']) && isPath(b['file']) && isPath(b['path']) && isHash(b['sha256']) && b['birth'] !== undefined && isCopyIdentity(b);
   if (!Array.isArray(backups) || !backups.every(isBackup)) return 'wrong_shape';
+  // Each value setup wrote carries this setup id: the MCP entry in its env, the hook's one handler on its line.
+  if (!entries.every((e: RecordEntry) => carriesId(e, x['setup_id'] as string))) return 'wrong_shape';
   return undefined;
+}
+
+function carriesId(e: RecordEntry, id: string): boolean {
+  if (e.kind === 'mcp_entry') {
+    const env = (e.value as Record<string, unknown>)['env'];
+    return isObject(env) && env['SKILLS_SETUP_ID'] === id;
+  }
+  if (e.kind === 'hook_group') {
+    const hooks = (e.value as Record<string, unknown>)['hooks'];
+    if (!Array.isArray(hooks) || hooks.length !== 1 || !isObject(hooks[0])) return false;
+    const line = hooks[0]['command'];
+    return typeof line === 'string' && line.includes(` hook session-start --setup-id ${id} `);
+  }
+  return true;
+}
+
+/** Where setup writes, rebuilt from its own settings, never taken from the record. */
+export type Places = { claudeJson: string; settingsJson: string; backups: string };
+const FILE_OF: Record<EntryKind, keyof Places> = { mcp_entry: 'claudeJson', hook_group: 'settingsJson', allow_rule: 'settingsJson' };
+const BACKUP_NAME = /^\d{8}T\d{6}Z-[0-9a-f]{4}-(claude\.json|settings\.json)$/;
+
+/** Every path the record names outside setup's own places, in the record's order, once each: an entry in a file other
+ *  than its kind's, a created file or a backup's original that isn't one of the two, a copy that isn't in the backups
+ *  folder under the name setup gives it. Setup refuses such a record; teardown never opens or deletes those paths. */
+export function elsewhere(r: SetupRecord, p: Places): string[] {
+  const files = [p.claudeJson, p.settingsJson];
+  const out = [
+    ...r.entries.filter((e) => e.file !== p[FILE_OF[e.kind]]).map((e) => e.file),
+    ...r.created_files.filter((f) => !files.includes(f.file)).map((f) => f.file),
+    ...r.backups.filter((b) => !files.includes(b.file)).map((b) => b.file),
+    ...r.backups.filter((b) => b.path !== join(p.backups, basename(b.path)) || !BACKUP_NAME.test(basename(b.path)) || !basename(b.path).endsWith(b.file === p.claudeJson ? '-claude.json' : '-settings.json')).map((b) => b.path),
+  ];
+  return [...new Set(out)];
 }

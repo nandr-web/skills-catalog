@@ -1,7 +1,7 @@
 // Setup's record (setup build notes, "The record"): exactly what setup added, so teardown removes only that. A record
 // that isn't this shape can't prove anything is setup's, so it's refused whole (wrong_shape), never read in part.
 import { describe, expect, it } from 'vitest';
-import { recordWhy } from '../src/machine/setup-record.ts';
+import { elsewhere, recordWhy, type SetupRecord } from '../src/machine/setup-record.ts';
 
 const ID = '0123456789abcdef0123456789abcdef';
 const HASH = 'a'.repeat(64);
@@ -10,7 +10,7 @@ const good = () => ({
   setup_id: ID,
   entries: [
     { kind: 'mcp_entry', file: '/h/.claude.json', value: { type: 'stdio', command: '/n', args: ['/s', 'mcp'], env: { SKILLS_SETUP_ID: ID } }, state: 'written', created: ['mcpServers'] },
-    { kind: 'hook_group', file: '/h/.claude/settings.json', value: { hooks: [{ type: 'command', command: 'x', timeout: 10 }] }, state: 'pending', created: ['hooks', 'hooks.SessionStart'] },
+    { kind: 'hook_group', file: '/h/.claude/settings.json', value: { hooks: [{ type: 'command', command: `'/n' '/s' hook session-start --setup-id ${ID} 2>/dev/null || true`, timeout: 10 }] }, state: 'pending', created: ['hooks', 'hooks.SessionStart'] },
     { kind: 'allow_rule', file: '/h/.claude/settings.json', value: 'Bash(skills-catalog update)', state: 'written', was_there: true },
     { kind: 'allow_rule', file: '/h/.claude/settings.json', value: 'mcp__skills-catalog__search_skills', state: 'written', was_there: false, created: ['permissions', 'permissions.allow'] },
   ],
@@ -60,6 +60,40 @@ describe("setup's record", () => {
     ['an ino with a leading zero', with_((r) => (r.backups[0]!.ino = '007'))],
     ['a negative birth', with_((r) => (r.backups[0]!.birth = -1))],
     ['a backup without its identity', with_((r) => delete (r.backups[0] as Partial<Rec['backups'][0]>).dev)],
+    // Each value setup wrote carries its setup id, so a record can't claim an entry setup never made.
+    ['an MCP entry with another setup id', with_((r) => (entry(r, 0)['value'] = { ...(entry(r, 0)['value'] as object), env: { SKILLS_SETUP_ID: 'f'.repeat(32) } }))],
+    ['an MCP entry without env', with_((r) => (entry(r, 0)['value'] = { type: 'stdio', command: '/n', args: ['/s', 'mcp'] }))],
+    ['a hook group whose line has another setup id', with_((r) => (entry(r, 1)['value'] = { hooks: [{ type: 'command', command: `'/n' '/s' hook session-start --setup-id ${'f'.repeat(32)} 2>/dev/null || true`, timeout: 10 }] }))],
+    ['a hook group whose line names the id only in passing', with_((r) => (entry(r, 1)['value'] = { hooks: [{ type: 'command', command: `echo ${ID}`, timeout: 10 }] }))],
+    ['a hook group of two handlers', with_((r) => (entry(r, 1)['value'] = { hooks: [...((entry(r, 1)['value'] as { hooks: unknown[] }).hooks), { type: 'command', command: 'x' }] }))],
   ];
   for (const [what, r] of bad) it(`refused: ${what}`, () => expect(recordWhy(r)).toBe('wrong_shape'));
+});
+
+describe("the record's paths: only setup's own places, rebuilt from its settings", () => {
+  const places = { claudeJson: '/h/.claude.json', settingsJson: '/h/.claude/settings.json', backups: '/k/backups' };
+  it('a record naming only those places has nothing elsewhere', () => expect(elsewhere(good() as SetupRecord, places)).toEqual([]));
+
+  const cases: [string, (r: Rec) => void, string][] = [
+    ['an MCP entry in the settings file', (r) => (entry(r, 0)['file'] = '/h/.claude/settings.json'), '/h/.claude/settings.json'],
+    ['an allow rule in another file', (r) => (entry(r, 3)['file'] = '/h/.zshrc'), '/h/.zshrc'],
+    ['a created file elsewhere', (r) => (r.created_files[0]!.file = '/sandbox/other.json'), '/sandbox/other.json'],
+    ['a backup copy in another folder', (r) => (r.backups[0]!.path = '/tmp/20260929T160000Z-0a1b-claude.json'), '/tmp/20260929T160000Z-0a1b-claude.json'],
+    ['a backup copy out through ..', (r) => (r.backups[0]!.path = '/k/backups/../20260929T160000Z-0a1b-claude.json'), '/k/backups/../20260929T160000Z-0a1b-claude.json'],
+    ['a backup copy not named as setup names them', (r) => (r.backups[0]!.path = '/k/backups/notes.txt'), '/k/backups/notes.txt'],
+    ["a backup copy named for the other file", (r) => (r.backups[0]!.path = '/k/backups/20260929T160000Z-0a1b-settings.json'), '/k/backups/20260929T160000Z-0a1b-settings.json'],
+  ];
+  for (const [what, change, path] of cases) {
+    it(`elsewhere: ${what}`, () => {
+      const r = good();
+      change(r);
+      expect(elsewhere(r as SetupRecord, places)).toEqual([path]);
+    });
+  }
+
+  it('elsewhere: a backup of another file names that file and its copy (the whole backup isn\'t setup\'s, so neither is kept-two pruning\'s)', () => {
+    const r = good();
+    r.backups[0]!.file = '/etc/hosts';
+    expect(elsewhere(r as SetupRecord, places)).toEqual(['/etc/hosts', '/k/backups/20260929T160000Z-0a1b-claude.json']);
+  });
 });
