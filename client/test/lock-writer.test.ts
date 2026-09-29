@@ -99,11 +99,8 @@ async function plantLock(p: Place, f: LockFile): Promise<number | null> {
 }
 
 describe('one writer at a time on the installed-skills lock (golden histories.lock_writer)', () => {
-  // unreadable-young waits for a decision: its file is past 5 s old within the call's own 5 s wait, and the code judges the
-  // age at each look (so it's taken), the row at first sight (so lock_busy). Skipped until the contract says which.
-  const waitsForDecision = new Set(['unreadable-young']);
   for (const row of rows) {
-    const skip = (row.root_only && process.getuid?.() !== 0) || waitsForDecision.has(row.id);
+    const skip = row.root_only && process.getuid?.() !== 0;
     (skip ? it.skip : it)(`lock_writer ${row.id}`, async () => {
       const p = place();
       const plain = ctxFor(p);
