@@ -4,6 +4,7 @@ import { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { pidFrom } from '../src/pids.ts';
 import { sandboxBase } from '../src/sandbox.ts';
 import { cleanup, PROCESS_TEST_MS, machine, qaSpawn, qaSync, scratch, type TestMachine } from './machine.ts';
 
@@ -67,8 +68,11 @@ describe('qa on the command line', () => {
     const p = qaSpawn(m, agent(dir, ['--scenario', 'A1', '--setup', 'mcp']), { env: { QA_FAKE_CLAUDE_TRACE: trace(dir), QA_FAKE_CLAUDE_SLEEP_MS: '30000', QA_FAKE_CLAUDE_PID: pidFile } });
     let err = '';
     p.stderr!.on('data', (b) => { err += b; });
-    for (let i = 0; i < 200 && !existsSync(pidFile); i++) await new Promise((ok) => setTimeout(ok, 50));
-    const fake = Number(readFileSync(pidFile, 'utf8'));
+    // The file can exist before its number is in it: wait (at most 10 s) for a pid.
+    const fakePid = () => pidFrom(existsSync(pidFile) ? readFileSync(pidFile, 'utf8') : '');
+    for (let i = 0; i < 200 && !fakePid(); i++) await new Promise((ok) => setTimeout(ok, 50));
+    const fake = fakePid()!;
+    expect(fake, `no pid in ${pidFile}`).toBeGreaterThan(0);
     p.kill('SIGINT');
     const code = await new Promise((ok) => p.on('exit', ok));
     expect(code, err).toBe(130);

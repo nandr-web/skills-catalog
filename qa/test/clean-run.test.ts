@@ -133,6 +133,12 @@ describe('teardown', () => {
       expect(t.sent).toEqual([`SIGTERM ${G}`, `SIGKILL ${G}`]);
     });
 
+    it('a group number of 0 or less is never signalled (0 is qa\'s own group, -1 every process)', async () => {
+      const t = sys({ pid: false });
+      await killGroups([0, -1], 100, { sys: t.sys, leaderAlive: () => true });
+      expect(t.sent).toEqual([]);
+    });
+
     it('a group that is gone is not signalled', async () => {
       const t = sys({ pid: false, group: false });
       await killGroups([G], 100, { sys: t.sys });

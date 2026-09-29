@@ -130,9 +130,8 @@ const commandOf = (pid: number): string | undefined => {
 export function stopQaGroup(pid: number, dir: string, o: { exists?: (pid: number) => boolean; commandOf?: (pid: number) => string | undefined; signal?: (pid: number) => void } = {}): boolean {
   const held = (o.exists ?? exists)(pid);
   const command = held ? (o.commandOf ?? commandOf)(pid) : undefined;
-  if (held && command === undefined) return false;   // there, but ps can't say what it is: fail closed
   const leaderRunning = command !== undefined && command.split(/\s+/).some((w, i, all) => w === dir && all[i - 1] === '--fake-machine');
-  if (!groupIsOurs(pid, leaderRunning, () => held)) return false;
+  if (!groupIsOurs(pid, leaderRunning, () => held)) return false;   // held but not named as this qa (ps failing included): fail closed
   (o.signal ?? kill)(-pid);
   return true;
 }

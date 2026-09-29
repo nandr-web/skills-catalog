@@ -8,6 +8,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it, onTestFinished } from 'vitest';
+import { pidFrom } from '../src/pids.ts';
 import { Surface } from '../../core/src/index.ts';
 import { answer, mcpBackend, serverEnv, toolName, type Stage, type Turn } from '../src/demo/assistant.ts';
 import { serverCommand } from '../src/demo/director.ts';
@@ -45,7 +46,7 @@ const calls = (root: string, who: string) => {
   const f = join(skillsHome(root, who), 'calls.jsonl');
   return existsSync(f) ? readFileSync(f, 'utf8').trimEnd().split('\n').map((l) => JSON.parse(l)) : [];
 };
-const serverPid = (root: string, who: string) => { const f = join(skillsHome(root, who), 'pid'); return existsSync(f) ? Number(readFileSync(f, 'utf8')) : undefined; };
+const serverPid = (root: string, who: string) => { const f = join(skillsHome(root, who), 'pid'); return existsSync(f) ? pidFrom(readFileSync(f, 'utf8')) : undefined; };
 const logOf = (root: string) => (existsSync(join(root, 'demo', 'activity.log')) ? readFileSync(join(root, 'demo', 'activity.log'), 'utf8') : '');
 
 /** A developer's stage on an MCP backend; its server is stopped when the test ends, however it ends. */

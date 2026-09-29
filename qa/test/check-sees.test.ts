@@ -80,6 +80,7 @@ describe('the process list on Linux, from /proc', () => {
     pid(103, ['X=QA_RUN_ID=20260929T010203Z-abcd1234'], ['/usr/bin/sleep', '30']);   // inside another variable's value
     pid(104, ['QA_RUN_ID=20260929T010203Z-abcd1234'], ['/usr/bin/sleep', '30']);
     chmodSync(join(proc, '104', 'environ'), 0o000);   // not readable: someone else's, or gone
+    pid(0, ['QA_RUN_ID=20260929T010203Z-abcd1234'], ['/sbin/launchd']);   // 0: never a process to signal
     mkdirSync(join(proc, 'self'));
     writeFileSync(join(proc, 'uptime'), '1.0 1.0\n');
     return proc;

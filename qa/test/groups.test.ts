@@ -2,7 +2,7 @@
 // hasn't been reaped, or, once it has, while no process holds that number (the system never gives out a number still in
 // use as a group's id, so a live process with it means the group emptied and the number is someone else's now).
 import { spawn } from 'node:child_process';
-import { describe, expect, it, onTestFinished } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { groupIsOurs, running, signalGroup } from '../src/groups.ts';
 import { pidFrom } from '../src/pids.ts';
 import { spawnDetached } from './machine.ts';
@@ -32,6 +32,18 @@ describe('whose a group\'s number is', () => {
     expect(running({ exitCode: 0, signalCode: null })).toBe(false);
     expect(running({ exitCode: null, signalCode: 'SIGKILL' })).toBe(false);
     expect(running(undefined)).toBe(false);
+  });
+});
+
+describe('a group number that isn\'t one', () => {
+  it('0 or less is never signalled, even with a leader said to be running: 0 is qa\'s own group, -1 every process', () => {
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    try {
+      for (const g of [0, -1, -4242]) expect(signalGroup(g, 'SIGKILL', { exitCode: null, signalCode: null }), String(g)).toBe(false);
+      expect(kill).not.toHaveBeenCalled();
+    } finally {
+      kill.mockRestore();
+    }
   });
 });
 

@@ -23,7 +23,7 @@ const SYS = {
 export async function killGroups(pgids: number[], graceMs = 2000, o: { leaderAlive?: (pgid: number) => boolean; sys?: Partial<typeof SYS> } = {}): Promise<void> {
   const sys = { ...SYS, ...o.sys };
   const ours = (g: number) => sys.groupAlive(g) && groupIsOurs(g, o.leaderAlive?.(g) ?? false, sys.pidAlive);
-  const live = pgids.filter(ours);
+  const live = pgids.filter((g) => g > 0 && ours(g));   // 0 is qa's own group, -1 every process
   for (const g of live) if (ours(g)) sys.signal(g, 'SIGTERM');
   for (let waited = 0; waited < graceMs && live.some(ours); waited += 50) await sys.sleep(50);
   for (const g of live) if (ours(g)) sys.signal(g, 'SIGKILL');

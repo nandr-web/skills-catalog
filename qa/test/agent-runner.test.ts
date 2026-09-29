@@ -113,7 +113,7 @@ describe('agent scenario runner: safety of the round', () => {
     const fakePid = () => pidFrom(existsSync(pidFile) ? readFileSync(pidFile, 'utf8') : '');
     for (let i = 0; i < 200 && !fakePid(); i++) await new Promise((ok) => setTimeout(ok, 50));
     const fake = fakePid();
-    expect(fake).toBeGreaterThan(0);
+    expect(fake, `no pid in ${pidFile}`).toBeGreaterThan(0);
     stop.abort();
     const report = await pending;
     expect(Date.now() - t0).toBeLessThan(15_000);

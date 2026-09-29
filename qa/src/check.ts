@@ -134,8 +134,8 @@ export function procProcesses(runId: string, proc = '/proc', uid = process.getui
   }
   const mark = `QA_RUN_ID=${runId}`;
   return names.flatMap((name) => {
-    const pid = Number(name);
-    if (!/^[0-9]+$/.test(name) || pid === process.pid) return [];
+    const pid = pidFrom(name);   // never 0
+    if (pid === undefined || pid === process.pid) return [];
     try {
       if (statSync(join(proc, name)).uid !== uid) return [];
       if (!readFileSync(join(proc, name, 'environ'), 'utf8').split('\0').includes(mark)) return [];
