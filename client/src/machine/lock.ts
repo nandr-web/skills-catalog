@@ -112,6 +112,8 @@ const CONFIG_KEYS: Record<string, (x: unknown, config: Record<string, unknown>) 
   non_granting_keys: (x) => narrowed(x, DEFAULT_NON_GRANTING_KEYS),
   // A number that isn't a positive whole one below 2^53 isn't a budget; 5000.0 is 5000 once parsed.
   context_cost_budget: (x) => (typeof x !== 'number' ? 'wrong_shape' : Number.isSafeInteger(x) && x >= 1 ? undefined : 'not_a_budget'),
+  // Only checked as a list for now, and read by nothing: the full check (at most 50 literal phrases, each with its kind)
+  // comes with the rules that turn these phrases into patterns, so a value here is never compiled or used until then.
   command_instruction_patterns: (x) => (Array.isArray(x) ? undefined : 'wrong_shape'),
   targets: (x) => (Array.isArray(x) && x.every((t) => typeof t === 'string' && SETUP_TARGETS.includes(t)) ? undefined : 'wrong_shape'),
   session_start_hook: (x) => (typeof x === 'boolean' ? undefined : 'wrong_shape'),

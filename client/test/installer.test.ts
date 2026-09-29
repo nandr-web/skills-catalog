@@ -1051,6 +1051,24 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
     }
   });
 
+  // Nothing reads command_instruction_patterns yet (the rules that use it aren't built): a value there, even one that isn't a
+  // valid pattern, is never compiled or used, and no source but the config check names the key.
+  it('command_instruction_patterns is inert: a present value is never compiled or used, and only the config check names it', async () => {
+    const p = place();
+    await publish(p, 'runner', plain('runner'));
+    mkdirSync(p.home, { recursive: true, mode: 0o700 });
+    const bytes = JSON.stringify({ command_instruction_patterns: ['(', '[z-a]', { phrase: 'please run zzz-marker now', instruction: 'shell' }] });
+    writeFileSync(join(p.home, 'config.json'), bytes);
+    const ctx = ctxFor(p);
+    expect((await install(ctx, { name: 'runner' })).outcome).toBe('installed');
+    await publish(p, 'runner', plain('runner', 'Body.\nplease run zzz-marker now\n'));
+    expect((await update(ctx, {})).outcome).toBe('updated');
+    expect(lockOf(p)[join(userSkills(p), 'runner')]).toMatchObject({ version: 2, accepted: [] });
+    const src = join(import.meta.dirname, '..', 'src');
+    const naming = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? naming(join(dir, e.name)) : readFileSync(join(dir, e.name), 'utf8').includes('command_instruction_patterns') ? [join(dir, e.name).slice(src.length + 1)] : []));
+    expect(naming(src)).toEqual(['machine/lock.ts']);
+  });
+
   // A config.json refusal tied to one key names it (§9): the row's own key, else the one key its file sets. A lock.json
   // refusal, and a file that isn't JSON or an object, name none.
   const keyOf = (d: (typeof damages)[number], bytes: string): string | undefined => {
