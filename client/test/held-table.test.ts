@@ -162,6 +162,43 @@ describe('accepting a hold keeps the policy and records the catalog (golden acce
   });
 });
 
+// The same version number from another catalog is another catalog's skill, not the installed one: installing it over the
+// copy from the catalog it came from is held as other_catalog, whether its files differ or not, and nothing changes.
+describe('the same version from another catalog', () => {
+  for (const files of ['different', 'the same'] as const) {
+    it(`is held as other_catalog when its files are ${files}, and the installed copy and the lock stay as they are`, async () => {
+      const p = place();
+      const ctx = ctxFor(p);
+      await publish(p, v1);
+      await install(ctx, { name: NAME });
+      const other = join(p.dir, 'other-catalog');
+      const lock = JSON.parse(readFileSync(join(p.home, 'lock.json'), 'utf8'));
+      lock.skills[dest(p)].catalog = other;
+      writeFileSync(join(p.home, 'lock.json'), JSON.stringify(lock, null, 2) + '\n');
+      const lockBefore = readFileSync(join(p.home, 'lock.json'), 'utf8');
+      // "different": the installed copy is v1 as the other catalog had it (its files and fingerprint differ from this v1).
+      if (files === 'different') writeFileSync(join(dest(p), 'notes.md'), 'Step one, as the other catalog had it.\n');
+      const installedNotes = readFileSync(join(dest(p), 'notes.md'), 'utf8');
+      if (files === 'different') {
+        const l = JSON.parse(lockBefore);
+        l.skills[dest(p)].fingerprint = 'sha256:' + '0'.repeat(64);
+        writeFileSync(join(p.home, 'lock.json'), JSON.stringify(l, null, 2) + '\n');
+      }
+      const lockHeld = readFileSync(join(p.home, 'lock.json'), 'utf8');
+      const r = await install(ctx, { name: NAME, version: 1 });
+      expect([files, r.result]).toEqual([files, S.doc.log.result.install.held_other_catalog]);
+      expect(readFileSync(join(p.home, 'lock.json'), 'utf8')).toBe(lockHeld);
+      expect(readFileSync(join(dest(p), 'notes.md'), 'utf8')).toBe(installedNotes);
+      // It waits for the person as the CLI's update <name> --accept finds it, and their yes takes it, recording the catalog
+      // in use.
+      expect(await pendingHold(ctx, NAME)).toEqual(expect.objectContaining({ reason: 'other_catalog', installed: 1, version: 1 }));
+      const m = /target "([^"]+)", version (\d+), confirm "([^"]+)"/.exec(r.text)!;
+      await accept(ctx, { name: NAME, target: m[1], version: Number(m[2]), confirm: m[3], flags: [] });
+      expect([readLock(p.home).skills[dest(p)]!.catalog, readFileSync(join(dest(p), 'notes.md'), 'utf8')]).toEqual([p.catalogUrl, v1[1]!.text]);
+    });
+  }
+});
+
 // What the CLI's update <name> --accept shows comes from pendingHold: why the hold waits (§5.3's order), and for a copy
 // from another catalog, where it came from and where this version comes from.
 describe('the hold waiting for the person says why', () => {

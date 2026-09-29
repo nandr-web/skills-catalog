@@ -511,7 +511,8 @@ export async function pendingHold(ctx: Context, name: string, target: Target = '
   const e = installedHere(ctx, lock).find((x) => x.name === name);
   const catalog = await ctx.catalog();
   const v = await allVersions(catalog, name);
-  if (e && v.latest === e.version) return { installed: e.version };
+  // The same version from another catalog still waits (an install held it as other_catalog).
+  if (e && v.latest === e.version && e.catalog === ctx.settings.catalog) return { installed: e.version };
   const at = e ? e.target : target;
   const path = checkTarget(ctx, at, name, lock);
   const to = await fetchListed(catalog, name, v, v.latest);
@@ -553,9 +554,11 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   const existing = lock.skills[dest];
   const to = await fetchListed(catalog, req.name, v, version);
   const w = s.word('install');
+  // A copy from another catalog is held first, whatever the version: the same version number there is another skill.
+  const otherCatalog = existing !== undefined && existing.catalog !== ctx.settings.catalog;
   // The same version over an intact copy (its files are the lock's fingerprint) changes nothing; a copy the person
   // recreated just has its identity recorded again. A changed or incomplete copy is written again, whatever the policy.
-  if (existing && existing.version === version && to.fingerprint === existing.fingerprint && folderFingerprint(dest) === existing.fingerprint) {
+  if (existing && !otherCatalog && existing.version === version && to.fingerprint === existing.fingerprint && folderFingerprint(dest) === existing.fingerprint) {
     recordAgain(ctx, dest, target, existing);
     return { text: s.format(w.unchanged, { name: req.name, version }), target: `${req.name} v${version}`, result: log.result('install', 'unchanged'), outcome: 'unchanged' };
   }
@@ -565,7 +568,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   const held = { name: req.name, target, version, confirm, flags: JSON.stringify(kinds(flags)), command: acceptCommand(s, req.name, target) };
   // Another version over an installed copy follows that skill's rows, as an update does (the owner's decision): another
   // catalog first, then pin, then notify, then the flags. The held result names the installed version.
-  const reason = existing && existing.version !== version ? holdOf(ctx, existing, config) : undefined;
+  const reason = existing && (otherCatalog || existing.version !== version) ? holdOf(ctx, existing, config) : undefined;
   if (existing && reason) {
     recordHold(ctx, req.name, version, reason, flags, version - existing.version);
     const also = flags.length ? s.format(s.word('update.held_also'), { reasons: reasons(s, flags) }) : '';
