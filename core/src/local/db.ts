@@ -46,6 +46,9 @@ CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5 (name UNINDEXED, words,
 
 const BUSY_MS = 15_000;
 
+const isBusy = (e: unknown) => (e as { errcode?: number }).errcode === 5 || /database is locked/.test(String((e as Error).message));
+const sleep = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
 export class LocalDb {
   readonly db: DatabaseSync;
   // True when the search index was dropped because its tokenizer changed: the catalog rebuilds it from the versions.
@@ -54,7 +57,7 @@ export class LocalDb {
   constructor(file: string) {
     this.db = new DatabaseSync(file, { timeout: BUSY_MS });
     this.db.exec(`PRAGMA busy_timeout = ${BUSY_MS}`);
-    this.db.exec('PRAGMA journal_mode = WAL');
+    this.walMode();
     this.db.exec('PRAGMA synchronous = NORMAL');
     this.indexReset = this.immediate(() => {
       const fts = this.db.prepare("SELECT sql FROM sqlite_master WHERE name = 'search_fts'").get() as { sql: string } | undefined;
@@ -63,6 +66,22 @@ export class LocalDb {
       this.db.exec(SCHEMA);
       return stale;
     });
+  }
+
+  // Switching a fresh file to WAL takes a moment's exclusive lock, and SQLite answers "database is locked" there at
+  // once, without waiting, while another process does the same (two assistants, or a server and the CLI, starting
+  // together). So it tries again with a short, growing pause, for at most the busy timeout.
+  private walMode(): void {
+    const until = Date.now() + BUSY_MS;
+    for (let pause = 5; ; pause = Math.min(pause * 2, 200)) {
+      try {
+        this.db.exec('PRAGMA journal_mode = WAL');
+        return;
+      } catch (e) {
+        if (!isBusy(e) || Date.now() + pause > until) throw e;
+        sleep(pause + Math.random() * pause);
+      }
+    }
   }
 
   // Runs fn inside BEGIN IMMEDIATE ... COMMIT; rolls back if it throws. Nested calls join the outer transaction.

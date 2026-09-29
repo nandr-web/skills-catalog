@@ -81,6 +81,19 @@ describe('nothing lost (histories.concurrent)', () => {
   }, 30_000);
 });
 
+describe('a fresh catalog opened by several processes at once (two assistants, or a server and the CLI, starting together)', () => {
+  it('every open succeeds: the switch to WAL waits its turn', async () => {
+    const script = join(import.meta.dirname, 'fixtures', 'open-one.ts');
+    for (let round = 0; round < 6; round++) {
+      const dir = join(sandbox(), 'catalog');
+      const startAt = Date.now() + 1200;
+      const outs = await Promise.allSettled(Array.from({ length: 10 }, () => run([script, dir, String(startAt)])));
+      const failed = outs.filter((o) => o.status === 'rejected').map((o) => String((o as PromiseRejectedResult).reason));
+      expect(failed, `round ${round}`).toEqual([]);
+    }
+  }, 120_000);
+});
+
 describe('fault injection (histories.fault)', () => {
   it('the version append fails after the blobs were stored: an error, no version, not searchable; the retry succeeds', async () => {
     let failNext = true;
