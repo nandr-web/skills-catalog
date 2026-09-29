@@ -5,13 +5,13 @@
 // (`unknown`), and is named, with why, for setup's summary (never its contents). What this can't see, said plainly: a
 // mode given for one session (--permission-mode, --settings), the macOS MDM profile, and Windows.
 
-import { readdirSync } from 'node:fs';
+import { opendirSync, type Dir } from 'node:fs';
 import { join } from 'node:path';
 import type { Settings } from '../settings.ts';
 import { readJsonFile } from './json-file.ts';
 
 export type PermissiveMode = 'auto' | 'bypass' | 'sandbox_auto_allow' | 'broad_bash_rule' | 'unknown';
-export type Unusable = { path: string; why: 'unreadable' | 'too_big' | 'not_json' | 'link' } | { path: string; why: 'wrong_type'; key: string };
+export type Unusable = { path: string; why: 'unreadable' | 'too_big' | 'not_json' | 'link' | 'too_many_files' } | { path: string; why: 'wrong_type'; key: string };
 export type Permissive = { mode?: PermissiveMode; unusable?: Unusable[] };
 
 const MAX_BYTES = 1024 * 1024;
@@ -57,16 +57,45 @@ function readSettings(path: string, managed: boolean): { values: Read } | { unus
   return key === undefined ? { values: f.value as Read } : { unusable: { path, why: 'wrong_type', key } };
 }
 
-/** Blocks merged key by key, a later single value winning and lists combined (managed-settings.d/). */
-function merge(a: Read, b: Read): Read {
+/** Blocks merged key by key, a later single value winning and lists combined (managed-settings.d/). Only as deep as the
+ *  keys this reads (a block, then its settings), so a drop-in nested as deep as a file allows can't overflow the stack;
+ *  below that, the later value wins whole. */
+function merge(a: Read, b: Read, depth = 2): Read {
   const out: Record<string, unknown> = { ...a };
   for (const [k, v] of Object.entries(b)) {
     const was = out[k];
     if (Array.isArray(was) && Array.isArray(v)) out[k] = [...was, ...v];
-    else if (isObject(was) && isObject(v)) out[k] = merge(was as Read, v as Read);
+    else if (depth > 1 && isObject(was) && isObject(v)) out[k] = merge(was as Read, v as Read, depth - 1);
     else out[k] = v;
   }
   return out as Read;
+}
+
+// At most this many entries in managed-settings.d are read, each within MAX_BYTES (contract §5.3).
+const MAX_DROP_INS = 64;
+
+/** The names in managed-settings.d: none when it's absent or not a folder; unreadable when it can't be listed; too many
+ *  past MAX_DROP_INS entries of any kind (listing stops there). Either of those makes the mode unknown. */
+function listDropIns(path: string): string[] | 'unreadable' | 'too_many_files' {
+  let d: Dir;
+  try {
+    d = opendirSync(path);
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    return code === 'ENOENT' || code === 'ENOTDIR' ? [] : 'unreadable';
+  }
+  try {
+    const names: string[] = [];
+    for (let entry = d.readSync(); entry; entry = d.readSync()) {
+      if (names.length === MAX_DROP_INS) return 'too_many_files';
+      names.push(entry.name);
+    }
+    return names;
+  } catch {
+    return 'unreadable';
+  } finally {
+    d.closeSync();
+  }
 }
 
 // A command that runs other code (§5.3's broad_bash_runners, fixed here; config can only add).
@@ -98,16 +127,14 @@ export function permissiveMode(settings: Settings, extraRunners: readonly string
     return r.values;
   };
   const dir = settings.managedSettings;
-  let dropIns: string[] = [];
-  try {
-    // .json files only, no dotfiles, in byte order of their names.
-    dropIns = readdirSync(join(dir, 'managed-settings.d'))
-      .filter((f) => f.endsWith('.json') && !f.startsWith('.'))
-      .sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
-  } catch {
-    // no drop-in folder
-  }
-  const managed = [join(dir, 'managed-settings.json'), ...dropIns.map((f) => join(dir, 'managed-settings.d', f))].map((f) => read(f, true)).reduce(merge, {});
+  const dropInDir = join(dir, 'managed-settings.d');
+  const listed = listDropIns(dropInDir);
+  if (listed === 'unreadable' || listed === 'too_many_files') unusable.push({ path: dropInDir, why: listed });
+  // .json files only, no dotfiles, in byte order of their names.
+  const dropIns = (Array.isArray(listed) ? listed : [])
+    .filter((f) => f.endsWith('.json') && !f.startsWith('.'))
+    .sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
+  const managed = [join(dir, 'managed-settings.json'), ...dropIns.map((f) => join(dir, 'managed-settings.d', f))].map((f) => read(f, true)).reduce((a, b) => merge(a, b), {});
   const local = read(join(settings.projectDir, '.claude', 'settings.local.json'));
   const project = read(join(settings.projectDir, '.claude', 'settings.json'));
   const user = read(join(settings.assistantHome, '.claude', 'settings.json'));

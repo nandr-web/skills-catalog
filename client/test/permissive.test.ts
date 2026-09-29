@@ -151,3 +151,46 @@ describe('an allow rule that lets every command through (broad_bash_rule)', () =
     expect(narrow.filter((r) => broadBashRule(r))).toEqual([]);
   });
 });
+
+describe('managed-settings.d, bounded', () => {
+  const dropIns = (p: Place, n: number, body: (i: number) => string) => {
+    const d = join(p.dir, 'managed', 'managed-settings.d');
+    mkdirSync(d, { recursive: true });
+    for (let i = 0; i < n; i++) writeFileSync(join(d, `${String(i).padStart(3, '0')}.json`), body(i));
+    return d;
+  };
+
+  it('64 entries are read; one more of any kind and the folder is named as having too many files, the mode unknown', () => {
+    const p = place();
+    const { settings } = tree(p, {});
+    const d = dropIns(p, 64, (i) => JSON.stringify(i === 63 ? { permissions: { defaultMode: 'auto' } } : {}));
+    expect(permissiveMode(settings)).toEqual({ mode: 'auto' });
+    writeFileSync(join(d, 'README.txt'), 'not a drop-in, still an entry');
+    expect(permissiveMode(settings)).toEqual({ mode: 'unknown', unusable: [{ path: d, why: 'too_many_files' }] });
+  });
+
+  it('a folder that can\'t be listed is unreadable, never taken as absent; absent or a file there is absent', () => {
+    const p = place();
+    const { settings } = tree(p, {});
+    const d = dropIns(p, 1, () => JSON.stringify({ permissions: { allow: ['Bash(*)'] } }));
+    chmodSync(d, 0o000);
+    try {
+      expect(permissiveMode(settings)).toEqual({ mode: 'unknown', unusable: [{ path: d, why: 'unreadable' }] });
+    } finally {
+      chmodSync(d, 0o700);
+    }
+    rmSync(d, { recursive: true });
+    expect(permissiveMode(settings)).toEqual({});
+    writeFileSync(d, '{}');
+    expect(permissiveMode(settings)).toEqual({});
+  });
+
+  it('drop-ins nested as deep as a file allows merge without overflowing the stack', () => {
+    const p = place();
+    const { settings } = tree(p, {});
+    // Two drop-ins nested the same way (just under the 1 MiB cap), so a merge that followed them would go that deep.
+    const deep = `${'{"x": '.repeat(140_000)}1${'}'.repeat(140_000)}`;
+    dropIns(p, 3, (i) => (i < 2 ? deep : JSON.stringify({ permissions: { defaultMode: 'auto' } })));
+    expect(permissiveMode(settings)).toEqual({ mode: 'auto' });
+  });
+});
