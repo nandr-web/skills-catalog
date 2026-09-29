@@ -2,7 +2,7 @@
 // local ports waiting to close for about 30 s; two runs at once can use up the machine's ephemeral ports (the person's
 // own programs share them). A run holds a fixed 127.0.0.1 port for its whole length: the kernel frees it when the
 // process ends, so no lock is ever left behind, and nothing is written anywhere. It starts only once the ports waiting
-// to close are few (the drain of the run before it).
+// to close are few (the drain of the run before it); where they can't be counted, it doesn't start.
 
 import { execFile } from 'node:child_process';
 import { createServer, type Server } from 'node:net';
@@ -54,12 +54,17 @@ export async function waitForFreePorts(o: { count?: () => Promise<number | undef
   const started = Date.now();
   for (let said = false; ; ) {
     const n = await count();
-    if (n === undefined || n < limit) return;
+    if (n !== undefined && n < limit) return;
+    // Unreadable is treated as too many: the lock can't see the ports, so a run never starts blind.
     if (Date.now() - started >= o.timeoutMs) {
-      throw new Error(`${n} local ports are waiting to close (a run starts under ${limit}); waited ${Math.round(o.timeoutMs / 1000)} s.`);
+      throw new Error(
+        n === undefined
+          ? `can't count local ports waiting to close (netstat unreadable); a hosted run won't start blind. Waited ${Math.round(o.timeoutMs / 1000)} s.`
+          : `${n} local ports are waiting to close (a run starts under ${limit}); waited ${Math.round(o.timeoutMs / 1000)} s.`,
+      );
     }
     if (!said) {
-      process.stderr.write(`waiting for local ports to close: ${n} (a run starts under ${limit})\n`);
+      process.stderr.write(n === undefined ? "can't count local ports waiting to close yet (netstat unreadable); waiting\n" : `waiting for local ports to close: ${n} (a run starts under ${limit})\n`);
       said = true;
     }
     await sleep(o.pollMs ?? 2000);
