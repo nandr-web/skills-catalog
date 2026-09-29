@@ -36,7 +36,7 @@ type Row = {
   lock_unchanged?: boolean;
   installed_unchanged?: boolean;
   installed_equals?: string;
-  lock?: { version?: number; accepted?: 'unchanged'; catalog?: string };
+  lock?: { version?: number; accepted?: 'unchanged'; catalog?: string; accepted_last?: { version: number; flags: string[]; by?: string } };
   then_accept?: { send?: Record<string, unknown>; flags: string[]; expect: AcceptExpect };
   note?: string;
 };
@@ -52,9 +52,9 @@ type Expect = {
   unchanged?: { version: number };
 };
 type AcceptExpect = { installed_equals?: string; lock?: { version?: number; catalog?: string }; policy_after?: string; error?: string; lock_unchanged?: boolean; installed_unchanged?: boolean };
-
+// The rows this file runs: an install over an installed copy, a copy from another catalog, or a run with setup's config.
 // The rows this file runs: an install over an installed copy, or a copy from another catalog.
-const rows = (table.cases as Row[]).map((c, i) => [i, c] as const).filter(([, c]) => typeof c.installed === 'object' && (c.install !== undefined || c.installed.catalog === 'other'));
+const rows = (table.cases as Row[]).map((c, i) => [i, c] as const).filter(([, c]) => typeof c.installed === 'object' && (c.install !== undefined || c.installed.catalog === 'other' || c.setup !== undefined));
 
 function ctxFor(p: Place): Context {
   return contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project')), S, 'mcp').ctx;
@@ -168,6 +168,8 @@ describe('an install over an installed skill, and a skill from another catalog (
       if (row.installed_equals) expect(tree(dest(p))).toEqual(filesOf(row.installed_equals));
       if (row.lock?.version !== undefined) expect(readLock(p.home).skills[dest(p)]!.version).toBe(row.lock.version);
       if (row.lock?.accepted === 'unchanged') expect(readLock(p.home).skills[dest(p)]!.accepted).toEqual(acceptedBefore);
+      // The last yes the lock records, exactly: a person's has no `by`.
+      if (row.lock?.accepted_last) expect(readLock(p.home).skills[dest(p)]!.accepted.at(-1)).toEqual(row.lock.accepted_last);
 
       const t = row.then_accept;
       if (!t) return;
