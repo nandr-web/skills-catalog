@@ -224,14 +224,14 @@ describe('search: the local index', () => {
 for (const a of ADAPTERS) catalogSuite(a);
 
 describe('SKILLS_CATALOG (contract §8)', () => {
-  it('file:// opens the local catalog; https:// (hosted, not built yet) and anything else are refused', async () => {
+  it('file:// opens the local catalog; https:// opens a hosted one (over its web API, nothing asked at open); anything else is refused', async () => {
     const { openCatalog } = await import('../src/open.ts');
     const { pathToFileURL } = await import('node:url');
     const dir = sandbox();
     const c = (await openCatalog(pathToFileURL(dir + '/catalog').href));
     expect((await c.search({})).catalog_size).toBe(0);
     c.close();
-    expect((await errorOf(async () => (await openCatalog('https://catalog.example.invalid')))).code).toBe('forbidden');
+    expect((await openCatalog('https://catalog.example.invalid', { fetch: (() => { throw new Error('asked at open'); }) as never })).where).toBe('hosted');
     expect((await errorOf(async () => (await openCatalog('/just/a/path')))).code).toBe('invalid_request');
   });
 });

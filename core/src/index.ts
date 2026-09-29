@@ -5,6 +5,7 @@ export * from './errors.ts';
 export * from './ports.ts';
 export * from './api.ts';
 export { openCatalog } from './open.ts';
+export { openRemoteCatalog, type RemoteOptions } from './remote/index.ts';
 export { actAs, openLocalCatalog, randomIds, type LocalOptions } from './local/index.ts';
 export { memorySearchIndex } from './local/search-index.ts';
 export { Words } from './words-file.ts';

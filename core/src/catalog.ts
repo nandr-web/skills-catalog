@@ -229,8 +229,8 @@ export type InlineFetched = { path: string; mode: Mode; content_base64: string }
 export type LinkedFetched = { path: string; mode: Mode; sha256: string; size: number; url: string };
 
 // A fetch's files with their bytes inline, as a local catalog answers. A hosted catalog's come by link, which a caller
-// that reads bytes from the answer doesn't follow: refused, never read as empty. Unreachable today (open.ts answers a
-// hosted address forbidden, hosted_not_available, before any fetch); a hosted client follows the links instead.
+// that reads bytes from the answer doesn't follow: refused, never read as empty. The hosted client (remote/index.ts)
+// follows the links and answers inline, so the installer never meets this.
 export function inlineFiles(r: FetchResult): InlineFetched[] {
   if (r.files.every((f) => 'content_base64' in f)) return r.files as InlineFetched[];
   throw new Error("this fetch answered with links (a hosted catalog's); the bytes are at each file's url");
