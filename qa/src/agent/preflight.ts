@@ -45,7 +45,7 @@ export async function preflight(o: PreflightOptions): Promise<string[]> {
   if (!o.skipTests) {
     const env = { ...process.env }; delete env.QA_LIVE; delete env.QA_REAL;
     const r = spawnSync('npx', ['--no-install', 'vitest', 'run'], { cwd: o.qaDir, env, encoding: 'utf8' });   // never fetches a package
-    if (r.status !== 0) problems.push(`unit tests: failing (run \`npm test\` in ${o.qaDir})`);
+    if (r.status !== 0) problems.push(`unit tests: failing (run \`npm run test:all\` in ${o.qaDir})`);   // all of them, as run here
   }
 
   // 2. Every variant renders with nothing unfilled: the asks the scenarios take from the surface, the companion skills,
