@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { contextFor, perform } from '../src/operations.ts';
 import { settingsFrom } from '../src/settings.ts';
 import { readUsage, skillHash } from '../src/usage/record.ts';
+import { usageStats } from '../src/usage/stats.ts';
 import { cli } from './cli-io.ts';
 import { seed } from './seed.ts';
 import { place, type Place } from './server.ts';
@@ -40,6 +41,18 @@ describe('looks and answers', () => {
     const skill = skillHash(p.home, 'release-notes-kit');
     expect(events(p, 'look')).toEqual([{ event: 'look', skill, version: 2, surface: 'cli' }]);
     expect(events(p, 'answer')).toEqual([{ event: 'answer', skill, version: 2, answer: 'no', together: 1 }]);
+  });
+
+  // Not yet true: the installer records its holds and a yes where a held update is taken (its calls are specified to its
+  // owner; until they land, `stats` isn't served). This passes while a held-then-accepted update counts as nothing, and
+  // trips when it counts: then make it a plain `it` and put stats back in the CLI's commands.
+  it.fails('a held install taken after a yes counts as one hold and one yes', async () => {
+    const p = place();
+    await seed(p);
+    await cli(p, ['install', 'release-notes-kit']);
+    await cli(p, ['update', 'release-notes-kit', '--accept'], { tty: true, answers: ['y'] });
+    const s = usageStats(readUsage(p.home));
+    expect([s.holds.total, s.answers.yes]).toEqual([1, 1]);
   });
 
   it('nothing held: update --accept records nothing', async () => {

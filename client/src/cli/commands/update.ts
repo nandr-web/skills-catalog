@@ -46,7 +46,7 @@ const said = (s: Surface, path: string, fields: Record<string, unknown>) => {
 };
 
 async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promise<number> {
-  // Each way this ends counts once in the usage metrics; a yes counts where the held update is taken (perform).
+  // Each way this ends counts once as a use (a yes is counted by perform, as the accept runs).
   const used = (result: string) => recordUsage(ctx.settings.home, { event: 'use', op: 'accept_held_update', result }, ctx.now());
   const fail = (e: unknown) => {
     const err = toCatalogError(e, ctx.settings.home, ctx.now());
@@ -73,8 +73,8 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
   // A first install names where it goes; a "tell me first" update with nothing flagged has no reasons to give.
   const intro = first ? 'update.accept_intro_install' : hold.notify && !hold.flags.length ? 'update.accept_intro_notify' : 'update.accept_intro';
   io.stdout(said(s, intro, at) + '\n' + said(s, first ? 'update.accept_look_install' : 'update.accept_look', at) + '\n');
-  // Showing the person the reasons is a look (usage metrics); their no is an answer. A yes is recorded where the held
-  // update is taken, on every face.
+  // Showing the person the reasons is a look (usage metrics); their no is an answer. Their yes is an answer too, for the
+  // installer to record where a held update is taken, on every face: not recorded yet (usage-look.test.ts says so).
   recordUsage(ctx.settings.home, { event: 'look', skill: name, version: hold.version, surface: 'cli' }, ctx.now());
   const answer = await io.ask(said(s, 'update.accept_ask', {}));
   if (!/^y(es)?$/i.test(answer.trim())) {

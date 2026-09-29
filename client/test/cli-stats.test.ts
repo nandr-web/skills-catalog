@@ -3,8 +3,15 @@
 // machine, and no skill is named (the events hold only hashes).
 import { describe, expect, it } from 'vitest';
 import { recordUsage } from '../src/usage/record.ts';
+import { renderStats } from '../src/cli/commands/stats.ts';
+import { COMMANDS } from '../src/cli/run.ts';
+import { readUsage } from '../src/usage/record.ts';
+import { usageStats } from '../src/usage/stats.ts';
 import { cli, S } from './cli-io.ts';
-import { place } from './server.ts';
+import { place, type Place } from './server.ts';
+
+// Until stats is served (it waits for the installer to record holds and a yes), its output is what the command would print.
+const runStats = async (p: Place) => ({ code: 0, err: '', out: renderStats(S, usageStats(readUsage(p.home))) + '\n' });
 
 const DAY = 86_400_000;
 const w = (path: string, fields: Record<string, unknown> = {}) => S.format(S.word(`stats.${path}`), fields);
@@ -20,7 +27,7 @@ describe('stats, until its words are vendored', () => {
   it.runIf(WORDS_GAP)('prints the summary as its data', async () => {
     const p = place();
     recordUsage(p.home, { event: 'hold', skill: 'release-notes-kit', version: 2, reason: 'flagged', flags: [], behind: 1 }, new Date(Date.now() - DAY));
-    const r = await cli(p, ['stats']);
+    const r = await runStats(p);
     expect(r.code).toBe(0);
     expect(r.out).toMatch(/^stats: \{"empty":false,/);
     expect(r.out).toContain('"holds":{"total":1,');
@@ -31,7 +38,7 @@ describe('stats, until its words are vendored', () => {
 describe.runIf(!WORDS_GAP)('stats', () => {
   it('with nothing counted yet, says so', async () => {
     const p = place();
-    const r = await cli(p, ['stats']);
+    const r = await runStats(p);
     expect([r.code, r.err, r.out.trimEnd()]).toEqual([0, '', w('empty')]);
   });
 
@@ -47,7 +54,7 @@ describe.runIf(!WORDS_GAP)('stats', () => {
     for (const d of [3, 2, 1]) recordUsage(p.home, { event: 'mode', surface: 'hook' }, at(d));
     recordUsage(p.home, { event: 'notice', surface: 'hook', waiting: 1 }, at(1));
     recordUsage(p.home, { event: 'policy', from: 'auto', to: 'pin', scope: 'skill', near_hold: false }, at(1));
-    const r = await cli(p, ['stats']);
+    const r = await runStats(p);
     expect([r.code, r.err]).toEqual([0, '']);
     expect(r.out.trimEnd().split('\n')).toEqual([
       w('header', { days: 20, from: date(at(20)), to: date(new Date(now)) }),
@@ -68,15 +75,18 @@ describe.runIf(!WORDS_GAP)('stats', () => {
     const now = Date.now();
     recordUsage(p.home, { event: 'hold', skill: 'a', version: 2, reason: 'flagged', flags: [], behind: 1 }, new Date(now - 2 * DAY));
     recordUsage(p.home, { event: 'policy', from: 'auto', to: 'pin', scope: 'skill', near_hold: false }, new Date(now - DAY));
-    const r = await cli(p, ['stats']);
+    const r = await runStats(p);
     const lines = r.out.trimEnd().split('\n');
     expect(lines).toContain(w('looks', { holds_looked: 0, holds_answered: 0, median_part: '' }));
     expect(lines).toContain(w('answers', { yes: 0, no: 0, pin: 0, superseded: 0, rate_part: '' }));
     expect(lines.at(-1)).toBe(w('review.avoidance', { what: w('review_avoidance.skill_pinned') }));
   });
+});
 
-  it('takes no words or flags beyond --as', async () => {
+describe('stats as a command', () => {
+  it('is not served yet (this trips when it is: then run the tests above through the command itself)', async () => {
     const p = place();
-    for (const argv of [['stats', 'x'], ['stats', '--json']]) expect((await cli(p, argv)).code, argv.join(' ')).toBe(1);
+    expect(Object.keys(COMMANDS)).not.toContain('stats');
+    for (const argv of [['stats'], ['stats', 'x']]) expect((await cli(p, argv)).code, argv.join(' ')).toBe(1);
   });
 });
