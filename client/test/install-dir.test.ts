@@ -50,7 +50,11 @@ describe('SKILLS_INSTALL_DIR', () => {
   // the catalog isn't opened (its folder keeps every byte), and a relative path is never resolved against the working folder.
   it('a relative one is refused by every call that uses the installed skills, before the lock, the config or the catalog is read', async () => {
     const p = await published();
-    const ctx = ctxFor(p, 'relative/skills');
+    const base = ctxFor(p, 'relative/skills');
+    // Every open is counted, read-only ones too (which may leave the catalog's bytes as they were).
+    const opened: string[] = [];
+    let what = '';
+    const ctx = { ...base, catalog: () => (opened.push(what), base.catalog()) };
     mkdirSync(p.home, { recursive: true });
     writeFileSync(join(p.home, 'lock.json'), '{');
     const catalogBefore = folderBytes(p.catalogDir);
@@ -62,10 +66,12 @@ describe('SKILLS_INSTALL_DIR', () => {
       ['policy', () => MACHINE_RUNS['set_skill_update_policy']!(ctx, { name: 'alpha', policy: 'pin' })],
       ['pending hold', () => pendingHold(ctx, 'alpha')],
     ];
-    for (const [what, call] of calls) {
+    for (const [name, call] of calls) {
+      what = name;
       const e = await refusal(call);
-      expect([what, e?.code, e?.data]).toEqual([what, 'invalid_request', { field: 'SKILLS_INSTALL_DIR', why: 'not_absolute' }]);
+      expect([name, e?.code, e?.data]).toEqual([name, 'invalid_request', { field: 'SKILLS_INSTALL_DIR', why: 'not_absolute' }]);
     }
+    expect(opened).toEqual([]);
     expect(folderBytes(p.catalogDir)).toEqual(catalogBefore);
     expect(existsSync('relative')).toBe(false);
   });
