@@ -170,6 +170,26 @@ describe("a login is bound to GitHub's numeric id", () => {
   it.each([':', 'bob:', 'bob:x', 'bob:1:2', ':7', 'bob:-1', 'bob:1.5'])('a sign-in list entry %j fails the catalog at open', async (entry) => {
     await expect(openHostedStandIn({ config: { signInLogins: ['ana-dev', entry] } })).rejects.toThrow(/sign-in list/);
   });
+
+  it.each([
+    [['bob', 'Bob:7']],
+    [['bob:5', 'bob:6']],
+    [['ana-dev', 'BOB', 'bob']],
+  ])('a login listed twice, whatever its case or pin (%j), fails the catalog at open, naming the later entry by its place', async (list) => {
+    await expect(openHostedStandIn({ config: { signInLogins: list } })).rejects.toThrow(new RegExp(`sign-in list.*entry ${list.length}\\b`));
+  });
+
+  it("an id from GitHub's port that isn't a positive whole number is the port's bug: thrown, never compared or recorded", async () => {
+    for (const id of [0, -1, 1.5, Number.NaN, 2 ** 53]) {
+      const s = await standIn({ github: () => ({ login: 'ana-dev', id }) });
+      const e = await s.catalog.signIn({ github_token: OURS, scope: 'read' }).then(
+        () => undefined,
+        (x: unknown) => x,
+      );
+      expect([id, e instanceof Error && !(e instanceof CatalogError)]).toEqual([id, true]);
+      expect(s.tokens.calls).toEqual([]);
+    }
+  });
 });
 
 describe('at most so many live tokens a person (contract §1.1)', () => {

@@ -171,6 +171,15 @@ describe('tokens', () => {
     expect(await w.tokens.bindLogin('ana', won === 11 ? 12 : 11)).toBe(false);
   });
 
+  it('the binding keeps when it was made: later sign-ins with the same id write nothing to it', async () => {
+    const w = await world();
+    await w.tokens.bindLogin('ana', 11);
+    w.clock.advance(3_600_000);
+    await w.tokens.bindLogin('ana', 11);
+    const items = (await w.ddb.send(new ScanCommand({ TableName: w.place.table }))).Items ?? [];
+    expect(items.find((i) => i['pk']?.S === 'login#ana')?.['bound_at']?.S).toBe('2026-09-29T12:00:00.000Z');
+  });
+
   it('last use is recorded at most once an hour, so a busy token costs one write an hour', async () => {
     const w = await world();
     const a = await w.tokens.issue({ owner: 'ana', scope: 'publish', kind: 'personal', expiresAt: new Date(w.clock.now().getTime() + 24 * 3_600_000) });
