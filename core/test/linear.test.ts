@@ -20,6 +20,14 @@ describe('expectLinear', () => {
     expect(() => expectLinear('quadratic', (scale) => Math.round(100 * scale), (n) => spin((n * n) / 4))).toThrow(/for a quarter of it/);
   }, 60_000);
 
+  // Load from other processes takes the CPU away mid-run, and a long run loses it more often than a short one, so wall
+  // time can fail linear work at high load (measured: 13.5 times for 4 times the input at load 25). Only the CPU time
+  // the work itself takes counts: here the full-size run also waits, which costs time but no CPU.
+  it('counts only the CPU time the work takes, not time spent waiting', () => {
+    const wait = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    expectLinear('linear, waiting on the full size', (scale) => Math.round(400 * scale), (n) => (n === 400 && wait(60), spin(n)));
+  }, 60_000);
+
   it('times the two sizes in turns, after the first full-size run', () => {
     const sizes: string[] = [];
     expectLinear('in turns', (scale) => (scale === 1 ? 'full' : 'quarter'), (s) => (sizes.push(s), spin(s === 'full' ? 40 : 10)));
