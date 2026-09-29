@@ -1,0 +1,27 @@
+{
+  "name": "skills-catalog",
+  "version": "0.1.0",
+  "description": "The skills catalog on your machine: the assistant's tools as an MCP server over stdio (skills-catalog mcp); the CLI and the installer join next",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "skills-catalog": "./src/cli.ts"
+  },
+  "engines": {
+    "node": ">=24.15"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test",
+    "mutate": "node test/mutations.mjs"
+  },
+  "dependencies": {
+    "@skills-catalog/core": "file:../core"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.3",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  }
+}
