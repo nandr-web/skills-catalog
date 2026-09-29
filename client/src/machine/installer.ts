@@ -580,9 +580,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
     }
     return undefined;
   };
-  const held = heldOver(existing, flags);
-  if (held) return held;
-  // Written while this run holds the lock. The decision is taken again from the entry as it is now (§4.5): another run may
+  // Decided, held or written while this run holds the lock (§4.5): from the entry as it is now, since another run may
   // have pinned, moved, updated or removed it since it was read. The fresh decision stands, with the version already
   // fetched and checked; the flags are taken again against another installed version, read from the catalog.
   const done = await withLock(ctx.settings.home, clockOf(ctx), async (fresh): Promise<Done | { written: ReturnType<typeof writeSkill>; entry: LockEntry }> => {
@@ -591,9 +589,15 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
       if (now && now.catalog === ctx.settings.catalog && now.version >= version) {
         return { text: s.format(w.unchanged, { name: req.name, version: now.version }), target: `${req.name} v${now.version}`, result: log.result('install', 'unchanged'), outcome: 'unchanged' };
       }
-      const sameSide = now && existing && now.version === existing.version && now.catalog === existing.catalog;
-      const again = heldOver(now, sameSide ? flags : gate(now ? await installedSide(catalog, now) : null, to).risk_flags);
+      // Another catalog now is held as such with the flags already taken; they're taken again only against no copy, or
+      // against another installed version, read from the catalog.
+      const again = !now
+        ? heldOver(undefined, gate(null, to).risk_flags)
+        : heldOver(now, now.catalog !== ctx.settings.catalog || now.version === existing?.version ? flags : gate(await installedSide(catalog, now), to).risk_flags);
       if (again) return again;
+    } else {
+      const held = heldOver(existing, flags);
+      if (held) return held;
     }
     const written = writeSkill(dest, target, to.files, now);
     return { written, entry: record(ctx, fresh, dest, { name: req.name, target }, to, req.policy ?? now?.policy, now?.accepted ?? [], toLock(written.copy)) };
@@ -880,14 +884,14 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
         }
         return false;
       };
-      if (heldOver(e, d)) continue;
+      // A dry run writes nothing and takes no lock: it says what this read would do.
       if (req.dry_run) {
-        lines.push(s.format(w.would_update, { ...at, changes: changesOf(s, d) }));
+        if (!heldOver(e, d)) lines.push(s.format(w.would_update, { ...at, changes: changesOf(s, d) }));
         continue;
       }
       // A folder that changed while it was being written is that skill's refused line; the other skills go on.
       // Another run holding the lock past the wait refuses the whole call (lock_busy).
-      // Under the lock the decision is taken again from the entry as it is now (§4.5): another run may have pinned, moved,
+      // Held or written under the lock, decided from the entry as it is now (§4.5): another run may have pinned, moved,
       // updated or removed it since it was read. The fresh decision stands, with the version already fetched and checked;
       // the flags are taken again against another installed version, read from the catalog.
       let done: { written: ReturnType<typeof writeSkill>; from: number; d: TreeDiff } | 'held' | 'unchanged' | 'removed';
@@ -898,10 +902,12 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
           if (!sameDecision(e, now)) {
             if (!now) return 'removed';
             if (now.catalog === ctx.settings.catalog && now.version >= to.version) return 'unchanged';
-            if (now.version !== e.version || now.catalog !== e.catalog) dNow = gate(await installedSide(catalog, now), to);
-            if (heldOver(now, dNow)) return 'held';
+            // Another catalog now is held as such with the flags already taken; they're taken again only against another
+            // installed version, read from the catalog.
+            if (now.catalog === ctx.settings.catalog && now.version !== e.version) dNow = gate(await installedSide(catalog, now), to);
           }
           const entry = now ?? e;
+          if (heldOver(entry, dNow)) return 'held';
           const w = writeSkill(dest, e.target, to.files, entry);
           record(ctx, fresh, dest, entry, to, entry.policy, entry.accepted, toLock(w.copy));
           return { written: w, from: entry.version, d: dNow };

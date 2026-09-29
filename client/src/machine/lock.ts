@@ -290,8 +290,10 @@ export function holdLock(home: string, now: () => number): { change<T>(fn: (lock
       mkdirSync(home, { recursive: true, mode: 0o700 });
       mine ??= await take(path, now);
       const lock = readLock(home);
+      const was = JSON.stringify(lock);
       const out = await fn(lock);
-      writeLock(home, lock);
+      // A change that decided to change nothing (a hold) leaves lock.json as it is.
+      if (JSON.stringify(lock) !== was) writeLock(home, lock);
       return out;
     },
     release(): void {

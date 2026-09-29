@@ -4,6 +4,7 @@
 // finds; and whatever it can't put back is named, never stranded in silence.
 import { join } from 'node:path';
 import { CatalogError, actAs, renderError } from '@skills-catalog/core';
+import { fingerprint, sha256Hex } from '@skills-catalog/core/skill-tree';
 import { describe, expect, it, vi } from 'vitest';
 import { cliSurface } from '../src/cli/words.ts';
 import { logWords } from '../src/activity.ts';
@@ -12,7 +13,7 @@ import { pendingHold } from '../src/machine/installer.ts';
 import { contextFor, perform } from '../src/operations.ts';
 import { settingsFrom } from '../src/settings.ts';
 import { race } from './race-fs.ts';
-import { S, accept, clearHooks, codeOf, refusalOf, ctxFor, install, publish, refused, stagedOf, stagingDir, stagingEntries, sweeps, update } from './race.ts';
+import { S, accept, clearHooks, codeOf, refusalOf, ctxFor, install, publish, refused, stagedOf, stagingDir, stagingEntries, sweeps, unformat, update } from './race.ts';
 import { open, request, skillMd } from './seed.ts';
 import { place, type Place } from './server.ts';
 
@@ -839,6 +840,11 @@ describe('the lock entry a decision used, changed by another run before the lock
     }
   };
   const NOTES = (text: string) => ({ path: 'notes.md', text });
+  // An entry as another run records a version: its number and its files' fingerprint (the copy on disk stays).
+  const recorded = (e: Entry, version: number, extra: { path: string; text: string; mode?: '0644' | '0755' }[]): Entry => {
+    const files = [{ path: 'SKILL.md', text: skillMd('alpha', 'The alpha skill.') }, ...extra];
+    return { ...e, version, fingerprint: fingerprint(files.map((f) => ({ path: f.path, mode: f.mode ?? '0644', sha256: sha256Hex(Buffer.from(f.text)) }))) };
+  };
   // The other run's change, made after the install read lock.json, at its first look at the skill's folder.
   const meanwhile = (p: Place, change: (e: Entry | undefined, dest: string) => Entry | undefined) => {
     const lockFile = join(p.home, 'lock.json');
@@ -1002,10 +1008,34 @@ describe('the lock entry a decision used, changed by another run before the lock
     const { target, version, confirm, flags } = held as { target: 'user'; version: number; confirm: string; flags: string[] };
     await accept(ctx, { name: 'alpha', target, version, confirm, flags });
     await versionsOf(p, [RUN, NOTES('Three.\n')]);
-    const dest = meanwhile(p, (e) => ({ ...e!, version: 1 }));
+    const dest = meanwhile(p, (e) => recorded(e!, 1, [NOTES('One.\n')]));
     const lines = await updating(ctx);
     expect(lines[1]!.startsWith(upToReasons(W.held_flagged, { name: 'alpha', from: 1, to: 3 }, 'reasons'))).toBe(true);
     expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('One.\n');
+  });
+
+  // A hold is a decision too: taken again under the lock, so one another run's install made moot goes through.
+  it('update, held against the version first read, but a version installed meanwhile already has what was flagged: updated from it', async () => {
+    const p = place();
+    // v1 plain; v2 adds a runnable file; v3 changes only a note over v2. Installed: v1, so v1 -> v3 is flagged.
+    await versionsOf(p, [NOTES('One.\n')], [RUN, NOTES('One.\n')], [RUN, NOTES('Three.\n')]);
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha', version: 1 });
+    const dest = meanwhile(p, (e) => recorded(e!, 2, [RUN, NOTES('One.\n')]));
+    const lines = await updating(ctx);
+    expect(unformat(W.updated, lines[1]!)).toMatchObject({ name: 'alpha', from: '2', to: '3' });
+    expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('Three.\n');
+  });
+
+  it('install, held against the version first read, but a version installed meanwhile already has what was flagged: installed', async () => {
+    const p = place();
+    await versionsOf(p, [NOTES('One.\n')], [RUN, NOTES('One.\n')], [RUN, NOTES('Three.\n')]);
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha', version: 1 });
+    const dest = meanwhile(p, (e) => recorded(e!, 2, [RUN, NOTES('One.\n')]));
+    const r = await installing(ctx);
+    expect(r.outcome).toBe('installed');
+    expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('Three.\n');
   });
 });
 
