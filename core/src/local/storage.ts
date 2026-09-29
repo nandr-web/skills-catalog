@@ -104,8 +104,10 @@ export class LocalStorage implements Storage {
 
   // After a publish that failed part-way (a crash, a full disk), its pending rows remain. Reads only those marked over
   // an hour ago by the clock, so another process's publish in flight is never touched: removes each one's file unless
-  // a version references it, and clears the row. Never walks the blob folder (contract §5.1); a leftover from before
-  // publishes were marked stays, unreferenced and unseen. Runs when the catalog is opened for writing.
+  // a version references it, and clears the row. Never walks the blob folder (contract §5.1). A catalog from before
+  // publishes were marked gets the table at its first writing open and no one-time sweep: its old leftovers are
+  // invisible (no version points at them) and rare (only a crashed publish leaves one), so they stay.
+  // Runs when the catalog is opened for writing.
   sweep(maxAgeMs = ORPHAN_AGE_MS): number {
     const before = new Date(this.clock.now().getTime() - maxAgeMs);
     let removed = 0;
