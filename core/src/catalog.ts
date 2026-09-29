@@ -2,7 +2,7 @@
 // here knows how versions and bytes are stored or kept consistent.
 
 import { CatalogError } from './errors.ts';
-import type { Clock, Events, Identity, Ids, SearchCard, SearchIndex, Storage, VersionRecord } from './ports.ts';
+import type { BlobLinks, Clock, Events, Identity, Ids, SearchCard, SearchIndex, Storage, VersionRecord } from './ports.ts';
 import { DEFAULT_SEARCH_LIMIT, VERSIONS_PAGE, validateInput, type Face } from './api.ts';
 
 // Each operation checks its input as the face its caller gives (contract §1.1): the client passes its own, the web page's
@@ -59,7 +59,13 @@ export interface CatalogPorts {
   ids: Ids;
   config?: Partial<CatalogConfig>;
   close?: () => void;
+  links?: BlobLinks; // hosted only: the files route answers with a link instead of the bytes
 }
+
+// A stored version's file, as the files route answers it (§1.1): its bytes (local), a link to them (hosted), on its
+// way (hosted, seconds after a publish), or unknown.
+export type FileAnswer = { kind: 'bytes'; bytes: Uint8Array } | { kind: 'link'; url: string } | { kind: 'on_its_way' } | { kind: 'unknown' };
+const SHA256_HEX = /^[0-9a-f]{64}$/;
 
 // ---------- shapes ----------
 
@@ -538,6 +544,19 @@ export class Catalog {
     }
     const files = (await this.tree(record)).map((f) => ({ path: f.path, mode: f.mode, content_base64: Buffer.from(f.bytes).toString('base64') }));
     return { name: record.name, version: record.version, fingerprint: record.fingerprint, files };
+  }
+
+  // A stored version's file by its sha256 (§1.1, the files route; not an operation, so no face): only a file some
+  // version names, its bytes checked on the way out as a fetch checks them, or a link where links are wired.
+  async file(sha256: string): Promise<FileAnswer> {
+    if (typeof sha256 !== 'string' || !SHA256_HEX.test(sha256)) return { kind: 'unknown' };
+    const state = await this.p.storage.fileState(sha256);
+    if (state !== 'named') return { kind: state };
+    if (this.p.links) return { kind: 'link', url: await this.p.links.downloadLink(sha256) };
+    const bytes = await this.p.storage.blob(sha256);
+    if (!bytes) throw new Error(`storage: the file ${sha256} a version names has no bytes`);
+    if (sha256Hex(bytes) !== sha256) throw new Error(`storage: the file ${sha256} does not match its sha256`);
+    return { kind: 'bytes', bytes };
   }
 }
 

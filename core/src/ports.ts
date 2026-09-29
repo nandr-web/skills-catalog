@@ -42,6 +42,8 @@ export type CommitResult =
 // Storage: the contract's MetadataStore (versions, the latest pointer) and BlobStore (bytes by sha256), with the
 // publish's commit point behind them (§5.1 steps 2-3). How the two stay consistent is the adapter's business:
 // locally one SQLite lock and a folder; hosted, create-only S3 puts then one conditional DynamoDB write.
+export type FileState = 'named' | 'on_its_way' | 'unknown';
+
 export interface Storage {
   skill(name: string): Promise<SkillRecord | undefined>;
   version(name: string, version: number): Promise<VersionRecord | undefined>;
@@ -51,6 +53,10 @@ export interface Storage {
   names(): Promise<string[]>;
   count(): Promise<number>; // names, not versions
   blob(sha256: string): Promise<Uint8Array | undefined>;
+  // Whether some stored version names this file (§1.1, the files route). Hosted, a file uploaded or claimed under a day
+  // ago and not marked for removal, that no version names yet, is on its way (the lookup is written seconds after a
+  // publish); locally the lookup is immediate, so never.
+  fileState(sha256: string): Promise<FileState>;
   // Stores the bytes, then compare-and-appends the version with its version_published event, atomically.
   // Refused (conflict, not_owner, identical): storage is left exactly as it was. Never: a version that points at
   // a missing blob.
@@ -106,4 +112,10 @@ export interface Clock {
 
 export interface Ids {
   next(): string;
+}
+
+// Short-lived links to a stored file's bytes (§1.1, §7), hosted only: where it's wired, the files route answers with a
+// link instead of reading the bytes.
+export interface BlobLinks {
+  downloadLink(sha256: string): Promise<string>;
 }

@@ -70,6 +70,16 @@ export class SqliteMetadataStore {
     return rows.map(toRecord);
   }
 
+  // Whether some version names this file: a scan of every version's file list (no index to migrate), with a text
+  // match first so only the rows that hold the sha256 are parsed.
+  namesFile(sha256: string): boolean {
+    return (
+      this.db
+        .prepare("SELECT 1 FROM versions v, json_each(v.files) f WHERE instr(v.files, ?1) > 0 AND json_extract(f.value, '$.sha256') = ?1 LIMIT 1")
+        .get(sha256) !== undefined
+    );
+  }
+
   names(): string[] {
     return (this.db.prepare('SELECT name FROM skills ORDER BY name').all() as { name: string }[]).map((r) => r.name);
   }

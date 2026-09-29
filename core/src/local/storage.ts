@@ -2,7 +2,7 @@
 // BEGIN IMMEDIATE, shared by every process on the folder). The publish's commit point, taking back a refused
 // publish's blobs, and the open-time cleanup of orphan blobs all live here, under that lock (contract §5.1).
 
-import type { Clock, CommitResult, NewVersion, SkillRecord, Storage, VersionPublished, VersionRecord } from '../ports.ts';
+import type { Clock, CommitResult, FileState, NewVersion, SkillRecord, Storage, VersionPublished, VersionRecord } from '../ports.ts';
 import type { FolderBlobStore } from './blobs.ts';
 import type { SqliteMetadataStore } from './metadata.ts';
 
@@ -50,6 +50,10 @@ export class LocalStorage implements Storage {
 
   async blob(sha256: string): Promise<Uint8Array | undefined> {
     return this.blobs.get(sha256);
+  }
+
+  async fileState(sha256: string): Promise<FileState> {
+    return this.meta.namesFile(sha256) ? 'named' : 'unknown';
   }
 
   async commit(
