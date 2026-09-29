@@ -81,18 +81,21 @@ describe('the permissive mode, from the settings files', () => {
   });
 
   it('a settings file that is there but can\'t be used is unknown, last in the order, and named with why for setup; a missing one is simply absent', () => {
-    const cases: [Files, keyof Files, string][] = [
-      [{ user: '{"permissions": ' }, 'user', 'not_json'],
-      [{ user: '[]' }, 'user', 'wrong_type'],
-      [{ project: { permissions: { allow: 'Bash' } } }, 'project', 'wrong_type'],
-      [{ local: { sandbox: { enabled: 'yes' } } }, 'local', 'wrong_type'],
-      [{ managed: { permissions: { defaultMode: 7 } } }, 'managed', 'wrong_type'],
-      [{ managed_d_20: { allowManagedPermissionRulesOnly: 'yes' } }, 'managed_d_20', 'wrong_type'],
-      [{ user: 'x'.repeat(1024 * 1024 + 1) }, 'user', 'too_big'],
+    // wrong_type names the setting read with the wrong type, never its value.
+    const cases: [Files, keyof Files, Record<string, string>][] = [
+      [{ user: '{"permissions": ' }, 'user', { why: 'not_json' }],
+      [{ user: '[]' }, 'user', { why: 'not_json' }],
+      [{ project: { permissions: { allow: 'Bash' } } }, 'project', { why: 'wrong_type', key: 'permissions.allow' }],
+      [{ project: { permissions: { allow: ['Read', 7] } } }, 'project', { why: 'wrong_type', key: 'permissions.allow' }],
+      [{ user: { permissions: 'all' } }, 'user', { why: 'wrong_type', key: 'permissions' }],
+      [{ local: { sandbox: { enabled: 'yes' } } }, 'local', { why: 'wrong_type', key: 'sandbox.enabled' }],
+      [{ managed: { permissions: { defaultMode: 7 } } }, 'managed', { why: 'wrong_type', key: 'permissions.defaultMode' }],
+      [{ managed_d_20: { allowManagedPermissionRulesOnly: 'yes' } }, 'managed_d_20', { why: 'wrong_type', key: 'allowManagedPermissionRulesOnly' }],
+      [{ user: 'x'.repeat(1024 * 1024 + 1) }, 'user', { why: 'too_big' }],
     ];
     for (const [files, which, why] of cases) {
       const t = tree(place(), files);
-      expect([which, permissiveMode(t.settings)]).toEqual([which, { mode: 'unknown', unusable: [{ path: t.at[which], why }] }]);
+      expect([which, permissiveMode(t.settings)]).toEqual([which, { mode: 'unknown', unusable: [{ path: t.at[which], ...why }] }]);
     }
     const p = place();
     const t = tree(p, {});
