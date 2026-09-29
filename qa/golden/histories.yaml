@@ -153,6 +153,100 @@ versions:
   gate.g0-bang-block-edit:
     SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER-2\n```\n"
     reference.md: "Step one.\n"
+  # f00eb47, be4d3594, 66e83a3d: nested ! openers, the narrow closer, fence lines moved in a file with a ! block
+  gate.g0-bang-nested:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n```!\necho QA-MARKER-2\n```\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-nested-4tick:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n````!\necho QA-MARKER\n```!\necho QA-MARKER-2\n```\nStep two.\n````\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-indent8:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n        ```\nStep.\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-indent8-edit:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n        ```\nStep two.\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-info:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n```js\nStep.\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-info-edit:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n```js\nStep two.\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-indent3:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n   ```\nStep.\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-indent3-edit:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n   ```\nStep two.\n"
+    reference.md: "Step one.\n"
+  gate.g0-fence-before:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```\necho safe\n```\n```!\necho QA-MARKER\n```\n"
+    reference.md: "Step one.\n"
+  gate.g0-fence-before-removed:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\necho safe\n```\n```!\necho QA-MARKER\n```\n"
+    reference.md: "Step one.\n"
+  gate.g0-fence-end:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n```\nNote.\n```\n"
+    reference.md: "Step one.\n"
+  gate.g0-fence-end-removed:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n```\nNote.\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-block-plus-code:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n```\n~~~\nnote\n~~~\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-block-4close:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n````\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-unbanged:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```\necho QA-MARKER\n```\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-plus-code:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n```\n```\ncode\n```\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-plus-tilde:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n```\n~~~\ncode\n~~~\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-4tick-inner:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n````!\necho QA-MARKER\n```\n````\n"
+    reference.md: "Step one.\n"
+  gate.g0-fence-two:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```\na\n```\n```!\necho QA-MARKER\n```\n~~~\nb\n~~~\n"
+    reference.md: "Step one.\n"
+  gate.g0-fence-two-removed:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\na\n```\n```!\necho QA-MARKER\n```\nb\n~~~\n"
+    reference.md: "Step one.\n"
+  gate.g0-fence-pair:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```\n```\n```!\necho QA-MARKER\n```\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-indent4:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n    ```\nStep.\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-indent4-edit:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n    ```\nStep two.\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-tabindent:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n\t```\nStep.\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-tabindent-edit:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n\t```\nStep two.\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-4tick-short:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n````!\necho QA-MARKER\n```\nStep.\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-4tick-short-edit:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n````!\necho QA-MARKER\n```\nStep two.\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-tabclose:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n```\t\nStep.\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-tabclose-edit:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n```\t\nStep two.\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-nbspclose:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n```\u00a0\nStep.\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-nbspclose-edit:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n```\u00a0\nStep two.\n"
+    reference.md: "Step one.\n"
   gate.g0-bang-target:
     SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n!`python3 tools/x.txt`\n"
     reference.md: "Step one.\n"
@@ -347,6 +441,28 @@ histories:
       - {from: gate.g0, to: gate.g0-bang-blanks, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "blanks before the fence and between it and the !"}
       - {from: gate.g0, to: gate.g0-bang-doc, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "the wide detector's price: a documented `!` flags too, since the ! is right before a backtick"}
       - {from: gate.g0, to: gate.g0-bang-spaced, risk_flags: [], note: "'Done! `make`': a space after the !, so no command; a markdown change in a skill with no grants raises nothing"}
+      # f00eb47 (be4d3594, 66e83a3d): what starts a command is read widely and what ends a block narrowly
+      - {from: gate.g0, to: gate.g0-bang-nested, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: runs_at_load, path: SKILL.md, line: 8}], note: "a ```! inside an unclosed ! block starts its own command; the ``` closes both"}
+      - {from: gate.g0, to: gate.g0-bang-nested-4tick, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: runs_at_load, path: SKILL.md, line: 8}], note: "a ```! inside a ```` block: its own block, which the ``` closes while the ```` block runs on"}
+      - {from: null, to: gate.g0-bang-nested, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: runs_at_load, path: SKILL.md, line: 8}, {kind: instructions_changed, path: reference.md}], note: "first install: the closer closes flagged blocks, so it adds nothing"}
+      - {from: gate.g0-bang-indent8, to: gate.g0-bang-indent8-edit, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a ``` indented 8 spaces is content, so the block runs to the end and the edit is inside it"}
+      - {from: gate.g0-bang-info, to: gate.g0-bang-info-edit, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "```js isn't a closer (an info string), so the edit is inside the block"}
+      - {from: gate.g0-bang-indent3, to: gate.g0-bang-indent3-edit, risk_flags: [{kind: instructions_changed, path: SKILL.md}], note: "a ``` indented 3 spaces closes it: the edit is outside the block"}
+      - {from: gate.g0-fence-before, to: gate.g0-fence-before-removed, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a fence line removed in a file with a ! block, flagged at the line now standing where it was; the ! block's text is unchanged"}
+      - {from: gate.g0-fence-end, to: gate.g0-fence-end-removed, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 9}], note: "a fence line removed at the end: flagged at the new last line"}
+      - {from: gate.g0-bang-block, to: gate.g0-bang-block-plus-code, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 9}, {kind: runs_at_load, path: SKILL.md, line: 11}], note: "fence lines added in a file with a ! block, one flag each"}
+      - {from: gate.g0-bang-plus-code, to: gate.g0-bang-plus-tilde, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 9}, {kind: runs_at_load, path: SKILL.md, line: 11}], note: "fence lines changed (``` to ~~~), outside the ! block"}
+      - {from: gate.g0-bang-block, to: gate.g0-bang-block-4close, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "the changed closer closes the flagged block: a line is flagged at most once"}
+      - {from: gate.g0-bang-4tick, to: gate.g0-bang-4tick-inner, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: runs_at_load, path: SKILL.md, line: 8}], note: "a fence line added inside a flagged ```` block is content, not its opener or closer: flagged too"}
+      - {from: gate.g0-bang-4tick-inner, to: gate.g0-bang-4tick, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: runs_at_load, path: SKILL.md, line: 8}], note: "a content fence line removed from a flagged block: flagged at the line now standing where it was"}
+      - {from: gate.g0-fence-two, to: gate.g0-fence-two-removed, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: runs_at_load, path: SKILL.md, line: 11}], note: "two fence lines removed apart: each flagged where it was"}
+      - {from: gate.g0-fence-pair, to: gate.g0-bang-block, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "two adjacent fence lines removed stand at one line: flagged once"}
+      - {from: gate.g0-bang-indent4, to: gate.g0-bang-indent4-edit, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a ``` indented 4 spaces isn't a closer: the edit is inside the block"}
+      - {from: gate.g0-bang-tabindent, to: gate.g0-bang-tabindent-edit, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a tab before ``` isn't a space of indent: content"}
+      - {from: gate.g0-bang-4tick-short, to: gate.g0-bang-4tick-short-edit, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a ``` can't close a ```` block: the edit is inside it"}
+      - {from: gate.g0-bang-tabclose, to: gate.g0-bang-tabclose-edit, risk_flags: [{kind: instructions_changed, path: SKILL.md}], note: "a closer may end in a tab: the edit is outside the block"}
+      - {from: gate.g0-bang-nbspclose, to: gate.g0-bang-nbspclose-edit, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a closer's blanks are space and tab only: ``` then a no-break space is content, so the block runs on"}
+      - {from: gate.g0-bang-block, to: gate.g0-bang-unbanged, risk_flags: [], note: "only the old version had a ! block: removing it doesn't fire"}
       - {from: gate.g0-bang-block, to: gate.g0-bang-block-edit, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "an edit inside an unchanged ! block: one flag per block, at its opening line"}
       - {from: gate.g0, to: gate.g0-bang-target, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: runnable_file, path: tools/x.txt}], note: "an injected command's target is a command position: its file gets runnable_file"}
       - {from: gate.g0, to: gate.g0-cmdwords, risk_flags: [{kind: runnable_file, path: tools/a.txt}, {kind: runnable_file, path: tools/b.txt}, {kind: runnable_file, path: tools/c.txt}, {kind: runnable_file, path: tools/d.txt}, {kind: runnable_file, path: tools/e.txt}, {kind: runnable_file, path: tools/f.txt}], note: "python, uv run, bun, deno, '. x' and ${CLAUDE_SKILL_DIR}/x are command positions"}
