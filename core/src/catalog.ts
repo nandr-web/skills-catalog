@@ -84,17 +84,21 @@ const TOKEN_ID = new RegExp(TOKEN_ID_PATTERN);
 const SIGN_IN_ENTRY = /^([^:\s]+)(?::([1-9][0-9]{0,14}))?$/;
 type SignInEntry = { login: string; id?: number };
 
-/** The sign-in list's entries, logins in lowercase (as GitHub compares them); a malformed entry is thrown at open. */
+/** The sign-in list's entries, logins in lowercase (as GitHub compares them); a malformed entry, or a login listed twice
+ *  (whatever its case or pin), is thrown at open, naming the entry by its place in the list. */
 function signInEntries(list: readonly string[]): Map<string, SignInEntry> {
   const out = new Map<string, SignInEntry>();
-  for (const entry of list) {
+  for (const [i, entry] of list.entries()) {
     const m = SIGN_IN_ENTRY.exec(entry);
-    if (!m) throw new Error(`the sign-in list has an entry that is neither a login nor login:id (entry ${out.size + 1})`);
+    if (!m) throw new Error(`the sign-in list has an entry that is neither a login nor login:id (entry ${i + 1})`);
     const login = m[1]!.toLowerCase();
+    if (out.has(login)) throw new Error(`the sign-in list names a login twice (entry ${i + 1})`);
     out.set(login, m[2] === undefined ? { login } : { login, id: Number(m[2]) });
   }
   return out;
 }
+/** GitHub's numeric id, as its port must give it: a positive whole number held exactly. */
+const isGitHubId = (id: number) => Number.isSafeInteger(id) && id > 0;
 // How many uploaded files a hosted publish reads at once.
 const UPLOAD_READS = 8;
 
@@ -673,6 +677,9 @@ export class Catalog {
     const req = validateInput<{ github_token: string; scope: TokenScope }>('sign_in_with_github', input, face, this.p.where);
     if (!GITHUB_TOKEN.test(req.github_token) || this.signInList.size === 0) throw new CatalogError('unauthenticated', {});
     const github = await this.p.signIn!.login(req.github_token);
+    // GitHub's answer comes from outside: an id the port lets through that isn't one is the port's bug, thrown (the
+    // caller gets internal_error), never compared or recorded.
+    if (github !== undefined && !isGitHubId(github.id)) throw new Error("GitHub's sign-in port answered an id that isn't a positive whole number");
     const login = github?.login.toLowerCase();
     const entry = login === undefined ? undefined : this.signInList.get(login);
     if (github === undefined || login === undefined || !ACTOR.test(login) || entry === undefined) throw new CatalogError('unauthenticated', {});

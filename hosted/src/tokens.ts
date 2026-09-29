@@ -103,23 +103,25 @@ export class HostedTokenStore implements TokenStore {
     return (await this.list(owner)).filter((t) => t.revoked_at === undefined && Date.parse(t.expires_at) > now).length;
   }
 
-  /** The login's GitHub id, recorded by its first call (item login#<login> / github) in one conditional put, so of two
-   *  first sign-ins at once exactly one id is kept; true when the id is the one kept. */
+  /** The login's GitHub id, recorded by its first call (item login#<login> / github, with when) in a put only if there's
+   *  none, so of two first sign-ins at once exactly one id is kept and the record is never rewritten; after that, one
+   *  read compares. True when the id is the one kept. */
   async bindLogin(login: string, githubId: number): Promise<boolean> {
+    const key = { pk: { S: `login#${login}` }, sk: { S: 'github' } };
     try {
       await this.p.ddb.send(
         new PutItemCommand({
           TableName: this.p.place.table,
-          Item: { pk: { S: `login#${login}` }, sk: { S: 'github' }, github_id: { N: String(githubId) }, bound_at: { S: this.p.clock.now().toISOString() } },
-          ConditionExpression: 'attribute_not_exists(pk) OR github_id = :id',
-          ExpressionAttributeValues: { ':id': { N: String(githubId) } },
+          Item: { ...key, github_id: { N: String(githubId) }, bound_at: { S: this.p.clock.now().toISOString() } },
+          ConditionExpression: 'attribute_not_exists(pk)',
         }),
       );
       return true;
     } catch (e) {
-      if ((e as { name?: string }).name === 'ConditionalCheckFailedException') return false;
-      throw e;
+      if ((e as { name?: string }).name !== 'ConditionalCheckFailedException') throw e;
     }
+    const kept = await this.p.ddb.send(new GetItemCommand({ TableName: this.p.place.table, Key: key, ConsistentRead: true }));
+    return kept.Item?.['github_id']?.N === String(githubId);
   }
 
   /** The owner's token with this id no longer works: its records stay, marked with when it was revoked (the API's role
