@@ -139,11 +139,15 @@ describe('hostile file lists are refused (golden/skills.yaml hostile, the raw re
 
   it('the fold is full Unicode case folding, over every code point', () => {
     // Idempotent everywhere; a character, its upper case and its lower case fold alike, except the one character
-    // Unicode's full folding treats specially (dotless ı, whose upper case is I).
+    // Unicode's full folding treats specially (dotless ı, whose upper case is I). The comparison uses the runtime's own
+    // case tables, so it covers the characters this runtime's Unicode knows: an older Node (24) doesn't know the newest
+    // letters, and its path rules refuse them anyway (unassigned counts as an invisible character), so the fold never
+    // differs between two machines on a path either accepts.
     const differs: number[] = [];
     for (let cp = 0; cp < 0x110000; cp++) {
       if (cp >= 0xd800 && cp <= 0xdfff) continue;
       const c = String.fromCodePoint(cp);
+      if (/\p{Cn}/u.test(c)) continue;
       const f = foldKey(c);
       if (foldKey(f) !== f || foldKey(c.toUpperCase()) !== f || foldKey(c.toLowerCase()) !== f) differs.push(cp);
     }

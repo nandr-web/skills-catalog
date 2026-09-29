@@ -10,6 +10,10 @@ import { DB_FILE, openLocalCatalog, type LocalOptions } from '../src/local/index
 import type { RawFile } from './golden.ts';
 import { sandbox } from './sandbox.ts';
 
+// The budget of a test that walks a whole golden set or every surface variant: about 2.5 s here and over 5 s on a slower
+// machine (Node 24 in a Linux container), so these few get their own budget instead of a global raise.
+export const HEAVY_MS = 30_000;
+
 export function fixedClock(start = Date.parse('2026-09-28T12:00:00Z')) {
   let t = start;
   return { now: () => new Date((t += 1000)) };

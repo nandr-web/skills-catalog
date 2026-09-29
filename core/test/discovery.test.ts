@@ -6,7 +6,7 @@ import { COMMON_WORDS } from '../src/words.ts';
 import type { Catalog } from '../src/catalog.ts';
 import { discoveryCorpus } from './corpus.ts';
 import { loadGolden } from './golden.ts';
-import { openTest } from './helpers.ts';
+import { HEAVY_MS, openTest } from './helpers.ts';
 import { actAs } from '../src/local/index.ts';
 
 const q = loadGolden('queries.yaml');
@@ -76,7 +76,7 @@ describe('discovery (golden/queries.yaml, any-word mode)', () => {
       if (!(await hasAll(catalog, query.keywords, query.must_find))) gap.push(id);
     }
     console.info(`discovery known gap (keywords alone miss): ${gap.join(', ')}`);
-  });
+  }, HEAVY_MS);
 
   it('Nothing matches: every no-match term says partial or none, and no card has every content word', async () => {
     const catalog = await seeded();

@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { refuseRealPlaces, sandbox } from './sandbox.ts';
 import { catalogNameOf, filesOf, generated, historyVersion, loadGolden, rawFilesOf, type RawFile } from './golden.ts';
-import { errorOf, openTest, request, snapshot, versionsIn } from './helpers.ts';
+import { HEAVY_MS, errorOf, openTest, request, snapshot, versionsIn } from './helpers.ts';
 import type { ReadItem } from '../src/catalog.ts';
 import { actAs } from '../src/local/index.ts';
 import { userInfo } from 'node:os';
@@ -111,7 +111,7 @@ describe('round trip: fetch and read give back exactly what was published', () =
     }
     const bin = (await catalog.read({ name: 'binary-file', include: 'contents' })).skills[0] as ReadItem;
     expect(bin.files!.find((f) => f.path === 'logo.png')!.type).toBe('binary');
-  });
+  }, HEAVY_MS);
 
   it('a read inlines at most 24 KB: bodies first, then each file whole or omitted, and paths[] reads the rest', async () => {
     const { catalog } = await openTest();

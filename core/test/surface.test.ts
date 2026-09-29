@@ -16,7 +16,7 @@ import type { Catalog, ReadItem } from '../src/catalog.ts';
 import { actAs } from '../src/local/index.ts';
 import { discoveryCorpus } from './corpus.ts';
 import { historyVersion, loadGolden } from './golden.ts';
-import { counterIds, errorOf, openTest, request, snapshot } from './helpers.ts';
+import { HEAVY_MS, counterIds, errorOf, openTest, request, snapshot } from './helpers.ts';
 import { sandbox } from './sandbox.ts';
 
 const UNFILLED = /\$\{|\{[a-z_]+\}/;
@@ -165,7 +165,7 @@ describe('the surface (vendored, recommended variant)', () => {
     const ours = (text: string) =>
       text.replace(/^--- (.+) ---\n[\s\S]*?\n--- end of \1 ---$/gm, '').replace(/"(content|body)":"(?:[^"\\]|\\.)*"/g, '');
     for (const text of shown) expect(ours(text), text.slice(0, 200)).not.toMatch(UNFILLED);
-  });
+  }, HEAVY_MS);
 
   it('says what a read left out, in sizes from the words: a body with paths ["SKILL.md"], a text over the budget on its own', async () => {
     const s = Surface.load();
