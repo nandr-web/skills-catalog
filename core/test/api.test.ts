@@ -1,0 +1,208 @@
+// The API's definitions (contract §1, §1.1, §9): each operation's row says where it's served, what it changes, what it
+// returns and which code runs it; the error list is data at run time and is §9's. The tables below are the approved API
+// page's (docs/api.md), pinned here so a row can't drift from it.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { COMMON_ERRORS, ERROR_CODES, OPERATIONS, inputSchema, validateInput, type OutputSchema } from '../src/api.ts';
+import { Catalog } from '../src/catalog.ts';
+import { CatalogError } from '../src/errors.ts';
+import { Words } from '../src/words-file.ts';
+import { actAs } from '../src/local/index.ts';
+import { historyVersion, loadGolden } from './golden.ts';
+import { openTest, request } from './helpers.ts';
+
+const histories = loadGolden('histories.yaml');
+
+const FACES: Record<string, readonly string[]> = {
+  search_shared_skills: ['mcp', 'cli', 'web'],
+  read_shared_skill: ['mcp', 'cli', 'web'],
+  list_shared_skill_versions: ['mcp', 'cli', 'web'],
+  diff_shared_skill_versions: ['mcp', 'cli', 'web'],
+  publish_version: ['web'],
+  fetch_version: ['web'],
+  publish_skill_to_catalog: ['mcp'], // its CLI command is on a branch
+  install_shared_skill: ['mcp', 'cli'],
+  update_installed_skills: ['mcp', 'cli'],
+  accept_held_update: ['mcp', 'cli'],
+  list_installed_skills: ['mcp', 'cli'],
+  set_skill_update_policy: ['mcp', 'cli'],
+};
+const EFFECT: Record<string, string> = {
+  search_shared_skills: 'reads',
+  read_shared_skill: 'reads',
+  list_shared_skill_versions: 'reads',
+  diff_shared_skill_versions: 'reads',
+  publish_version: 'writes_catalog',
+  fetch_version: 'reads',
+  publish_skill_to_catalog: 'writes_catalog',
+  install_shared_skill: 'writes_machine',
+  update_installed_skills: 'writes_machine',
+  accept_held_update: 'writes_machine',
+  list_installed_skills: 'reads',
+  set_skill_update_policy: 'writes_machine',
+};
+// A catalog row names the Catalog method; a machine row, its function in the client's machine operations (resolved there).
+const RUN: Record<string, string> = {
+  search_shared_skills: 'search',
+  read_shared_skill: 'read',
+  list_shared_skill_versions: 'versions',
+  diff_shared_skill_versions: 'diff',
+  publish_version: 'publish',
+  fetch_version: 'fetch',
+  publish_skill_to_catalog: 'publishFolder',
+  install_shared_skill: 'install',
+  update_installed_skills: 'update',
+  accept_held_update: 'accept',
+  list_installed_skills: 'list',
+  set_skill_update_policy: 'setPolicy',
+};
+
+describe('each operation\'s definition (contract §1)', () => {
+  it('says where it\'s served: the approved faces, and the web face serves catalog operations only', () => {
+    expect(Object.keys(OPERATIONS).sort()).toEqual(Object.keys(FACES).sort());
+    for (const [op, def] of Object.entries(OPERATIONS)) {
+      expect([op, def.faces]).toEqual([op, FACES[op]]);
+      if (def.kind === 'machine') expect([op, def.faces.includes('web')]).toEqual([op, false]);
+    }
+  });
+
+  it('the assistant\'s tools are exactly the operations with the mcp face', () => {
+    const tools = Words.load().toolDefs().map((t) => t.op).sort();
+    expect(tools).toEqual(Object.values(OPERATIONS).filter((o) => o.faces.includes('mcp')).map((o) => o.name).sort());
+  });
+
+  it('says what it changes: it reads, writes the catalog, or writes this machine', () => {
+    for (const [op, def] of Object.entries(OPERATIONS)) expect([op, def.effect]).toEqual([op, EFFECT[op]]);
+  });
+
+  it('names the code that runs it: a catalog row, a Catalog method', () => {
+    for (const [op, def] of Object.entries(OPERATIONS)) {
+      expect([op, def.run]).toEqual([op, RUN[op]]);
+      if (def.kind === 'catalog') expect([op, typeof (Catalog.prototype as unknown as Record<string, unknown>)[def.run]]).toEqual([op, 'function']);
+    }
+  });
+
+  it('the web face never gets an input only a person may give', () => {
+    for (const def of Object.values(OPERATIONS)) {
+      for (const k of def.cliOnly ?? []) expect([def.name, k in inputSchema(def, 'web').properties]).toEqual([def.name, false]);
+    }
+    const e = (() => {
+      try {
+        validateInput('install_shared_skill', { name: 'x', policy: 'pin' }, 'web');
+      } catch (err) {
+        return err as CatalogError;
+      }
+    })();
+    expect(e?.toJSON()).toMatchObject({ code: 'invalid_request', field: 'policy', why: 'unknown_field' });
+  });
+});
+
+// §9: "The list is data, not only a type: the API exports it at run time [...] and a test fails when this section and
+// the code's list differ." The section's codes are the backticked names in its list of errors, outside any {…} or (…).
+function contractCodes(): string[] {
+  const text = readFileSync(join(import.meta.dirname, '..', '..', 'docs', 'contract.md'), 'utf8');
+  const s9 = text.slice(text.indexOf('## 9. Error codes'), text.indexOf('## 10.'));
+  let list = s9.slice(s9.indexOf('`internal_error` {log}'), s9.indexOf('Each error carries'));
+  for (let prev = ''; prev !== list; ) [prev, list] = [list, list.replace(/\{[^{}]*\}/g, '').replace(/\([^()]*\)/g, '')];
+  return [...list.matchAll(/`([a-z_]+)`/g)].map((m) => m[1]!);
+}
+
+describe('the error list at run time (contract §9)', () => {
+  it('is the contract\'s list, in its order', () => {
+    const codes = contractCodes();
+    expect(codes.length).toBeGreaterThan(20);
+    expect([...ERROR_CODES]).toEqual(codes);
+  });
+
+  it('a CatalogError takes only a listed code, and any call may return the common four', () => {
+    expect([...COMMON_ERRORS]).toEqual(['invalid_request', 'invalid_developer_setting', 'internal_error', 'forbidden']);
+    for (const c of COMMON_ERRORS) expect(ERROR_CODES).toContain(c);
+    for (const c of ERROR_CODES) expect(new CatalogError(c).code).toBe(c);
+  });
+});
+
+// An output schema, checked the strict way: an object has exactly its listed fields (the required ones always), so a
+// field the code adds or drops fails here before it reaches the published schema.
+function conforms(schema: OutputSchema, value: unknown, at = '$'): string[] {
+  if ('anyOf' in schema) {
+    const each = schema.anyOf.map((s) => conforms(s, value, at));
+    return each.some((e) => e.length === 0) ? [] : [`${at}: matches none of ${schema.anyOf.length}: ${each.map((e) => e[0]).join(' | ')}`];
+  }
+  if (!('type' in schema)) return []; // any value (a front matter value, a flag's from/to)
+  switch (schema.type) {
+    case 'null':
+      return value === null ? [] : [`${at}: not null`];
+    case 'string':
+      if (typeof value !== 'string') return [`${at}: not a string`];
+      return schema.enum && !schema.enum.includes(value) ? [`${at}: ${value} not one of ${schema.enum.join(', ')}`] : [];
+    case 'integer':
+      return Number.isInteger(value) ? [] : [`${at}: not an integer`];
+    case 'boolean':
+      return typeof value === 'boolean' ? [] : [`${at}: not a boolean`];
+    case 'array':
+      return Array.isArray(value) ? value.flatMap((v, i) => conforms(schema.items, v, `${at}[${i}]`)) : [`${at}: not an array`];
+    case 'object': {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return [`${at}: not an object`];
+      const o = value as Record<string, unknown>;
+      const errs = schema.required.filter((k) => !(k in o)).map((k) => `${at}.${k}: missing`);
+      for (const [k, v] of Object.entries(o)) {
+        const p = schema.properties[k];
+        if (p) errs.push(...conforms(p, v, `${at}.${k}`));
+        else if (schema.additionalProperties === undefined || schema.additionalProperties === false) errs.push(`${at}.${k}: not in the schema`);
+        else if (schema.additionalProperties !== true) errs.push(...conforms(schema.additionalProperties, v, `${at}.${k}`));
+      }
+      return errs;
+    }
+  }
+}
+
+describe('each operation\'s output (contract §1)', () => {
+  it('a catalog operation\'s is a schema; a machine operation\'s is text, for now', () => {
+    for (const def of Object.values(OPERATIONS)) {
+      if (def.kind === 'machine') expect([def.name, def.output]).toEqual([def.name, 'text']);
+      else expect([def.name, typeof def.output === 'object' && 'type' in def.output && def.output.type]).toEqual([def.name, 'object']);
+    }
+  });
+
+  it('what each catalog operation really returns fits its schema, every shape it takes', async () => {
+    const { catalog } = await openTest();
+    const v = (ref: string) => historyVersion(histories.versions[ref]);
+    const out = (op: string) => OPERATIONS[op]!.output as OutputSchema;
+    const seen: [string, unknown][] = [];
+    const run = async (op: string, call: () => Promise<unknown>) => {
+      const r = await call();
+      seen.push([op, r]);
+      return r;
+    };
+    // publish: new, dry run (with a diff), identical, and a new version with flags
+    await run('publish_version', () => catalog.publish(request('pr-review-checklist', v('prc.v1'), { message: 'first' }), actAs('dev1')));
+    await run('publish_version', () => catalog.publish(request('pr-review-checklist', v('prc.v3'), { dry_run: true }), actAs('dev1')));
+    await run('publish_version', () => catalog.publish(request('pr-review-checklist', v('prc.v1')), actAs('dev1')));
+    await run('publish_version', () => catalog.publish(request('pr-review-checklist', v('prc.v2')), actAs('dev1')));
+    await run('publish_version', () => catalog.publish(request('pr-review-checklist', v('prc.v3'), { expected_latest: 2 }), actAs('dev1')));
+    // search: all, partial, none, and a page with a cursor
+    await run('search_shared_skills', () => catalog.search({ query: 'review checklist' }));
+    await run('search_shared_skills', () => catalog.search({ query: 'review zebra' }));
+    await run('search_shared_skills', () => catalog.search({ query: 'zebra' }));
+    await run('search_shared_skills', () => catalog.search({}));
+    // read: each include, several names with one missing, paths, an older version
+    for (const include of ['manifest', 'files', 'contents'] as const) await run('read_shared_skill', () => catalog.read({ name: 'pr-review-checklist', include }));
+    await run('read_shared_skill', () => catalog.read({ names: ['pr-review-checklist', 'no-such-skill'] }));
+    await run('read_shared_skill', () => catalog.read({ name: 'pr-review-checklist', paths: ['SKILL.md'] }));
+    await run('read_shared_skill', () => catalog.read({ name: 'pr-review-checklist', version: 1, include: 'contents' }));
+    await run('list_shared_skill_versions', () => catalog.versions({ name: 'pr-review-checklist' }));
+    await run('diff_shared_skill_versions', () => catalog.diff({ name: 'pr-review-checklist', from: 1, to: 3 }));
+    await run('diff_shared_skill_versions', () => catalog.diff({ name: 'pr-review-checklist', from: 2, to: 3 }));
+    const fetched = (await run('fetch_version', () => catalog.fetch({ name: 'pr-review-checklist', version: 3 }))) as { fingerprint: string };
+    await run('fetch_version', () => catalog.fetch({ fingerprint: fetched.fingerprint }));
+    catalog.close();
+    for (const [op, r] of seen) expect([op, conforms(out(op), r)]).toEqual([op, []]);
+    expect(new Set(seen.map(([op]) => op))).toEqual(new Set(Object.values(OPERATIONS).filter((o) => o.kind === 'catalog').map((o) => o.name)));
+    // and the check itself: a field the schema doesn't list, or a missing one, fails
+    const [, one] = seen.find(([op]) => op === 'fetch_version')!;
+    expect(conforms(out('fetch_version'), { ...(one as object), extra: 1 })).toEqual(['$.extra: not in the schema']);
+    const { name: _, ...noName } = one as Record<string, unknown>;
+    expect(conforms(out('fetch_version'), noName)).toEqual(['$.name: missing']);
+  });
+});
