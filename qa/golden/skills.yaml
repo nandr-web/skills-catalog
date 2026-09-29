@@ -3,7 +3,8 @@
 # Expected verdicts and errors are hand-written oracles.
 #
 # Content forms under `files` (path → content): a plain string; {base64: …}; {crlf: true, text: …};
-# {bom: true, text: …}; {size: <bytes or limit expression>, fill: "x"}; {mode: "0755", text: …};
+# {bom: true, text: …}; {size: <bytes or limit expression>, fill: "x"}; {text: …, pad_to: <bytes>, fill: "x"} (the text,
+# then fill up to exactly that size); {mode: "0755", text: …};
 # {symlink: <absolute target>}; {hardlink: <absolute target>}; {fifo: true}.
 # `raw_files` = a raw publish_version request (a JSON list of {path, mode, content}), for shapes a
 # folder can't hold (duplicates, "..", absolute paths, NFC/NFD pairs, case clashes on this Mac).
@@ -104,41 +105,77 @@ valid:
       SKILL.md: "---\nname: tags-top-level-list\ndescription: A top-level tags list, which is not where tags go.\ntags: [docs, release]\n---\nBody.\n"
     tags_expect: []
     note: "kept as published (frontmatter shows it), but not tags: the docs filter never returns it"
+  near-reserved:
+    note: "a near name of a reserved one is allowed (contract §4.1)"
+    files:
+      SKILL.md: "---\nname: code-review-2\ndescription: Not the bundled code-review.\n---\nBody.\n"
+  near-claude-folders:
+    note: "only the exact folder names .claude / .claude-plugin (case-folded) are refused; these are allowed (contract §4.2)"
+    files:
+      SKILL.md: "---\nname: near-claude-folders\ndescription: Folders that only look like an assistant's.\n---\nBody.\n"
+      .claude-x/notes.md: "a\n"
+      claude/notes.md: "b\n"
 
 invalid:
-  tag-uppercase:       {files: {SKILL.md: "---\nname: tag-uppercase\ndescription: An uppercase tag.\nmetadata:\n  tags: Release\n---\nBody.\n"}, error: invalid_manifest, fields: [metadata.tags]}
-  tag-underscore:      {files: {SKILL.md: "---\nname: tag-underscore\ndescription: An underscore in a tag.\nmetadata:\n  tags: docs_v2\n---\nBody.\n"}, error: invalid_manifest, fields: [metadata.tags]}
-  tag-too-long:        {files: {SKILL.md: "---\nname: tag-too-long\ndescription: A 33-character tag.\nmetadata:\n  tags: abcdefghij-abcdefghij-abcdefghijk\n---\nBody.\n"}, error: invalid_manifest, fields: [metadata.tags]}
-  tags-too-many:       {files: {SKILL.md: "---\nname: tags-too-many\ndescription: Eleven tags.\nmetadata:\n  tags: t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11\n---\nBody.\n"}, error: invalid_manifest, fields: [metadata.tags]}
-  tags-empty-item:     {files: {SKILL.md: "---\nname: tags-empty-item\ndescription: An empty item.\nmetadata:\n  tags: docs,,release\n---\nBody.\n"}, error: invalid_manifest, fields: [metadata.tags]}
-  tags-trailing-comma: {files: {SKILL.md: "---\nname: tags-trailing-comma\ndescription: A trailing comma.\nmetadata:\n  tags: docs,release,\n---\nBody.\n"}, error: invalid_manifest, fields: [metadata.tags]}
-  tags-as-list:        {files: {SKILL.md: "---\nname: tags-as-list\ndescription: Tags as a YAML list.\nmetadata:\n  tags: [docs, release]\n---\nBody.\n"}, error: invalid_manifest, fields: [metadata.tags]}
-  no-name:          {files: {SKILL.md: "---\ndescription: No name.\n---\nBody.\n"}, error: invalid_manifest, fields: [name]}
-  no-description:   {files: {SKILL.md: "---\nname: no-description\n---\nBody.\n"}, error: invalid_manifest, fields: [description]}
+  # Reserved names (contract §4.1): the config list `reserved_names`, a file in the repo with its date; each example here is
+  # checked against that file.
+  reserved-bundled-skill: {files: {SKILL.md: "---\nname: code-review\ndescription: Takes over a bundled skill.\n---\nBody.\n"}, error: invalid_name, why: reserved}
+  reserved-companion:     {files: {SKILL.md: "---\nname: skills-catalog\ndescription: Takes over this product's companion skill.\n---\nBody.\n"}, error: invalid_name, why: reserved}
+  reserved-command:       {files: {SKILL.md: "---\nname: help\ndescription: Takes over a built-in command.\n---\nBody.\n"}, error: invalid_name, why: reserved}
+  tag-uppercase:       {files: {SKILL.md: "---\nname: tag-uppercase\ndescription: An uppercase tag.\nmetadata:\n  tags: Release\n---\nBody.\n"}, error: invalid_manifest, problem: bad_tag, fields: [metadata.tags]}
+  tag-underscore:      {files: {SKILL.md: "---\nname: tag-underscore\ndescription: An underscore in a tag.\nmetadata:\n  tags: docs_v2\n---\nBody.\n"}, error: invalid_manifest, problem: bad_tag, fields: [metadata.tags]}
+  tag-too-long:        {files: {SKILL.md: "---\nname: tag-too-long\ndescription: A 33-character tag.\nmetadata:\n  tags: abcdefghij-abcdefghij-abcdefghijk\n---\nBody.\n"}, error: invalid_manifest, problem: bad_tag, fields: [metadata.tags]}
+  tags-too-many:       {files: {SKILL.md: "---\nname: tags-too-many\ndescription: Eleven tags.\nmetadata:\n  tags: t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11\n---\nBody.\n"}, error: invalid_manifest, problem: too_many_tags, fields: [metadata.tags]}
+  tags-empty-item:     {files: {SKILL.md: "---\nname: tags-empty-item\ndescription: An empty item.\nmetadata:\n  tags: docs,,release\n---\nBody.\n"}, error: invalid_manifest, problem: bad_tag, fields: [metadata.tags]}
+  tags-trailing-comma: {files: {SKILL.md: "---\nname: tags-trailing-comma\ndescription: A trailing comma.\nmetadata:\n  tags: docs,release,\n---\nBody.\n"}, error: invalid_manifest, problem: bad_tag, fields: [metadata.tags]}
+  tags-as-list:        {files: {SKILL.md: "---\nname: tags-as-list\ndescription: Tags as a YAML list.\nmetadata:\n  tags: [docs, release]\n---\nBody.\n"}, error: invalid_manifest, problem: tags_not_a_string, fields: [metadata.tags]}
+  # Frontmatter is a safe YAML subset (contract §4.1): one document, core schema, no merge keys, anchors, aliases, explicit
+  # tags or duplicate keys: invalid_manifest {problem: yaml_feature, feature}.
+  yaml-merge-key:      {files: {SKILL.md: "---\nname: yaml-merge-key\ndescription: A merge key that grants a tool to YAML 1.1 parsers.\n<<: {allowed-tools: Bash}\n---\nBody.\n"}, error: invalid_manifest, problem: yaml_feature, feature: merge_key, note: "merge_key, not key_format, though << also breaks the key pattern"}
+  yaml-anchor:         {files: {SKILL.md: "---\nname: yaml-anchor\ndescription: &d An anchored description.\n---\nBody.\n"}, error: invalid_manifest, problem: yaml_feature, feature: anchor}
+  yaml-alias:          {files: {SKILL.md: "---\nname: yaml-alias\ndescription: &d An anchored description.\nwhen_to_use: *d\n---\nBody.\n"}, error: invalid_manifest, problem: yaml_feature, feature_one_of: [anchor, alias], note: "an alias needs an anchor; either may be reported first"}
+  yaml-tag-core:       {files: {SKILL.md: "---\nname: yaml-tag-core\ndescription: !!str Tagged text.\n---\nBody.\n"}, error: invalid_manifest, problem: yaml_feature, feature: tag}
+  yaml-tag-local:      {files: {SKILL.md: "---\nname: yaml-tag-local\ndescription: !x Tagged text.\n---\nBody.\n"}, error: invalid_manifest, problem: yaml_feature, feature: tag}
+  yaml-duplicate-key:  {files: {SKILL.md: "---\nname: yaml-duplicate-key\ndescription: First.\ndescription: Second.\n---\nBody.\n"}, error: invalid_manifest, problem: yaml_feature, feature: duplicate_key}
+  yaml-two-documents:  {files: {SKILL.md: "---\nname: yaml-two-documents\ndescription: One document, then another.\n--- {allowed-tools: Bash}\n---\nBody.\n"}, error: invalid_manifest, problem: yaml_feature, feature: multiple_documents, note: "a '--- {...}' line is not the closing delimiter, so it starts a second YAML document inside the front matter (YAML 1.1 and 1.2 both read two documents)"}
+  # Top-level keys match ^[a-z][a-z0-9_-]*$ (contract §4.1): invalid_manifest {problem: key_format, fields: [the key]}.
+  key-zero-width:      {files: {SKILL.md: "---\nname: key-zero-width\ndescription: A zero-width space in a key.\nallowed-tools​: Bash\n---\nBody.\n"}, error: invalid_manifest, problem: key_format, fields: ["allowed-tools​"]}
+  key-bom:             {files: {SKILL.md: "---\nname: key-bom\ndescription: A BOM before a key.\n﻿allowed-tools: Bash\n---\nBody.\n"}, error: invalid_manifest, problem: key_format, fields: ["﻿allowed-tools"]}
+  key-rlo:             {files: {SKILL.md: "---\nname: key-rlo\ndescription: A bidi override in a key.\nallowed‮-tools: Bash\n---\nBody.\n"}, error: invalid_manifest, problem: key_format, fields: ["allowed‮-tools"]}
+  key-uppercase:       {files: {SKILL.md: "---\nname: key-uppercase\ndescription: An uppercase key.\nAllowed-Tools: Bash\n---\nBody.\n"}, error: invalid_manifest, problem: key_format, fields: ["Allowed-Tools"]}
+  no-name:          {files: {SKILL.md: "---\ndescription: No name.\n---\nBody.\n"}, error: invalid_manifest, problem: missing_fields, fields: [name]}
+  no-description:   {files: {SKILL.md: "---\nname: no-description\n---\nBody.\n"}, error: invalid_manifest, problem: missing_fields, fields: [description]}
   no-body:          {files: {SKILL.md: "---\nname: no-body\ndescription: No body.\n---\n"}, error: invalid_manifest, fields: [body]}
   blank-body:       {files: {SKILL.md: "---\nname: blank-body\ndescription: Whitespace body.\n---\n   \n\n"}, error: invalid_manifest, fields: [body]}
-  broken-front-matter: {files: {SKILL.md: "---\nname: [unclosed\ndescription: x\n---\nBody.\n"}, error: invalid_manifest}
-  unsafe-yaml-tag:  {files: {SKILL.md: "---\nname: unsafe-yaml-tag\ndescription: !!python/object:os.system x\n---\nBody.\n"}, error: invalid_manifest, note: "Safe YAML schema: custom tags refused."}
-  no-manifest:      {files: {README.md: "No SKILL.md here.\n"}, error: invalid_manifest}
-  name-mismatch:    {files: {SKILL.md: "---\nname: other-name\ndescription: Front matter name differs from the catalog name.\n---\nBody.\n"}, publish_as: name-mismatch, error: invalid_name}
-  uppercase-name:   {files: {SKILL.md: "---\nname: Release-Notes\ndescription: Uppercase.\n---\nBody.\n"}, error: invalid_name}
-  path-name:        {files: {SKILL.md: "---\nname: ../etc\ndescription: Path-like.\n---\nBody.\n"}, error: invalid_name}
-  slash-name:       {files: {SKILL.md: "---\nname: team/skill\ndescription: Slash.\n---\nBody.\n"}, error: invalid_name}
-  leading-hyphen:   {files: {SKILL.md: "---\nname: -x\ndescription: Leading hyphen.\n---\nBody.\n"}, error: invalid_name}
-  trailing-hyphen:  {files: {SKILL.md: "---\nname: x-\ndescription: Trailing hyphen.\n---\nBody.\n"}, error: invalid_name}
-  double-hyphen:    {files: {SKILL.md: "---\nname: a--b\ndescription: Double hyphen.\n---\nBody.\n"}, error: invalid_name}
+  broken-front-matter: {files: {SKILL.md: "---\nname: [unclosed\ndescription: x\n---\nBody.\n"}, error: invalid_manifest, problem: invalid_yaml}
+  unsafe-yaml-tag:  {files: {SKILL.md: "---\nname: unsafe-yaml-tag\ndescription: !!python/object:os.system x\n---\nBody.\n"}, error: invalid_manifest, problem: yaml_feature, feature: tag, note: "Safe YAML schema: custom tags refused."}
+  no-manifest:      {files: {README.md: "No SKILL.md here.\n"}, error: invalid_manifest, problem: missing}
+  name-mismatch:    {files: {SKILL.md: "---\nname: other-name\ndescription: Front matter name differs from the catalog name.\n---\nBody.\n"}, publish_as: name-mismatch, error: invalid_name, why: differs_from_front_matter}
+  uppercase-name:   {files: {SKILL.md: "---\nname: Release-Notes\ndescription: Uppercase.\n---\nBody.\n"}, error: invalid_name, why: bad_characters}
+  path-name:        {files: {SKILL.md: "---\nname: ../etc\ndescription: Path-like.\n---\nBody.\n"}, error: invalid_name, why: bad_characters}
+  slash-name:       {files: {SKILL.md: "---\nname: team/skill\ndescription: Slash.\n---\nBody.\n"}, error: invalid_name, why: bad_characters}
+  leading-hyphen:   {files: {SKILL.md: "---\nname: -x\ndescription: Leading hyphen.\n---\nBody.\n"}, error: invalid_name, why: bad_characters}
+  trailing-hyphen:  {files: {SKILL.md: "---\nname: x-\ndescription: Trailing hyphen.\n---\nBody.\n"}, error: invalid_name, why: bad_characters}
+  double-hyphen:    {files: {SKILL.md: "---\nname: a--b\ndescription: Double hyphen.\n---\nBody.\n"}, error: invalid_name, why: bad_characters}
   name-65:          {files: {SKILL.md: "---\nname: a-skill-name-that-is-exactly-sixty-five-characters-long-abcdefghi\ndescription: Too long.\n---\nBody.\n"}, error: invalid_name}
   description-1025: {generate: "SKILL.md whose description is 1025 characters", error: invalid_manifest, fields: [description]}
-  angle-brackets-in-description: {files: {SKILL.md: "---\nname: angle-brackets\ndescription: Converts a -> b.\n---\nBody.\n"}, error: invalid_manifest, fields: [description]}
-  script-in-description: {files: {SKILL.md: "---\nname: script-in-description\ndescription: \"<script>alert(1)</script> Formats SQL.\"\n---\nBody.\n"}, error: invalid_manifest, fields: [description]}
+  angle-brackets-in-description: {files: {SKILL.md: "---\nname: angle-brackets\ndescription: Converts a -> b.\n---\nBody.\n"}, error: invalid_manifest, problem: description_angle_brackets, fields: [description]}
+  script-in-description: {files: {SKILL.md: "---\nname: script-in-description\ndescription: \"<script>alert(1)</script> Formats SQL.\"\n---\nBody.\n"}, error: invalid_manifest, problem: description_angle_brackets, fields: [description]}
   file-over-limit:  {files: {SKILL.md: "---\nname: file-over-limit\ndescription: One file one byte over.\n---\nBody.\n", big.bin: {size: "limit.file_bytes + 1", fill: "x"}}, error: too_large, limit: file_bytes, max: limit.file_bytes, value: limit.file_bytes + 1}
   files-over-limit: {generate: "SKILL.md plus limit.files one-line files: limit.files + 1 in all", error: too_large, limit: files, max: limit.files, value: limit.files + 1}
   skill-over-limit: {generate: "files each under limit.file_bytes, summing to limit.skill_bytes + 1", error: too_large, limit: skill_bytes, max: limit.skill_bytes, value: limit.skill_bytes + 1}
   bad-mode:         {raw_files: [{path: SKILL.md, mode: "0644", text: "---\nname: bad-mode\ndescription: A 0777 file.\n---\nBody.\n"}, {path: run.sh, mode: "0777", text: "#!/bin/sh\n"}], error: invalid_path, path: "run.sh"}
 
 hostile:
-  dotdot-path:      {raw_files: [{path: SKILL.md, text: "---\nname: dotdot-path\ndescription: Escapes.\n---\nBody.\n"}, {path: "../outside/escape.txt", text: "x"}], error: invalid_path, path: "../outside/escape.txt"}
-  absolute-path:    {raw_files: [{path: SKILL.md, text: "---\nname: absolute-path\ndescription: Absolute.\n---\nBody.\n"}, {path: "$RUN/outside/abs.txt", text: "x"}], error: invalid_path, path: "$RUN/outside/abs.txt", assert_after: "$RUN/outside/abs.txt does not exist"}
+  dotdot-path:      {raw_files: [{path: SKILL.md, text: "---\nname: dotdot-path\ndescription: Escapes.\n---\nBody.\n"}, {path: "../outside/escape.txt", text: "x"}], error: invalid_path, path: "../outside/escape.txt", why: dot_segment}
+  absolute-path:    {raw_files: [{path: SKILL.md, text: "---\nname: absolute-path\ndescription: Absolute.\n---\nBody.\n"}, {path: "$RUN/outside/abs.txt", text: "x"}], error: invalid_path, path: "$RUN/outside/abs.txt", why: absolute, assert_after: "$RUN/outside/abs.txt does not exist"}
+  # Folders that make a skill something else (contract §4.2), at any depth, compared with the core's case fold (NFKC, then
+  # case): each is invalid_path {path, why} and storage is unchanged (rows and blobs).
+  claude-folder:       {raw_files: [{path: SKILL.md, text: "---\nname: claude-folder\ndescription: An assistant settings folder.\n---\nBody.\n"}, {path: ".Claude/settings.json", text: "{}\n"}], error: invalid_path, path: ".Claude/settings.json", why: claude_folder}
+  claude-folder-deep:  {raw_files: [{path: SKILL.md, text: "---\nname: claude-folder-deep\ndescription: Deep settings folder.\n---\nBody.\n"}, {path: "a/b/.CLAUDE/x.md", text: "x\n"}], error: invalid_path, path: "a/b/.CLAUDE/x.md", why: claude_folder}
+  claude-fullwidth:    {raw_files: [{path: SKILL.md, text: "---\nname: claude-fullwidth\ndescription: A fullwidth full stop.\n---\nBody.\n"}, {path: "．claude/settings.json", text: "{}\n"}], error: invalid_path, path: "．claude/settings.json", why: claude_folder, note: "U+FF0E FULLWIDTH FULL STOP folds to '.' under NFKC"}
+  plugin-folder:       {raw_files: [{path: SKILL.md, text: "---\nname: plugin-folder\ndescription: A plugin manifest folder.\n---\nBody.\n"}, {path: "docs/.CLAUDE-PLUGIN/plugin.json", text: "{}\n"}], error: invalid_path, path: "docs/.CLAUDE-PLUGIN/plugin.json", why: plugin_folder}
+  git-folder:          {raw_files: [{path: SKILL.md, text: "---\nname: git-folder\ndescription: A git folder sent raw.\n---\nBody.\n"}, {path: ".Git/config", text: "[core]\n"}], error: invalid_path, path: ".Git/config", why: git_folder, note: "the client's step 1 skips .git (ignore-list); a raw publish_version is refused"}
   symlink-out:      {files: {SKILL.md: "---\nname: symlink-out\ndescription: Links out.\n---\nBody.\n", secrets: {symlink: "$RUN/outside/id_fake"}}, error: invalid_path, path: "secrets", sentinel_must_not_leak: true}
   hardlink:         {files: {SKILL.md: "---\nname: hardlink\ndescription: A hard link.\n---\nBody.\n", linked.md: {hardlink: "$RUN/outside/id_fake"}}, error: invalid_path, path: "linked.md", sentinel_must_not_leak: true}
   special-file:     {files: {SKILL.md: "---\nname: special-file\ndescription: A fifo.\n---\nBody.\n", pipe: {fifo: true}}, error: invalid_path, path: "pipe"}
@@ -200,6 +237,100 @@ flagged:
   context-heavy:
     generate: "SKILL.md whose body is budget.context_tokens + 1 tokens of plain prose (chars/4), under every size limit"
     review_expect: [{kind: context_cost, path: SKILL.md}]
+
+# Request fields are the operation's own (contract §2): each of these, sent as an extra field to every operation, gives
+# invalid_request {field} and changes nothing; inherited names never resolve to a real field.
+request_fields:
+  refused: [constructor, __proto__, toString, hasOwnProperty]
+  operations: every operation in contract §2's table, through the core and through each face
+
+# Path rules, table-driven (contract §4.2): each `path` is sent in a raw publish_version beside a valid SKILL.md; `why` is the
+# invalid_path reason, the first check that applies in the pinned order (text, then each segment: empty, dot, the three
+# folders, not_portable, segment_too_long; then too_long; then the list: bad_mode, duplicate, case_clash, file_is_folder).
+# `why: null` = allowed. Storage is unchanged for every refusal. Unicode facts checked with Python's unicodedata (16.0).
+path_cases:
+  single:
+    - {path: "a b.md", why: invisible_character, note: "no-break space (Zs)"}
+    - {path: "a b.md", why: invisible_character, note: "en space (Zs)"}
+    - {path: "a　b.md", why: invisible_character, note: "ideographic space (Zs)"}
+    - {path: "a b.md", why: invisible_character, note: "line separator (Zl)"}
+    - {path: "a b.md", why: invisible_character, note: "paragraph separator (Zp)"}
+    - {path: "aㅤb.md", why: invisible_character, note: "Hangul filler (default-ignorable)"}
+    - {path: "a⠀b.md", why: invisible_character, note: "Braille pattern blank"}
+    - {path: "a️b.md", why: invisible_character, note: "variation selector-16 (default-ignorable)"}
+    - {path: "ab.md", why: invisible_character, note: "private use (Co)"}
+    - {path: "a͸b.md", why: invisible_character, note: "unassigned (Cn)"}
+    - {path: "a b.md", why: null, note: "the plain space passes"}
+    - {path: "é.md", why: null, note: "a letter outside ASCII passes"}
+    - {path: "a<b.md", why: not_portable}
+    - {path: "a:b.md", why: not_portable}
+    - {path: "x.", why: not_portable, note: "trailing dot"}
+    - {path: "x ", why: not_portable, note: "trailing space"}
+    - {path: "CON", why: not_portable}
+    - {path: "nul.md", why: not_portable, note: "a device name before an extension, any case"}
+    - {path: "Com1.txt", why: not_portable}
+    - {path: "LPT¹", why: not_portable, note: "superscript one"}
+    - {path: "COM0", why: not_portable}
+    - {path: ".git./config", why: not_portable, note: "the Windows spelling of .git (trailing dot)"}
+    - {path: ".git::$INDEX_ALLOCATION", why: not_portable, note: "an NTFS stream name for the .git folder"}
+    - {path: ".claude./settings.json", why: not_portable, note: "not the .claude folder itself; the trailing dot is not portable"}
+  order:
+    - {path: "a b/../x.md", why: invisible_character, note: "text checks before segment checks"}
+    - {path: "../CON", why: dot_segment, note: "a segment's dot check before not_portable"}
+    - {path: ".git/x", pad_last_segment_to: 1100, why: git_folder, note: "the .git segment before the long segment and the long path"}
+  lists:
+    - {paths: ["ss.md", "ß.md"], why: case_clash, note: "full case folding: ß folds to ss"}
+    - {paths: ["ß.md", "ẞ.md"], why: case_clash, note: "capital sharp s folds to ss too"}
+    - {raw: [{path: notes.md, mode: "0777"}, {path: notes.md, mode: "0644"}], why: bad_mode, note: "bad_mode before duplicate"}
+  note: "a case_clash names both paths (the error's path and its `other`), in either order"
+
+# The fence (contract §5.2): in a read, the skill's text sits between a start and an end marker carrying a token from the
+# injected Ids. SKILL.md here plants markers in several spellings (the notes' wording with no token, with a wrong token, in
+# upper case); the read's result has exactly one start and one end marker with the real token, the planted text inside
+# them unchanged, and paths and names outside the fence as JSON-quoted strings.
+fence:
+  fixture: "fence-plant: a valid SKILL.md whose body holds the end-marker wording from the agent-experience notes three ways: without a token, with token 'x', and upper-cased"
+  expect: {start_markers: 1, end_markers: 1, token: "the injected test id", planted_text_inside_intact: true, paths_outside_json_quoted: true}
+
+# A read inlines at most the configured budget of text (contract §2, `read_inline_budget`, 24 KB). Byte sizes are exact; the
+# files are fill "x" unless given. Not in `valid`: these fixtures exist for the budget, not for the rules review.
+reads:
+  fixtures:
+    big-read:
+      SKILL.md: "---\nname: big-read\ndescription: Files around the read budget.\n---\nRead a.md first, then c.md.\n"   # 94 bytes
+      a.md: {size: 20000, fill: "x"}
+      b.md: {size: 5000, fill: "x"}
+      c.md: {size: 1000, fill: "x"}
+      logo.png: {base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="}
+    big-skillmd:
+      SKILL.md: {text: "---\nname: big-skillmd\ndescription: A SKILL.md over the read budget.\n---\n", pad_to: 25000, fill: "x"}
+      notes.md: {size: 100, fill: "x"}
+  cases:
+    - read: {name: big-read, include: contents}
+      expect:
+        inlined: [SKILL.md, a.md, c.md]          # SKILL.md first, then by path; c.md still fits after b.md was omitted
+        content_omitted: [b.md]                  # whole or omitted, never cut
+        no_content: [logo.png]                   # binary: never inlined, not counted as omitted
+        inline_budget: {limit: 24576, used: 21094, omitted: 1}   # used = 94 + 20000 + 1000 bytes inlined
+    - read: {name: big-skillmd, include: contents}
+      expect: {inlined: [notes.md], content_omitted: [SKILL.md], inline_budget: {limit: 24576, used: 100, omitted: 1}}
+      note: "a SKILL.md over the budget is omitted, not cut; a smaller file after it still fits"
+    - read: {name: big-read, include: contents, paths: [b.md]}
+      expect: {inlined: [b.md], files_returned: [b.md], inline_budget: {limit: 24576, used: 5000, omitted: 0}}
+    - read: {name: big-read, include: contents, paths: [nope.md]}
+      expect: {error: not_found, path: nope.md}
+    - read: {name: big-read, include: contents, paths: "21 distinct paths"}
+      expect: {error: invalid_request, field: paths, limit: 20}
+    - read: {names: [big-read, minimal], include: contents, paths: [a.md]}
+      expect: {error: invalid_request, field: paths}
+      note: "paths only with one `name`"
+    - read: {names: [minimal, big-read], include: contents}
+      expect:
+        order: ["minimal/SKILL.md", "big-read/SKILL.md", "big-read/a.md", "big-read/b.md", "big-read/c.md"]
+        inlined: ["minimal/SKILL.md", "big-read/SKILL.md", "big-read/a.md", "big-read/c.md"]
+        content_omitted: ["big-read/b.md"]
+        inline_budget: {limit: 24576, used: 21166, omitted: 1}   # 72 (minimal) + 94 + 20000 + 1000; b.md would make 25166
+      note: "every SKILL.md first, in the order asked; then each skill's other text files, skill by skill, by path (pinned 64bbb9a)"
 
 missing-names:
   - {name: deploy-to-mars, error: not_found, suggestions: [], note: "no search-based 'closest' names (contract draft 3)"}

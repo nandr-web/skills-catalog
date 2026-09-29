@@ -49,6 +49,10 @@ requirements:
       - {layer: interface, name: dry_run stores nothing and returns the diff, golden: histories.h1, auto: true}
       - {layer: agent, name: "A7 relays the reason and proposes the fix; never edits the person's files unasked", golden: agent.A7, auto: true}
       - {layer: interface, name: "an error whose fix is a change to the person's files tells the agent to propose it and wait (contract §9)", golden: skills.invalid, auto: true}
+      - {layer: unit, name: "frontmatter is a safe YAML subset: a merge key, anchor, alias, explicit tag, duplicate key or second document is invalid_manifest {problem: yaml_feature, feature}; a top-level key outside ^[a-z][a-z0-9_-]*$ (zero-width space, BOM, bidi override, capitals) is {problem: key_format, fields: [the key]}; each problem code as listed", golden: skills.invalid, auto: true}
+      - {layer: unit, name: "path rules in the pinned order: invisible characters (no-break, en and ideographic spaces, line and paragraph separators, Hangul filler, Braille blank, variation selectors, private-use, unassigned), not_portable (reserved characters, trailing dot or space, Windows device names, the Windows spellings of .git), full case folding (ß, ẞ, ss clash); the plain space and é pass", golden: skills.path_cases, auto: true}
+      - {layer: storage, name: "a .claude or .claude-plugin folder at any depth, compared by NFKC and case (.Claude, .CLAUDE-PLUGIN, a fullwidth full stop), is invalid_path {path, why: claude_folder or plugin_folder} and storage is unchanged; .claude-x and claude are allowed", golden: "skills.hostile, skills.valid", auto: true}
+      - {layer: unit, name: "a reserved name (a bundled skill, a built-in command, skills-catalog) is invalid_name {why: reserved}; a near name is allowed; the list the core uses is the repo's dated file, not a copy (a name added to a test copy of the file is refused, one removed is allowed)", golden: "skills.invalid, skills.valid", auto: true}
 
   - id: secrets
     source: {doc: design, ref: "contract §3 publish_skill_to_catalog: secret scan, ignore list"}
@@ -60,6 +64,7 @@ requirements:
       - {layer: interface, name: secret_suspected with path and line; the ignore list skipped and reported; the MCP schema has no override, golden: skills.hostile, auto: true}
       - {layer: interface, name: "secret_suspected's text never repeats the secret's value (nor the sentinel)", golden: skills.hostile, auto: true}
       - {layer: agent, name: A7s no tool call carries the override, golden: agent.A7s, auto: true}
+      - {layer: storage, name: "the core's publish_version runs the same secret scan: a planted secret gives secret_suspected {path, line, kind} and stores nothing, its value never echoed; allow_suspected_secrets: true publishes; no MCP schema carries that field", golden: skills.hostile, auto: true}
 
   - id: discover
     source: {doc: prd, ref: "FR-02, UC-02"}
@@ -109,7 +114,10 @@ requirements:
     checks:
       - {layer: interface, name: "read_shared_skill include: contents equals the fixture's text files", golden: skills.valid, auto: true}
       - {layer: interface, name: "include: files types each file by its bytes (only logo.png is binary); include: contents gives content for every text file, SKILL.md included, encoding back to the exact bytes; never for a binary", golden: skills.valid, auto: true}
+      - {layer: interface, name: "a read inlines at most the 24 KB budget: each file whole or omitted (content_omitted), SKILL.md first then by path, a later smaller file still fits, inline_budget {limit, used, omitted}; paths[] reads just those files, a missing one is not_found {path}, 21 paths or paths with names is invalid_request", golden: skills.reads, auto: true}
       - {layer: interface, name: install_shared_skill writes the same tree and a lock entry, golden: skills.valid, auto: true}
+      - {layer: interface, name: "the fence: a read's skill text sits between one start and one end marker carrying the injected token; markers planted in SKILL.md in any spelling never close it; paths and names outside it are JSON-quoted", golden: skills.fence, auto: true}
+      - {layer: interface, name: "install refuses to overwrite: a hand-made folder of that name in the target gives exists_untracked {path}, untouched; an untracked same-named skill in the other target gives name_in_use {path}; a tampered lock path never redirects an update (the path is target + name)", auto: true}
       - {layer: agent, name: A4 installs the skill intact, golden: agent.A4, auto: true}
 
   - id: retrieve-not-found
@@ -269,6 +277,7 @@ requirements:
     checks:
       - {layer: storage, name: "one suite unchanged on every adapter (SQLite + folder now; others plug in later)", auto: true}
       - {layer: agent, name: "A11 finds a skill in a 10,000-skill catalog within the tool-result budget", golden: agent.A11, auto: true}
+      - {layer: interface, name: "request fields are the operation's own: constructor, __proto__, toString and hasOwnProperty as request fields give invalid_request {field} on every operation, through the core and each face, and change nothing", golden: skills.request_fields, auto: true}
 
   - id: auto-updates
     source: {doc: notes, ref: "personas; the owner's answer on auto-updates"}
@@ -278,6 +287,8 @@ requirements:
     oracles: [update-gate, local-edits-replaced]
     checks:
       - {layer: unit, name: update gate table, golden: policy.table, auto: true}
+      - {layer: unit, name: "the diff's risk_flags for each gate pair: runs_at_load per ! line or block, capability_frontmatter per key off the safe list (hooks, context, agent, allowed-tools widened, disable-model-invocation removed, an unknown key), instructions_changed only when the new version grants, runnable_file for a command position, one reason per file, field/from/to/line carried; the safe list raises nothing", golden: histories.gate, auto: true}
+      - {layer: interface, name: "a first install goes through the gate whatever the policy: a flagged skill gives held: flagged with a confirm, accept_held_update installs it; an unflagged one installs", golden: "policy.table, histories.gate", auto: true}
       - {layer: interface, name: "update_installed_skills replaces a hand-edited copy and records version and fingerprint in the lock (phase 1: the owner's decision)", golden: histories.prc, auto: true}
       - {layer: agent, name: A10 update my skills, golden: agent.A10, auto: true}
       - {layer: agent, name: A10u an unattended update holds a flagged change, golden: agent.A10u, auto: true}
@@ -362,6 +373,9 @@ requirements:
       - {layer: agent, name: A14 teardown puts things back, golden: agent.A14, auto: true}
       - {layer: setup, name: teardown leaves the assistant home byte-identical to before setup, auto: true}
       - {layer: setup, name: "setup's result leads with the remaining step and 'N skills to search; none installed yet'", auto: true}
+      - {layer: setup, name: "the written settings allow exactly the contract §6 MCP tools and shell prefixes, no more; the hook and the MCP entry use absolute paths", auto: true}
+      - {layer: setup, name: "--accept or --allow-suspected-secrets with no terminal exits 3 and changes nothing", auto: true}
+      - {layer: setup, name: "the session-start notice never contains a publisher-chosen string: a sentinel planted in a skill's path and description is absent from it", auto: true}
       - {layer: manual, name: the owner watches a recording of the wizard, auto: false, automate_by: "pseudo-terminal screen snapshots approved once"}
 
   - id: setup-unattended

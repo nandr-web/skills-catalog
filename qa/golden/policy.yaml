@@ -5,15 +5,18 @@
 #
 # policy: the global default; override: per skill (none = inherit). The effective policy is the override when set.
 # flags: the risk_flags the newest version raises against the installed one (contract §5.3):
-#   from the diff: runnable_file, non_markdown, capability_frontmatter, new_publisher;
+#   from the diff: runnable_file, runs_at_load, capability_frontmatter, instructions_changed, non_markdown, new_publisher
+#   (which change raises which flag: histories.yaml `gate`);
 #   from the rules reviewer, run by the installer on the fetched version: prompt_injection, context_cost.
 #   [] = a markdown-only change with no reviewer findings. `newer: false` = no newer version.
 # local: same | changed_here. Phase 1 (the owner's decision; contract §5.4): nothing checks for local changes and an update replaces the installed copy, so
 #   `outcome` ignores `local`. `if_protected` is the outcome if the owner later picks protection.
 # accept: the setup option accept_flagged_updates (default false).
 # mode: interactive | unattended (unattended holds are reported at the next session).
-# outcome: updated | unchanged | held:pin | held:notify | held:flagged
+# outcome: updated | unchanged | installed | held:pin | held:notify | held:flagged
 # Precedence: pin, then notify, then the risk-flag gate.
+# first_install: true = an install from nothing (contract §5.3): it follows the auto rows whatever the policy, so no flags
+#   installs and any flag is held:flagged, then accept_held_update with its confirm installs it.
 
 cases:
   - {policy: auto,   override: none,   flags: [],                       local: same,         accept: false, mode: interactive, outcome: updated}
@@ -42,3 +45,14 @@ cases:
   - {policy: pin,    override: none,   flags: [],                       local: changed_here, accept: false, mode: interactive, outcome: held:pin, if_protected: held:changed_here}
   - {policy: notify, override: none,   flags: [runnable_file],          local: changed_here, accept: false, mode: interactive, outcome: held:notify, if_protected: held:changed_here}
   - {policy: auto,   override: pin,    flags: [non_markdown],           local: same,         accept: true,  mode: unattended,  outcome: held:pin}
+  # The new diff flags (contract §5.3, f4a1df7): each holds an auto update like any other flag.
+  - {policy: auto,   override: none,   flags: [runs_at_load],           local: same,         accept: false, mode: interactive, outcome: held:flagged}
+  - {policy: auto,   override: none,   flags: [runs_at_load],           local: same,         accept: false, mode: unattended,  outcome: held:flagged}
+  - {policy: auto,   override: none,   flags: [instructions_changed],   local: same,         accept: false, mode: interactive, outcome: held:flagged}
+  - {policy: auto,   override: none,   flags: [instructions_changed],   local: same,         accept: false, mode: unattended,  outcome: held:flagged}
+  # A first install goes through the gate whatever the policy (it follows the auto rows).
+  - {first_install: true, policy: pin,    override: none, flags: [],                       local: same, accept: false, mode: interactive, outcome: installed}
+  - {first_install: true, policy: pin,    override: none, flags: [capability_frontmatter], local: same, accept: false, mode: interactive, outcome: held:flagged, note: "then accept_held_update with its confirm installs it"}
+  - {first_install: true, policy: notify, override: none, flags: [],                       local: same, accept: false, mode: interactive, outcome: installed}
+  - {first_install: true, policy: notify, override: none, flags: [runs_at_load],           local: same, accept: false, mode: interactive, outcome: held:flagged}
+  - {first_install: true, policy: auto,   override: none, flags: [runnable_file],          local: same, accept: false, mode: interactive, outcome: held:flagged}

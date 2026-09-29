@@ -40,6 +40,62 @@ versions:
     SKILL.md: "---\nname: pr-review-checklist\ndescription: A checklist for reviewing pull requests (tests, naming, security, docs). Use when asked to review a PR.\n---\nWork through checklist.md item by item. Run scripts/lint.sh first.\n"
     checklist.md: "- [ ] Tests cover the change\n- [ ] Names say what things are\n- [ ] No secrets\n- [ ] Docs updated\n"
     scripts/lint.sh: {mode: "0755", text: "#!/bin/sh\necho lint ok\n"}
+  # The update gate's flags (contract §5.3). g0 grants nothing; g1 pre-approves Bash(python3 *). Planted commands only echo
+  # a marker (the fixture safety rule). Line numbers count from the file's first line.
+  gate.g0:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n"
+    reference.md: "Step one.\n"
+  gate.g0-hooks:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\nhooks:\n  PreToolUse:\n    - matcher: Bash\n      hooks:\n        - type: command\n          command: echo QA-HOOK-MARKER\n---\nFollow reference.md.\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-line:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n!`python3 -c \"print('QA-MARKER')\"`\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-block:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n```\n"
+    reference.md: "Step one.\n"
+  gate.g0-fork:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\ncontext: fork\nagent: Explore\n---\nFollow reference.md.\n"
+    reference.md: "Step one.\n"
+  gate.g0-desc:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill, reworded.\n---\nFollow reference.md.\n"
+    reference.md: "Step one.\n"
+  gate.g0-meta:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\nmetadata:\n  tags: docs\n---\nFollow reference.md.\n"
+    reference.md: "Step one.\n"
+  gate.g0-dmi:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\ndisable-model-invocation: true\n---\nFollow reference.md.\n"
+    reference.md: "Step one.\n"
+  gate.g0-unknown:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\nx-future-key: \"1\"\n---\nFollow reference.md.\n"
+    reference.md: "Step one.\n"
+  gate.g0-ref:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n"
+    reference.md: "Step one.\nStep two.\n"
+  gate.g0-cmdpos:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\nRun `python3 tools/x.txt` first.\n"
+    reference.md: "Step one.\n"
+    tools/x.txt: "print('QA-MARKER')\n"
+  gate.g0-script:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n"
+    reference.md: "Step one.\n"
+    scripts/run.sh: {mode: "0755", text: "#!/bin/sh\necho QA-MARKER\n"}
+  gate.g1:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\nallowed-tools: Bash(python3 *)\n---\nFollow reference.md.\n"
+    reference.md: "Step one.\n"
+  gate.g1-steps:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\nallowed-tools: Bash(python3 *)\n---\nFollow reference.md.\nThen run the checks.\n"
+    reference.md: "Step one.\n"
+  gate.g1-widened:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\nallowed-tools: Bash\n---\nFollow reference.md.\n"
+    reference.md: "Step one.\n"
+  gate.g1-ref:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\nallowed-tools: Bash(python3 *)\n---\nFollow reference.md.\n"
+    reference.md: "Step one.\nStep two.\n"
+  gate.g1-notes-bang:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\nallowed-tools: Bash(python3 *)\n---\nFollow reference.md.\n"
+    reference.md: "Step one.\n"
+    notes.md: "!`echo QA-MARKER`\n"
 
 histories:
   h1:
@@ -70,6 +126,33 @@ histories:
     diffs:
       - {from: 1, to: 2, files: [{path: checklist.md, status: changed}], risk_flags: []}
       - {from: 2, to: 3, files: [{path: SKILL.md, status: changed}, {path: scripts/lint.sh, status: added, flags: {executable: true, script: true}}], risk_flags: [{kind: runnable_file, path: scripts/lint.sh}], note: "one reason per file: runnable_file, not also non_markdown (the contract); SKILL.md is markdown, so no flag"}
+
+  gate:
+    name: gate-skill
+    note: >-
+      The update gate's flags (contract §5.3, f4a1df7): each pair is (installed version, new version) and the risk_flags the
+      diff must raise, compared as a set; `from: null` is a first install. One reason per file, the first that applies:
+      runnable_file, runs_at_load (one per ! line or block, and no other reason for that file), instructions_changed,
+      non_markdown; capability_frontmatter is one flag per key beside the file's own reason. Flags carry path, line, field,
+      from and to where they apply. Checked by the shared skill-tree module's diff (slice 4); the core's diff uses the same safe list.
+    pairs:
+      - {from: gate.g0, to: gate.g0-hooks, risk_flags: [{kind: capability_frontmatter, path: SKILL.md, line: 4, field: hooks, from: null}], note: "frontmatter-only change: not also instructions_changed"}
+      - {from: gate.g0, to: gate.g0-bang-line, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}]}
+      - {from: gate.g0, to: gate.g0-bang-block, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}]}
+      - {from: gate.g0, to: gate.g0-fork, risk_flags: [{kind: capability_frontmatter, path: SKILL.md, line: 4, field: context, from: null, to: fork}, {kind: capability_frontmatter, path: SKILL.md, line: 5, field: agent, from: null, to: Explore}]}
+      - {from: gate.g1, to: gate.g1-steps, risk_flags: [{kind: instructions_changed, path: SKILL.md}], note: "new body steps in a skill that pre-approves Bash(python3 *)"}
+      - {from: gate.g1, to: gate.g1-widened, risk_flags: [{kind: capability_frontmatter, path: SKILL.md, line: 4, field: allowed-tools, from: "Bash(python3 *)", to: Bash}], note: "frontmatter-only change: not also instructions_changed"}
+      - {from: gate.g0, to: gate.g0-desc, risk_flags: [], note: "description is on the safe list"}
+      - {from: gate.g0, to: gate.g0-meta, risk_flags: [], note: "metadata is on the safe list"}
+      - {from: gate.g0-dmi, to: gate.g0, risk_flags: [{kind: capability_frontmatter, path: SKILL.md, field: disable-model-invocation, from: true, to: null}], note: "removing a key off the safe list flags"}
+      - {from: gate.g0, to: gate.g0-unknown, risk_flags: [{kind: capability_frontmatter, path: SKILL.md, line: 4, field: x-future-key, from: null, to: "1"}], note: "an unknown key flags: the gate fails closed"}
+      - {from: gate.g0, to: gate.g0-ref, risk_flags: [], note: "a skill with no grants: a changed markdown file raises nothing, so auto applies it"}
+      - {from: gate.g1, to: gate.g1-ref, risk_flags: [{kind: instructions_changed, path: reference.md}], note: "the same change in a skill with allowed-tools"}
+      - {from: gate.g0, to: gate.g0-cmdpos, risk_flags: [{kind: runnable_file, path: tools/x.txt}], note: "SKILL.md puts tools/x.txt in a command position (python3 x): runnable_file, not also non_markdown; SKILL.md's body change raises nothing in a skill with no grants"}
+      - {from: gate.g0, to: gate.g0-script, risk_flags: [{kind: runnable_file, path: scripts/run.sh}], note: "one reason per file: not also non_markdown"}
+      - {from: gate.g1, to: gate.g1-notes-bang, risk_flags: [{kind: runs_at_load, path: notes.md, line: 1}], note: "runs_at_load and no other reason for that file, though the skill grants"}
+      - {from: null, to: gate.g1, risk_flags: [{kind: capability_frontmatter, path: SKILL.md, line: 4, field: allowed-tools, from: null, to: "Bash(python3 *)"}, {kind: instructions_changed, path: SKILL.md}, {kind: instructions_changed, path: reference.md}], note: "a first install is an update from nothing"}
+      - {from: null, to: gate.g0, risk_flags: [], note: "a first install of a skill that grants nothing installs"}
 
   concurrent:
     name: concurrent-skill
