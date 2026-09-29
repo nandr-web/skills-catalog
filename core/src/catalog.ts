@@ -619,15 +619,17 @@ export class Catalog {
     return { name: record.name, version: record.version, fingerprint: record.fingerprint, files };
   }
 
-  // request_upload_links (hosted only, §1.1): every check a publish makes before its files (who is asking, the name
-  // theirs or new, the sizes), then a link for each file not stored; the links port claims each stored one.
+  // request_upload_links (hosted only, §1.1): each file's sha256, then every check a publish makes before its files (who
+  // is asking, the name theirs or new, the sizes), then a link for each file not stored; the links port claims each
+  // stored one.
   async uploadLinks(input: unknown, identity: Identity = this.p.identity, face: Face = CATALOG_FACE): Promise<UploadLinksResult> {
     const req = validateInput<UploadLinksInput>('request_upload_links', input, face, this.p.where);
+    // Each sha256 is a pure input check, like the schema's: before anything is looked up (§9).
+    checkSha256s(req.files);
     const publisher = checkActor(await identity.actor());
     const name = checkName(req.name);
     const skill = await this.p.storage.skill(name);
     if (skill && !skill.owners.includes(publisher)) throw new CatalogError('not_owner', { name, owners: skill.owners });
-    checkSha256s(req.files);
     checkSizes(req.files, this.config.limits);
     return { name, files: await this.p.links!.uploadLinks(req.files.map((f) => ({ sha256: f.sha256, size: f.size }))) };
   }
