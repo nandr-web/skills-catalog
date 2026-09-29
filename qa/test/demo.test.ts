@@ -104,20 +104,50 @@ async function tmuxServer() {
 }
 /** A pane's border format, expanded (before tmux reads #[…] styles and "##" while drawing it). */
 const border = (t: Tmux, pane: string) => t('display-message', '-p', '-t', pane, '#{T:pane-border-format}').replace(/\n$/, '');
+const DRAWN_COLS = 200;
+/** Whether a captured screen's top row (every top pane's border, with its title) is drawn whole: all 200 columns, and no
+ *  run of 3 blank cells (a border's title is padded by one space; tmux fills the title in after the border itself, so a
+ *  row caught in between is blank where the titles go). Says nothing about what the titles are: the tests check that. */
+function wholeFrame(screen: string): boolean {
+  const top = screen.split('\n')[0];
+  return [...top].length === DRAWN_COLS && !top.includes('   ');
+}
 /** What a client of the demo's server really draws: a second tmux server (socket `o`) runs a client in a 200x50 pane,
- *  and its screen is read back as plain text, rows joined by newlines. Killed after the test. */
+ *  and its screen is read back as plain text, rows joined by newlines, once it's finished: its top row is whole and two
+ *  captures 100 ms apart are the same (a client draws a frame in pieces; on a busy machine the first capture that isn't
+ *  blank can hold a border row without its titles). Killed after the test. */
 async function drawn(dir: string): Promise<string> {
   const o = (...args: string[]) => spawnSync('tmux', ['-S', 'o', '-f', '/dev/null', '-u', ...args], { cwd: dir, encoding: 'utf8' });
   servers.push({ kill: () => { o('kill-server'); } });
   // inside the outer server $TMUX is set, and tmux refuses to nest a client unless it's unset
-  o('new-session', '-d', '-s', 'outer', '-x', '200', '-y', '50', 'unset TMUX; exec tmux -S t -f /dev/null -u -N attach-session -t demo');
-  for (let i = 0; i < 50; i++) {
+  o('new-session', '-d', '-s', 'outer', '-x', String(DRAWN_COLS), '-y', '50', 'unset TMUX; exec tmux -S t -f /dev/null -u -N attach-session -t demo');
+  let last = '';
+  for (const started = Date.now(); Date.now() - started < 10_000;) {
+    await new Promise((r) => setTimeout(r, 100));
     const screen = o('capture-pane', '-p', '-t', 'outer').stdout;
-    if (screen.split('\n')[0].trim()) return screen;
-    await new Promise((r) => setTimeout(r, 50));
+    if (screen === last && wholeFrame(screen)) return screen;
+    last = screen;
   }
-  throw new Error('the client drew nothing within 2.5 s');
+  // the row's length only: the screen itself isn't printed (it could hold the host name)
+  const top = last.split('\n')[0];
+  throw new Error(`the client didn't finish drawing within 10 s: its top row is ${[...top].length} of ${DRAWN_COLS} columns${top.includes('   ') ? ', with blanks where titles go' : ''}${wholeFrame(last) ? ', and still changing' : ''}`);
 }
+
+describe('drawn(): a screen counts only once the client has drawn its top row whole', () => {
+  // Rows captured from a client of the demo's layout (200 columns: ana, bob, Steps); tmux fills a border's title in
+  // after the border itself, so a capture can land in between
+  const fill = (row: string) => row + '─'.repeat(200 - [...row].length);
+  it('a border row whose titles aren\'t drawn yet, a narrower window, or nothing at all isn\'t whole', () => {
+    expect(wholeFrame('──' + ' '.repeat(74) + '┬──' + ' '.repeat(72) + '┬──\n│')).toBe(false);   // the flake's capture
+    expect(wholeFrame(fill('──  ').slice(0, 120))).toBe(false);   // the window before it takes the client's size
+    expect(wholeFrame('')).toBe(false);
+  });
+  it('a drawn row is whole whatever its titles say, so a wrong title still reaches the test\'s own check', () => {
+    expect(wholeFrame(`${fill('── #(touch ran) #{host} ').slice(0, 76)}┬── odd ## #[fg=red]x #{pane_id}; ${'─'.repeat(41)}┬── Steps ${'─'.repeat(39)}\n│`)).toBe(true);
+    expect(wholeFrame(fill('──  '))).toBe(true);   // a blank title
+    expect(wholeFrame(fill(`── ${hostname()} `))).toBe(true);   // the host name drawn: whole, so the test sees it
+  });
+});
 
 describe.skipIf(!!noTmux)(`qa demo with real tmux${noTmux ? ` (skipped: ${noTmux})` : ''}`, () => {
   it('a headless run plays the scene in four titled panes, saves each pane, and leaves nothing behind', async () => {
