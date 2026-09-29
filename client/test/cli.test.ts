@@ -29,12 +29,23 @@ describe('the CLI face', () => {
 
   it('serves the catalog\'s and the installer\'s commands; preview, publish and setup are still to come', async () => {
     const p = place();
-    for (const word of ['preview', 'publish', 'setup', 'constructor', '__proto__']) {
-      const r = await cli(p, [word, 'x']);
-      expect(r.code, word).toBe(1);
-    }
     const u = await cli(p, ['frobnicate']);
     expect(u.err.split('\n').filter((l) => l.startsWith('  ')).map((l) => l.trim().split(' ')[1])).toEqual(['search', 'read', 'versions', 'diff', 'install', 'update', 'list', 'policy', 'update', 'mcp']);
+    for (const word of ['preview', 'publish', 'setup']) {
+      const r = await cli(p, [word, 'x']);
+      expect([r.code, r.err], word).toEqual([1, u.err]);
+    }
+  });
+
+  it('a word that names something every object has (constructor, __proto__, …) is no command: the usage, exit 1', async () => {
+    const p = place();
+    const u = await cli(p, ['frobnicate']);
+    for (const word of ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf']) {
+      for (const argv of [[word], [word, 'x', '--as', 'dev1']]) {
+        const r = await cli(p, argv);
+        expect([r.code, r.out, r.err], argv.join(' ')).toEqual([1, '', u.err]);
+      }
+    }
   });
 
   it('list with nothing installed says how to add one', async () => {
