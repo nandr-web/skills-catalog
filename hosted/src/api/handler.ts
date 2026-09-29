@@ -32,7 +32,7 @@ export function createHostedHandler(p: HostedHandlerParts): { handle(req: Hosted
   async function answer(req: HostedRequest): Promise<HttpResponse> {
     // One fixed 403 for a missing or wrong value, naming no guard.
     if (!(await p.origin.allows(req.headers[ORIGIN_HEADER]))) return refuse('refused', s);
-    const r = route(req.method, req.path);
+    const r = route(req.method, req.path, 'hosted');
     // Outside the versioned API (the page, pairing) nothing is served here.
     if (r.kind === 'pair' || (r.kind === 'not_found' && !r.operationPath)) return refuse('not_found', s);
 
@@ -42,12 +42,12 @@ export function createHostedHandler(p: HostedHandlerParts): { handle(req: Hosted
     }
 
     if (r.kind === 'file') return fileResponse({ file: p.file ?? ((sha) => p.catalog.file(sha)) }, r.sha256);
-    if (r.kind === 'method') return refuse('method', s);
+    if (r.kind === 'method') return refuse('method', { ...s, allow: r.allow });
     if (r.kind === 'not_found') return refuse('not_found', s);
 
     const refused = mayRun(asking.holder, r.op);
     if (refused) return envelope({ error: refused }, s);
-    return operationResponse({ ...s, op: r.op, raw: req.body, catalog: p.catalog, developer: asking.holder.owner, face: 'web' });
+    return operationResponse({ ...s, op: r.op, raw: req.body, catalog: p.catalog, developer: asking.holder.owner });
   }
 
   return {
