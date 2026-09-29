@@ -17,9 +17,10 @@ export type OriginGuard = { allows(sent: string | undefined): Promise<boolean> }
 
 const digest = (v: string) => createHash('sha256').update(v).digest();
 
-/** A guard on the two parameters' values, read now (a cold start) and again once they're ORIGIN_VALUES_MS old; requests
- *  meanwhile share the one read. An unset or empty parameter is no value. Until a read has succeeded, or once the last
- *  good values are ORIGIN_KEEP_MS old and reading still fails, every request is refused. */
+/** A guard on the two parameters' values, read now (a cold start) and again, in the background, once they're
+ *  ORIGIN_VALUES_MS old; requests meanwhile share the one read and answer with the values in hand. An unset or empty
+ *  parameter is no value. Until a read has succeeded, or once the last good values are ORIGIN_KEEP_MS old, a request
+ *  waits for a read, and is refused if it fails. */
 export function originGuard(p: { names: { current: string; previous: string }; read: (name: string) => Promise<string | undefined>; clock: Clock }): OriginGuard {
   let good: { digests: Buffer[]; at: number } | undefined;
   let reading: Promise<void> | undefined;
@@ -36,12 +37,17 @@ export function originGuard(p: { names: { current: string; previous: string }; r
   read().catch(() => {});
   return {
     async allows(sent) {
-      if (!good || p.clock.now().getTime() - good.at >= ORIGIN_VALUES_MS) {
+      const age = good ? p.clock.now().getTime() - good.at : Infinity;
+      if (age >= ORIGIN_KEEP_MS) {
+        // Nothing good in hand: this request waits for the read.
         try {
           await read();
         } catch {
-          // The last good values stand, within ORIGIN_KEEP_MS.
+          // Refused below.
         }
+      } else if (age >= ORIGIN_VALUES_MS) {
+        // Good values in hand: read again in the background and answer with them; a failed read leaves them standing.
+        read().catch(() => {});
       }
       if (!good || p.clock.now().getTime() - good.at >= ORIGIN_KEEP_MS) return false;
       if (sent === undefined || sent === '') return false;

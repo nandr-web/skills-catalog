@@ -51,7 +51,7 @@ describe('the origin guard', () => {
     expect(await g.allows(undefined)).toBe(false);
   });
 
-  it('the values are read when the guard is made, kept five minutes, then read again (a rotation lands)', async () => {
+  it('the values are read when the guard is made, kept five minutes, then read again in the background (a rotation lands once that read is back)', async () => {
     const values: Record<string, string | undefined> = { [NAMES.current]: CURRENT, [NAMES.previous]: PREVIOUS };
     const p = parameters(values);
     const g = originGuard({ names: NAMES, read: p.read, clock: p.clock });
@@ -64,6 +64,9 @@ describe('the origin guard', () => {
     p.clock.advance(ORIGIN_VALUES_MS - 1);
     expect(await g.allows(PREVIOUS)).toBe(true);
     p.clock.advance(1);
+    // This request starts the read and is answered with the values in hand; the next ones see the rotation.
+    expect(await g.allows(PREVIOUS)).toBe(true);
+    await new Promise((r) => setTimeout(r, 0));
     expect(await g.allows(PREVIOUS)).toBe(false);
     expect(await g.allows('n'.repeat(43))).toBe(true);
     expect(await g.allows(CURRENT)).toBe(true);
