@@ -1,7 +1,7 @@
 // Where the client reads and writes, and who it acts as (contract §7, §8), from the environment it was started with:
 // an assistant's MCP config for the server, the person's shell for the CLI.
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 // A developer's name as the core accepts a publisher's (its ACTOR rule), kept in step with the core until the core
@@ -15,6 +15,8 @@ export type Settings = {
   catalog: string;
   /** SKILLS_ACTIVITY_LOG (default $SKILLS_HOME/activity.log): one line per tool call, for the demo. */
   activityLog: string;
+  /** The log sits directly in SKILLS_HOME, the client's own folder (kept 0700); a folder the person named is theirs. */
+  activityLogInHome: boolean;
   /** SKILLS_AS: the developer you act as locally (a demo identity, not security), when it is a developer's name. */
   developer?: string;
   /** SKILLS_AS was set to something that isn't a developer's name: every call says so, and nothing is done. */
@@ -25,10 +27,12 @@ export function settingsFrom(env: Record<string, string | undefined>): Settings 
   const home = resolve(env['SKILLS_HOME'] || join(homedir(), '.skills-catalog'));
   const as = env['SKILLS_AS'] || undefined;
   const valid = as !== undefined && DEVELOPER.test(as);
+  const activityLog = resolve(env['SKILLS_ACTIVITY_LOG'] || join(home, 'activity.log'));
   return {
     home,
     catalog: env['SKILLS_CATALOG'] || pathToFileURL(join(home, 'catalog')).href,
-    activityLog: resolve(env['SKILLS_ACTIVITY_LOG'] || join(home, 'activity.log')),
+    activityLog,
+    activityLogInHome: dirname(activityLog) === home,
     ...(valid ? { developer: as } : {}),
     developerInvalid: as !== undefined && !valid,
   };

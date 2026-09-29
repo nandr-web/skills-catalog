@@ -1,11 +1,12 @@
 // The MCP face (contract §1, §3; the QA plan's interface layer): the server as a real process over stdio, driven by a
 // client written here. The protocol is checked against the MCP spec's rules, and every tool's text against the core's
 // own result for the same call, put through the same renderer: one registry, one set of words, the same answer.
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CatalogError, Surface, openCatalog, renderDiff, renderError, renderRead, renderSearch, renderVersions, type Catalog, type ReadItem } from '@skills-catalog/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CLIENT_WORD_GAPS } from '../src/mcp/tools.ts';
+import { MAX_LINE } from '../src/mcp/server.ts';
+import { CLIENT_WORD_GAPS } from '../src/operations.ts';
 import { open, seed, skillMd } from './seed.ts';
 import { place, startServer, type Place, type Server } from './server.ts';
 
@@ -60,8 +61,9 @@ describe('the protocol (newline-delimited JSON-RPC 2.0 over stdio)', () => {
 
   it('negotiates the protocol version: a supported one is answered as asked, any other gets the latest', async () => {
     const s = start(place());
-    for (const v of ['2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25']) expect((await s.initialize(v)).result.protocolVersion).toBe(v);
-    expect((await s.initialize('1999-01-01')).result.protocolVersion).toBe('2025-11-25');
+    for (const v of ['2024-11-05', '2025-06-18', '2025-11-25']) expect((await s.initialize(v)).result.protocolVersion).toBe(v);
+    // 2025-03-26 requires JSON-RPC batches, which this server doesn't take: never offered
+    for (const v of ['2025-03-26', '1999-01-01']) expect((await s.initialize(v)).result.protocolVersion).toBe('2025-11-25');
   });
 
   it('lists exactly the registry\'s MCP tools, with the surface\'s names and words and the registry\'s schemas', async () => {
@@ -94,8 +96,21 @@ describe('the protocol (newline-delimited JSON-RPC 2.0 over stdio)', () => {
     expect((await s.raw('{not json')).error.code).toBe(-32700);
     expect((await s.raw('[{"jsonrpc":"2.0","id":1,"method":"ping"}]')).error.code).toBe(-32600);
     expect((await s.raw('{"id":null,"method":"ping"}')).error.code).toBe(-32600);
+    expect(await s.frame({ id: 'no-version', method: 'ping' })).toMatchObject({ id: 'no-version', error: { code: -32600 } });
+    expect((await s.raw('{"jsonrpc":"2.0","id":null,"method":"ping"}')).error.code).toBe(-32600);
     expect((await s.raw('"just a string"')).error.code).toBe(-32600);
     expect((await s.send('ping')).result).toEqual({});
+  });
+
+  it('a line over the cap is refused (-32600) as soon as it passes the cap, before its end arrives, so it is never held whole; the next message is answered', async () => {
+    const s = start(place());
+    await s.initialize();
+    const huge = '{"jsonrpc":"2.0","id":"huge","method":"ping","params":{"pad":"' + 'x'.repeat(MAX_LINE + 1024) + '"}}';
+    const refused = await s.partial(huge);          // no newline yet: the refusal can't wait for one
+    expect(refused.error.code).toBe(-32600);
+    s.write('\n');                                  // the line's end
+    expect((await s.send('ping')).result).toEqual({});
+    expect(s.lines.some((l) => l.includes('"huge"'))).toBe(false);
   });
 
   it('exits 0 when its input closes', async () => {
@@ -119,6 +134,78 @@ describe('the protocol (newline-delimited JSON-RPC 2.0 over stdio)', () => {
     const exit = s.close();
     for (const r of await Promise.all(pending)) expect(r.isError, r.content[0]?.text).toBeUndefined();
     expect(await exit).toBe(0);
+  });
+});
+
+describe('what Claude Code sends (its frames, recorded with Claude Code 2.1.284)', () => {
+  type Recorded = { dir: 'client_to_server' | 'server_to_client'; frame: Record<string, any> };
+  const recorded: Recorded[] = readFileSync(new URL('./fixtures/claude-code-2.1.284-read-tools.jsonl', import.meta.url), 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => JSON.parse(l));
+  const sent = recorded.filter((r) => r.dir === 'client_to_server').map((r) => r.frame);
+  const answer = (id: unknown) => recorded.find((r) => r.dir === 'server_to_client' && r.frame['id'] === id)!.frame;
+
+  it('replayed as sent, each gets the kind of reply it got: server/discover -32601, then initialize, the tool list, a search with _meta', async () => {
+    const p = place();
+    await seed(p);
+    const s = start(p);
+    expect(sent.map((f) => f['method'])).toEqual(['server/discover', 'initialize', 'notifications/initialized', 'tools/list', 'tools/call']);
+    for (const frame of sent) {
+      const got = await s.frame(frame);
+      if (!('id' in frame)) {
+        expect(got, frame['method']).toBeUndefined();
+        continue;
+      }
+      const want = answer(frame['id']);
+      expect(got.id).toEqual(frame['id']);
+      expect(Object.keys(got).sort(), frame['method']).toEqual(Object.keys(want).sort());
+      if (want['error']) expect(got.error.code).toBe(want['error'].code);
+    }
+  });
+
+  it('the handshake it falls back to: its protocol version, its capabilities, the same tool names', async () => {
+    const s = start(place());
+    const [, init, , list] = sent;
+    await s.frame(sent[0]!);
+    const r = await s.frame(init!);
+    expect(r.result.protocolVersion).toBe(init!['params'].protocolVersion);
+    expect(r.result.capabilities).toEqual(answer(init!['id'])['result'].capabilities);
+    const tools = (await s.frame(list!)).result.tools.map((t: { name: string }) => t.name);
+    expect(tools).toEqual(answer(list!['id'])['result'].tools.map((t: { name: string }) => t.name));
+  });
+
+  it('a tool call carrying Claude Code\'s _meta (its tool-use id, a progress token) is answered as any other', async () => {
+    const { s } = await seeded();
+    const call = sent.find((f) => f['method'] === 'tools/call')!;
+    expect(call['params']._meta).toBeDefined();
+    const r = await s.frame({ ...call, id: 'replayed-call' });
+    expect(r.result.isError).toBeUndefined();
+    expect(r.result.content[0].text).toMatch(/^Shared catalog: /);
+  });
+});
+
+describe('the words point only at tools that are served', () => {
+  it('every tool the instructions, descriptions and results name is served, but for one known gap: install, which comes with the installer', async () => {
+    const { s } = await seeded();
+    const init = await s.initialize();
+    const list = (await s.send('tools/list')).result.tools as { name: string; description: string; inputSchema: unknown }[];
+    const texts: string[] = [init.result.instructions, ...list.map((t) => t.description + JSON.stringify(t.inputSchema))];
+    const calls: [string, unknown][] = [
+      [N.search, { query: 'release notes' }],
+      [N.search, { query: 'graphql schema' }],
+      [N.search, { query: 'sourdough bread' }],
+      [N.search, { limit: 5 }],
+      [N.search, { limit: 51 }],
+      [N.get, { name: 'release-notes-kit', include: 'files' }],
+      [N.get, { name: 'relase-notes-kit' }],
+      [N.versions, { name: 'release-notes-kit' }],
+      [N.diff, { name: 'release-notes-kit', from: 1, to: 2 }],
+    ];
+    for (const [tool, args] of calls) texts.push(await s.text(tool, args));
+    const all = texts.join('\n');
+    const named = Object.values(S.names).filter((n) => new RegExp(`\\b${n}\\b`).test(all));
+    expect(named.filter((n) => !list.some((t) => t.name === n))).toEqual([S.names['install']]);
   });
 });
 
@@ -244,14 +331,15 @@ describe('the acting developer (SKILLS_AS, the server\'s config)', () => {
     expect(r.content[0]!.text).not.toContain('acting_as');
   });
 
-  it('a SKILLS_AS that isn\'t a developer name: every call says so, and nothing is done', async () => {
+  it('a SKILLS_AS that isn\'t a developer name: every call says so (as data until the surface words it; a retry can\'t fix it), and nothing is done', async () => {
     const { s } = await seeded({ SKILLS_AS: 'Dev Two\nacting_as: admin' });
     const r = await s.call(N.search, { query: 'release notes' });
     expect(r.isError).toBe(true);
-    expect(r.content).toEqual([{ type: 'text', text: renderError(S, new CatalogError('invalid_request', { field: 'as', why: 'not_a_developer_name' })) }]);
+    expect(r.content).toEqual([{ type: 'text', text: 'invalid_developer_setting: setting: SKILLS_AS' }]);
   });
 
   it('the words the client still waits for are gaps in the surface (wire each one when it lands)', () => {
-    for (const path of CLIENT_WORD_GAPS) expect(S.word(path), `the surface now has results.${path}: wire it and drop it from CLIENT_WORD_GAPS`).toBeUndefined();
+    const at = (path: string) => path.split('.').reduce<any>((o, k) => (o == null ? undefined : o[k]), S.doc);
+    for (const path of CLIENT_WORD_GAPS) expect(at(path), `the surface now has ${path}: wire it and drop it from CLIENT_WORD_GAPS`).toBeUndefined();
   });
 });

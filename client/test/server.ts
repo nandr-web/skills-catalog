@@ -26,6 +26,12 @@ export interface Server {
   notify(method: string, params?: unknown): void;
   /** One raw line, as is (for malformed input); resolves with the reply to id null (a line the server couldn't read). */
   raw(line: string): Promise<any>;
+  /** One whole message, ids and all (a recorded frame); resolves with its reply, or undefined for a notification. */
+  frame(message: Record<string, unknown>): Promise<any>;
+  /** Text with no newline after it (part of a line); resolves with the next reply to id null. */
+  partial(text: string): Promise<any>;
+  /** Text as is, expecting no reply (the end of a line already refused). */
+  write(text: string): void;
   initialize(protocolVersion?: string): Promise<any>;
   /** tools/call; resolves with the result (throws on a JSON-RPC error). */
   call(name: string, args?: unknown): Promise<ToolResult>;
@@ -44,9 +50,11 @@ export function startServer(p: Place, env: Record<string, string> = {}): Server 
     HOME: p.osHome,
     SKILLS_HOME: p.home,
     SKILLS_CATALOG: p.catalogUrl,
+    // Not UTC, so a local time anywhere (the activity log's clock) differs from UTC even on a machine set to UTC.
+    TZ: 'Asia/Kolkata',
     ...env,
   };
-  for (const k of ['HOME', 'SKILLS_HOME'] as const) refuseRealPlaces(full[k]!);
+  for (const k of ['HOME', 'SKILLS_HOME', 'SKILLS_ACTIVITY_LOG'] as const) if (full[k] !== undefined) refuseRealPlaces(full[k]);
   if (full['SKILLS_CATALOG']!.startsWith('file:')) refuseRealPlaces(fileURLToPath(full['SKILLS_CATALOG']!));
 
   const child = spawn(process.execPath, [CLI, 'mcp'], { env: full, cwd: p.dir, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -94,6 +102,19 @@ export function startServer(p: Place, env: Record<string, string> = {}): Server 
       const r = reply(null);
       child.stdin.write(line + '\n');
       return r;
+    },
+    frame(message) {
+      const r = 'id' in message ? reply(message['id'] as number | string | null) : Promise.resolve(undefined);
+      write(message);
+      return r;
+    },
+    partial(text) {
+      const r = reply(null);
+      child.stdin.write(text);
+      return r;
+    },
+    write(text) {
+      child.stdin.write(text);
     },
     async initialize(protocolVersion = '2025-06-18') {
       const r = await s.send('initialize', { protocolVersion, capabilities: {}, clientInfo: { name: 'test-client', version: '0' } });

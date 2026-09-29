@@ -1,12 +1,14 @@
 // The activity log: one plain line per tool call, for the demo's bottom pane (SKILLS_ACTIVITY_LOG, else
-// $SKILLS_HOME/activity.log). `HH:MM:SS  who  tool  target  result`, UTC, spaces only. It says who called which tool, on
-// which skills and how it ended, never what was asked: the target comes from the result (skill names and versions, a
-// match count), never from the arguments; no skill text, no paths, no secrets.
-import { existsSync, lstatSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+// $SKILLS_HOME/activity.log). `HH:MM:SS  who  tool  result  target`, UTC, spaces only; the result is padded to the
+// longest one, so a long target (skill names run to 64 characters) comes last and never shifts a column. It says who
+// called which tool, how it ended and on which skills, never what was asked: the target comes from the result (skill
+// names and versions, a match count), never from the arguments; no skill text, no paths, no secrets.
+import { execFileSync } from 'node:child_process';
+import { chmodSync, closeSync, constants, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { actAs, Surface } from '@skills-catalog/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CLIENT_WORD_GAPS } from '../src/mcp/tools.ts';
+import { CLIENT_WORD_GAPS } from '../src/operations.ts';
 import { open, request, seed, skillMd } from './seed.ts';
 import { place, startServer, type Place, type Server } from './server.ts';
 
@@ -26,8 +28,9 @@ afterEach(async () => {
 
 const logOf = (p: Place, path = join(p.home, 'activity.log')) => readFileSync(path, 'utf8');
 const linesOf = (p: Place, path?: string) => logOf(p, path).split('\n').filter(Boolean);
-/** A line without its time, as the format lays it out. */
-const row = (who: string, tool: string, target: string, result: string) => `  ${who.padEnd(4)}  ${tool.padEnd(27)}  ${target.padEnd(26)}  ${result}`;
+/** A line without its time, as the format lays it out. Until the log's words land, a result is its code: the longest is
+ *  25 characters (invalid_developer_setting). */
+const row = (who: string, tool: string, target: string, result: string) => `  ${who.padEnd(4)}  ${tool.padEnd(27)}  ${result.padEnd(25)}  ${target}`;
 
 describe('the activity log', () => {
   it('one line per tool call: time, who, tool, the target from the result, how it ended; nothing for other messages', async () => {
@@ -77,7 +80,7 @@ describe('the activity log', () => {
     const lines = linesOf(p);
     expect(lines).toHaveLength(2);
     expect(lines[0]!.slice(8)).toBe(row('-', N.search, '0/14', 'ok'));
-    expect(lines[1]!.slice(8)).toBe(row('-', N.search, '-', 'invalid_request'));
+    expect(lines[1]!.slice(8)).toBe(row('-', N.search, '-', 'invalid_developer_setting'));
     expect(logOf(p)).not.toContain('admin');
   });
 
@@ -96,8 +99,12 @@ describe('the activity log', () => {
     await s.call(N.versions, { name: marker.toLowerCase() });
     await s.call(N.search, { query: 'x', cursor: marker });
     await s.call(N.search, { [marker]: 1 });
+    await s.call(N.search, { query: 'value', filters: { tags: [marker], publisher: marker, updated_since: marker } });
+    await s.call(N.get, { names: [marker.toLowerCase(), 'marker-skill', marker] });
+    await s.call(N.diff, { name: marker.toLowerCase(), from: 1, to: 2 });
+    await s.call(N.diff, { name: 'marker-skill', from: 1, to: 1 });
     const log = logOf(p);
-    expect(linesOf(p)).toHaveLength(7);
+    expect(linesOf(p)).toHaveLength(11);
     for (const needle of [marker, marker.toLowerCase(), 'PLANTED', 'planted', 'Holds', p.dir]) expect(log).not.toContain(needle);
   });
 
@@ -110,6 +117,54 @@ describe('the activity log', () => {
     await s.call(N.search, { query: 'release' });
     expect(statSync(p.home).mode & 0o777).toBe(0o700);
     expect(statSync(join(p.home, 'activity.log')).mode & 0o777).toBe(0o600);
+  });
+
+  it('a log file or SKILLS_HOME made looser before is tightened (0600, 0700)', async () => {
+    const p = place();
+    await seed(p);
+    mkdirSync(p.home, { recursive: true });
+    chmodSync(p.home, 0o755);
+    writeFileSync(join(p.home, 'activity.log'), '');
+    chmodSync(join(p.home, 'activity.log'), 0o644);
+    const s = start(p);
+    await s.initialize();
+    await s.call(N.search, { query: 'release' });
+    expect(statSync(p.home).mode & 0o777).toBe(0o700);
+    expect(statSync(join(p.home, 'activity.log')).mode & 0o777).toBe(0o600);
+  });
+
+  it('a folder the person named with SKILLS_ACTIVITY_LOG is theirs: its mode is left as it is', async () => {
+    const p = place();
+    await seed(p);
+    const theirs = join(p.dir, 'shared');
+    mkdirSync(theirs);
+    chmodSync(theirs, 0o755);
+    const s = start(p, { SKILLS_ACTIVITY_LOG: join(theirs, 'activity.log') });
+    await s.initialize();
+    await s.call(N.search, { query: 'release' });
+    expect(statSync(theirs).mode & 0o777).toBe(0o755);
+    expect(linesOf(p, join(theirs, 'activity.log'))).toHaveLength(1);
+  });
+
+  it('a FIFO in the log\'s place never stalls the server, and nothing is written into it, even with a reader on it', async () => {
+    const p = place();
+    await seed(p);
+    mkdirSync(p.home, { recursive: true, mode: 0o700 });
+    const fifo = join(p.home, 'activity.log');
+    execFileSync('mkfifo', [fifo]);
+    const s = start(p);
+    await s.initialize();
+    const r = await s.call(N.search, { query: 'release' });            // no reader: opening it for writing would block
+    expect(r.isError).toBeUndefined();
+    const reader = openSync(fifo, constants.O_RDONLY | constants.O_NONBLOCK);
+    try {
+      expect((await s.call(N.search, { query: 'release' })).isError).toBeUndefined();   // a reader: it opens, but isn't a file
+      const got = (() => { try { return readSync(reader, Buffer.alloc(4096)); } catch { return 0; } })();
+      expect(got).toBe(0);
+    } finally {
+      closeSync(reader);
+    }
+    expect(lstatSync(fifo).isFIFO()).toBe(true);
   });
 
   it('SKILLS_ACTIVITY_LOG moves it (the demo points its pane there); its folder is made 0700', async () => {
@@ -151,6 +206,22 @@ describe('the activity log', () => {
     expect(lines).toHaveLength(40);
     for (const l of lines) expect(l.split(/ {2,}/)).toHaveLength(5);
     expect(lines.filter((l) => l.slice(8).startsWith('  dev1'))).toHaveLength(20);
+  });
+
+  it('a long target never moves a column: the result sits at the same place on every line', async () => {
+    const long = 'a-skill-name-that-runs-long-like-the-sixty-four-character-limit';
+    const p = place();
+    await seed(p, async (c) => {
+      for (const body of ['First.\n', 'Second.\n']) await c.publish(request(long, [{ path: 'SKILL.md', text: skillMd(long, 'A long name.', body) }]), actAs('ana'));
+    });
+    const s = start(p, { SKILLS_AS: 'dev2' });
+    await s.initialize();
+    await s.call(N.diff, { name: long, from: 1, to: 2 });
+    await s.call(N.search, { query: 'release' });
+    const lines = linesOf(p);
+    expect(lines[0]!.slice(8)).toBe(row('dev2', N.diff, `${long} v1 → v2`, 'ok'));
+    const at = (l: string) => l.indexOf('ok  ');
+    expect(at(lines[0]!)).toBe(at(lines[1]!));
   });
 
   it('the log\'s words are still a gap in the surface (wire them when they land)', () => {

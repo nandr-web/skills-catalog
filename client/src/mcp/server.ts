@@ -1,16 +1,17 @@
 // The MCP server over stdio (contract §1, §3): newline-delimited JSON-RPC 2.0 with the few methods a tools-only server
 // needs (initialize, ping, tools/list, tools/call). It's written here rather than taken from the MCP SDK, whose 17
 // runtime dependencies are for HTTP transports this server never uses. The tools are the registry's (Surface.toolDefs),
-// every word an assistant reads is the vendored surface's, and every answer is the core's.
-import { createInterface } from 'node:readline';
+// and each call is the client's face-neutral operation (operations.ts), so the MCP text is what the CLI prints.
 import type { Readable, Writable } from 'node:stream';
-import { actAs, CatalogError, openCatalog, renderError, Surface, toCatalogError, type Catalog } from '@skills-catalog/core';
-import { appendActivity } from '../activity.ts';
+import { Surface } from '@skills-catalog/core';
+import { lazyCatalog, perform, RUNS, type Context } from '../operations.ts';
 import type { Settings } from '../settings.ts';
-import { actingAs, RUNS, type Done } from './tools.ts';
 
-/** The protocol versions this server speaks, newest first. A tools-only server with text results reads the same in each. */
-export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'] as const;
+/** The protocol versions this server speaks, newest first. 2025-03-26 isn't offered: it requires JSON-RPC batches. */
+export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2024-11-05'] as const;
+
+/** The longest line read (a message is one line): a longer one is refused and skipped to its end, never held whole. */
+export const MAX_LINE = 4 * 1024 * 1024;
 
 // JSON-RPC 2.0's error codes.
 const PARSE_ERROR = -32700, INVALID_REQUEST = -32600, METHOD_NOT_FOUND = -32601, INVALID_PARAMS = -32602, INTERNAL = -32603;
@@ -23,18 +24,18 @@ class RpcError extends Error {
   }
 }
 
-type Id = string | number | null;
 type Message = Record<string, unknown>;
 const isObject = (x: unknown): x is Message => typeof x === 'object' && x !== null && !Array.isArray(x);
-const reply = (id: Id, result: unknown) => ({ jsonrpc: '2.0', id, result });
-const failure = (id: Id, code: number, message: string) => ({ jsonrpc: '2.0', id, error: { code, message } });
+const isId = (x: unknown): x is string | number => typeof x === 'string' || typeof x === 'number';
+const reply = (id: string | number, result: unknown) => ({ jsonrpc: '2.0', id, result });
+const failure = (id: string | number | null, code: number, message: string) => ({ jsonrpc: '2.0', id, error: { code, message } });
 
 export type ServerOptions = { settings: Settings; version: string; surface?: Surface; now?: () => Date };
 
 export function createMcpServer(o: ServerOptions) {
   const surface = o.surface ?? Surface.load();
-  const now = o.now ?? (() => new Date());
-  const { settings } = o;
+  const catalog = lazyCatalog(o.settings);
+  const ctx: Context = { catalog: catalog.get, surface, settings: o.settings, now: o.now ?? (() => new Date()) };
   const tools = new Map(
     surface
       .toolDefs()
@@ -42,34 +43,12 @@ export function createMcpServer(o: ServerOptions) {
       .map((d) => [d.name, d]),
   );
 
-  // Opened on the first tool call, so a catalog that can't be opened is an error the assistant reads, not a server
-  // that won't start. A failed open is tried again on the next call.
-  let opened: Promise<Catalog> | undefined;
-  const catalog = () =>
-    (opened ??= openCatalog(settings.catalog, { identity: actAs(settings.developer) }).catch((e) => {
-      opened = undefined;
-      throw e;
-    }));
-
   async function callTool(params: unknown) {
     if (!isObject(params) || typeof params['name'] !== 'string') throw new RpcError(INVALID_PARAMS, 'tools/call needs params.name, a tool name');
     const def = tools.get(params['name']);
     if (!def) throw new RpcError(INVALID_PARAMS, `Unknown tool: ${params['name']}`);
-    let done: Done;
-    let isError = false;
-    try {
-      if (settings.developerInvalid) throw new CatalogError('invalid_request', { field: 'as', why: 'not_a_developer_name' });
-      done = await RUNS[def.op]!(await catalog(), surface, params['arguments']);
-    } catch (e) {
-      // A contract error in words; anything else is a bug in skills-catalog: its traceback goes to a log file in
-      // SKILLS_HOME, never to the assistant (contract §9).
-      const err = toCatalogError(e, settings.home, now());
-      done = { text: renderError(surface, err), target: '-', result: err.code };
-      isError = true;
-    }
-    appendActivity(settings.activityLog, { at: now(), who: settings.developer, tool: def.name, target: done.target, result: done.result });
-    const text = settings.developer ? `${done.text}\n${actingAs(settings.developer)}` : done.text;
-    return { content: [{ type: 'text', text }], ...(isError ? { isError: true } : {}) };
+    const a = await perform(ctx, def.op, def.name, params['arguments']);
+    return { content: [{ type: 'text', text: a.text }], ...(a.isError ? { isError: true } : {}) };
   }
 
   async function dispatch(method: string, params: unknown): Promise<unknown> {
@@ -99,12 +78,11 @@ export function createMcpServer(o: ServerOptions) {
   /** One message in, its response out (undefined for a notification, which never gets one). */
   async function handle(msg: unknown): Promise<object | undefined> {
     if (!isObject(msg) || msg['jsonrpc'] !== '2.0' || typeof msg['method'] !== 'string') {
-      const id = isObject(msg) && (typeof msg['id'] === 'string' || typeof msg['id'] === 'number') ? msg['id'] : null;
-      return failure(id, INVALID_REQUEST, 'Invalid Request: one JSON-RPC 2.0 message per line (batches are not supported)');
+      return failure(isObject(msg) && isId(msg['id']) ? msg['id'] : null, INVALID_REQUEST, 'Invalid Request: one JSON-RPC 2.0 message per line (batches are not supported)');
     }
     if (!('id' in msg)) return undefined; // a notification (initialized, cancelled, …): nothing to answer
     const id = msg['id'];
-    if (id !== null && typeof id !== 'string' && typeof id !== 'number') return failure(null, INVALID_REQUEST, 'Invalid Request: id must be a string or a number');
+    if (!isId(id)) return failure(null, INVALID_REQUEST, 'Invalid Request: id must be a string or a number');
     try {
       return reply(id, await dispatch(msg['method'], msg['params']));
     } catch (e) {
@@ -113,11 +91,38 @@ export function createMcpServer(o: ServerOptions) {
     }
   }
 
-  function close(): void {
-    opened?.then((c) => c.close()).catch(() => {});
-  }
+  return { handle, close: catalog.close };
+}
 
-  return { handle, close };
+/** The input's lines, each at most MAX_LINE characters: a longer one is reported (`tooLong`) and skipped to its end,
+ *  so memory stays bounded whatever arrives. */
+async function* linesOf(input: Readable, tooLong: () => void): AsyncGenerator<string> {
+  input.setEncoding('utf8');
+  let buf = '';
+  let skipping = false;
+  for await (const chunk of input as AsyncIterable<string>) {
+    let start = 0;
+    for (let i = chunk.indexOf('\n'); i >= 0; i = chunk.indexOf('\n', start)) {
+      const part = chunk.slice(start, i);
+      start = i + 1;
+      if (skipping) {
+        skipping = false;
+        continue;
+      }
+      const line = buf + part;
+      buf = '';
+      if (line.length > MAX_LINE) tooLong();
+      else yield line;
+    }
+    if (skipping) continue;
+    buf += chunk.slice(start);
+    if (buf.length > MAX_LINE) {
+      tooLong();
+      buf = '';
+      skipping = true;
+    }
+  }
+  if (buf && !skipping) yield buf; // a last line without its newline
 }
 
 /** Serves until the input closes, then answers what's in flight, closes the catalog and returns. stdout carries only
@@ -126,7 +131,8 @@ export async function serveStdio(o: ServerOptions, input: Readable = process.std
   const server = createMcpServer(o);
   const send = (m: object) => output.write(JSON.stringify(m) + '\n');
   const inFlight = new Set<Promise<void>>();
-  for await (const line of createInterface({ input, crlfDelay: Infinity })) {
+  const tooLong = () => send(failure(null, INVALID_REQUEST, `Invalid Request: a line over ${MAX_LINE} characters, skipped`));
+  for await (const line of linesOf(input, tooLong)) {
     if (!line.trim()) continue;
     let msg: unknown;
     try {
