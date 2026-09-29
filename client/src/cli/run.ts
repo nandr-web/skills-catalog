@@ -39,6 +39,7 @@ export const COMMANDS: Record<string, Command> = {
 type Schema = { type?: string };
 type Flag = { key: string; field: string; kind: 'boolean' | 'string' | 'integer' | 'list' };
 
+const TARGETS: readonly string[] = ['user', 'project'];
 const kebab = (s: string) => s.replaceAll('_', '-');
 const singular = (s: string) => (s.endsWith('s') ? s.slice(0, -1) : s);
 
@@ -88,6 +89,12 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
   }
   const values = parsed.values as Record<string, string | boolean | string[] | undefined>;
   const positionals = parsed.positionals;
+  // --target on update says where a held first install goes, so it goes only with --accept, as user or project.
+  const target = values['target'];
+  if (word === 'update' && target !== undefined && (values['accept'] !== true || typeof target !== 'string' || !TARGETS.includes(target))) {
+    io.stderr(usage(s));
+    return 1;
+  }
 
   // --as: the developer to act as, checked here so a bad one names the flag.
   let developer: string | undefined;
@@ -121,7 +128,7 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
   // The person-only step: with no terminal, nothing is done and the person gets the command to run themselves.
   const accept = word === 'update' && values['accept'] === true;
   if (accept && !io.tty) {
-    const command = [s.cli, ...argv.filter((a, i) => !(a === '--as' || argv[i - 1] === '--as')).map(shellQuote)].join(' ');
+    const command = [s.cli, ...argv.filter((a, i) => !(a === '--as' || a.startsWith('--as=') || argv[i - 1] === '--as')).map(shellQuote)].join(' ');
     io.stderr(withActing(s.format(s.word('errors.person_only'), { command })) + '\n');
     // The activity log shows the step waiting for the person; its target only when it's a skill's name (the log holds
     // names and versions only, never text someone typed).
@@ -132,7 +139,7 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
 
   const { ctx, close } = contextFor(settings, s, 'cli');
   try {
-    if (accept) return await acceptHeld(ctx, s, io, positionals, (values['target'] as Target | undefined) ?? 'user', withActing);
+    if (accept) return await acceptHeld(ctx, s, io, positionals, (target as Target | undefined) ?? 'user', withActing);
     const a = await perform(ctx, cmd.op, word!, args);
     (a.isError ? io.stderr : io.stdout)(a.text + '\n');
     return a.isError ? 1 : 0;

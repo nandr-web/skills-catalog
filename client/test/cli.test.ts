@@ -126,6 +126,23 @@ describe('the CLI face', () => {
     expect(last.split(/\s{2,}/).slice(1)).toEqual(['-', 'update --accept', S.doc.log.error.person_only, 'release-notes-kit']);
   });
 
+  it('--target goes only with --accept, and only as user or project; --as in either form stays out of the command given', async () => {
+    const p = place();
+    await seed(p);
+    await cli(p, ['install', 'release-notes-kit']);
+    for (const argv of [['update', '--target', 'project'], ['update', 'release-notes-kit', '--target', 'user'], ['update', 'release-notes-kit', '--accept', '--target', 'elsewhere']]) {
+      const r = await cli(p, argv, { tty: true, answers: ['y'] });
+      expect(r.code, argv.join(' ')).toBe(1);
+      expect(r.asked, argv.join(' ')).toEqual([]);
+    }
+    expect(existsSync(join(skills(p), 'release-notes-kit'))).toBe(false);
+    for (const as of [['--as=dev2'], ['--as', 'dev2']]) {
+      const r = await cli(p, ['update', 'release-notes-kit', '--accept', ...as]);
+      expect(r.code).toBe(3);
+      expect(r.err).toContain(S.format(S.word('errors.person_only'), { command: 'skills-catalog update release-notes-kit --accept' }) + '\n');
+    }
+  });
+
   it('update and list on the command line: a text-only change updates, names limit it, the list shows it', async () => {
     const p = place();
     await seed(p);
