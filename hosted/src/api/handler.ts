@@ -51,10 +51,16 @@ export function createHostedHandler(p: HostedHandlerParts): { handle(req: Hosted
       try {
         return await answer(req);
       } catch (e) {
-        // A bug: its details go to the function's log by name and stack only; the caller gets internal_error.
-        log(`internal_error: ${e instanceof Error ? `${e.name}: ${e.stack ?? e.message}` : typeof e}`);
+        // A bug: the function's log gets its kind and where it happened (the stack's frames), never its message, which
+        // could carry skill text; the caller gets internal_error.
+        log(`internal_error: ${e instanceof Error ? `${e.name}\n${frames(e)}` : typeof e}`);
         return envelope({ error: new CatalogError('internal_error', {}) }, s);
       }
     },
   };
+}
+
+/** A stack's frames only (its "    at …" lines), without the message above them. */
+function frames(e: Error): string {
+  return (e.stack ?? '').split('\n').filter((l) => /^\s+at /.test(l)).join('\n');
 }
