@@ -85,7 +85,10 @@ export class LocalStorage implements Storage {
       try {
         // Under the same lock as the cleanup, every blob this version references must exist: one cleaned away
         // (a stalled publish, a raced take-back) is put again from the bytes held here. If that fails, the
-        // publish fails, retryable, with no version stored.
+        // publish fails, retryable, with no version stored. A blob put again here gets no pending row: a row written
+        // inside this transaction would be rolled back with it by the very crash it's meant to outlive. So only a crash
+        // between this put and the append, after a raced take-back, can leave a file no version names; it stays unseen
+        // and is as rare as the stalled publish before it.
         r = this.meta.withWriteLock(() => {
           for (const f of files) if (!this.blobs.has(f.sha256) && this.blobs.put(f.sha256, f.bytes)) added.add(f.sha256);
           const out = this.meta.append(v, cond, event);

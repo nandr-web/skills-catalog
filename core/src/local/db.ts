@@ -76,7 +76,7 @@ function distrust(db: DatabaseSync): void {
 // as SQLite does, without regard to case. `required` must be there (the read-only open's); any other of the catalog's
 // tables may be missing (the writing open makes it) but never wrong.
 export class NotCatalogTables extends Error {}
-const OWN_TABLES = ['skills', 'versions', 'version_files', 'outbox', 'search_cards'];
+const OWN_TABLES = ['skills', 'versions', 'version_files', 'pending_blobs', 'outbox', 'search_cards'];
 const FTS_TABLE = 'search_fts';
 const REAL_TABLE = /^CREATE\s+TABLE\s/i;
 const FTS5_TABLE = /^CREATE\s+VIRTUAL\s+TABLE\s+("?)search_fts\1\s+USING\s+fts5\s*\(/i;
