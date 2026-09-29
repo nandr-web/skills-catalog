@@ -127,8 +127,10 @@ const ADDRESSED = new RegExp(`\\bto${S}+the${S}+${NOUN}${S}*:|\\bnote${S}+to${S}
 //
 // A line is read left to right into commands. A command word counts only where a shell would read one: at the start of
 // the line or of a code span, after `|`, `|&`, `||`, `;`, `&` or `&&`, at the start of a `$( … )`, `<( … )` or backtick
-// substitution, and inside a subshell's `( … )`; sudo and env are looked past with their options and settings. A command
-// runs to the next of those, or to the end of its span, substitution or subshell; on the line itself (prose, or a line of
+// substitution, and inside a subshell's `( … )` or a group's `{ …; }`; sudo and env are looked past with their options and
+// settings. A subshell or group is one command on either side of a pipe: a download in it is piped, and one opened right
+// after a pipe starts with that pipe. A command runs to the next of those, or to the end of its span, substitution,
+// subshell or group; on the line itself (prose, or a line of
 // a code block) a backtick ends it too, so prose never reaches into a later code span, and a span's closing backtick
 // always ends the span, whatever quote or backslash it holds. `>&`, `<&` and `&>` are redirections, not a lone `&`.
 // A quote that opens a word (or follows `=`) keeps it whole; a quote inside a word, as in "don't", is text, so an
@@ -138,7 +140,7 @@ const ADDRESSED = new RegExp(`\\bto${S}+the${S}+${NOUN}${S}*:|\\bnote${S}+to${S}
 // own commands and marks the word when it runs a download, at any depth. Substitutions and subshells nest at most
 // MAX_NESTING deep (deeper, an opener is text), so each character is read a bounded number of times in each reading.
 const MAX_NESTING = 8;
-type FrameKind = 'line' | 'subshell' | 'span' | 'dollar' | 'process' | 'tick';
+type FrameKind = 'line' | 'subshell' | 'group' | 'span' | 'dollar' | 'process' | 'tick';
 interface Word {
   start: number;
   end: number;
@@ -153,11 +155,13 @@ interface Frame {
   pipedDownload: boolean; // a download ran earlier in this pipeline
   downloads: boolean; // a command in this frame is a download (for the word holding the substitution)
   carries: boolean; // a word in this frame holds a substitution that runs a download (for a download at any depth)
+  fetched: boolean; // a command in this frame, or in a subshell or group inside it, holds a download (for the pipe after)
+  groupFetched: boolean; // a subshell or group in the command read so far held a download: it is piped as the command's
   prose: boolean; // this command follows a code span on the line: its first word isn't at a command start
   firstArg: number | undefined; // where a shell's first argument was found for this command, once a backtick asked
 }
-// The line itself and a subshell read backticks and (in the second reading) quotes as the line does.
-const lineLike = (f: Frame) => f.kind === 'line' || f.kind === 'subshell';
+// The line itself, a subshell and a group read backticks and (in the second reading) quotes as the line does.
+const lineLike = (f: Frame) => f.kind === 'line' || f.kind === 'subshell' || f.kind === 'group';
 interface Command {
   words: string[];
   download: boolean[];
@@ -236,8 +240,9 @@ const commandName = (words: readonly string[]) => {
 
 // A shell that reads its program from the pipe: sh, bash, zsh, or python with no script and no module (-c or - counts).
 type Resolved = { words: readonly string[]; at: number; name: string } | null;
-// The name is read without the punctuation ending a sentence ("… | bash." and "… | sh!").
-const SENTENCE_END = /[.,;:!?]+$/;
+// The name is read without the punctuation ending a sentence ("… | bash.", "… | sh!", "… | bash…", "… | bash。") or a
+// closing parenthesis ("(… | bash)" in prose).
+const SENTENCE_END = /[.,;:!?)\u2026\u3002]+$/;
 function readsPipe(c: Resolved): boolean {
   if (!c) return false;
   const name = c.name.replace(SENTENCE_END, '');
@@ -255,28 +260,27 @@ function readsPipe(c: Resolved): boolean {
 // option (after -c, past an option's value: `bash -o pipefail -c "$(curl …)"`, `python <(curl …)`), eval's, source's or
 // .'s first argument, and the word a `<` feeds it (`bash < <(curl …)`). Not a later argument (`bash deploy.sh "$(curl …)"`
 // hands the script a value), and not python's with -m. With env -S the command sits inside one word, so any word counts.
+// At a command start that's the command's own word; a shell's or python's also counts anywhere, prose included, as the pipe
+// does ("To install, run /bin/bash -c "$(curl …)""), each read up to the next such word, so a word is read once.
 const SHELL_VALUE = new Set(['-o', '+o', '-O', '+O', '--rcfile', '--init-file']);
 const PYTHON_VALUE = new Set(['-W', '-X', '-Q']);
 const FED = /^[0-9]*<$/;
-function runPositions(words: readonly string[]): number[] {
-  const c = commandName(words);
-  if (!c) return [];
-  const shell = SHELL_NAME.test(c.name);
-  const python = PYTHON_NAME.test(c.name);
-  if (!shell && !python && !SOURCING.has(c.name)) return [];
-  if (c.words !== words) return words.map((_, k) => k);
-  const out: number[] = [];
+// The words a command named `name` at `at` runs, read up to `stop`, added to `out`.
+function runsFrom(words: readonly string[], at: number, name: string, stop: number, out: number[]): void {
+  const shell = SHELL_NAME.test(name);
+  const python = PYTHON_NAME.test(name);
+  if (!shell && !python && !SOURCING.has(name)) return;
   let first = false;
   let options = true;
-  for (let k = c.at + 1; k < words.length; k++) {
+  for (let k = at + 1; k < stop; k++) {
     const w = unquote(words[k]!);
     if (FED.test(w)) {
-      if (k + 1 < words.length) out.push(k + 1);
+      if (k + 1 < stop) out.push(k + 1);
       k++;
       continue;
     }
     if (first) continue;
-    if (options && !SOURCING.has(c.name) && (w.startsWith('-') || (shell && w.startsWith('+'))) && w.length > 1) {
+    if (options && !SOURCING.has(name) && (w.startsWith('-') || (shell && w.startsWith('+'))) && w.length > 1) {
       if (w === '--') options = false;
       else if (python && w === '-m') first = true;
       else if ((shell && SHELL_VALUE.has(w)) || (python && PYTHON_VALUE.has(w))) k++;
@@ -285,6 +289,24 @@ function runPositions(words: readonly string[]): number[] {
     out.push(k);
     first = true;
   }
+}
+function runPositions(words: readonly string[]): number[] {
+  const c = commandName(words);
+  if (!c) return [];
+  if (c.words !== words) return SHELL_NAME.test(c.name) || PYTHON_NAME.test(c.name) || SOURCING.has(c.name) ? words.map((_, k) => k) : [];
+  const out: number[] = [];
+  runsFrom(words, c.at, c.name, words.length, out);
+  return out;
+}
+// A shell's or python's words anywhere in the command, each read up to the next shell or python word.
+const shellLike = (name: string) => SHELL_NAME.test(name) || PYTHON_NAME.test(name);
+function anywherePositions(words: readonly string[], names: readonly string[]): number[] {
+  const starts: number[] = [];
+  names.forEach((n, k) => {
+    if (shellLike(n)) starts.push(k);
+  });
+  const out: number[] = [];
+  starts.forEach((at, j) => runsFrom(words, at, names[at]!, starts[j + 1] ?? words.length, out));
   return out;
 }
 // Whether a word about to start at the end of these words is one a substitution would run in.
@@ -405,7 +427,7 @@ function commandFlags(text: string): { pipe: boolean; send: boolean } {
 }
 function readCommands(text: string, quotesAsText: boolean): { pipe: boolean; send: boolean } {
   const out = { pipe: false, send: false };
-  const frame = (kind: FrameKind): Frame => ({ kind, words: [], word: null, quote: '', afterPipe: false, pipedDownload: false, downloads: false, carries: false, prose: false, firstArg: undefined });
+  const frame = (kind: FrameKind): Frame => ({ kind, words: [], word: null, quote: '', afterPipe: false, pipedDownload: false, downloads: false, carries: false, fetched: false, groupFetched: false, prose: false, firstArg: undefined });
   const stack: Frame[] = [frame('line')];
   const top = () => stack[stack.length - 1]!;
   const startWord = (f: Frame, i: number) => {
@@ -421,16 +443,23 @@ function readCommands(text: string, quotesAsText: boolean): { pipe: boolean; sen
   const endCommand = (f: Frame, i: number, pipe: boolean) => {
     endWord(f, i);
     const words = f.words.map((w) => text.slice(w.start, w.end));
+    let fetched = f.groupFetched;
     if (words.length) {
       const cmd: Command = { words, download: f.words.map((w) => w.download) };
       const c = f.prose ? null : commandName(cmd.words);
       if (f.afterPipe && f.pipedDownload && readsPipe(c)) out.pipe = true;
-      if (c && cmd.download.some(Boolean) && runPositions(cmd.words).some((k) => cmd.download[k])) out.pipe = true;
       const names = words.map(nameOf);
+      if (cmd.download.some(Boolean)) {
+        const runs = (k: number) => cmd.download[k];
+        if ((c && runPositions(cmd.words).some(runs)) || anywherePositions(cmd.words, names).some(runs)) out.pipe = true;
+      }
       if (!out.send && sends(cmd.words, names)) out.send = true;
       if (isDownload(c)) f.downloads = true;
-      f.pipedDownload = pipe && (f.pipedDownload || hasDownload(names));
-    } else if (!pipe) f.pipedDownload = false;
+      fetched ||= hasDownload(names);
+    }
+    if (fetched) f.fetched = true;
+    f.pipedDownload = pipe && (f.pipedDownload || fetched);
+    f.groupFetched = false;
     f.afterPipe = pipe;
     f.words = [];
     f.prose = false;
@@ -460,9 +489,21 @@ function readCommands(text: string, quotesAsText: boolean): { pipe: boolean; sen
       parent.word.download = true;
       parent.carries = true;
     }
-    // what follows a code span on the line, or a subshell's ), isn't at a command start (the contract's starts don't
-    // include it), so "(macOS only). `curl …`" has no `.` command
-    if (f.kind === 'span' || f.kind === 'subshell') parent.prose = true;
+    // a subshell or group is one command on either side of a pipe: a download in it is piped
+    if ((f.kind === 'subshell' || f.kind === 'group') && f.fetched) parent.groupFetched = true;
+    // what follows a code span on the line, or a subshell's ) or a group's }, isn't at a command start (the contract's
+    // starts don't include it), so "(macOS only). `curl …`" has no `.` command
+    if (f.kind === 'span' || f.kind === 'subshell' || f.kind === 'group') parent.prose = true;
+  };
+  // A subshell or group opened where a command would start, right after a pipe, starts with that pipe.
+  const openGroup = (kind: 'subshell' | 'group') => {
+    const parent = top();
+    const g = frame(kind);
+    if (!parent.words.length) {
+      g.afterPipe = parent.afterPipe;
+      g.pipedDownload = parent.pipedDownload;
+    }
+    stack.push(g);
   };
   for (let i = 0; i < text.length; i++) {
     const f = top();
@@ -516,12 +557,21 @@ function readCommands(text: string, quotesAsText: boolean): { pipe: boolean; sen
       i++;
       continue;
     }
-    // a subshell's ( at the start of a word: its commands start inside it
+    // a subshell's ( at the start of a word, or a group's { as a word of its own: their commands start inside them
     if (room && c === '(' && !f.word) {
-      stack.push(frame('subshell'));
+      openGroup('subshell');
+      continue;
+    }
+    if (room && c === '{' && !f.word && (i + 1 === text.length || isBlank(text[i + 1]))) {
+      openGroup('group');
       continue;
     }
     if (c === ')' && (f.kind === 'dollar' || f.kind === 'process' || f.kind === 'subshell')) {
+      close(i);
+      continue;
+    }
+    // a group's } as a word of its own closes it
+    if (c === '}' && f.kind === 'group' && !f.word && (i + 1 === text.length || isBlank(text[i + 1]) || ';|&)'.includes(text[i + 1]!))) {
       close(i);
       continue;
     }
