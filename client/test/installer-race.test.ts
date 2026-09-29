@@ -46,6 +46,7 @@ vi.mock('node:fs', async (original) => {
 const S = Surface.load();
 const install = MACHINE_RUNS['install_shared_skill']!;
 const update = MACHINE_RUNS['update_installed_skills']!;
+const accept = MACHINE_RUNS['accept_held_update']!;
 
 const ctxFor = (p: Place, wrap?: (c: Catalog) => Catalog) => {
   const { ctx } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), S, 'mcp');
@@ -424,23 +425,29 @@ describe('the review\'s probes (B, B2, C, D)', () => {
 describe('folders another user could control are refused (target_not_private)', () => {
   const uid = process.getuid!();
 
-  const cases: { what: string; at: (claude: string) => string; change: Partial<import('node:fs').Stats> }[] = [
-    { what: 'the staging folder owned by another user', at: (c) => join(c, '.skills-catalog-staging'), change: { uid: uid + 1 } },
-    { what: '.claude owned by another user', at: (c) => c, change: { uid: uid + 1 } },
-    { what: '.claude/skills world-writable', at: (c) => join(c, 'skills'), change: { mode: 0o040777 } },
-    { what: 'the staging folder group-writable with another group', at: (c) => join(c, '.skills-catalog-staging'), change: { mode: 0o040770, gid: uid + 1 } },
-    { what: '.claude group-writable with a shared group (macOS staff, 20)', at: (c) => c, change: { mode: 0o040775, gid: 20 } },
-    { what: 'the project folder world-writable without the sticky bit', at: (c) => join(c, '..'), change: { mode: 0o040777 } },
+  const cases: { what: string; at: (claude: string) => string; change: Partial<import('node:fs').Stats>; own: boolean }[] = [
+    { what: 'the staging folder owned by another user', at: (c) => join(c, '.skills-catalog-staging'), change: { uid: uid + 1 }, own: false },
+    { what: '.claude owned by another user', at: (c) => c, change: { uid: uid + 1 }, own: false },
+    { what: '.claude/skills world-writable', at: (c) => join(c, 'skills'), change: { mode: 0o040777 }, own: true },
+    { what: 'the staging folder group-writable with another group', at: (c) => join(c, '.skills-catalog-staging'), change: { mode: 0o040770, gid: uid + 1 }, own: true },
+    { what: '.claude group-writable with a shared group (macOS staff, 20)', at: (c) => c, change: { mode: 0o040775, gid: 20 }, own: true },
+    { what: 'the project folder world-writable without the sticky bit', at: (c) => join(c, '..'), change: { mode: 0o040777 }, own: true },
   ];
 
   // The folder above .claude (§4.5, aeedabd): the person's assistant home is held to the same rule; a project folder may
   // be group-writable (a team checkout), but not world-writable unless sticky (as /tmp is).
   it('the folder above .claude: the assistant home must be private; a project may be group-writable, or world-writable only if sticky', async () => {
-    const tries: { what: string; target: 'user' | 'project'; change: Partial<import('node:fs').Stats>; refused: boolean }[] = [
-      { what: 'assistant home owned by another user', target: 'user', change: { uid: uid + 1 }, refused: true },
-      { what: 'assistant home group-writable with a shared group', target: 'user', change: { mode: 0o040775, gid: 20 }, refused: true },
+    // `refused`: the data of the refusal, or false when it installs. The data says which folder it is (the home, on a
+    // user install) and whether it's the person's own, so the words can pick the way on.
+    const tries: { what: string; target: 'user' | 'project'; change: Partial<import('node:fs').Stats>; refused: false | { home?: true; own: boolean } }[] = [
+      { what: 'assistant home owned by another user', target: 'user', change: { uid: uid + 1 }, refused: { home: true, own: false } },
+      { what: 'assistant home group-writable with a shared group', target: 'user', change: { mode: 0o040775, gid: 20 }, refused: { home: true, own: true } },
+      { what: 'assistant home world-writable, even with the sticky bit', target: 'user', change: { mode: 0o041777 }, refused: { home: true, own: true } },
+      { what: 'assistant home group-writable with the person\'s private group', target: 'user', change: { mode: 0o040775, gid: uid }, refused: false },
       { what: 'project group-writable', target: 'project', change: { mode: 0o040775, gid: 20 }, refused: false },
+      { what: 'project owned by another user, not world-writable', target: 'project', change: { uid: uid + 1 }, refused: false },
       { what: 'project world-writable and sticky', target: 'project', change: { mode: 0o041777 }, refused: false },
+      { what: 'project world-writable, not sticky, another user\'s', target: 'project', change: { mode: 0o040777, uid: uid + 1 }, refused: { own: false } },
     ];
     for (const t of tries) {
       const p = place();
@@ -454,8 +461,11 @@ describe('folders another user could control are refused (target_not_private)', 
       } finally {
         clearHooks();
       }
-      if (t.refused) expect([t.what, codeOf(r), refused(r).data]).toEqual([t.what, 'target_not_private', { path: root }]);
-      else expect([t.what, race.fs.existsSync(join(root, '.claude', 'skills', 'alpha', 'SKILL.md'))]).toEqual([t.what, true]);
+      if (t.refused) {
+        expect([t.what, codeOf(r), refused(r).data]).toEqual([t.what, 'target_not_private', { path: root, target: t.target, ...t.refused }]);
+        // Refused before anything is made under it.
+        expect([t.what, race.fs.readdirSync(root)]).toEqual([t.what, []]);
+      } else expect([t.what, race.fs.existsSync(join(root, '.claude', 'skills', 'alpha', 'SKILL.md'))]).toEqual([t.what, true]);
     }
   });
 
@@ -472,7 +482,7 @@ describe('folders another user could control are refused (target_not_private)', 
       } finally {
         clearHooks();
       }
-      expect([c.what, codeOf(r), refused(r).data]).toEqual([c.what, 'target_not_private', { path }]);
+      expect([c.what, codeOf(r), refused(r).data]).toEqual([c.what, 'target_not_private', { path, target: 'project', own: c.own }]);
       expect(race.fs.existsSync(join(claude, 'skills', 'alpha')), c.what).toBe(false);
       expect(stagingEntries(p).filter((e) => !e.endsWith('.gitignore')), c.what).toEqual([]);
     }
@@ -489,6 +499,53 @@ describe('folders another user could control are refused (target_not_private)', 
       clearHooks();
     }
     expect(race.fs.existsSync(join(claude, 'skills', 'alpha', 'SKILL.md'))).toBe(true);
+  });
+
+  it('an assistant home reached through a link: the folder it leads to is the one checked', async () => {
+    for (const mode of [0o777, 0o755]) {
+      const p = place();
+      await publish(p, 'alpha', 'Body.\n');
+      const real = join(p.dir, 'real-home');
+      race.fs.mkdirSync(real);
+      race.fs.chmodSync(real, mode);
+      race.fs.symlinkSync(real, p.osHome);
+      const r = await install(ctxFor(p), { name: 'alpha' }).catch((e: unknown) => e);
+      if (mode === 0o777) {
+        expect([codeOf(r), refused(r).data]).toEqual(['target_not_private', { path: p.osHome, target: 'user', home: true, own: true }]);
+        expect(race.fs.readdirSync(real)).toEqual([]);
+      } else expect(race.fs.existsSync(join(real, '.claude', 'skills', 'alpha', 'SKILL.md'))).toBe(true);
+    }
+  });
+
+  it('update and accept refuse the same way when the assistant home stopped being private, and change nothing', async () => {
+    const p = place();
+    await publish(p, 'alpha', 'First.\n');
+    await install(ctxFor(p), { name: 'alpha' });
+    const c = await open(p);
+    try {
+      await c.publish(request('beta', [{ path: 'SKILL.md', text: skillMd('beta', 'The beta skill.') }, { path: 'run.sh', text: '#!/bin/sh\n', mode: '0755' }]), actAs('ana'));
+    } finally {
+      c.close();
+    }
+    const held = await install(ctxFor(p), { name: 'beta' });
+    const confirm = /confirm "([^"]+)"/.exec(held.text)![1]!;
+    await publish(p, 'alpha', 'Second.\n');
+    const skills = join(p.osHome, '.claude', 'skills');
+    const lock = race.fs.readFileSync(join(p.home, 'lock.json'), 'utf8');
+    race.stats = (at) => (at === p.osHome ? { mode: 0o040777 } : undefined);
+    let updated: { text: string } | undefined;
+    let accepted: unknown;
+    try {
+      updated = await update(ctxFor(p), {});
+      accepted = await accept(ctxFor(p), { name: 'beta', confirm, flags: ['runnable_file'] }).catch((e: unknown) => e);
+    } finally {
+      clearHooks();
+    }
+    expect(updated!.text).toContain('target_not_private');
+    expect([codeOf(accepted), refused(accepted).data]).toEqual(['target_not_private', { path: p.osHome, target: 'user', home: true, own: true }]);
+    expect(race.fs.readFileSync(join(skills, 'alpha', 'SKILL.md'), 'utf8')).toContain('First.');
+    expect(race.fs.existsSync(join(skills, 'beta'))).toBe(false);
+    expect(race.fs.readFileSync(join(p.home, 'lock.json'), 'utf8')).toBe(lock);
   });
 
   it('the temp folder swapped for a link between its making and the first write: refused, nothing written where it points', async () => {

@@ -73,11 +73,11 @@ function skillsFolderFor(dest: string, target: Target): Anchor[] {
   // The folder above .claude (§4.5): the assistant home is held to the same rule as .claude; a project folder may be
   // group-writable (a team's checkout) but not world-writable unless sticky, as /tmp is. It may be reached through a link.
   const r = statSync(root, { bigint: true });
-  const open = target === 'user' ? !isPrivate(r) : (r.mode & 0o002n) !== 0n && (r.mode & 0o1000n) === 0n;
-  if (open) throw new CatalogError('target_not_private', { path: root });
+  const open = target === 'user' ? !isPrivate(r) : process.getuid !== undefined && (r.mode & 0o002n) !== 0n && (r.mode & 0o1000n) === 0n;
+  if (open) throw notPrivate(root, target, r, target === 'user');
   return [claude, skills].map((path) => {
     makeFolder(path, 0o755);
-    return realFolder(path);
+    return realFolder(path, target);
   });
 }
 
@@ -115,12 +115,18 @@ function writeNew(path: string, bytes: Uint8Array, mode: number): void {
 }
 
 // A folder that must be a real folder, not a link, private to the person, with its identity taken from the same lstat.
-function realFolder(path: string): Anchor {
+function realFolder(path: string, target: Target): Anchor {
   const s = lstatOf(path);
   if (!s || s.isSymbolicLink()) throw new CatalogError('target_symlink', { path });
   if (!s.isDirectory()) throw new CatalogError('exists_untracked', { path });
-  if (!isPrivate(s)) throw new CatalogError('target_not_private', { path });
+  if (!isPrivate(s)) throw notPrivate(path, target, s);
   return { path, id: idFrom(s) };
+}
+
+// The refusal names the folder, the target, whether it's the assistant home, and whether it's the person's own, so the
+// words can offer the way on that fits (chmod only on their own folder).
+function notPrivate(path: string, target: Target, s: Stats, home = false): CatalogError {
+  return new CatalogError('target_not_private', { path, target, ...(home ? { home: true } : {}), own: s.uid === BigInt(process.getuid?.() ?? -1) });
 }
 
 // Private to the person (§4.5): owned by them, never world-writable, and group-writable only with their own private group
@@ -202,7 +208,7 @@ function writeSkill(dest: string, target: Target, files: readonly TreeFile[], en
   const anchors = skillsFolderFor(dest, target);
   const stagingDir = join(anchors[0]!.path, STAGING);
   const made = makeFolder(stagingDir, 0o700);
-  const staging = realFolder(stagingDir);
+  const staging = realFolder(stagingDir, target);
   anchors.push(staging);
   const anchored = () => anchors.every((a) => isCopy(lstatOf(a.path), a.id));
   // A kept copy may hold the person's local edits: git ignores everything here, so `git add -A` can't commit it.
