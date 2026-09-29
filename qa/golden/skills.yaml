@@ -738,3 +738,23 @@ secret_scan:
     - {id: pgpass-plain-name, path: "pgpass", content: {base64: "IyBsb2NhbApkYi5leGFtcGxlLmludmFsaWQ6NTQzMjphcHA6cWFfdXNlcjpRQUZBS0VwYXNzd29yZAo="}, decoded: "# local\ndb.example.invalid:5432:app:qa_user:QAFAKEpassword\n", expect: {line: 2, kind: pgpass_line}, note: "a file named pgpass"}
     - {id: pgpass-empty-password, path: ".pgpass", content: {base64: "ZGIuZXhhbXBsZS5pbnZhbGlkOjU0MzI6YXBwOnFhX3VzZXI6Cg=="}, decoded: "db.example.invalid:5432:app:qa_user:\n", expect: none, note: "the last field empty"}
     - {id: value-next-line, path: "notes.md", content: {base64: "cGFzc3dvcmQ6CiAgUUFGQUtFdmFsdWUxMjM0NQo="}, decoded: "password:\n  QAFAKEvalue12345\n", expect: none, note: "a value on the next line isn't a kind (bad7db3)"}
+
+# Each operation's errors that no other golden row reaches (the API's error lists, contract §1 and §9: every code an
+# operation raises is proved by a golden row). `call` is the operation, `args` its input; the catalog is
+# histories.yaml's prc@v3 (pr-review-checklist, versions 1-3) and the call acts as dev1, unless `acting: none` (no acting
+# identity set: locally, neither setup's `me` nor `--as`). `expect` is the error and the fields pinned here; not_found's
+# `suggestions` are names within a small spelling distance, so only a one-letter typo (suggested) and an unrelated name
+# (none) are pinned. Every row changes nothing in storage. Through the core and each face.
+operation_errors:
+  catalog: "histories.prc@v3"
+  cases:
+    - {id: versions-invalid-name, call: list_shared_skill_versions, args: {name: "Bad Name"}, expect: {error: invalid_name, name: "Bad Name", why: bad_characters}}
+    - {id: versions-not-found, call: list_shared_skill_versions, args: {name: deploy-to-mars}, expect: {error: not_found, suggestions: []}}
+    - {id: versions-not-found-typo, call: list_shared_skill_versions, args: {name: pr-review-checklst}, expect: {error: not_found, suggestions_include: [pr-review-checklist]}, note: "one letter missing"}
+    - {id: diff-invalid-name, call: diff_shared_skill_versions, args: {name: "../etc", from: 1, to: 2}, expect: {error: invalid_name, name: "../etc", why: bad_characters}}
+    - {id: diff-not-found-skill, call: diff_shared_skill_versions, args: {name: deploy-to-mars, from: 1, to: 2}, expect: {error: not_found}}
+    - {id: diff-not-found-version, call: diff_shared_skill_versions, args: {name: pr-review-checklist, from: 1, to: 9}, expect: {error: not_found}, note: "the skill exists, version 9 doesn't"}
+    - {id: fetch-invalid-name, call: fetch_version, args: {name: "-x", version: 1}, expect: {error: invalid_name, name: "-x", why: bad_characters}}
+    - {id: fetch-not-found-version, call: fetch_version, args: {name: pr-review-checklist, version: 9}, expect: {error: not_found}}
+    - {id: fetch-not-found-fingerprint, call: fetch_version, args: {fingerprint: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}, expect: {error: not_found}, note: "a well-formed fingerprint that no version has"}
+    - {id: publish-unauthenticated, call: publish_version, acting: none, args: {name: pr-review-checklist, files: prc.v1}, expect: {error: unauthenticated}, storage_unchanged: true, note: "no acting identity: the sentence points to setup's me or --as"}

@@ -11,13 +11,6 @@ import { loadGolden } from './golden.ts';
 // Codes an operation's code raises with no golden row yet (operation, code, where it's raised): golden rows to add.
 // Each is exempt until its row lands, and this test says when one has, so the list only shrinks.
 const MISSING_GOLDENS: [op: string, code: string, where: string][] = [
-  ['list_shared_skill_versions', 'invalid_name', 'catalog.ts versions → checkName'],
-  ['list_shared_skill_versions', 'not_found', 'catalog.ts versions: no such skill'],
-  ['diff_shared_skill_versions', 'invalid_name', 'catalog.ts diff → versionOf → checkName'],
-  ['diff_shared_skill_versions', 'not_found', 'catalog.ts diff → versionOf: no such skill or version'],
-  ['fetch_version', 'invalid_name', 'catalog.ts fetch → versionOf → checkName'],
-  ['fetch_version', 'not_found', 'catalog.ts fetch: no such version or fingerprint'],
-  ['publish_version', 'unauthenticated', 'catalog.ts publish → checkActor: no acting identity'],
   ['publish_skill_to_catalog', 'unauthenticated', 'publish-folder.ts → catalog.publish → checkActor'],
   ['publish_skill_to_catalog', 'not_owner', 'publish-folder.ts → catalog.publish (preview_expect preview-not-owner runs once the preview is its own tool)'],
   ['publish_skill_to_catalog', 'invalid_manifest', 'publish-folder.ts → checkManifest (preview-invalid-manifest, pending until the preview is its own tool)'],

@@ -41,4 +41,4 @@ afterEach(() => {
 });
 
 // The QA goldens, read as they are, for the client's tests too.
-export { loadGolden } from './golden.ts';
+export { historyVersion, loadGolden } from './golden.ts';
