@@ -3,7 +3,7 @@
 // sit in SKILLS_HOME (kept 0700), are written whole to a temp file and renamed in, and are readable by the person only.
 
 import { spawnSync } from 'node:child_process';
-import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, writeSync, type Stats } from 'node:fs';
+import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, writeSync, type Stats } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { CatalogError } from '@skills-catalog/core';
@@ -99,7 +99,14 @@ function readJson<T>(home: string, name: 'lock.json' | 'config.json', empty: T, 
 function writeJson(home: string, file: string, value: unknown): void {
   mkdirSync(home, { recursive: true, mode: 0o700 });
   const tmp = `${file}.${randomBytes(6).toString('hex')}.tmp`;
-  writeFileSync(tmp, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 });
+  // On disk before it's renamed over the file, so a crash leaves the old file or the whole new one, never an empty one.
+  const fd = openSync(tmp, 'wx', 0o600);
+  try {
+    writeFileSync(fd, JSON.stringify(value, null, 2) + '\n');
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
   renameSync(tmp, file);
 }
 
