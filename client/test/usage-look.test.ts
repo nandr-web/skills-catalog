@@ -68,10 +68,8 @@ describe('looks and answers', () => {
     expect(existsSync(join(dest, 'SKILL.md'))).toBe(true);
   });
 
-  // Not yet true: the installer records its holds and a yes where a held update is taken (its calls are specified to its
-  // owner; until they land, `stats` isn't served). This passes while a held-then-accepted update counts as nothing, and
-  // trips when it counts: then make it a plain `it` and put stats back in the CLI's commands.
-  it.fails('a held install taken after a yes counts as one hold and one yes', async () => {
+  // The installer records its holds and a yes where a held update is taken.
+  it('a held install taken after a yes counts as one hold and one yes', async () => {
     const p = place();
     await seed(p);
     await cli(p, ['install', 'release-notes-kit']);

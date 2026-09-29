@@ -19,6 +19,7 @@ import { CatalogError, shellQuote, validateInput, type Catalog, type Surface, ty
 import { DEFAULT_LIMITS, checkFetched, checkName, diffTrees, fingerprint, flagText, sha256Hex, type RiskFlag, type TreeDiff, type TreeFile } from '@skills-catalog/core/skill-tree';
 import { reasons } from '@skills-catalog/core';
 import { logWords } from '../activity.ts';
+import { holdWithinADay, recordUsage, type HoldReason, type UsageEvent } from '../usage/record.ts';
 import type { Context, Done } from '../operations.ts';
 import { policyOf, readRecords, writeConfig, writeLock, type FolderId, type Lock, type LockEntry, type Policy, type Target } from './lock.ts';
 
@@ -536,11 +537,13 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   // catalog first, then pin, then notify, then the flags. The held result names the installed version.
   const reason = existing && existing.version !== version ? holdOf(ctx, existing, config) : undefined;
   if (existing && reason) {
+    recordHold(ctx, req.name, version, reason, flags, version - existing.version);
     const also = flags.length ? s.format(s.word('update.held_also'), { reasons: reasons(s, flags) }) : '';
     const text = s.format(w[ctx.face === 'cli' ? `held_${reason}_cli` : `held_${reason}`], { ...held, from: existing.version, also, was: existing.catalog, now: ctx.settings.catalog });
     return { text, target: `${req.name} v${version}`, result: log.result('install', `held_${reason}`), outcome: 'held' };
   }
   if (flags.length) {
+    recordHold(ctx, req.name, version, 'flagged', flags, existing ? version - existing.version : 0);
     // Over an installed copy the sentence names the version installed now.
     const over = existing ? { word: 'held_over', from: existing.version } : { word: 'held' };
     const text = s.format(w[ctx.face === 'cli' ? `${over.word}_cli` : over.word], { ...held, ...over, reasons: reasons(s, flags) });
@@ -580,6 +583,12 @@ function holdOf(ctx: Context, e: LockEntry, config: Parameters<typeof policyOf>[
   if (e.catalog !== ctx.settings.catalog) return 'other_catalog';
   const { policy } = policyOf(e, config);
   return policy === 'pin' || policy === 'notify' ? policy : undefined;
+}
+
+/** A hold, for the usage metrics (§3): the held version, why, the kinds of flag and how many versions behind. */
+function recordHold(ctx: Context, name: string, version: number, reason: HoldReason, flags: readonly RiskFlag[], behind: number): void {
+  const hold: UsageEvent = { event: 'hold', skill: name, version, reason, flags: kinds(flags) as Extract<UsageEvent, { event: 'hold' }>['flags'], behind: Math.max(0, behind) };
+  recordUsage(ctx.settings.home, hold, ctx.now(), { createKey: true });
 }
 
 /** The fingerprint of the files in an installed folder as they are on disk, or undefined when it can't be one (a link or
@@ -660,6 +669,8 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   if (!sameSet(req.flags, kinds(flags))) throw conflict();
   const written = writeSkill(dest, t.target, to.files, existing);
   const entry = record(ctx, lock, dest, { name: req.name, target: t.target }, to, existing?.policy, [...(existing?.accepted ?? []), { version: to.version, flags: kinds(flags) }], toLock(written.copy));
+  // The person's yes, wherever it was given (§3's usage metrics).
+  recordUsage(ctx.settings.home, { event: 'answer', skill: req.name, version: to.version, answer: 'yes', together: 1 }, ctx.now(), { createKey: true });
   const text =
     (existing
       ? s.format(s.word('update.accepted'), { name: req.name, from: existing.version, to: to.version, path: quoted(dest) })
@@ -685,6 +696,8 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
   const { lock, config } = readRecords(ctx.settings.home);
   const here = installedHere(ctx, lock);
   for (const name of req.names ?? []) if (!here.some((e) => e.name === name)) throw new CatalogError('not_installed', { name });
+  // Each sync counts (the mode itself once permissive modes are detected, §5.3).
+  recordUsage(ctx.settings.home, { event: 'mode', surface: 'update' }, ctx.now());
   const chosen = req.names ? here.filter((e) => req.names!.includes(e.name)) : here;
   if (!chosen.length) {
     const none = s.word('update.none_installed');
@@ -755,6 +768,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     // A copy from another catalog comes first (§5.3): it may be a different skill that shares the name. Never applied
     // silently; taken on a yes, which records the catalog in use.
     if (e.catalog !== ctx.settings.catalog) {
+      recordHold(ctx, e.name, to.version, 'other_catalog', d.risk_flags, to.version - e.version);
       lines.push(s.format(w.held_other_catalog, { ...at, was: e.catalog, now: ctx.settings.catalog, also }));
       lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
       saw('held_other_catalog');
@@ -762,6 +776,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     }
     // Pinned: stays, and the person may still take this version; it stays pinned, at that version.
     if (policy === 'pin') {
+      recordHold(ctx, e.name, to.version, 'pin', d.risk_flags, to.version - e.version);
       lines.push(s.format(w.held_pin, at));
       lines.push(s.format(ctx.face === 'cli' ? w.held_pin_next_cli : w.held_pin_next, take));
       saw('held_pin');
@@ -770,12 +785,14 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     // "Tell me first" holds every new version, flagged or not (§5.3: pin, then notify, then the flags); it's taken with
     // the flags it shows, [] when none.
     if (policy === 'notify') {
+      recordHold(ctx, e.name, to.version, 'notify', d.risk_flags, to.version - e.version);
       lines.push(d.risk_flags.length ? s.format(w.held_notify_flagged, { ...at, reasons: reasons(s, d.risk_flags) }) : s.format(w.held_notify, at));
       lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
       saw('held_notify');
       continue;
     }
     if (d.risk_flags.length) {
+      recordHold(ctx, e.name, to.version, 'flagged', d.risk_flags, to.version - e.version);
       lines.push(s.format(w.held_flagged, { ...at, reasons: reasons(s, d.risk_flags) }));
       lines.push(s.format(ctx.face === 'cli' ? w.held_next_cli : w.held_next, take));
       saw('held_flagged');
@@ -835,13 +852,19 @@ export async function setPolicy(ctx: Context, args: unknown): Promise<Done> {
   const w = s.word('policy_set');
   const name = s.word('policy_name')?.[req.policy] ?? req.policy;
   const { lock, config } = readRecords(home);
+  const near_hold = holdWithinADay(home, ctx.now());
   if (req.name === undefined) {
     writeConfig(home, { ...config, update_policy: req.policy });
+    recordUsage(home, { event: 'policy', from: config.update_policy ?? policyOf(undefined, config).policy, to: req.policy, scope: 'catalog', near_hold }, ctx.now());
     return { text: w ? s.format(w.default, { policy: name }) : asData('set_skill_update_policy', { policy: req.policy }), target: '-', result: logWords(s).result('policy') };
   }
   const entries = installedHere(ctx, lock).filter((e) => e.name === req.name);
   if (!entries.length) throw new CatalogError('not_installed', { name: req.name });
+  // A pin set while an update waits for the person is their answer to it (§3's usage metrics), taken before it changes.
+  const waiting = req.policy === 'pin' ? await pendingHold(ctx, req.name).catch(() => null) : null;
   for (const e of entries) lock.skills[destOf(ctx, e.target, e.name)] = { ...e, policy: req.policy };
   writeLock(home, lock);
+  recordUsage(home, { event: 'policy', from: policyOf(entries[0], config).policy, to: req.policy, scope: 'skill', near_hold }, ctx.now());
+  if (waiting && 'confirm' in waiting) recordUsage(home, { event: 'answer', skill: req.name, version: waiting.version, answer: 'pin', together: 1 }, ctx.now(), { createKey: true });
   return { text: w ? s.format(w.skill, { name: req.name, policy: name }) : asData('set_skill_update_policy', { name: req.name, policy: req.policy }), target: req.name, result: logWords(s).result('policy') };
 }
