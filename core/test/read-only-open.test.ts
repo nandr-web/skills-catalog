@@ -157,6 +157,8 @@ describe('a catalog file made to mislead', () => {
     ['it has a view by another name', 'CREATE VIEW anything AS SELECT 1'],
     ['it has a trigger', "CREATE TRIGGER t AFTER INSERT ON versions BEGIN DELETE FROM skills; END"],
     ['it has another virtual table', 'CREATE VIRTUAL TABLE other USING fts5 (x)'],
+    // the file route would read an index by that name as "no table yet" and look through the versions instead
+    ['version_files is an index', 'DROP TABLE version_files; CREATE INDEX version_files ON versions (name)'],
   ];
   for (const [what, sql] of cases) {
     it(`where ${what}, a read-only open refuses with catalog_unreadable and writes nothing`, async () => {
