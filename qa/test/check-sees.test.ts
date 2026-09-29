@@ -40,6 +40,11 @@ describe('the process and port checks fail closed', () => {
     await expect(checkSees(newRunId(), { ...DEFAULT_TOOLS, lsof: '/nonexistent/lsof' })).rejects.toThrow(CheckBlind);
   });
 
+  it('an lsof that fails (an exit other than 0, or 1 for "nothing found") refuses, never "no ports"', async () => {
+    // /bin/sh given lsof's arguments fails (127: it looks for a script by the first one's name)
+    await expect(checkSees(newRunId(), { ...DEFAULT_TOOLS, lsof: '/bin/sh' })).rejects.toThrow(/can't run \/bin\/sh \(exit (?!0\)|1\))\d+\)/);
+  });
+
   it('a machine without lsof: qa run says to install it and exits 3, with no sandbox and no command started', () => {
     const m = machine();
     const noLsof = fileURLToPath(new URL('./fixtures/no-lsof.mjs', import.meta.url));

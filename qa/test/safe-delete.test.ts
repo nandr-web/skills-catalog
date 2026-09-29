@@ -2,7 +2,7 @@
 // on the real home, and the guards that keep a test process away from the real places. Every test here uses a fake
 // machine; the few that name a real place only check that it is refused, and nothing there exists or is created.
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { platform, tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -11,7 +11,7 @@ import { leftoverNames } from '../src/leftovers.ts';
 import { realMachine } from '../src/machine.ts';
 import { DEFAULT_TIMEOUT_MS } from '../src/run.ts';
 import { DEFAULT_TTL_MS } from '../src/janitor.ts';
-import { removeLeftover, removeRun, RUN_ID, UnsafeError, verifyBase } from '../src/safe-delete.ts';
+import { realClaudeTmp, removeLeftover, removeRun, RUN_ID, UnsafeError, verifyBase } from '../src/safe-delete.ts';
 import { createSandbox, FailSafeError, failSafe, newRunId, realHome, recordProcessGroup, sandboxBase } from '../src/sandbox.ts';
 import { teardown } from '../src/teardown.ts';
 import { cleanup, PROCESS_TEST_MS, machine, qaBareSync, qaSync, scratch, spawnDetached, type TestMachine } from './machine.ts';
@@ -52,7 +52,7 @@ describe('run ids and the base directory', () => {
     const sb = run(m);
     const base = sandboxBase(m.tmp);
     expect(sb.root).toBe(join(base, sb.runId));
-    expect((execFileSync('stat', ['-f', '%Lp', base], { encoding: 'utf8' })).trim()).toBe('700');
+    expect(statSync(base).mode & 0o777).toBe(0o700);
     expect(() => verifyBase(base)).not.toThrow();
     expect(JSON.parse(readFileSync(join(sb.root, 'run.json'), 'utf8'))).toMatchObject({ run_id: sb.runId, pid: process.pid, started_at: new Date(T0).toISOString() });
   });
@@ -310,7 +310,7 @@ describe('a test process never deletes in the real places', () => {
   });
 
   it('the tripwire refuses a deletion under the real home, the real Claude tmp folder or the real sandbox base, before looking', () => {
-    const claudeTmp = join('/private/tmp', `claude-${userInfo().uid}`);
+    const claudeTmp = realClaudeTmp();   // /private/tmp/claude-<uid> on macOS, /tmp/claude-<uid> on Linux
     for (const [parent, name] of [[join(realHome(), '.claude', 'projects'), 'qa-tripwire-never-exists'], [claudeTmp, 'qa-tripwire-never-exists']])
       expect(() => removeLeftover(parent, name), parent).toThrow(/tripwire/);
     expect(() => removeRun(sandboxBase(tmpdir()), newRunId())).toThrow(/tripwire/);

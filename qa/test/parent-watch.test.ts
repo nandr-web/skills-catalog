@@ -109,12 +109,12 @@ describe('stopping an orphaned qa\'s group when its test finishes', () => {
   };
 
   it('signals the group only while its leader is still the qa command this test started on its own machine', () => {
-    expect(stop(`/usr/local/bin/node /x/qa/src/cli.ts run --fake-machine ${dir} -- node -e 1`)).toEqual({ done: true, sent: [-4242] });
+    expect(stop(`/usr/local/bin/node /x/qa/cli run --fake-machine ${dir} -- node -e 1`)).toEqual({ done: true, sent: [-4242] });
   });
 
   it('a leader that has exited, or a number that is someone else\'s by now, gets no signal', () => {
     expect(stop(undefined)).toEqual({ done: false, sent: [] });   // gone
     expect(stop('-zsh')).toEqual({ done: false, sent: [] });   // the number reused by one of the person's own shells
-    expect(stop(`/usr/local/bin/node /x/qa/src/cli.ts run --fake-machine ${dir}-other -- node -e 1`)).toEqual({ done: false, sent: [] });   // another test's
+    expect(stop(`/usr/local/bin/node /x/qa/cli run --fake-machine ${dir}-other -- node -e 1`)).toEqual({ done: false, sent: [] });   // another test's
   });
 });
