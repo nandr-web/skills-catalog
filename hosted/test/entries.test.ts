@@ -6,7 +6,7 @@ import { GetParameterCommand, ParameterNotFound } from '@aws-sdk/client-ssm';
 import type { VersionPublished } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
 import { originGuard } from '../src/api/origin.ts';
-import { apiSettings, indexerSettings, onQueue, parameterReader, sweepSettings, versionPublishedOf, type QueueEvent } from '../src/entries/index.ts';
+import { apiSettings, indexerSettings, onQueue, openOnce, parameterReader, sweepSettings, versionPublishedOf, type QueueEvent } from '../src/entries/index.ts';
 
 const clock = { now: () => new Date('2026-09-29T12:00:00Z') };
 const CURRENT = 'c'.repeat(40);
@@ -161,5 +161,37 @@ describe("the indexer's queue", () => {
     expect(r).toEqual({ batchItemFailures: [{ itemIdentifier: 'm1' }] });
     expect(lines).toHaveLength(1);
     expect(lines[0]).not.toContain('secret-ish');
+  });
+});
+
+describe('a function opens once per container', () => {
+  it('an open that succeeds is kept: later requests share it', async () => {
+    let opens = 0;
+    const get = openOnce(async () => (opens++, (x: number) => x * 2));
+    expect(await (await get())(2)).toBe(4);
+    expect(await (await get())(3)).toBe(6);
+    expect(opens).toBe(1);
+  });
+
+  it('an open that fails (a blip at a cold start) is forgotten, so the next request opens again and answers', async () => {
+    let opens = 0;
+    const get = openOnce(async () => {
+      if (opens++ === 0) throw Object.assign(new Error('blip'), { name: 'ServiceUnavailable' });
+      return (x: number) => x * 2;
+    });
+    await expect(get()).rejects.toThrow('blip');
+    expect(await (await get())(2)).toBe(4);
+    expect(opens).toBe(2);
+  });
+
+  it('requests during one open share it, even one that fails', async () => {
+    let opens = 0;
+    let fail!: (e: Error) => void;
+    const get = openOnce(() => (opens++, new Promise<(x: number) => number>((_, reject) => (fail = reject))));
+    const [a, b] = [get(), get()];
+    fail(new Error('blip'));
+    await expect(a).rejects.toThrow('blip');
+    await expect(b).rejects.toThrow('blip');
+    expect(opens).toBe(1);
   });
 });

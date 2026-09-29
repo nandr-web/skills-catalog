@@ -198,6 +198,15 @@ describe('at most so many live tokens a person (contract §1.1)', () => {
     expect(s.catalog.config.maxLiveTokens).toBe(50);
   });
 
+  it("checked after the id: a login bound to another id, at its limit, is unauthenticated, so nobody learns the login holds tokens", async () => {
+    let id = 11;
+    const s = await standIn({ github: () => ({ login: 'ana-dev', id }), config: { signInLogins: ['ana-dev'], maxLiveTokens: 1 } });
+    await s.catalog.signIn({ github_token: OURS, scope: 'read' });
+    id = 12;
+    const e = await errorOf(() => s.catalog.signIn({ github_token: OURS, scope: 'read' }));
+    expect([e.code, e.data]).toEqual(['unauthenticated', {}]);
+  });
+
   it("at the limit a sign-in issues nothing and answers forbidden {why: too_many_tokens, limit}; revoked and expired tokens don't count", async () => {
     const s = await standIn({ config: { signInLogins: ['ana-dev'], maxLiveTokens: 2 } });
     const first = await s.catalog.signIn({ github_token: OURS, scope: 'read' });
@@ -310,6 +319,12 @@ describe("list_tokens and revoke_token: the caller's own tokens only", () => {
     const s = await standIn();
     expect((await errorOf(() => s.catalog.listTokens({}, actAs(undefined)))).code).toBe('unauthenticated');
     expect((await errorOf(() => s.catalog.revokeToken({ id: 'nosuchid00000000' }, actAs(undefined)))).code).toBe('unauthenticated');
+  });
+
+  it("an id of no token id's shape is refused before who's asking is: nobody acting still gets not_a_token_id", async () => {
+    const s = await standIn();
+    const e = await errorOf(() => s.catalog.revokeToken({ id: 'no-such-id' }, actAs(undefined)));
+    expect([e.code, e.data]).toEqual(['invalid_request', { field: 'id', why: 'not_a_token_id' }]);
   });
 
   it('not_found for a token says so without saying whose it is', () => {
