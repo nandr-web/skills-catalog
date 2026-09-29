@@ -11,7 +11,7 @@ import type { Surface } from './surface.ts';
 
 // Words the agent-facing surface doesn't have yet (asked for). A test fails when one of them appears in the surface,
 // so each is wired as soon as it lands.
-export const WORD_GAPS: readonly string[] = [];
+export const WORD_GAPS: readonly string[] = ['errors.why.paths_need_one_name'];
 
 function asData(code: string, data: Record<string, unknown>): string {
   return `${code}: ` + Object.entries(data).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ');
@@ -78,7 +78,8 @@ function renderItem(s: Surface, item: ReadItem, token: string, budget: InlineBud
   const shown = body !== undefined;
   if (shown) {
     const skillMd = `---\n${stringify(item.manifest.frontmatter, { lineWidth: 0 })}---\n${body}`;
-    lines.push(s.format(w.data_note, { publisher }), s.format(w.fence[0], { token }), skillMd.trimEnd(), s.format(w.fence[1], { token }));
+    const end = s.format(w.fence[1], { token });
+    lines.push(s.format(w.data_note, { publisher, end }), s.format(w.fence[0], { token }), skillMd.trimEnd(), end);
   }
   if (item.files) lines.push(s.format(w.files, { files: list(item.files.map((f) => `${quoted(f.path)} (${f.size} B)`)) }));
   for (const f of item.files ?? []) {
@@ -147,7 +148,8 @@ export function renderDiff(s: Surface, r: DiffResult, ids: Ids): string {
   const hunks = r.files.map((f) => f.unified).filter((u): u is string => !!u);
   if (hunks.length) {
     const token = ids.next();
-    lines.push(w.lines_intro, w.data_note, s.format(w.fence[0], { token }), ...hunks.map((u) => u.trimEnd()), s.format(w.fence[1], { token }));
+    const end = s.format(w.fence[1], { token });
+    lines.push(w.lines_intro, s.format(w.data_note, { end }), s.format(w.fence[0], { token }), ...hunks.map((u) => u.trimEnd()), end);
   }
   return lines.join('\n');
 }
@@ -203,7 +205,12 @@ export function renderError(s: Surface, e: CatalogError): string {
     case 'too_large':
       return fill(w.too_large, { ...d, limit: w.too_large_limit?.[String(d['limit'])] ?? d['limit'] });
     case 'invalid_request':
+      // A confirm that didn't come from a preview on this machine has its own sentence: preview again.
+      if (e.data['why'] === 'not_a_confirm') return fill(w.invalid_confirm, d);
       return fill(d['limit'] !== undefined ? w.invalid_request_limit : w.invalid_request, d);
+    case 'invalid_path':
+      // A link, a hard link or a special file in a folder being published: its own sentence proposes a plain copy.
+      return fill(e.data['why'] === 'not_regular_file' ? w.invalid_path_not_regular : w.invalid_path, d);
     case 'conflict':
       return fill(d['folder'] !== undefined ? w.publish_conflict : w.conflict, d);
     case 'forbidden':

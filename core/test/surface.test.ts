@@ -190,7 +190,8 @@ describe('the surface (vendored, recommended variant)', () => {
     expect(third).toContain(s.format(s.word('get.body_omitted'), { used: size(r.inline_budget.used), limit: size(24 * 1024), name: 'three' }));
     expect(text.split(fence)).toHaveLength(3);
     // The fence holds what the core inlined: the front matter and the body, nothing a face adds.
-    const inside = first!.slice(first!.indexOf(fence) + fence.length + 1, first!.indexOf(s.format(s.word('get').fence[1], { token })) - 1);
+    // The data note names the end line too, so the fence's own end line is the last one.
+    const inside = first!.slice(first!.indexOf(fence) + fence.length + 1, first!.lastIndexOf(s.format(s.word('get').fence[1], { token })) - 1);
     expect(inside).toBe(`---\nname: one\ndescription: Around the read budget.\n---\n${'a'.repeat(10_000)}`);
 
     // A file over the whole budget can only be read on its own; a smaller one left out, with paths[].
@@ -219,6 +220,30 @@ describe('the surface (vendored, recommended variant)', () => {
   it('lists the words it is still waiting for; each fails here the moment it appears', async () => {
     const s = Surface.load();
     for (const path of WORD_GAPS) expect(s.word(path), `the surface now has ${path}: wire it in render.ts and drop it from WORD_GAPS`).toBeUndefined();
+  });
+
+  it('every reason (why) the core can raise has words, and so do the two a face raises (not_regular_file, not_a_confirm)', () => {
+    const s = Surface.load();
+    // Read from the source: every literal why, every path refusal, and the path reasons' type.
+    const src = join(import.meta.dirname, '..', 'src');
+    const files = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(join(dir, e.name)) : e.name.endsWith('.ts') ? [join(dir, e.name)] : []));
+    const text = files(src).map((f) => readFileSync(f, 'utf8')).join('\n');
+    const whys = new Set<string>(['not_regular_file', 'not_a_confirm']);
+    for (const m of text.matchAll(/why: '([a-z_]+)'|refuse\([\w.!]+, '([a-z_]+)'/g)) whys.add((m[1] ?? m[2])!);
+    const pathWhy = /export type PathWhy =([^;]+);/.exec(text)![1]!;
+    for (const m of pathWhy.matchAll(/'([a-z_]+)'/g)) whys.add(m[1]!);
+    expect(whys.size).toBeGreaterThan(25);
+    // hosted_not_available is worded by its own sentence (errors.forbidden_hosted), not as a reason.
+    const missing = [...whys].filter((w) => w !== 'hosted_not_available' && !WORD_GAPS.includes(`errors.why.${w}`) && s.word(`errors.why.${w}`) === undefined);
+    expect(missing).toEqual([]);
+  });
+
+  it('a link in a published folder and a confirm from elsewhere each have their own sentence', () => {
+    const s = Surface.load();
+    const w = s.word('errors');
+    expect(renderError(s, new CatalogError('invalid_path', { path: 'notes/link.md', why: 'not_regular_file', folder: '/work/x' }))).toBe(s.format(w.invalid_path_not_regular, { path: 'notes/link.md' }));
+    expect(renderError(s, new CatalogError('invalid_request', { field: 'confirm', why: 'not_a_confirm' }))).toBe(s.format(w.invalid_confirm));
+    expect(renderError(s, new CatalogError('invalid_path', { path: 'a/../b', why: 'dot_segment' }))).toBe(s.format(w.invalid_path, { path: 'a/../b', why: w.why.dot_segment }));
   });
 });
 

@@ -181,7 +181,8 @@ describe('the read\'s inline budget (golden reads)', () => {
     // The words an assistant gets for this read: never more text than the core inlined.
     const s = Surface.load();
     const text = renderRead(s, r, counterIds());
-    const fenced = text.split(s.format(s.word('get').data_note, { publisher: 'ana' })).length - 1;
+    // The note up to its end line (the line carries this read's token).
+    const fenced = text.split(s.format((s.word('get').data_note as string).split('{end}')[0]!, { publisher: 'ana' })).length - 1;
     expect(fenced).toBe(items.filter((i) => i.manifest.body !== undefined).length);
     // About 4 bytes a token (contract §2).
     if (c.expect.tool_result_tokens_max !== undefined) expect(Buffer.byteLength(text, 'utf8') / 4).toBeLessThanOrEqual(c.expect.tool_result_tokens_max);
