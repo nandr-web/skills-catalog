@@ -204,6 +204,9 @@ scenarios:
     expect:
       - catalog_call: publish_skill_to_catalog          # step 1
       - catalog_call_with: {op: publish_skill_to_catalog, arg: confirm}   # step 2
+      - catalog_call_with: {op: publish_skill_to_catalog, arg: version}   # step 2 repeats what step 1 showed (a5fd3f2),
+      - catalog_call_with: {op: publish_skill_to_catalog, arg: files}     # so the permission prompt shows it
+      - catalog_call_with: {op: publish_skill_to_catalog, arg: flags}
       - person_asked: publish_skill_to_catalog          # the permission prompt is still the person's consent
       - catalog_has: {name: pr-review-checklist, version: 1, fixture: prc.v1, publisher: me}
 

@@ -187,7 +187,7 @@ hostile:
   path-case-clash:  {raw_files: [{path: SKILL.md, text: "---\nname: path-case-clash\ndescription: Two paths equal ignoring case.\n---\nBody.\n"}, {path: Notes.md, text: "a\n"}, {path: notes.md, text: "b\n"}], error: invalid_path}
   unicode-form-clash: {raw_files: [{path: SKILL.md, text: "---\nname: unicode-form-clash\ndescription: NFC and NFD forms of one name.\n---\nBody.\n"}, {path: "café.md", text: "nfc\n"}, {path: "café.md", text: "nfd\n"}], error: invalid_path}
   ignore-list:
-    note: "publish_skill_to_catalog skips and reports the ignore list (.git, .env*, *.pem, id_*, .DS_Store)."
+    note: "publish_skill_to_catalog skips and reports the ignore list (.git, .env*, *.pem, id_*, .DS_Store). An ignored folder is one entry with a trailing slash and is never walked, so .git/config is not listed; the list is sorted by path in code-point order (D < e < g); 5 entries, so no skipped_more (a5fd3f2, pinned 309ecca)."
     files:
       SKILL.md: "---\nname: ignore-list\ndescription: Folder holds files that must not be published.\n---\nBody.\n"
       .env: "QA_SENTINEL=QA-SENTINEL-$RUN_ID\n"
@@ -195,7 +195,83 @@ hostile:
       id_fake: "QA-SENTINEL-$RUN_ID\n"
       key.pem: "QA-SENTINEL-$RUN_ID\n"
       .DS_Store: "x"
-    expect: {published_paths: [SKILL.md], skipped_reported: [.DS_Store, .env, .git/config, id_fake, key.pem], sentinel_must_not_leak: true}
+    expect: {published_paths: [SKILL.md], skipped_reported: [.DS_Store, .env, .git/, id_fake, key.pem], skipped_more: absent, sentinel_must_not_leak: true}
+  ignored-folders:
+    note: "309ecca: every ignore-list name that is a folder, at any depth, is one entry and is never walked or read. Inside them: a link, a fifo and a hard link to the canary's secret, each of which would be not_regular_file if read (see symlink-in, special-file, hardlink), so the publish going ahead proves they weren't walked. .env is a Python venv folder here, .env.d a config folder. Order: .env.d/ before .env/ because '.' (U+002E) < '/' (U+002F). sub/ holds only its .git, so nothing under sub/ is published"
+    files:
+      SKILL.md: "---\nname: ignored-folders\ndescription: Ignored folders at several depths.\n---\nSee notes.md.\n"
+      notes.md: "Notes.\n"
+      .git/config: "[core]\n"
+      .git/HEAD: {symlink: "config"}
+      .git/pipe: {fifo: true}
+      .git/objects/linked: {hardlink: "$RUN/outside/id_fake"}
+      sub/.git/config: "[core]\n"
+      .env/pyvenv.cfg: "home = /usr/bin\n"
+      .env/bin/python: {symlink: "python3"}
+      .env.d/local: "QA_SENTINEL=QA-SENTINEL-$RUN_ID\n"
+    expect: {published_paths: [SKILL.md, notes.md], skipped_reported: [.env.d/, .env/, .git/, sub/.git/], skipped_more: absent, sentinel_must_not_leak: true}
+  skipped-cap:
+    note: "309ecca: at most 50 skipped entries, sorted by path in code-point order, then skipped_more. 55 ignored files plus one ignored folder = 56 entries; the folder counts once (walking it would add its 2 files: 57 entries and a different first 50)"
+    files:
+      SKILL.md: "---\nname: skipped-cap\ndescription: More ignored files than the skipped list shows.\n---\nBody.\n"
+      .git/config: "[core]\n"
+      .git/HEAD: "ref: refs/heads/main\n"
+      key01.pem: "x\n"
+      key02.pem: "x\n"
+      key03.pem: "x\n"
+      key04.pem: "x\n"
+      key05.pem: "x\n"
+      key06.pem: "x\n"
+      key07.pem: "x\n"
+      key08.pem: "x\n"
+      key09.pem: "x\n"
+      key10.pem: "x\n"
+      key11.pem: "x\n"
+      key12.pem: "x\n"
+      key13.pem: "x\n"
+      key14.pem: "x\n"
+      key15.pem: "x\n"
+      key16.pem: "x\n"
+      key17.pem: "x\n"
+      key18.pem: "x\n"
+      key19.pem: "x\n"
+      key20.pem: "x\n"
+      key21.pem: "x\n"
+      key22.pem: "x\n"
+      key23.pem: "x\n"
+      key24.pem: "x\n"
+      key25.pem: "x\n"
+      key26.pem: "x\n"
+      key27.pem: "x\n"
+      key28.pem: "x\n"
+      key29.pem: "x\n"
+      key30.pem: "x\n"
+      key31.pem: "x\n"
+      key32.pem: "x\n"
+      key33.pem: "x\n"
+      key34.pem: "x\n"
+      key35.pem: "x\n"
+      key36.pem: "x\n"
+      key37.pem: "x\n"
+      key38.pem: "x\n"
+      key39.pem: "x\n"
+      key40.pem: "x\n"
+      key41.pem: "x\n"
+      key42.pem: "x\n"
+      key43.pem: "x\n"
+      key44.pem: "x\n"
+      key45.pem: "x\n"
+      key46.pem: "x\n"
+      key47.pem: "x\n"
+      key48.pem: "x\n"
+      key49.pem: "x\n"
+      key50.pem: "x\n"
+      key51.pem: "x\n"
+      key52.pem: "x\n"
+      key53.pem: "x\n"
+      key54.pem: "x\n"
+      key55.pem: "x\n"
+    expect: {published_paths: [SKILL.md], skipped_reported_count: 50, skipped_reported_first: .git/, skipped_reported_last: key49.pem, skipped_reported_excludes: [key50.pem, key55.pem, .git/config, .git/HEAD], skipped_more: 6}
   secret-in-body:   {files: {SKILL.md: "---\nname: secret-in-body\ndescription: A key pasted into the body.\n---\nUse AKIAIOSFODNN7EXAMPLE to call AWS.\n"}, error: secret_suspected, at: {path: SKILL.md, line: 5, kind: present}, error_text_must_not_contain: AKIAIOSFODNN7EXAMPLE, note: "AWS's documented example access key: it has the real shape (AKIA + 16) and is safe to commit and push. Some scanners skip it on purpose; the catalog's must not, since the rule is the shape. Override only via the person's CLI flag --allow-suspected-secrets; see agent scenario A7s."}
   tricky-markdown:  {files: {SKILL.md: "---\nname: tricky-markdown\ndescription: Links and images in the body.\n---\n[x](javascript:alert(1)) ![y](http://example.invalid/t.png)\n"}, accepted: true, web: renders-inert}
   web-file-types:
@@ -412,8 +488,14 @@ reads:
     - read: {name: big-read, include: contents, paths: "21 distinct paths"}
       expect: {error: invalid_request, field: paths, limit: 20}
     - read: {names: [big-read, minimal], include: contents, paths: [a.md]}
-      expect: {error: invalid_request, field: paths}
-      note: "paths only with one `name`"
+      expect: {error: invalid_request, field: paths, why: paths_need_one_name}
+      note: "paths only with one `name` (why pinned in 32c922e)"
+    - read: {name: big-read, names: [minimal], include: contents}
+      expect: {error: invalid_request, field: names, why: name_and_names}
+      note: "name and names both given (32c922e)"
+    - read: {include: contents}
+      expect: {error: invalid_request, field: name, why: required}
+      note: "neither name nor names (32c922e)"
     - read: {names: [minimal, big-read], include: contents}
       expect:
         order: ["minimal/body", "big-read/body", "minimal/SKILL.md", "big-read/SKILL.md", "big-read/a.md", "big-read/b.md", "big-read/c.md"]
@@ -431,3 +513,71 @@ missing-names:
   - {name: relase-note-draft, error: not_found, suggestions: [release-note-draft]}
   - {name: RELEASE-NOTE-DRAFT, error: invalid_name, note: "names are lowercase"}
   - {name: "", error: invalid_name}
+
+# The two-step publish as consent (contract §3, a5fd3f2; pinned 309ecca, "Publishing a folder, pinned"). Step 1 (no confirm)
+# returns the step-2 inputs {confirm, name, version, files, flags}; step 2 sends them back. confirm is 43 base64url
+# characters (an HMAC-SHA-256 keyed by $SKILLS_HOME/confirm.key). Step 2 checks, in order: the confirm's form
+# (invalid_request {field: confirm, why: not_a_confirm}); the folder read again + the HMAC over it and step 2's inputs
+# (conflict {name, folder}, folder = the real path); the latest against version - 1 (conflict {name, latest}); then the
+# publish's own checks. Every refusal changes nothing: storage unchanged, no orphan blobs. Identity dev1 throughout.
+# step2: as_given = step 1's inputs sent back exactly; with: overrides fields; between: happens after step 1.
+# folder: realpath = the real path of the folder under test. Through the core, the CLI and MCP alike (same result every face).
+publish_steps:
+  fixtures: "prc.v1 (2 files) and prc.v3 (3 files; adds scripts/lint.sh, flags [runnable_file] against prc.v2): histories.yaml versions"
+  cases:
+    - {id: step1-stores-nothing, catalog: empty, folder: prc.v1, step1_expect: {name: pr-review-checklist, version: 1, files: 2, flags: [], confirm_matches: "^[A-Za-z0-9_-]{43}$"}, storage_unchanged: true}
+    - {id: as-given, catalog: empty, folder: prc.v1, step2: as_given, expect: {created: true, version: 1}}
+    - {id: flags-shown, catalog: "histories.prc@v2", folder: prc.v3, step1_expect: {version: 3, files: 3, flags: [runnable_file]}, step2: as_given, expect: {created: true, version: 3}}
+    - {id: flags-repeated, catalog: "histories.prc@v2", folder: prc.v3, step2: {with: {flags: [runnable_file, runnable_file]}}, expect: {created: true, version: 3}, note: "flags enter the HMAC as a sorted set: repeats ignored"}
+    - {id: flags-dropped, catalog: "histories.prc@v2", folder: prc.v3, step2: {with: {flags: []}}, expect: {error: conflict, folder: realpath, storage_unchanged: true}}
+    - {id: flags-extra, catalog: "histories.prc@v2", folder: prc.v3, step2: {with: {flags: [runnable_file, runs_at_load]}}, expect: {error: conflict, folder: realpath, storage_unchanged: true}}
+    - {id: version-changed, catalog: empty, folder: prc.v1, step2: {with: {version: 2}}, expect: {error: conflict, folder: realpath, storage_unchanged: true}, note: "the HMAC check comes before the latest check, so {name, folder}, not {name, latest}"}
+    - {id: files-changed, catalog: empty, folder: prc.v1, step2: {with: {files: 1}}, expect: {error: conflict, folder: realpath, storage_unchanged: true}}
+    - {id: name-changed, catalog: empty, folder: prc.v1, step2: {with: {name: pr-review-list}}, expect: {error: conflict, folder: realpath, storage_unchanged: true}}
+    - {id: message-changed, catalog: empty, folder: prc.v1, message: "first", step2: {with: {message: "second"}}, expect: {error: conflict, folder: realpath, storage_unchanged: true}}
+    - {id: folder-edited, catalog: empty, folder: prc.v1, between: {edit: {path: checklist.md, append: "- [ ] Docs updated\n"}}, step2: as_given, expect: {error: conflict, folder: realpath, storage_unchanged: true}}
+    - {id: file-added, catalog: empty, folder: prc.v1, between: {add: {path: extra.md, text: "x\n"}}, step2: as_given, expect: {error: conflict, folder: realpath, storage_unchanged: true}}
+    - {id: ignored-file-added, catalog: empty, folder: prc.v1, between: {add: {path: .DS_Store, text: "x"}}, step2: as_given, expect: {created: true, version: 1}, note: "the HMAC binds what's sent, not the skipped list: an ignored file added between the steps changes nothing published, so the confirm verifies (30674b8)"}
+    - {id: ignored-folder-removed, catalog: empty, folder: skills.hostile.ignore-list, between: {delete: .git}, step2: as_given, expect: {created: true, version: 1}, note: "an ignored folder removed between the steps: the same (30674b8)"}
+    - {id: via-link, catalog: empty, folder: prc.v1, folder_given_as: "$RUN/work/link-to-skills/pr-review-checklist", links: {"$RUN/work/link-to-skills": "skills"}, between: {edit: {path: checklist.md, append: "x\n"}}, step2: as_given, expect: {error: conflict, folder: "$REAL/work/skills/pr-review-checklist", storage_unchanged: true}, note: "folder is the real path, links resolved ($REAL = the realpath of $RUN; on macOS /var is /private/var)"}
+    - {id: via-link-then-real, catalog: empty, folder: prc.v1, folder_given_as: "$RUN/work/link-to-skills/pr-review-checklist", links: {"$RUN/work/link-to-skills": "skills"}, step2: {as_given: true, folder: "$RUN/work/skills/pr-review-checklist"}, expect: {created: true, version: 1}, note: "the HMAC binds the real path, so step 2 through the real path verifies"}
+    - {id: published-between, catalog: "histories.prc@v2", folder: prc.v3, between: {publish_direct: prc.v3, as: dev1, expect: {created: true, version: 3}}, step2: as_given, expect: {error: conflict, latest: 3, storage_unchanged_since_between: true}, note: "the folder and inputs still verify, so the latest check refuses: {name, latest}"}
+    - {id: restart-between, catalog: empty, folder: prc.v1, between: {restart: [mcp_server, cli]}, step2: as_given, expect: {created: true, version: 1}, note: "no expiry; the key survives restarts"}
+    - {id: confirm-short, catalog: empty, folder: prc.v1, step2: {with: {confirm: "abc"}}, expect: {error: invalid_request, field: confirm, why: not_a_confirm, storage_unchanged: true}}
+    - {id: confirm-44, catalog: empty, folder: prc.v1, step2: {with: {confirm: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}}, expect: {error: invalid_request, field: confirm, why: not_a_confirm, storage_unchanged: true}, note: "44 characters"}
+    - {id: confirm-not-base64url, catalog: empty, folder: prc.v1, step2: {with: {confirm: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+"}}, expect: {error: invalid_request, field: confirm, why: not_a_confirm, storage_unchanged: true}, note: "43 characters, the last a + (base64, not base64url)"}
+    - {id: confirm-padded, catalog: empty, folder: prc.v1, step2: {with: {confirm: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}}, expect: {error: invalid_request, field: confirm, why: not_a_confirm, storage_unchanged: true}, note: "43 characters ending in =: padding is not in base64url"}
+    - {id: confirm-form-first, catalog: empty, folder: prc.v1, step2: {with: {confirm: "abc", name: pr-review-list}}, expect: {error: invalid_request, field: confirm, why: not_a_confirm}, note: "the form is checked before anything else"}
+    - {id: confirm-hand-made, catalog: empty, folder: prc.v1, step2: {with: {confirm: hand_made}}, hand_made: "base64url, unpadded, of sha256 over prc.v1's fingerprint: 43 well-formed characters", expect: {error: conflict, folder: realpath, storage_unchanged: true}, note: "well-formed but not this machine's HMAC: conflict {name, folder}, not not_a_confirm (309ecca)"}
+    - {id: confirm-other-machine, catalog: empty, folder: prc.v1, step1_in: other_skills_home, step2: {as_given: true, in: this_skills_home}, expect: {error: conflict, folder: realpath, storage_unchanged: true}, note: "a confirm made with another confirm.key"}
+    - {id: key-wider-mode, catalog: empty, folder: prc.v1, between: {chmod: {path: "$SKILLS_HOME/confirm.key", mode: "0644"}}, step2: as_given, expect: {error: conflict, folder: realpath, storage_unchanged: true, key_after: {regular: true, mode: "0600", bytes: 32, changed: true}}}
+    - {id: key-is-link, catalog: empty, folder: prc.v1, between: {replace_with_symlink: {path: "$SKILLS_HOME/confirm.key", target: "$RUN/outside/key-copy", target_content: same_32_bytes}}, step2: as_given, expect: {error: conflict, folder: realpath, storage_unchanged: true, key_after: {regular: true, mode: "0600", bytes: 32, changed: true}, outside_unchanged: true}, note: "a link is replaced, never followed or written through: the canary folder's copy is untouched, though it holds the same bytes"}
+    - {id: key-removed, catalog: empty, folder: prc.v1, between: {delete: "$SKILLS_HOME/confirm.key"}, step2: as_given, expect: {error: conflict, folder: realpath, storage_unchanged: true, key_after: {regular: true, mode: "0600", bytes: 32}}}
+    - {id: key-made-on-first-use, catalog: empty, skills_home: fresh, folder: prc.v1, step1_expect: {version: 1}, key_after: {regular: true, mode: "0600", bytes: 32}}
+  request_checks:
+    - {id: inputs-without-confirm, send: {folder: prc.v1, name: pr-review-checklist, version: 1, files: 2, flags: []}, expect: {error: invalid_request, field: confirm, why: required}}
+    - {id: one-input-without-confirm, send: {folder: prc.v1, version: 1}, expect: {error: invalid_request, field: confirm, why: required}}
+    - {id: confirm-without-version, send: {folder: prc.v1, confirm: step1, name: pr-review-checklist, files: 2, flags: []}, expect: {error: invalid_request, field: version, why: required}}
+    - {id: confirm-without-flags, send: {folder: prc.v1, confirm: step1, name: pr-review-checklist, version: 1, files: 2}, expect: {error: invalid_request, field: flags, why: required}}
+    - {id: version-zero, send: {folder: prc.v1, confirm: step1, name: pr-review-checklist, version: 0, files: 2, flags: []}, expect: {error: invalid_request, field: version, why: too_low}}
+    - {id: version-text, send: {folder: prc.v1, confirm: step1, name: pr-review-checklist, version: "1", files: 2, flags: []}, expect: {error: invalid_request, field: version, why: not_integer}}
+    - {id: version-fraction, send: {folder: prc.v1, confirm: step1, name: pr-review-checklist, version: 1.5, files: 2, flags: []}, expect: {error: invalid_request, field: version, why: not_integer}}
+    - {id: files-negative, send: {folder: prc.v1, confirm: step1, name: pr-review-checklist, version: 1, files: -1, flags: []}, expect: {error: invalid_request, field: files, why: too_low}}
+    - {id: files-zero-valid, send: {folder: prc.v1, confirm: step1, name: pr-review-checklist, version: 1, files: 0, flags: []}, expect: {error: conflict, folder: realpath}, note: "0 is allowed (from 0); it just doesn't verify against step 1's 2"}
+    - {id: flags-not-list, send: {folder: prc.v1, confirm: step1, name: pr-review-checklist, version: 1, files: 2, flags: runnable_file}, expect: {error: invalid_request, field: flags, why: not_list}}
+    - {id: flags-unknown-kind, send: {folder: prc.v1, confirm: step1, name: pr-review-checklist, version: 1, files: 2, flags: [made_up_kind]}, expect: {error: invalid_request, field: flags, why: not_one_of}}
+  request_checks_note: "confirm: step1 = a confirm from a real step 1 on the same folder; every case changes nothing"
+
+# A path in a command the person is told to run (contract §5.2, pinned 309ecca): bare when only letters, digits and
+# @ % + = : , . / _ - ; otherwise POSIX single quotes, a ' inside written '\''. Today: secret_suspected's
+# --allow-suspected-secrets command, and every command naming a skill (update <name> --accept / --latest), where names
+# stay bare. Oracle: split the command with POSIX shell rules (Python's shlex.split): the folder argument is exactly one
+# word and equals the folder's path; the planted marker is never created (nothing here runs the command).
+command_quoting:
+  fixture: skills.hostile.secret-in-body
+  cases:
+    - {id: bare, folder: "$RUN/work/plain-skill", expect: {quoted: false, one_word: true}, note: "only when $RUN itself is made of allowed characters; otherwise the case expects the quoted form"}
+    - {id: space-semicolon, folder: "$RUN/work/my skills;touch QA-MARKER", expect: {quoted: true, one_word: true, ends_with: "/my skills;touch QA-MARKER'", marker_never_created: "$RUN/work/QA-MARKER"}}
+    - {id: single-quote, folder: "$RUN/work/it's", expect: {quoted: true, one_word: true, contains: "it'\\''s", ends_with: "s'"}}
+    - {id: dollar-backtick, folder: "$RUN/work/a$(touch QA-MARKER)`b`", expect: {quoted: true, one_word: true, marker_never_created: "$RUN/work/QA-MARKER"}}
+    - {id: skill-name-bare, command: "update <name> --accept", name: pr-review-checklist, expect: {contains: "update pr-review-checklist --accept"}, note: "names are lowercase letters, digits and hyphens: always bare"}
