@@ -86,7 +86,14 @@ const MUTATIONS = [
   // the check fails closed: a tool it can't run, or one that sees nothing, refuses the run
   ['check.ts', 'a ps or lsof that can\'t run reads as nothing left behind', 'if (r.error || r.status === null || !ok(r.status)) {', 'if (false) {'],
   ['check.ts', 'ps is looked up on PATH', "export const PS = system('/bin/ps', '/usr/bin/ps');", "export const PS = 'ps';"],
-  ['check.ts', 'a check that can\'t see its own marker process lets the run start', 'if (!runProcesses(runId, tools).some((p) => p.pid === marker.pid)) {', 'if (false) {'],
+  ['check.ts', 'a check that can\'t see its own marker process lets the run start', 'if (!runProcesses(runId, tools).some((p) => p.pid === m.pid)) {', 'if (false) {'],
+  // the run's marker: only the run's holders count, each looked at again right before its signal
+  ['marker.ts', 'a marker any program of this user can open (and hold on descriptor 3)', 'constants.O_NOFOLLOW, 0o000);', 'constants.O_NOFOLLOW, 0o600);'],
+  ['marker.ts', "another user's holder counts as the run's", 'if (Number(r[2]) !== uid) others.push(', 'if (false) others.push('],
+  ['marker.ts', "a holder started before the run counts as the run's", 'else if (!(Date.parse(r[3]!) >= m.since)) others.push(', 'else if (false) others.push('],
+  ['check.ts', "an lsof line the check can't read is skipped", 'if (odd !== undefined) throw', 'if (false) throw'],
+  ['run.ts', 'a pid is signalled without being looked at again', 'if (!sys.still(pid, runId, marker, tools)) continue;', ''],
+  ['run.ts', 'the re-check asks about every holder, not that pid', 'markedProcesses(marker, tools, [pid])', 'markedProcesses(marker, tools)'],
   ['run.ts', 'a run starts without proving the check can see', 'await checkSees(runId, o.tools);', ''],
   // the tests stop what they start (a mutant here can leave a sleep or listener that ends itself within 60 s)
   ['test/machine.ts', 'a test\'s detached child outlives the test', 'onTestFinished(() => stopGroup(child));', ''],
