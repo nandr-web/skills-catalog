@@ -2,7 +2,7 @@
 // on the real home, and the guards that keep a test process away from the real places. Every test here uses a fake
 // machine; the few that name a real place only check that it is refused, and nothing there exists or is created.
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { platform, tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -14,7 +14,7 @@ import { DEFAULT_TTL_MS } from '../src/janitor.ts';
 import { realClaudeTmp, removeLeftover, removeRun, RUN_ID, UnsafeError, verifyBase } from '../src/safe-delete.ts';
 import { createSandbox, FailSafeError, failSafe, newRunId, realHome, recordProcessGroup, sandboxBase } from '../src/sandbox.ts';
 import { teardown } from '../src/teardown.ts';
-import { cleanup, PROCESS_TEST_MS, machine, qaBareSync, qaSync, scratch, spawnDetached, stopGroup, type TestMachine } from './machine.ts';
+import { cleanup, PROCESS_TEST_MS, machine, qaBareSync, qaSync, scratch, spawnDetached, stopGroup, tmpIgnoresCase, type TestMachine } from './machine.ts';
 
 vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start processes (see PROCESS_TEST_MS)
 
@@ -24,15 +24,7 @@ const HOUR = 3600_000;
 const T0 = Date.parse('2026-09-28T10:00:00Z');
 const later = () => T0 + 2 * HOUR;
 const deadPid = () => spawnSync('true').pid!;          // a process that has exited
-// Made and removed at once, at import: a folder made here would outlive a run that filters out every test in this file.
-const caseInsensitive = (() => {
-  const d = realpathSync.native(mkdtempSync(join(tmpdir(), 'qa-case-')));
-  try {
-    return existsSync(d.toUpperCase());
-  } finally {
-    rmdirSync(d);
-  }
-})();
+const caseInsensitive = tmpIgnoresCase();
 const run = (m: TestMachine, at = T0) => createSandbox({ runId: newRunId(new Date(at)), machine: m, now: () => at });
 /** Mark a run as finished long ago: its qa process is gone. */
 const finished = (root: string) => {

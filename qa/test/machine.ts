@@ -3,7 +3,7 @@
 // machinery passes one explicitly, and the qa command line runs here only with `--fake-machine <dir>`.
 // This file is the only test code that starts the qa command line (test/meta.test.ts checks that).
 import { spawn, spawnSync, type ChildProcess, type SpawnOptions } from 'node:child_process';
-import { appendFileSync, chmodSync, existsSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, existsSync, mkdtempSync, readdirSync, realpathSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -25,6 +25,8 @@ export const PROCESS_TEST_MS = 30_000;
 // in the test doesn't run), every process it registered is stopped and its exit awaited, then any process still carrying
 // the id of a run in its folders, and only then are its folders removed: no process of the test's outlives its folder
 // and makes it again (test/temp-folders.ts names any folder left at the end of the run).
+// The test is found by getCurrentTest(), which is the test running now only while one test runs at a time in a file:
+// no test runs at the same time as another (vitest's concurrent option), and test/meta.test.ts checks that.
 type Finisher = { stops: (() => unknown)[]; folders: string[] };
 const finishers = new WeakMap<object, Finisher>();
 function finisher(what: string): Finisher {
@@ -116,6 +118,17 @@ export function scratch(prefix = 'qa-test-'): string {
   const log = process.env['QA_SCRATCH_LOG'];
   if (log) appendFileSync(log, `${d}\n`);
   return d;
+}
+
+/** Whether the temporary folder's file system ignores case: a folder made and removed at once, so it's safe at a file's
+ *  top level (a folder kept there would outlive a run that filters out every test in the file). */
+export function tmpIgnoresCase(): boolean {
+  const d = realpathSync.native(mkdtempSync(join(tmpdir(), 'qa-case-')));
+  try {
+    return existsSync(d.toUpperCase());
+  } finally {
+    rmdirSync(d);
+  }
 }
 
 /** The real ps, every start time it prints 90 s early (fixtures/skewed-ps.cjs), by its full path in the test's own folder. */

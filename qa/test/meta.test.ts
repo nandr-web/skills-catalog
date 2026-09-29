@@ -56,6 +56,14 @@ describe('the QA tools\' own guards', () => {
     expect([...standIn.matchAll(/\bconnect\(([^,]*),/g)].map((m) => m[1])).toEqual(['o.command']);
   });
 
+  it('a test makes a temporary folder only with scratch() (test/machine.ts), so the run\'s check sees it; the check makes only its own log', () => {
+    expect(using(tests.filter((f) => !f.endsWith('meta.test.ts')), /\bmkdtemp(Sync)?\(/)).toEqual(['test/machine.ts', 'test/temp-folders.ts']);
+  });
+
+  it('no test runs at the same time as another in its file: each finds its own folders and processes by getCurrentTest()', () => {
+    expect(using([...tests.filter((f) => !f.endsWith('meta.test.ts')), dir('../vitest.config.ts')], /\.concurrent\b|\bconcurrent\s*:/)).toEqual([]);
+  });
+
   it('only the live scripts, run by those helpers in a child process, use the real machine outside src/', () => {
     // safe-delete.test.ts only checks that it refuses in a test process
     expect(using(tests.filter((f) => !f.endsWith('meta.test.ts')), /realMachine\(\)/)).toEqual(['test/live/person-check.ts', 'test/safe-delete.test.ts']);

@@ -1,21 +1,19 @@
 // `qa trace-check` (qa-plan §9; brief §3), a port of the QA plan's preview checker.
 // It must pass on the real goldens, and fail with a clear message for each kind of break, shown on a broken copy.
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parse, stringify } from 'yaml';
 import { traceCheck } from '../src/trace-check.ts';
+import { cleanup, scratch } from './machine.ts';
 
 const QA = fileURLToPath(new URL('..', import.meta.url));
-const made: string[] = [];
-afterEach(() => { for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true }); });
+afterEach(cleanup);
 
 /** A copy of the goldens and traceability, plus a backlog folder made from traceability's own backlog references. */
 function copy(): { qa: string; backlog: string } {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'qa-trace-')));
-  made.push(root);
+  const root = scratch('qa-trace-');
   const qa = join(root, 'qa'), backlog = join(root, 'backlog');
   cpSync(join(QA, 'golden'), join(qa, 'golden'), { recursive: true });
   cpSync(join(QA, 'traceability.yaml'), join(qa, 'traceability.yaml'));

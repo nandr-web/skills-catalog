@@ -1,17 +1,15 @@
 // The agent scenario runner's parts (brief §2.1-2.3): the surface variant (tool names, companion skill), the exact
 // `claude -p` command per setup (qa-plan §3.2), and the stand-in person, a QA MCP tool that answers permission prompts.
-import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { loadSurface } from '../src/agent/surface.ts';
 import { claudeCommand, mcpConfig, SETUPS_FROM } from '../src/agent/command.ts';
+import { cleanup, exitOf, scratch, spawnDetached } from './machine.ts';
 
 const SURFACE = fileURLToPath(new URL('./fixtures/surface.yaml', import.meta.url));
-const made: string[] = [];
-afterEach(() => { for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true }); });
+afterEach(cleanup);
 
 describe('surface', () => {
   it('maps contract operations to the variant\'s tool names, and back', () => {
@@ -114,15 +112,15 @@ describe('the claude -p command (qa-plan §3.2)', () => {
 
 describe('the stand-in person (a QA MCP server over stdio)', () => {
   it('approves only what the scenario agrees to, refuses the rest, and records every request', async () => {
-    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'qa-person-')));
-    made.push(dir);
+    const dir = scratch('qa-person-');
     const log = join(dir, 'person.jsonl');
     const server = fileURLToPath(new URL('../src/agent/person.ts', import.meta.url));
-    const p = spawn(process.execPath, [server], { env: { ...process.env, QA_PERSON_LOG: log, QA_PERSON_AGREES: JSON.stringify(['mcp__skills-catalog__publish_skill_to_catalog']) }, stdio: ['pipe', 'pipe', 'inherit'] });
+    // stopped, and its exit awaited, before its folder goes, however the test ends
+    const p = spawnDetached(process.execPath, [server], { env: { ...process.env, QA_PERSON_LOG: log, QA_PERSON_AGREES: JSON.stringify(['mcp__skills-catalog__publish_skill_to_catalog']) }, stdio: ['pipe', 'pipe', 'inherit'] });
     const replies: any[] = [];
     let buf = '';
-    p.stdout.on('data', (b) => { buf += b; let i; while ((i = buf.indexOf('\n')) >= 0) { replies.push(JSON.parse(buf.slice(0, i))); buf = buf.slice(i + 1); } });
-    const send = (m: object) => p.stdin.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n');
+    p.stdout!.on('data', (b) => { buf += b; let i; while ((i = buf.indexOf('\n')) >= 0) { replies.push(JSON.parse(buf.slice(0, i))); buf = buf.slice(i + 1); } });
+    const send = (m: object) => p.stdin!.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n');
     const reply = (id: number) => new Promise<any>((ok) => { const t = setInterval(() => { const r = replies.find((x) => x.id === id); if (r) { clearInterval(t); ok(r); } }, 5); });
     send({ id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '1' } } });
     expect((await reply(1)).result.serverInfo.name).toBe('qa-person');
@@ -132,8 +130,8 @@ describe('the stand-in person (a QA MCP server over stdio)', () => {
     const ask = (id: number, tool_name: string) => { send({ id, method: 'tools/call', params: { name: 'answer', arguments: { tool_name, input: { folder: './x' } } } }); return reply(id); };
     expect(JSON.parse((await ask(3, 'mcp__skills-catalog__publish_skill_to_catalog')).result.content[0].text)).toEqual({ behavior: 'allow', updatedInput: { folder: './x' } });
     expect(JSON.parse((await ask(4, 'Bash')).result.content[0].text)).toMatchObject({ behavior: 'deny' });
-    p.stdin.end();
-    await new Promise((ok) => p.on('exit', ok));
+    p.stdin!.end();
+    await exitOf(p);
     expect(existsSync(log)).toBe(true);
     expect(readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l))).toMatchObject([
       { tool_name: 'mcp__skills-catalog__publish_skill_to_catalog', decision: 'allow' },
