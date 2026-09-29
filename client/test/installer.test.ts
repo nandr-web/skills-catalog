@@ -685,6 +685,30 @@ describe('replacing an installed copy deletes only the copy the lock recorded (c
     expect(nothingStaged(p)).toBe(true);
   });
 
+  // A recreated copy that is complete and unchanged, with nothing to replace, has its identity recorded again: nothing is
+  // moved, and the next update deletes it as any recorded copy, instead of keeping it in staging (contract §4.5).
+  it('an intact copy the person recreated, installed again at its version: unchanged, nothing moved, its identity recorded', async () => {
+    const p = place();
+    await publish(p, 'alpha', plain('alpha'));
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha' });
+    const dest = join(userSkills(p), 'alpha');
+    const files = tree(dest);
+    rmSync(dest, { recursive: true });
+    mkdirSync(dest);
+    writeFileSync(join(dest, 'SKILL.md'), skillMd('alpha', 'The alpha skill.'));
+    const recreated = idOf(dest);
+    expect(lockOf(p)[dest]!.copy).not.toEqual(recreated);
+    const r = await install(ctx, { name: 'alpha' });
+    expect([r.outcome, r.text]).toEqual(['unchanged', S.format(S.word('install.unchanged'), { name: 'alpha', version: 1 })]);
+    expect([tree(dest), idOf(dest)]).toEqual([files, recreated]);
+    expect(lockOf(p)[dest]).toMatchObject({ version: 1, copy: recreated });
+    await publish(p, 'alpha', plain('alpha', 'Second.\n'));
+    const u = await update(ctx, {});
+    expect(u.text).not.toContain(S.word('update.kept_in_staging').split('{')[0]);
+    expect(nothingStaged(p)).toBe(true);
+  });
+
   // A real folder with another identity while .claude and the skills folder hold was recreated by the person or their
   // tools (a restore, a branch switch): it may hold their edits, so it's kept in staging, never deleted (contract §4.5).
   it('a folder the person recreated at the skill\'s path is never deleted: the update goes in, and it is kept in staging and named', async () => {
@@ -839,6 +863,8 @@ describe('update (contract §3 update_installed_skills, §5.3)', () => {
       S.format(S.word('update.held_notify_next'), { name: 'ask-first', target: 'user', from: 1, to: 2, confirm, flags: '[]' }),
       S.format(S.word('update.updated'), { name: 'auto-one', from: 1, to: 2, changes: '"SKILL.md" changed' }),
       S.format(S.word('update.held_pin'), { name: 'pinned-one', from: 1, to: 2 }),
+      // A pinned skill stays, and the person may still take the new version (it stays pinned, at that version).
+      S.format(S.word('update.held_pin_next'), { name: 'pinned-one', target: 'user', to: 2, confirm: heldOf(lines[5]!)!.confirm, flags: '[]' }),
     ]);
     expect(r.result).toBe(S.doc.log.result.update.held_notify);
     const e = await refusal(() => update(ctx, { names: ['auto-one', 'never-installed'] }));
@@ -946,6 +972,7 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
     { file: 'config.json', why: 'unknown_policy', bytes: () => '{"update_policy": "Pin"}' },
   ];
 
+  // Every damage runs a publish, an install and each installer call (about 2 s alone, over 6 s in a loaded full run).
   it('every installer call refuses it with the file and why, and nothing changes', async () => {
     for (const d of damages) {
       const p = place();
@@ -977,7 +1004,7 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
       expect(existsSync(join(projectSkills(p), 'other'))).toBe(false);
       expect(nothingStaged(p)).toBe(true);
     }
-  });
+  }, 30_000);
 
   it('a mistyped pin never applies an update', async () => {
     const p = place();

@@ -13,10 +13,10 @@
 // Node has no directory-relative file operations, so another program running as the same person can still race these
 // checks; the installer narrows the window.
 
-import { closeSync, constants, existsSync, fchmodSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync, writeSync, type BigIntStats } from 'node:fs';
+import { closeSync, constants, existsSync, fchmodSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync, writeSync, type BigIntStats } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CatalogError, shellQuote, validateInput, type Catalog, type Surface, type VersionsResult } from '@skills-catalog/core';
-import { checkFetched, checkName, diffTrees, flagText, type RiskFlag, type TreeDiff, type TreeFile } from '@skills-catalog/core/skill-tree';
+import { DEFAULT_LIMITS, checkFetched, checkName, diffTrees, fingerprint, flagText, sha256Hex, type RiskFlag, type TreeDiff, type TreeFile } from '@skills-catalog/core/skill-tree';
 import { reasons } from '@skills-catalog/core';
 import { logWords } from '../activity.ts';
 import type { Context, Done } from '../operations.ts';
@@ -505,17 +505,31 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   const dest = checkTarget(ctx, target, req.name, lock);
   const existing = lock.skills[dest];
   const to = await fetchListed(catalog, req.name, v, version);
+  const w = s.word('install');
+  // The same version over an intact copy (its files are the lock's fingerprint) changes nothing; a copy the person
+  // recreated just has its identity recorded again. A changed or incomplete copy is written again, whatever the policy.
+  if (existing && existing.version === version && to.fingerprint === existing.fingerprint && folderFingerprint(dest) === existing.fingerprint) {
+    recordAgain(ctx, lock, dest, target, existing);
+    return { text: s.format(w.unchanged, { name: req.name, version }), target: `${req.name} v${version}`, result: log.result('install', 'unchanged'), outcome: 'unchanged' };
+  }
   const from = existing ? await installedSide(catalog, existing) : null;
   const flags = gate(from, to).risk_flags;
+  const confirm = encode({ name: req.name, target, version, fingerprint: to.fingerprint, latest: v.latest });
+  const held = { name: req.name, target, version, confirm, flags: JSON.stringify(kinds(flags)), command: acceptCommand(s, req.name, target) };
+  // Another version over an installed copy follows that skill's rows, as an update does (the owner's decision): another
+  // catalog first, then pin, then notify, then the flags. The held result names the installed version.
+  const reason = existing && existing.version !== version ? holdOf(ctx, existing, config) : undefined;
+  if (existing && reason) {
+    const also = flags.length ? s.format(s.word('update.held_also'), { reasons: reasons(s, flags) }) : '';
+    const text = s.format(w[ctx.face === 'cli' ? `held_${reason}_cli` : `held_${reason}`], { ...held, from: existing.version, also, was: existing.catalog, now: ctx.settings.catalog });
+    return { text, target: `${req.name} v${version}`, result: log.result('install', `held_${reason}`), outcome: 'held' };
+  }
   if (flags.length) {
-    const w = s.word('install');
-    const confirm = encode({ name: req.name, target, version, fingerprint: to.fingerprint, latest: v.latest });
-    const text = s.format(ctx.face === 'cli' ? w.held_cli : w.held, { name: req.name, target, version, reasons: reasons(s, flags), confirm, flags: JSON.stringify(kinds(flags)), command: acceptCommand(s, req.name, target) });
+    const text = s.format(ctx.face === 'cli' ? w.held_cli : w.held, { ...held, reasons: reasons(s, flags) });
     return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held' };
   }
   const written = writeSkill(dest, target, to.files, existing);
   const entry = record(ctx, lock, dest, { name: req.name, target }, to, req.policy ?? existing?.policy, existing?.accepted ?? [], toLock(written.copy));
-  const w = s.word('install');
   const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + keptLine(s, req.name, written.kept) + '\n' + s.format(w.live, { name: req.name });
   return { text, target: `${req.name} v${version}`, result: log.result('install', 'installed'), outcome: 'installed' };
 }
@@ -540,6 +554,52 @@ function keptLine(s: Surface, name: string, kept: string | undefined): string {
   if (kept === undefined) return '';
   const w = s.word('update.kept_in_staging');
   return '\n' + (typeof w === 'string' ? s.format(w, { name, staging: kept }) : asData('kept_in_staging', { name, staging: kept }));
+}
+
+/** Why another version of an installed skill waits for the person, in the order of §5.3: a copy from another catalog
+ *  (it may be a different skill that shares the name), then pin, then notify; undefined when only the flags decide. */
+function holdOf(ctx: Context, e: LockEntry, config: Parameters<typeof policyOf>[1]): 'other_catalog' | 'pin' | 'notify' | undefined {
+  if (e.catalog !== ctx.settings.catalog) return 'other_catalog';
+  const { policy } = policyOf(e, config);
+  return policy === 'pin' || policy === 'notify' ? policy : undefined;
+}
+
+/** The fingerprint of the files in an installed folder as they are on disk, or undefined when it can't be one (a link or
+ *  anything but a file or folder inside, or more than a skill may hold): then the copy isn't intact. */
+function folderFingerprint(dir: string): string | undefined {
+  const entries: { path: string; mode: '0644' | '0755'; sha256: string }[] = [];
+  let bytes = 0;
+  const walk = (rel: string): boolean => {
+    for (const name of readdirSync(join(dir, rel))) {
+      const r = rel ? `${rel}/${name}` : name;
+      const st = lstatOf(join(dir, r));
+      if (!st) return false;
+      if (st.isDirectory()) {
+        if (!walk(r)) return false;
+        continue;
+      }
+      if (!st.isFile() || entries.length >= DEFAULT_LIMITS.files || (bytes += Number(st.size)) > DEFAULT_LIMITS.skill_bytes) return false;
+      entries.push({ path: r, mode: (st.mode & 0o111n) !== 0n ? '0755' : '0644', sha256: sha256Hex(readFileSync(join(dir, r))) });
+    }
+    return true;
+  };
+  try {
+    const top = lstatOf(dir);
+    return top?.isDirectory() && walk('') ? fingerprint(entries) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** An intact copy the person recreated (a restore, a branch switch): its identity is recorded again, only while the
+ *  folders above it are the real, private ones and it's a real folder itself; nothing is moved. */
+function recordAgain(ctx: Context, lock: Lock, dest: string, target: Target, e: LockEntry): void {
+  const now = idOf(dest);
+  if (now === undefined || same(now, fromLock(e.copy))) return;
+  skillsFolderFor(dest, target);
+  if (!isCopy(lstatOf(dest), now)) return;
+  lock.skills[dest] = { ...e, copy: toLock(now) };
+  writeLock(ctx.settings.home, lock);
 }
 
 function record(ctx: Context, lock: Lock, dest: string, at: { name: string; target: Target }, to: Side, policy: Policy | undefined, accepted: LockEntry['accepted'], copy: FolderId | undefined): LockEntry {
@@ -617,7 +677,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
   const targets: string[] = [];
   let unchanged = 0;
   // The log's one word for the call: the outcome that most needs the person, else updated, else up to date.
-  const RANK = ['unchanged', 'updated', 'refused', 'held_pin', 'held_notify', 'held_flagged'];
+  const RANK = ['unchanged', 'updated', 'refused', 'held_pin', 'held_notify', 'held_flagged', 'held_other_catalog'];
   let outcome = 'unchanged';
   const saw = (o: string) => {
     if (RANK.indexOf(o) > RANK.indexOf(outcome)) outcome = o;
@@ -646,11 +706,6 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     const at = { name: e.name, from: e.version, to: v.latest };
     targets.push(`${e.name} v${e.version} → v${v.latest}`);
     const { policy } = policyOf(e, config);
-    if (policy === 'pin') {
-      lines.push(s.format(w.held_pin, at));
-      saw('held_pin');
-      continue;
-    }
     // Where it goes, checked as an install checks it: a link or a same-name skill or command may have appeared since.
     let dest: string;
     try {
@@ -677,17 +732,34 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     }
     const d = gate(await installedSide(catalog, e), to);
     const confirm = encode({ name: e.name, target: e.target, version: to.version, fingerprint: to.fingerprint, latest: v.latest });
+    const take = { ...at, target: e.target, confirm, flags: JSON.stringify(kinds(d.risk_flags)) };
+    const also = d.risk_flags.length ? s.format(w.held_also, { reasons: reasons(s, d.risk_flags) }) : '';
+    // A copy from another catalog comes first (§5.3): it may be a different skill that shares the name. Never applied
+    // silently; taken on a yes, which records the catalog in use.
+    if (e.catalog !== ctx.settings.catalog) {
+      lines.push(s.format(w.held_other_catalog, { ...at, was: e.catalog, now: ctx.settings.catalog, also }));
+      lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
+      saw('held_other_catalog');
+      continue;
+    }
+    // Pinned: stays, and the person may still take this version; it stays pinned, at that version.
+    if (policy === 'pin') {
+      lines.push(s.format(w.held_pin, at));
+      lines.push(s.format(ctx.face === 'cli' ? w.held_pin_next_cli : w.held_pin_next, take));
+      saw('held_pin');
+      continue;
+    }
     // "Tell me first" holds every new version, flagged or not (§5.3: pin, then notify, then the flags); it's taken with
     // the flags it shows, [] when none.
     if (policy === 'notify') {
       lines.push(d.risk_flags.length ? s.format(w.held_notify_flagged, { ...at, reasons: reasons(s, d.risk_flags) }) : s.format(w.held_notify, at));
-      lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, { ...at, target: e.target, confirm, flags: JSON.stringify(kinds(d.risk_flags)) }));
+      lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
       saw('held_notify');
       continue;
     }
     if (d.risk_flags.length) {
       lines.push(s.format(w.held_flagged, { ...at, reasons: reasons(s, d.risk_flags) }));
-      lines.push(s.format(ctx.face === 'cli' ? w.held_next_cli : w.held_next, { ...at, target: e.target, confirm, flags: JSON.stringify(kinds(d.risk_flags)) }));
+      lines.push(s.format(ctx.face === 'cli' ? w.held_next_cli : w.held_next, take));
       saw('held_flagged');
       continue;
     }
