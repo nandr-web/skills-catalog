@@ -596,7 +596,7 @@ results:
     not_found: 'not_found: no skill named "{name}" in the shared catalog.{suggest} Nothing was changed.'
     not_found_suggest: " Names spelled like it: {names}."
     not_found_next: "Next: ${search} with words from the task, or tell the user it isn't in the catalog."
-    not_found_next_cli: "Next: ${cli} search with a few words from the task, or tell the user it isn't in the catalog."
+    not_found_next_cli: "Next: search the catalog with a few words from the task, or tell the user it isn't in the catalog."
     invalid_confirm: "invalid_request: that confirm value isn't one a preview gives (it may have been cut or changed in copying), so nothing was published. Preview again (${publish} with just the folder), show the person the lists, and use the new values once they say yes."
     not_installed: "not_installed: {name} isn't installed on this machine, so nothing was changed. To see what is: ${status}; to add it: ${install}."
     not_found_path: "not_found: {name} v{version} has no file {path}. Nothing was changed; its files are listed in a read with include files."
