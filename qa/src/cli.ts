@@ -16,7 +16,8 @@ import { janitor } from './janitor.ts';
 import type { Cleanup } from './leftovers.ts';
 import { machineFor, type Machine } from './machine.ts';
 import { UnsafeError } from './safe-delete.ts';
-import { CheckBlind, checksProcesses } from './check.ts';
+import { CheckBlind } from './check.ts';
+import { statusLine } from './status.ts';
 import { traceCheck } from './trace-check.ts';
 import { newRunId, qaRun, type RunResult } from './run.ts';
 import { childEnv, FailSafeError } from './sandbox.ts';
@@ -66,11 +67,6 @@ const USAGE = `qa: the skills catalog's QA tools
 
   Every command that touches a machine also takes --fake-machine <dir> (tests: tmp, home and Claude's folders under <dir>).`;
 
-/** A run's last line: its status, and that nothing was left behind when that's so. */
-function statusLine(name: string, r: RunResult): string {
-  const nothing = checksProcesses(process.platform) ? ', nothing left behind' : '; files, settings and ports unchanged; processes not checked on this system yet';
-  return `qa ${name} ${r.runId}: ${r.status}${r.differences.length ? '' : nothing}`;
-}
 
 /** A run's ending, as `qa run` says it; returns its exit code. */
 function reportRun(name: string, r: RunResult): number {

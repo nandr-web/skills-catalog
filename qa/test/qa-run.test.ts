@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { qaRun } from '../src/run.ts';
-import { compare, PS, snapshot, watchOn } from '../src/check.ts';
+import { checksProcesses, compare, PS, snapshot, watchOn } from '../src/check.ts';
 import { sandboxBase } from '../src/sandbox.ts';
 import { cleanup, PROCESS_TEST_MS, machine, qaSpawn } from './machine.ts';
 
@@ -155,7 +155,7 @@ describe('qa run on the command line', () => {
     expect(code, err).toBe(0);
     expect(existsSync(err.match(/sandbox (\S+)/)![1])).toBe(false);
     expect(compare(before, snapshot(every))).toEqual([]);
-    expect(err).toMatch(process.platform === 'darwin' ? /nothing left behind/ : /processes not checked on this system yet/);
+    expect(err).toMatch(checksProcesses(process.platform) ? /nothing left behind/ : /processes not checked on this system yet/);
   });
 
 });

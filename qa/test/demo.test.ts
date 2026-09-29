@@ -7,7 +7,7 @@ import { hostname } from 'node:os';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, onTestFinished } from 'vitest';
-import { runProcesses } from '../src/check.ts';
+import { checksProcesses, runProcesses } from '../src/check.ts';
 import { firstPid, pidFrom } from '../src/pids.ts';
 import { signalGroup } from '../src/groups.ts';
 import { conduct, joined, stoppedLine, type ConductorIo, type StepsFile, type Turn } from '../src/demo/conductor.ts';
@@ -31,8 +31,8 @@ const demoEnv = (scenes = 'scenes.yaml', extra: Record<string, string> = {}) => 
 // This repository's catalog server, the demo's default once its dependencies are installed
 const CLIENT = DEFAULTS.client, ownServer = existsSync(join(CLIENT, 'node_modules'));
 const alive = running;
-/** How a clean ending reads: on macOS every check ran; elsewhere processes aren't checked yet, and it says so. */
-const NOTHING_LEFT = process.platform === 'darwin' ? ', nothing left behind' : '; files, settings and ports unchanged; processes not checked on this system yet';
+/** How a clean ending reads: where the check lists processes (macOS, Linux) every check ran; elsewhere it says so. */
+const NOTHING_LEFT = checksProcesses(process.platform) ? ', nothing left behind' : '; files, settings and ports unchanged; processes not checked on this system yet';
 // A whole qa run per test: a ceiling for a busy machine, not a pace (each run ends itself sooner: its turns time out at 30 s).
 const RUN_MS = 120_000;
 
