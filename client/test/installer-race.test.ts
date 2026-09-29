@@ -1070,6 +1070,22 @@ describe('the lock entry a decision used, changed by another run before the lock
     expect(after).toEqual(theirs);
   });
 
+  it('update, nothing newer, a recreated copy while another run records another copy of the same version: that copy stays recorded', async () => {
+    const p = place();
+    await versionsOf(p, [NOTES('One.\n')]);
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha' });
+    const dest = join(p.osHome, '.claude', 'skills', 'alpha');
+    const fresh = `${dest}.fresh`;
+    race.fs.cpSync(dest, fresh, { recursive: true });
+    race.fs.rmSync(dest, { recursive: true });
+    race.fs.renameSync(fresh, dest);
+    let theirs: Entry | undefined;
+    meanwhile(p, (e) => (theirs = { ...e!, copy: { dev: 1, ino: 2 } }));
+    expect(await updating(ctx)).toEqual([header, S.format(W.unchanged, { n: 1 })]);
+    expect((JSON.parse(race.fs.readFileSync(join(p.home, 'lock.json'), 'utf8')) as { skills: Record<string, Entry> }).skills[dest]).toEqual(theirs);
+  });
+
   it('update, nothing newer, an entry recorded before identities were kept: the intact copy\'s identity is recorded', async () => {
     const p = place();
     await versionsOf(p, [NOTES('One.\n')]);
