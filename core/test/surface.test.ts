@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { readFileSync } from 'node:fs';
 import { DEFAULT_SEARCH_LIMIT, MAX_READ_NAMES, MAX_READ_PATHS, MAX_SEARCH_LIMIT, OPERATIONS, validateInput } from '../src/registry.ts';
-import { MAX_TAGS, SECRET_KINDS, TAG_MAX_LENGTH, checkTree, diffTrees } from '../src/skill-tree/index.ts';
+import { MAX_TAGS, SECRET_KINDS, TAG_MAX_LENGTH, checkTree, diffTrees, type RiskFlag, type RiskKind } from '../src/skill-tree/index.ts';
 import { WORD_GAPS, reasons, renderDiff, renderError, renderRead, renderSearch, renderVersions } from '../src/render.ts';
 import { SURFACE_FILE, Surface } from '../src/surface.ts';
 import { toCatalogError } from '../src/internal-error.ts';
@@ -325,6 +325,31 @@ describe('the surface (vendored, recommended variant)', () => {
     expect(renderError(s, new CatalogError('invalid_path', { path: 'notes/link.md', why: 'not_regular_file', folder: '/work/x' }))).toBe(s.format(w.invalid_path_not_regular, { path: 'notes/link.md' }));
     expect(renderError(s, new CatalogError('invalid_request', { field: 'confirm', why: 'not_a_confirm' }))).toBe(s.format(w.invalid_confirm));
     expect(renderError(s, new CatalogError('invalid_path', { path: 'a/../b', why: 'dot_segment' }))).toBe(s.format(w.invalid_path, { path: 'a/../b', why: w.why.dot_segment }));
+  });
+
+  // Every kind the core can raise, with a representative flag (its line, path and detail where its rows have them): each
+  // renders with nothing left unfilled, so a word naming a value reasons() doesn't pass can't come back for any kind. The
+  // Record makes the compiler name a kind added later without a row here.
+  it('a hold\'s reason renders for every flag kind the core can raise, with nothing unfilled', () => {
+    const s = Surface.load();
+    const one: Record<RiskKind, RiskFlag> = {
+      runnable_file: { kind: 'runnable_file', path: 'scripts/run.sh', detail: 'executable script' },
+      runs_at_load: { kind: 'runs_at_load', path: 'SKILL.md', line: 6, detail: 'echo hi' },
+      command_instruction: { kind: 'command_instruction', path: 'SKILL.md', line: 7, detail: 'tells the assistant to install packages; it runs commands without asking: auto mode' },
+      capability_frontmatter: { kind: 'capability_frontmatter', path: 'SKILL.md', line: 4, field: 'hooks', from: null, to: {}, detail: 'hooks added: {}' },
+      instructions_changed: { kind: 'instructions_changed', path: 'notes.md', detail: 'sets hooks in its front matter' },
+      non_markdown: { kind: 'non_markdown', path: 'data.json', detail: '.json file' },
+      new_publisher: { kind: 'new_publisher', from: 'ana', to: 'ben', detail: 'ana → ben' },
+      prompt_injection: { kind: 'prompt_injection', path: 'SKILL.md', line: 5, detail: 'hidden character U+202E' },
+      context_cost: { kind: 'context_cost', path: 'SKILL.md', detail: 'about 6000 tokens (budget 5000)' },
+    };
+    const words = s.word('update.reason') as Record<string, string>;
+    expect(Object.keys(one).sort()).toEqual(Object.keys(words).filter((k) => k !== 'capability_frontmatter_unreadable').sort());
+    for (const [kind, flag] of Object.entries(one)) {
+      const text = reasons(s, [flag]);
+      expect(text, kind).not.toMatch(/\{\w+\}/);
+      expect(text.length, kind).toBeGreaterThan(0);
+    }
   });
 
   it('a hold\'s reasons name the line of a flag that has one (a command that runs at load)', () => {
