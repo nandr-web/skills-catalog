@@ -3,9 +3,12 @@
 // copy the lock recorded (contract §4.5, "Replacing an installed copy, safely"); a first install never moves what it
 // finds; and whatever it can't put back is named, never stranded in silence.
 import { join } from 'node:path';
-import { actAs } from '@skills-catalog/core';
+import { CatalogError, actAs, renderError } from '@skills-catalog/core';
 import { describe, expect, it, vi } from 'vitest';
+import { cliSurface } from '../src/cli/words.ts';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
+import { contextFor, perform } from '../src/operations.ts';
+import { settingsFrom } from '../src/settings.ts';
 import { race } from './race-fs.ts';
 import { S, accept, clearHooks, codeOf, refusalOf, ctxFor, install, publish, refused, stagedOf, stagingDir, stagingEntries, sweeps, update } from './race.ts';
 import { open, request, skillMd } from './seed.ts';
@@ -326,6 +329,43 @@ describe('folders another user could control are refused (target_not_private)', 
       clearHooks();
     }
     expect(race.fs.existsSync(join(claude, 'skills', 'alpha', 'SKILL.md'))).toBe(true);
+  });
+
+  // What the assistant (MCP) and the person (CLI) read: the sentence for the folder it is, with its way on in that face's
+  // words (chmod only on the person's own folder; otherwise SKILLS_ASSISTANT_HOME or the other target), never the raw data.
+  it('the refusal reaches each face as its sentence, with the way on', async () => {
+    const tries: { what: string; target: 'user' | 'project'; at: (p: Place) => string; change: Partial<import('node:fs').Stats>; way: RegExp }[] = [
+      { what: 'the person\'s home, theirs', target: 'user', at: (p) => p.osHome, change: { mode: 0o040777 }, way: /chmod go-w/ },
+      { what: 'a home not theirs (CI, a container)', target: 'user', at: (p) => p.osHome, change: { mode: 0o040777, uid: uid + 1 }, way: /SKILLS_ASSISTANT_HOME/ },
+      { what: 'a project, theirs', target: 'project', at: (p) => join(p.dir, 'project'), change: { mode: 0o040777 }, way: /chmod go-w/ },
+      { what: 'a project not theirs', target: 'project', at: (p) => join(p.dir, 'project'), change: { uid: uid + 1 }, way: /skills folder instead/ },
+      { what: '.claude in the home, not theirs', target: 'user', at: (p) => join(p.osHome, '.claude'), change: { uid: uid + 1 }, way: /SKILLS_ASSISTANT_HOME/ },
+    ];
+    for (const face of ['mcp', 'cli'] as const) {
+      const words = face === 'cli' ? cliSurface(S) : S;
+      for (const t of tries) {
+        const p = place();
+        await publish(p, 'alpha', 'Body.\n');
+        const path = t.at(p);
+        race.fs.mkdirSync(path, { recursive: true });
+        const { ctx, close } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), words, face);
+        race.stats = (at) => (at === path ? t.change : undefined);
+        let answer;
+        try {
+          answer = await perform(ctx, 'install_shared_skill', 'install', { name: 'alpha', target: t.target });
+        } finally {
+          clearHooks();
+          close();
+        }
+        const label = `${face}: ${t.what}`;
+        const data = { path, target: t.target, ...(path === p.osHome ? { home: true } : {}), own: t.change.uid === undefined };
+        expect([label, answer.isError, answer.text]).toEqual([label, true, renderError(words, new CatalogError('target_not_private', data))]);
+        expect(answer.text, label).toMatch(t.way);
+        // The data as it would show if the words were missing: "target_not_private: path: …; target: …".
+        expect(answer.text, label).not.toMatch(/; target: /);
+        if (face === 'cli') expect(answer.text, label).not.toMatch(/with target "/);
+      }
+    }
   });
 
   // Homes the installer meets outside a desktop: root in a container (/root, 0700, uid 0: a uid that's 0 must still be
