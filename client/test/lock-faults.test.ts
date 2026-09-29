@@ -51,15 +51,34 @@ describe('the lock file under faults', () => {
     expect(await withLock(h, fast(), () => 'taken')).toBe('taken');
   });
 
-  it('a stale lock file owned by another user is never removed: lock_busy, and it stays', async () => {
+  it('a stale lock file owned by another user is never removed: lock_busy with no pid (its sentence names the file), and it stays', async () => {
     const h = home();
     const pid = deadPid();
     writeFileSync(lockPath(h), JSON.stringify({ pid, started: Date.now() }), { mode: 0o600 });
     race.stats = (path) => (path === lockPath(h) ? { uid: (process.getuid?.() ?? 0) + 1 } : undefined);
     const e = await withLock(h, fast(), () => undefined).catch((x: unknown) => x);
-    expect([(e as CatalogError).code, (e as CatalogError).data]).toEqual(['lock_busy', { path: lockPath(h), pid }]);
+    expect([(e as CatalogError).code, (e as CatalogError).data]).toEqual(['lock_busy', { path: lockPath(h), pid: null }]);
     expect(existsSync(lockPath(h))).toBe(true);
   });
+
+  // Gone at every look and back at every try to make it: the wait still ends at its 5 seconds, never spinning.
+  it('a lock file that vanishes at each look and is back at each try: lock_busy when the wait is up', async () => {
+    const h = home();
+    const text = JSON.stringify({ pid: deadPid(), started: Date.now() });
+    race.onOpen = (path, flags) => {
+      if (path === lockPath(h) && flags === 'wx') race.fs.writeFileSync(path, text);
+    };
+    race.onLstat = (path) => {
+      if (path === lockPath(h)) race.fs.rmSync(path, { force: true });
+    };
+    try {
+      const e = await withLock(h, fast(), () => undefined).catch((x: unknown) => x);
+      expect([(e as CatalogError).code, (e as CatalogError).data]).toEqual(['lock_busy', { path: lockPath(h), pid: null }]);
+    } finally {
+      race.onOpen = undefined;
+      race.onLstat = undefined;
+    }
+  }, 3000);
 
   it('a stale lock file changed between the look and the removal (a new change time, the same text) is treated as held', async () => {
     const h = home();

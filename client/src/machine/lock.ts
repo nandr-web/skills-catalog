@@ -268,9 +268,11 @@ async function take(path: string, now: () => number): Promise<Stats> {
       const mine = create(path);
       if (mine) return mine;
       const found = heldBy(path);
-      if (!found) continue;
-      if (isStale(found) && removeIfSame(path, found.st, found.text)) continue;
-      pid = found.holder?.pid ?? null;
+      // Gone since the try, or stale and removed: tried again at once, but only within the same wait.
+      const again = !found || (isStale(found) && removeIfSame(path, found.st, found.text));
+      if (again && now() < deadline) continue;
+      // Only this user's regular file names a holder; a link, anything else or another user's file is named by its path.
+      pid = found && !again && found.st.isFile() && found.st.uid === process.getuid?.() ? (found.holder?.pid ?? null) : null;
     }
     if (now() >= deadline) throw new CatalogError('lock_busy', { path, pid });
     await wait(LOCK_RETRY_MS);
