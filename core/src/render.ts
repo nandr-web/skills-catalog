@@ -11,7 +11,7 @@ import type { Surface } from './surface.ts';
 
 // Words the agent-facing surface doesn't have yet (asked for). A test fails when one of them appears in the surface,
 // so each is wired as soon as it lands.
-export const WORD_GAPS: readonly string[] = ['errors.why.not_a_catalog', 'errors.why.catalog_unreadable', 'errors.target_unavailable'];
+export const WORD_GAPS: readonly string[] = ['errors.why.not_a_catalog', 'errors.why.catalog_unreadable'];
 
 function asData(code: string, data: Record<string, unknown>): string {
   return `${code}: ` + Object.entries(data).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ');
@@ -259,6 +259,10 @@ export function renderError(s: Surface, e: CatalogError): string {
       const what = d['home'] === true ? 'target_not_private_home' : d['target'] === 'project' ? 'target_not_private_project' : 'target_not_private';
       return fill(w[d['own'] === false ? `${what}_not_own` : what], { ...d, path: shellQuote(String(d['path'])) });
     }
+    case 'target_unavailable':
+      // The sentence by what couldn't be made (the person's home, a project, or a folder on the way); no command uses the
+      // path, so it's shown as it is.
+      return fill(w[d['home'] === true ? 'target_unavailable_home' : d['target'] === 'project' ? 'target_unavailable_project' : 'target_unavailable'], d);
     case 'invalid_developer_setting': {
       // A bad developer name from a setting (SKILLS_AS, the MCP server's config, setup's `me`): fix it there.
       const setting = w.developer_setting?.[String(d['setting'])];

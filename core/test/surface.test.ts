@@ -399,6 +399,17 @@ describe('the surface (vendored, recommended variant)', () => {
     for (const d of [{ home: true }, { target: 'project' }, {}]) expect(r({ path: '/x', target: 'user', ...d, own: false })).not.toContain('chmod');
   });
 
+  it('a target that can\'t be made picks its sentence by what it is: the home folder, a project, or a folder on the way', () => {
+    const s = Surface.load();
+    const w = s.word('errors');
+    const r = (data: Record<string, unknown>) => renderError(s, new CatalogError('target_unavailable', data));
+    expect(r({ path: '/nonexistent', target: 'user', home: true })).toBe(s.format(w.target_unavailable_home, { path: '/nonexistent' }));
+    expect(r({ path: '/work/gone', target: 'project' })).toBe(s.format(w.target_unavailable_project, { path: '/work/gone' }));
+    expect(r({ path: '/home/ana/.claude', target: 'user' })).toBe(s.format(w.target_unavailable, { path: '/home/ana/.claude' }));
+    // No command uses the path, so it's shown as it is.
+    expect(r({ path: '/work/team app', target: 'user' })).toContain('/work/team app ');
+  });
+
   it('a damaged lock or config file names the file by its path, says why, and what removing it would do', () => {
     const s = Surface.load();
     const w = s.word('errors');

@@ -30,7 +30,7 @@ describe('the CLI face', () => {
   it('serves the catalog\'s and the installer\'s commands; preview, publish and setup are still to come', async () => {
     const p = place();
     const u = await cli(p, ['frobnicate']);
-    expect(u.err.split('\n').filter((l) => l.startsWith('  ')).map((l) => l.trim().split(' ')[1])).toEqual(['search', 'read', 'versions', 'diff', 'install', 'update', 'list', 'policy', 'update', 'mcp']);
+    expect(u.err.split('\n').filter((l) => l.startsWith('  ')).map((l) => l.trim().split(' ')[1])).toEqual(['search', 'read', 'versions', 'diff', 'install', 'update', 'list', 'policy', 'update', 'stats', 'mcp']);
     for (const word of ['preview', 'publish', 'setup']) {
       const r = await cli(p, [word, 'x']);
       expect([r.code, r.err], word).toEqual([1, u.err]);

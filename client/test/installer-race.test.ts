@@ -554,7 +554,7 @@ describe('a target that can\'t be made (target_unavailable)', () => {
     } finally {
       race.fs.chmodSync(where, 0o755);
     }
-    expect(updated!.text).toContain('target_unavailable');
+    expect(refusalOf(updated)).toEqual({ code: 'target_unavailable', data: { path: home } });
     expect(race.fs.readFileSync(join(p.dir, 'project', '.claude', 'skills', 'beta', 'SKILL.md'), 'utf8')).toContain('Second.');
     expect(refusalOf(accepted)).toEqual({ code: 'target_unavailable', data: { path: home, target: 'user', home: true } });
     expect(race.fs.existsSync(home)).toBe(false);

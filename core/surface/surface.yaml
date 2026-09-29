@@ -147,6 +147,7 @@ names:
     policy: ${cli} policy <auto|notify|pin> [<name>]
     publish: ${cli} publish <folder>
     accept: ${cli} update <name> --accept
+    stats: ${cli} stats
 tools:
   search:
     annotations:
@@ -584,11 +585,13 @@ results:
       install: tells the assistant to install packages
       secrets: tells the assistant to read credentials or secret files
     command_instruction_mode: "; it runs commands without asking: {mode}"
+    command_instruction_mode_unknown: ; its settings couldn't be read, so it may run commands without asking
     permissive_mode_name:
       auto: auto mode
       bypass: bypass mode
       sandbox_auto_allow: the sandbox's auto-allow
       broad_bash_rule: a Bash rule that allows any command
+      unknown: settings that couldn't be read
     held_cooldown: "- {name} v{to} waits until {until} before it updates automatically: new versions wait a few days, so a problem someone finds early stops them. It stays on v{from}. If the person wants it now, they can take it (${accept}, their yes) or run ${cli} update {name} --latest in their own terminal."
     refused: "- Not updated: {name} v{to} breaks the catalog's current rules ({reason}), so {name} stays on v{from}. Tell the person; only its publisher can fix it."
     refused_fingerprint: "- Not updated: the catalog's copy of {name} v{to} doesn't match its fingerprint (damaged or altered), so {name} stays on v{from}. Don't retry or work around it; tell the person, so whoever runs the catalog can check it."
@@ -601,6 +604,7 @@ results:
       exists_untracked: "{path} now holds something that wasn't installed from the catalog"
       name_in_use: "{path} now holds another skill or command with the same name"
       target_not_private: "{path} isn't private to the person (others on this machine could change it), and the installer won't write through it"
+      target_unavailable: "{path} is missing and the installer couldn't make it (no permission, a read-only disk, or a file where a folder should be)"
     reason:
       runnable_file: it adds or changes {path}, which can run on this machine
       runs_at_load: "{path} line {line} runs a command as soon as the skill loads, without asking"
@@ -684,6 +688,7 @@ results:
       not_json: isn't valid JSON
       wrong_shape: doesn't have the fields skills-catalog expects
       unknown_policy: names an update setting other than auto, notify or pin
+      not_a_budget: has a context_cost_budget that isn't a positive whole number (it can't turn the size check off)
       empty: is empty
       not_utf8: isn't valid UTF-8 text
       control_character: contains a line break or another control character (it must be one line)
@@ -847,6 +852,12 @@ results:
     target_not_private_project_cli: "target_not_private: other people on this machine could change {path}, and the installer writes through it, so nothing was installed. Tell the person. In a shared project that may be the team's choice, so there are two ways on: install it to their own skills folder instead (the same install command without --project), or make the folder private with chmod go-w {path}. Propose one, and do it only once they agree."
     target_not_private_project_not_own: "target_not_private: {path} isn't the person's own and others on this machine can change it, so the installer won't install through it and nothing was installed. Tell the person; the way on is to install it to their own skills folder instead (${install} with target \"user\"). Propose it, and do it only once they agree."
     target_not_private_project_not_own_cli: "target_not_private: {path} isn't the person's own and others on this machine can change it, so the installer won't install through it and nothing was installed. Tell the person; the way on is to install it to their own skills folder instead (the same install command without --project). Propose it, and do it only once they agree."
+    target_unavailable: "target_unavailable: {path} doesn't exist and the installer couldn't make it (it may lack permission, the disk may be read-only, or a file may stand where a folder should be), so nothing was installed. Tell the person; there are two ways on: set SKILLS_ASSISTANT_HOME to a folder of their own, or install into this project instead (${install} with target \"project\"). Propose one, and do it only once they agree; don't make or remove folders yourself."
+    target_unavailable_cli: "target_unavailable: {path} doesn't exist and the installer couldn't make it (it may lack permission, the disk may be read-only, or a file may stand where a folder should be), so nothing was installed. Tell the person; there are two ways on: set SKILLS_ASSISTANT_HOME to a folder of their own, or install into this project instead (the same install command with --project). Propose one, and do it only once they agree; don't make or remove folders yourself."
+    target_unavailable_home: "target_unavailable: the home folder here, {path}, doesn't exist and can't be made (as in CI or a container without one), so nothing was installed. Tell the person; there are two ways on: set SKILLS_ASSISTANT_HOME to a folder of their own, or install into this project instead (${install} with target \"project\"). Propose one, and do it only once they agree."
+    target_unavailable_home_cli: "target_unavailable: the home folder here, {path}, doesn't exist and can't be made (as in CI or a container without one), so nothing was installed. Tell the person; there are two ways on: set SKILLS_ASSISTANT_HOME to a folder of their own, or install into this project instead (the same install command with --project). Propose one, and do it only once they agree."
+    target_unavailable_project: "target_unavailable: {path} doesn't exist and the installer couldn't make it (it may lack permission, the disk may be read-only, or a file may stand where a folder should be), so nothing was installed. Tell the person; the way on is to install it to their own skills folder instead (${install} with target \"user\"). Propose it, and do it only once they agree; don't make or remove folders yourself."
+    target_unavailable_project_cli: "target_unavailable: {path} doesn't exist and the installer couldn't make it (it may lack permission, the disk may be read-only, or a file may stand where a folder should be), so nothing was installed. Tell the person; the way on is to install it to their own skills folder instead (the same install command without --project). Propose it, and do it only once they agree; don't make or remove folders yourself."
     lock_busy: "lock_busy: another run of this tool (process {pid}) is changing the installed skills, so nothing was changed. Try once more in a moment. Don't delete or edit the lock file: a stale one is taken over by itself. If it keeps happening, tell the person."
     invalid_local_file: "invalid_local_file: {path} {why}, so nothing was changed. The file is never repaired or rewritten automatically. Tell the person which file it is and why; they decide whether to fix it or remove it ({effect}). Change it only once they agree."
     local_file_effect:
@@ -883,6 +894,13 @@ setup:
     Nothing went to the cloud. To undo all of it: ${cli} teardown
   updates_auto: automatic; an update that could change what runs on this machine waits for you
   updates_permissive_now: Your assistant's settings let it run commands without asking ({mode}), so an update whose instructions tell it to run commands, install packages or read secrets will ask you first. A mode switched on for one session only isn't seen.
+  updates_permissive_unknown: Your assistant's settings file {path} couldn't be used ({why}), so it may let the assistant run commands without asking. Until it can be used, an update whose instructions tell it to run commands, install packages or read secrets will ask you first.
+  settings_unusable:
+    unreadable: "it can't be read: check its permissions"
+    too_big: it's over 1 MiB
+    not_json: it isn't a JSON object of settings
+    link: it's a link, which isn't followed
+    wrong_type: the setting {key} has the wrong type
   updates_off: only when you ask (${cli} update)
   handoff_prompt: "Set up our team's Skills Catalog on this machine: run `${cli} setup` and ask me the questions it prints."
   handoff_prompt_fast: "Set up our team's Skills Catalog on this machine with the defaults: run `${cli} setup --yes`."
@@ -1024,6 +1042,7 @@ log:
     invalid_local_file: "refused: a local settings file is damaged"
     target_changed: "refused: the folder changed during the install"
     target_not_private: "refused: the folder isn't private"
+    target_unavailable: "refused: the folder can't be made"
     lock_busy: "refused: another run was busy"
     person_only: waiting for the person
     fingerprint_mismatch: "refused: the catalog's copy doesn't match its fingerprint"
