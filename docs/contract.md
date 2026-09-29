@@ -272,20 +272,23 @@ a file with several faults gets the first of: not a regular file, `other_user`, 
 line in a readable day is skipped, not counted as unreadable. The report's window is computed from the days read.
 - `hold` {skill, version (the held one), reason, the kinds of risk flag, versions behind}: a hold is reported again at each
   sync, so the measures count distinct (skill, version, reason);
-- `notice` {surface: `hook` \| `mcp`, how many were waiting};
-- `look` {skill, version, surface: `cli` \| `assistant` \| `web`}: a held update's changes were opened: `diff_shared_skill_versions` for the
+- `notice` {face: `hook` \| `mcp`, how many were waiting};
+- `look` {skill, version, face: `cli` \| `assistant` \| `web`}: a held update's changes were opened: `diff_shared_skill_versions` for the
   held version, the CLI showing the diff or `update <name> --accept` showing the reasons, or the web compare screen. The
   held result's own diff doesn't count, since it reaches the assistant whether or not anyone looks;
 - `answer` {skill, version, `yes` \| `no` \| `pin` \| `superseded`, how many answered together}; the seconds since the
   notice and since the look are derived by `stats` from the events' times (the look by skill and version, the notice as the
   latest before the answer), so whoever records an answer needs no state;
 - `policy` {from, to, scope: the catalog or one skill, whether within a day of a hold};
-- `mode` {mode: `default` \| `auto` \| `bypass` \| `sandbox_auto_allow` \| `broad_bash_rule` \| `unknown`, surface: `hook` \| `mcp` \|
+- `mode` {mode: `default` \| `auto` \| `bypass` \| `sandbox_auto_allow` \| `broad_bash_rule` \| `unknown`, face: `hook` \| `mcp` \|
   `update`}, at each sync, so it also counts syncs (a hook's sync counts as a session); `mode` is left out until the
   permissive-mode detection (§5.3) is built;
 - `use` {op: search, read, install, update, publish, …, result: the result or error code}: one per operation, so the
   measures can say how often a search finds nothing, and how many installs and updates were applied; no query, name or
   path.
+
+The field naming where an event came from is `face`; lines written before the renaming call it `surface`, and `stats` reads
+both.
 
 `skills-catalog stats` turns the hold events into six measures: holds a week, sessions that open with a notice, whether and how long the
 person looked, the yes-rate, noes and pins (the only direct sign a hold earned its cost), and holds left waiting or updates
