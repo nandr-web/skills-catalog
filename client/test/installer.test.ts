@@ -436,3 +436,71 @@ describe('update (contract §3 update_installed_skills, §5.3)', () => {
     expect(log).toContain('notes-helper v1');
   });
 });
+
+// §4.5: a lock or config file that isn't JSON, has the wrong shape (a wrong-typed field anywhere, a lock entry's included)
+// or holds an unknown policy is refused by every installer call with invalid_local_file {file, why}. Nothing changes: the
+// file is never repaired or rewritten, and an unknown policy never falls back to automatic updates.
+describe('a damaged lock or config file (contract §4.5 invalid_local_file)', () => {
+  const entry = (p: Place, name: string) => lockOf(p)[join(userSkills(p), name)]!;
+  const damages: { file: 'lock.json' | 'config.json'; why: string; bytes: (p: Place) => string }[] = [
+    { file: 'lock.json', why: 'not_json', bytes: () => '{"skills": {' },
+    { file: 'lock.json', why: 'wrong_shape', bytes: () => '[]' },
+    { file: 'lock.json', why: 'wrong_shape', bytes: () => '{"skills": []}' },
+    { file: 'lock.json', why: 'wrong_shape', bytes: (p) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), version: '1' } } }) },
+    { file: 'lock.json', why: 'wrong_shape', bytes: (p) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), accepted: [{ version: 1, flags: 'runnable_file' }] } } }) },
+    { file: 'lock.json', why: 'wrong_shape', bytes: (p) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), policy: true } } }) },
+    { file: 'lock.json', why: 'unknown_policy', bytes: (p) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), policy: 'pinn' } } }) },
+    { file: 'config.json', why: 'not_json', bytes: () => 'update_policy: pin\n' },
+    { file: 'config.json', why: 'wrong_shape', bytes: () => '"pin"' },
+    { file: 'config.json', why: 'wrong_shape', bytes: () => '{"update_policy": ["pin"]}' },
+    { file: 'config.json', why: 'unknown_policy', bytes: () => '{"update_policy": "Pin"}' },
+  ];
+
+  it('every installer call refuses it with the file and why, and nothing changes', async () => {
+    for (const d of damages) {
+      const p = place();
+      await publish(p, 'runner', plain('runner'));
+      await publish(p, 'other', withScript('other'));
+      const ctx = ctxFor(p);
+      await install(ctx, { name: 'runner' });
+      const confirm = confirmOf((await install(ctx, { name: 'other' })).text)!;
+      await publish(p, 'runner', plain('runner', 'Second.\n'));
+      const file = join(p.home, d.file);
+      const bytes = d.bytes(p);
+      writeFileSync(file, bytes);
+      const installed = tree(join(userSkills(p), 'runner'));
+      const calls: [string, () => Promise<unknown>][] = [
+        ['install', () => install(ctx, { name: 'other', target: 'project' })],
+        ['update', () => update(ctx, {})],
+        ['accept', () => accept(ctx, { name: 'other', confirm, flags: ['runnable_file'] })],
+        ['list', () => list(ctx, {})],
+        ['policy', () => policy(ctx, { policy: 'pin', name: 'runner' })],
+        ['default policy', () => policy(ctx, { policy: 'notify' })],
+      ];
+      for (const [what, call] of calls) {
+        const e = await refusal(call);
+        expect([what, d.why, e.code, e.data]).toEqual([what, d.why, 'invalid_local_file', { file: d.file, why: d.why, path: file }]);
+      }
+      expect(readFileSync(file, 'utf8')).toBe(bytes);
+      expect(tree(join(userSkills(p), 'runner'))).toEqual(installed);
+      expect(existsSync(join(userSkills(p), 'other'))).toBe(false);
+      expect(existsSync(join(projectSkills(p), 'other'))).toBe(false);
+      expect(nothingStaged(p)).toBe(true);
+    }
+  });
+
+  it('a mistyped pin never applies an update', async () => {
+    const p = place();
+    await publish(p, 'runner', plain('runner'));
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'runner' });
+    await publish(p, 'runner', plain('runner', 'Second.\n'));
+    const file = join(p.home, 'lock.json');
+    writeFileSync(file, JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), policy: 'pin ' } } }));
+    const r = await perform(ctx, 'update_installed_skills', 'update_installed_skills', {});
+    expect(r.isError).toBe(true);
+    expect(r.text).toBe(renderError(S, new CatalogError('invalid_local_file', { file: 'lock.json', why: 'unknown_policy', path: file })));
+    expect(readFileSync(join(userSkills(p), 'runner', 'SKILL.md'), 'utf8')).toBe(skillMd('runner', 'The runner skill.'));
+    expect(JSON.parse(readFileSync(file, 'utf8')).skills[join(userSkills(p), 'runner')].version).toBe(1);
+  });
+});

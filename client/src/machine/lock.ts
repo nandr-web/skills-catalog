@@ -5,6 +5,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { CatalogError } from '@skills-catalog/core';
 
 export type Policy = 'auto' | 'notify' | 'pin';
 export type Target = 'user' | 'project';
@@ -34,15 +35,53 @@ export type Config = { update_policy?: Policy; [key: string]: unknown };
 const lockFile = (home: string) => join(home, 'lock.json');
 const configFile = (home: string) => join(home, 'config.json');
 
-function readJson<T>(file: string, empty: T): T {
+// A file that isn't JSON, has the wrong shape (a wrong-typed field anywhere) or names an unknown policy is refused with
+// invalid_local_file {file, why, path}: never repaired or rewritten, and an unknown policy never taken as automatic.
+type Why = 'wrong_shape' | 'unknown_policy';
+const POLICIES: readonly string[] = ['auto', 'notify', 'pin'];
+const TARGETS: readonly string[] = ['user', 'project'];
+
+const isObject = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
+const isCount = (x: unknown) => Number.isSafeInteger(x) && (x as number) >= 1;
+const isStrings = (x: unknown) => Array.isArray(x) && x.every((y) => typeof y === 'string');
+
+/** Why a policy field is refused, if it is: absent is fine; a string that isn't a policy is unknown; anything else is the wrong shape. */
+const policyWhy = (x: unknown): Why | undefined => (x === undefined ? undefined : typeof x !== 'string' ? 'wrong_shape' : POLICIES.includes(x) ? undefined : 'unknown_policy');
+
+function entryWhy(e: unknown): Why | undefined {
+  if (!isObject(e)) return 'wrong_shape';
+  const strings = ['name', 'fingerprint', 'publisher', 'path', 'installed_at', 'catalog'].every((k) => typeof e[k] === 'string');
+  const accepted = Array.isArray(e['accepted']) && e['accepted'].every((a) => isObject(a) && isCount(a['version']) && isStrings(a['flags']));
+  if (!strings || !TARGETS.includes(e['target'] as string) || !isCount(e['version']) || !accepted) return 'wrong_shape';
+  return policyWhy(e['policy']);
+}
+
+function lockWhy(x: unknown): Why | undefined {
+  if (!isObject(x) || !isObject(x['skills'])) return 'wrong_shape';
+  const whys = Object.values(x['skills']).map(entryWhy);
+  return whys.includes('wrong_shape') ? 'wrong_shape' : whys.find((w) => w !== undefined);
+}
+
+const configWhy = (x: unknown): Why | undefined => (isObject(x) ? policyWhy(x['update_policy']) : 'wrong_shape');
+
+function readJson<T>(home: string, name: 'lock.json' | 'config.json', empty: T, why: (x: unknown) => Why | undefined): T {
+  const path = join(home, name);
   let text: string;
   try {
-    text = readFileSync(file, 'utf8');
+    text = readFileSync(path, 'utf8');
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return empty;
     throw e;
   }
-  return JSON.parse(text) as T;
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    throw new CatalogError('invalid_local_file', { file: name, why: 'not_json', path });
+  }
+  const refused = why(value);
+  if (refused) throw new CatalogError('invalid_local_file', { file: name, why: refused, path });
+  return value as T;
 }
 
 function writeJson(home: string, file: string, value: unknown): void {
@@ -52,15 +91,16 @@ function writeJson(home: string, file: string, value: unknown): void {
   renameSync(tmp, file);
 }
 
-export function readLock(home: string): Lock {
-  const lock = readJson<Lock>(lockFile(home), { skills: {} });
-  if (typeof lock !== 'object' || lock === null || typeof lock.skills !== 'object' || lock.skills === null) throw new Error(`${lockFile(home)} is not a lock file`);
-  return lock;
-}
+export const readLock = (home: string): Lock => readJson<Lock>(home, 'lock.json', { skills: {} }, lockWhy);
 
 export const writeLock = (home: string, lock: Lock) => writeJson(home, lockFile(home), lock);
 
-export const readConfig = (home: string): Config => readJson<Config>(configFile(home), {});
+export const readConfig = (home: string): Config => readJson<Config>(home, 'config.json', {}, configWhy);
+
+/** Both files, checked: every installer call reads both first, so a damaged one refuses the call before anything changes. */
+export function readRecords(home: string): { lock: Lock; config: Config } {
+  return { lock: readLock(home), config: readConfig(home) };
+}
 export const writeConfig = (home: string, config: Config) => writeJson(home, configFile(home), config);
 
 /** The policy a skill updates by: its own, else the default in the config, else automatic. */

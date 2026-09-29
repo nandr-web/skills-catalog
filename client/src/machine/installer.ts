@@ -16,7 +16,7 @@ import { checkFetched, diffTrees, flagText, type RiskFlag, type TreeDiff, type T
 import { reasons } from '@skills-catalog/core';
 import { logWords } from '../activity.ts';
 import type { Context, Done } from '../operations.ts';
-import { policyOf, readConfig, readLock, writeConfig, writeLock, type Config, type Lock, type LockEntry, type Policy, type Target } from './lock.ts';
+import { policyOf, readRecords, writeConfig, writeLock, type Lock, type LockEntry, type Policy, type Target } from './lock.ts';
 
 const quoted = (p: string) => JSON.stringify(p);
 const TARGETS: readonly Target[] = ['user', 'project'];
@@ -188,7 +188,7 @@ function refusalReason(s: Surface, e: CatalogError): string {
 export type Pending = { name: string; target: Target; installed?: number; version: number; reasons: string; confirm: string; flags: string[] };
 
 export async function pendingHold(ctx: Context, name: string, target: Target = 'user'): Promise<Pending | { installed: number } | null> {
-  const lock = readLock(ctx.settings.home);
+  const { lock } = readRecords(ctx.settings.home);
   const e = installedHere(ctx, lock).find((x) => x.name === name);
   const catalog = await ctx.catalog();
   const v = await allVersions(catalog, name);
@@ -218,10 +218,10 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   const s = ctx.surface;
   const log = logWords(s);
   const target = req.target ?? 'user';
+  const { lock, config } = readRecords(ctx.settings.home);
   const catalog = await ctx.catalog();
   const v = await allVersions(catalog, req.name);
   const version = req.version ?? v.latest;
-  const lock = readLock(ctx.settings.home);
   const dest = checkTarget(ctx, target, req.name, lock);
   const existing = lock.skills[dest];
   const to = await fetchListed(catalog, req.name, v, version);
@@ -236,7 +236,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   writeSkill(ctx, dest, to.files);
   const entry = record(ctx, lock, dest, { name: req.name, target }, to, req.policy ?? existing?.policy, existing?.accepted ?? []);
   const w = s.word('install');
-  const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, readConfig(ctx.settings.home))) }) + '\n' + s.format(w.live, { name: req.name });
+  const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + '\n' + s.format(w.live, { name: req.name });
   return { text, target: `${req.name} v${version}`, result: log.result('install', 'installed') };
 }
 
@@ -263,13 +263,13 @@ type AcceptInput = { name: string; confirm: string; flags: string[] };
 export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<AcceptInput>('accept_held_update', args, ctx.face);
   const s = ctx.surface;
+  const { lock, config } = readRecords(ctx.settings.home);
   const t = decode(req.confirm);
   const conflict = () => new CatalogError('conflict', { name: req.name, held: true });
   if (t.name !== req.name) throw conflict();
   const catalog = await ctx.catalog();
   const v = await allVersions(catalog, req.name);
   if (v.latest !== t.latest) throw conflict();
-  const lock = readLock(ctx.settings.home);
   const dest = checkTarget(ctx, t.target, req.name, lock);
   const existing = lock.skills[dest];
   const to = await fetchListed(catalog, req.name, v, t.version);
@@ -280,7 +280,7 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const entry = record(ctx, lock, dest, { name: req.name, target: t.target }, to, existing?.policy, [...(existing?.accepted ?? []), { version: to.version, flags: kinds(flags) }]);
   const text = existing
     ? s.format(s.word('update.accepted'), { name: req.name, from: existing.version, to: to.version, path: quoted(dest) })
-    : s.format(s.word('install.installed_after_yes'), { name: req.name, version: to.version, path: quoted(dest), policy: policyWords(s, policyOf(entry, readConfig(ctx.settings.home))) });
+    : s.format(s.word('install.installed_after_yes'), { name: req.name, version: to.version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) });
   return { text, target: `${req.name} v${to.version}`, result: logWords(s).result('accept') };
 }
 
@@ -299,8 +299,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
   const s = ctx.surface;
   const w = s.word('update');
   const log = logWords(s);
-  const lock = readLock(ctx.settings.home);
-  const config = readConfig(ctx.settings.home);
+  const { lock, config } = readRecords(ctx.settings.home);
   const here = installedHere(ctx, lock);
   for (const name of req.names ?? []) if (!here.some((e) => e.name === name)) throw new CatalogError('not_installed', { name });
   const chosen = req.names ? here.filter((e) => req.names!.includes(e.name)) : here;
@@ -375,8 +374,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
 
 export async function list(ctx: Context): Promise<Done> {
   const s = ctx.surface;
-  const lock = readLock(ctx.settings.home);
-  const config = readConfig(ctx.settings.home);
+  const { lock, config } = readRecords(ctx.settings.home);
   const here = installedHere(ctx, lock);
   const catalog = here.length ? await ctx.catalog() : undefined;
   const rows = [];
@@ -404,12 +402,11 @@ export async function setPolicy(ctx: Context, args: unknown): Promise<Done> {
   const home = ctx.settings.home;
   const w = s.word('policy_set');
   const name = s.word('policy_name')?.[req.policy] ?? req.policy;
+  const { lock, config } = readRecords(home);
   if (req.name === undefined) {
-    const config: Config = { ...readConfig(home), update_policy: req.policy };
-    writeConfig(home, config);
+    writeConfig(home, { ...config, update_policy: req.policy });
     return { text: w ? s.format(w.default, { policy: name }) : asData('set_skill_update_policy', { policy: req.policy }), target: '-', result: logWords(s).result('policy') };
   }
-  const lock = readLock(home);
   const entries = installedHere(ctx, lock).filter((e) => e.name === req.name);
   if (!entries.length) throw new CatalogError('not_installed', { name: req.name });
   for (const e of entries) lock.skills[destOf(ctx, e.target, e.name)] = { ...e, policy: req.policy };
