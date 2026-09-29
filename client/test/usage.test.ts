@@ -3,7 +3,7 @@
 // machine keeps, and each event keeps only its own fields, so nothing a person or a publisher typed is ever written.
 // Recording never fails or slows what it records.
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sandbox } from '@skills-catalog/core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -77,6 +77,16 @@ describe('recording usage', () => {
     expect(readdirSync(join(h, 'usage')).sort()).toEqual(['2026-07-01.jsonl', '2026-09-29.jsonl', 'notes.txt']);
     expect(readUsage(h, day('2026-09-29')).map((e) => (e.event === 'notice' ? e.waiting : 0))).toEqual([2, 3]);
     expect(readUsage(h, day('2026-09-30')).map((e) => (e.event === 'notice' ? e.waiting : 0))).toEqual([3]);
+  });
+
+  it('the old days still go when today\'s line can\'t be written (a pipe in its place): only the day files, never the pipe', () => {
+    const h = home();
+    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-06-30'));
+    const today = join(h, 'usage', '2026-09-29.jsonl');
+    execFileSync('mkfifo', [today]);
+    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 2 }, day('2026-09-29'));
+    expect(readdirSync(join(h, 'usage'))).toEqual(['2026-09-29.jsonl']);
+    expect(lstatSync(today).isFIFO()).toBe(true);
   });
 
   it('tightens its own folder to 0700 and a day file to 0600 when they were looser', () => {
