@@ -60,6 +60,9 @@ const policyWhy = (x: unknown): Why | undefined => (x === undefined ? undefined 
 
 // A part of a folder's identity: a non-negative safe integer, or a decimal string of digits (no sign, no leading zeros).
 const isIdPart = (n: unknown) => (typeof n === 'number' && Number.isSafeInteger(n) && n >= 0) || (typeof n === 'string' && /^(0|[1-9][0-9]*)$/.test(n));
+/** A folder or file identity as recorded: dev and ino, and birth when there is one (a fraction of a millisecond kept). */
+export const isCopyIdentity = (c: unknown): boolean =>
+  isObject(c) && [c['dev'], c['ino']].every(isIdPart) && (c['birth'] === undefined || isIdPart(c['birth']) || (typeof c['birth'] === 'number' && Number.isFinite(c['birth']) && c['birth'] > 0));
 
 function entryWhy(e: unknown): Why | undefined {
   if (!isObject(e)) return 'wrong_shape';
@@ -67,7 +70,7 @@ function entryWhy(e: unknown): Why | undefined {
   // `by` is absent (the person's yes) or the setting that let it through, nothing else (§4.5).
   const accepted = Array.isArray(e['accepted']) && e['accepted'].every((a) => isObject(a) && isCount(a['version']) && isStrings(a['flags']) && (a['by'] === undefined || a['by'] === 'accept_flagged_updates'));
   const c = e['copy'];
-  const copy = c === undefined || (isObject(c) && [c['dev'], c['ino']].every(isIdPart) && (c['birth'] === undefined || isIdPart(c['birth']) || (typeof c['birth'] === 'number' && Number.isFinite(c['birth']) && c['birth'] > 0)));
+  const copy = c === undefined || isCopyIdentity(c);
   if (!strings || !TARGETS.includes(e['target'] as string) || !isCount(e['version']) || !accepted || !copy) return 'wrong_shape';
   return policyWhy(e['policy']);
 }
