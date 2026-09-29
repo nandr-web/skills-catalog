@@ -227,8 +227,27 @@ function writeSkill(dest: string, target: Target, files: readonly TreeFile[], en
     if (bad) failed ??= bad.path;
     return bad === undefined;
   };
+  const changed = () => new CatalogError('target_changed', { path: failed, ...(failed === stagingDir ? { temp: true } : {}) });
+  // The staging folder is looked at again, through its whole path, before its .gitignore and the temp folder are made in
+  // it, so a link swapped in for it (or for a folder above it) right after its check doesn't take them where it points. A
+  // .gitignore already there in a staging folder made just now means another folder was put in its place.
+  const stagingThere = () => {
+    if (isCopy(lstatOf(stagingDir), staging.id)) return;
+    failed ??= stagingDir;
+    throw changed();
+  };
   // A kept copy may hold the person's local edits: git ignores everything here, so `git add -A` can't commit it.
-  if (made) writeFileSync(join(stagingDir, '.gitignore'), '*\n', { flag: 'wx', mode: 0o600 });
+  if (made) {
+    stagingThere();
+    try {
+      writeFileSync(join(stagingDir, '.gitignore'), '*\n', { flag: 'wx', mode: 0o600 });
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+      failed ??= stagingDir;
+      throw changed();
+    }
+  }
+  stagingThere();
   const tmp = mkdtempSync(join(stagingDir, 'install-'));
   madeAs(tmp, 0o700);
   const copy = idOf(tmp)!;
@@ -236,7 +255,7 @@ function writeSkill(dest: string, target: Target, files: readonly TreeFile[], en
     // Nothing is written until the folders are still the ones checked, and each file only while the temp folder is still
     // the one made here; files are created, never opened where something already stands. Once a file was written, a temp
     // folder that fails its check may have taken it somewhere else: the refusal says so.
-    if (!anchored()) throw new CatalogError('target_changed', { path: failed, ...(failed === stagingDir ? { temp: true } : {}) });
+    if (!anchored()) throw changed();
     let wrote = false;
     const tmpChanged = () => new CatalogError('target_changed', { path: tmp, temp: true, ...(wrote ? { elsewhere: true } : {}) });
     for (const f of files) {

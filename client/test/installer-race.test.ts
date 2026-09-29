@@ -51,7 +51,7 @@ describe('links swapped in while the installer replaces a copy (the security rev
   });
 
   // A small bound here; installer-race-sweep.test.ts (slow) reaches every check.
-  sweeps(16);
+  sweeps(18);
 });
 
 // The review's probes, each at one exact point. An update of alpha, installed in the project, to a markdown-only v2.
@@ -412,6 +412,78 @@ describe('folders another user could control are refused (target_not_private)', 
     }
     expect(seen).toBe('*\n');
     expect(race.fs.existsSync(staging)).toBe(false);
+  });
+});
+
+// The staging folder swapped right after its check, before its .gitignore and the temp folder are made in it: it's checked
+// again before each, so nothing is made where a link points, and a folder of someone else's making that already has a
+// .gitignore is a changed temp folder (target_changed), never a failure of the tool.
+describe('the staging folder swapped right after its check', () => {
+  // `after`: which look at the staging folder the swap follows (1: the check itself; 2: the look just before the .gitignore
+  // is written, so the write finds the planted one). `to`: a link to someone else's folder, or their folder with a .gitignore.
+  const swaps: { what: string; after: number; to: 'link' | 'folder' }[] = [
+    { what: 'a link, right after the check', after: 1, to: 'link' },
+    { what: 'a folder with its own .gitignore, right after the check', after: 1, to: 'folder' },
+    { what: 'a folder with its own .gitignore, right before the .gitignore is written', after: 2, to: 'folder' },
+  ];
+  for (const s of swaps) {
+    it(`${s.what}: refused as a changed temp folder, and nothing made in what was swapped in`, async () => {
+      const p = place();
+      await publish(p, 'alpha', 'Body.\n');
+      const staging = stagingDir(p);
+      const theirs = join(p.dir, 'theirs');
+      race.fs.mkdirSync(theirs);
+      if (s.to === 'folder') race.fs.writeFileSync(join(theirs, '.gitignore'), 'theirs\n');
+      let looks = 0;
+      race.stats = (at) => {
+        if (at !== staging || ++looks !== s.after) return undefined;
+        race.fs.renameSync(staging, join(p.dir, 'aside'));
+        if (s.to === 'link') race.fs.symlinkSync(theirs, staging);
+        else race.fs.renameSync(theirs, staging);
+        return undefined;
+      };
+      let r: unknown;
+      try {
+        r = await install(ctxFor(p), { name: 'alpha', target: 'project' }).catch((e: unknown) => e);
+      } finally {
+        clearHooks();
+      }
+      expect(refusalOf(r)).toEqual({ code: 'target_changed', data: { path: staging, temp: true } });
+      const inTheirs = s.to === 'link' ? theirs : staging;
+      expect(race.fs.readdirSync(inTheirs)).toEqual(s.to === 'link' ? [] : ['.gitignore']);
+      if (s.to === 'folder') expect(race.fs.readFileSync(join(inTheirs, '.gitignore'), 'utf8')).toBe('theirs\n');
+      expect(race.fs.existsSync(join(p.dir, 'project', '.claude', 'skills', 'alpha'))).toBe(false);
+    });
+  }
+
+  it('in an update, the skill it happened to is refused and the next one still updates', async () => {
+    const p = place();
+    const ctx = ctxFor(p);
+    for (const name of ['alpha', 'beta']) {
+      await publish(p, name, 'First.\n');
+      await install(ctx, { name, target: 'project' });
+      await publish(p, name, 'Second.\n');
+    }
+    const staging = stagingDir(p);
+    const theirs = join(p.dir, 'theirs');
+    race.fs.mkdirSync(theirs);
+    race.fs.writeFileSync(join(theirs, '.gitignore'), 'theirs\n');
+    let looks = 0;
+    race.stats = (at) => {
+      if (at !== staging || ++looks !== 1) return undefined;
+      race.fs.renameSync(staging, join(p.dir, 'aside'));
+      race.fs.renameSync(theirs, staging);
+      return undefined;
+    };
+    let r: unknown;
+    try {
+      r = await update(ctx, {}).catch((e: unknown) => e);
+    } finally {
+      clearHooks();
+    }
+    expect(refusalOf(r)).toEqual({ code: 'target_changed', data: expect.objectContaining({ temp: true }) });
+    const second = ['alpha', 'beta'].filter((n) => race.fs.readFileSync(join(p.dir, 'project', '.claude', 'skills', n, 'SKILL.md'), 'utf8').includes('Second.'));
+    expect(second).toHaveLength(1);
   });
 });
 
