@@ -5,7 +5,8 @@
 // an operation whose row changes the catalog takes a publish-scope token (else forbidden read_scope, the operation's
 // answer in the envelope).
 
-import { CatalogError, OPERATIONS } from '@skills-catalog/core';
+import { CatalogError } from '@skills-catalog/core';
+import { effectOf } from '@skills-catalog/core/http';
 import type { TokenHolder } from '../tokens.ts';
 
 export type Asking =
@@ -30,10 +31,11 @@ export async function whoIsAsking(
   return holder ? { kind: 'holder', holder } : unauthenticated();
 }
 
-/** Whether this holder may run the operation, by its row's effect; undefined when it may. Not a row: a bug, thrown. */
+/** Whether this holder may run the operation, by its row's effect; undefined when it may. An operation a hosted
+ *  catalog's web face doesn't serve never gets here (the route refuses it): a bug, thrown. */
 export function mayRun(holder: TokenHolder, operation: string): CatalogError | undefined {
-  if (!Object.hasOwn(OPERATIONS, operation)) throw new Error(`no operation ${JSON.stringify(operation)}`);
-  const effect = OPERATIONS[operation]!.effect;
+  const effect = effectOf(operation, 'hosted');
+  if (effect === undefined) throw new Error(`no hosted web operation ${JSON.stringify(operation)}`);
   if (effect === 'reads') return undefined;
   return holder.scope === 'publish' ? undefined : new CatalogError('forbidden', { why: 'read_scope' });
 }
