@@ -28,7 +28,11 @@ const MUTATIONS = [
   // one definition runs every face (operations-seam.test.ts; the golden transcripts for the MCP's and CLI's bytes)
   ['operations.ts', 'a face runs an operation it doesn\'t serve', '  if (!row.faces.includes(ctx.face)) throw', '  if (false) throw'],
   ['operations.ts', 'the web face gets presented text', "text: web ? '' : present(ctx, op, ran.data, args)", 'text: present(ctx, op, ran.data, args)'],
-  ['operations.ts', 'a catalog operation\'s data is shown as it is, not through its presenter', 'return catalogOp ? catalogOp.present(ctx, data, args) : String(data);', 'return String(data);'],
+  ['operations.ts', 'a catalog operation\'s data is shown as it is, not through its presenter', 'return catalogOp?.present ? catalogOp.present(ctx, data, args) : String(data);', 'return String(data);'],
+  ['operations.ts', 'a publish acts as the catalog\'s own identity, not the calling developer', 'catalog.publish(args, actAs(ctx.settings.developer), ctx.face)', 'catalog.publish(args, undefined, ctx.face)'],
+  ['operations.ts', 'one generic call puts the face in publish\'s identity slot', "row.run === 'publish'\n      ?", 'false\n      ?'],
+  // Not listed: dropping ctx.face from either call. Equivalent today: the catalog's default is the strictest face, and
+  // only publish_version (web only) has a person-only input; it counts once a read gains one.
   ['operations.ts', 'search is worded as a read', 'present: (ctx, r, args) => renderSearch(ctx.words, r, (args ?? {}) as SearchInput),', 'present: (ctx, r) => renderRead(ctx.words, r, ctx.ids),'],
   // the words an assistant reads
   ['operations.ts', 'a bug\'s traceback reaches the assistant', ": renderError(words, err), isError: true", ": (err.code === 'internal_error' && e instanceof Error ? String(e.stack) : renderError(words, err)), isError: true"],

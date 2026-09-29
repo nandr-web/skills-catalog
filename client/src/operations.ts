@@ -37,7 +37,7 @@ const LOOK_FACE: Record<Face, 'cli' | 'assistant' | 'web'> = { mcp: 'assistant',
 // A catalog operation on this client: after the Catalog method its row names has run, what the log shows (the target
 // comes from the result, the skills it returned or a match count, never from the arguments, which can hold anything),
 // and how the MCP and CLI faces word the result (the core's renderers).
-type CatalogOp = { log(ctx: Context, data: any): Omit<Ran, 'data'>; present(ctx: Context, data: any, args: unknown): string };
+type CatalogOp = { log(ctx: Context, data: any): Omit<Ran, 'data'>; present?(ctx: Context, data: any, args: unknown): string };
 const CATALOG_OPS: Record<string, CatalogOp> = {
   search_shared_skills: {
     log: (ctx, r) => {
@@ -66,6 +66,14 @@ const CATALOG_OPS: Record<string, CatalogOp> = {
     },
     present: (ctx, r) => renderDiff(ctx.words, r, ctx.ids),
   },
+  // The web's own (faces: web only, never presented): a publish, a dry run included, and fetching a version's files,
+  // which the log counts as a read.
+  publish_version: {
+    log: (ctx, r) => ({ target: `${r.name} v${r.version}`, result: logWords(ctx.words).result('publish', r.dry_run ? 'preview' : 'published') }),
+  },
+  fetch_version: {
+    log: (ctx, r) => ({ target: `${r.name} v${r.version}`, result: logWords(ctx.words).result('get') }),
+  },
 };
 
 /** Runs an operation through its row: a Catalog method, or a machine function (whose data is its text today). */
@@ -78,15 +86,20 @@ async function run(ctx: Context, op: string, args: unknown): Promise<Ran> {
   }
   const catalogOp = CATALOG_OPS[op];
   if (!catalogOp) throw new Error(`no run for ${op} on this client yet`);
-  const catalog = (await ctx.catalog()) as unknown as Record<string, (input: unknown) => Promise<unknown>>;
-  const data = await catalog[row.run]!.call(catalog, args);
+  // Each method gets the caller's face in its own slot: publish's second argument is the identity (the developer this
+  // call acts as, so one shared catalog serves every caller), the others' second is the face.
+  const catalog = await ctx.catalog();
+  const data =
+    row.run === 'publish'
+      ? await catalog.publish(args, actAs(ctx.settings.developer), ctx.face)
+      : await (catalog as unknown as Record<string, (input: unknown, face: Face) => Promise<unknown>>)[row.run]!.call(catalog, args, ctx.face);
   return { data, ...catalogOp.log(ctx, data) };
 }
 
 /** How the MCP and CLI faces word an operation's data; the web face never presents (it sends the data). */
 function present(ctx: Context, op: string, data: unknown, args: unknown): string {
   const catalogOp = CATALOG_OPS[op];
-  return catalogOp ? catalogOp.present(ctx, data, args) : String(data);
+  return catalogOp?.present ? catalogOp.present(ctx, data, args) : String(data);
 }
 
 /** The operations this client runs, by operation name: each with a machine function or a catalog operation here. */
@@ -105,7 +118,9 @@ export type Answer = { text: string; isError: boolean; outcome: string; data?: u
 export async function perform(ctx: Context, op: string, name: string, args: unknown): Promise<Answer> {
   const row = Object.hasOwn(OPERATIONS, op) ? OPERATIONS[op] : undefined;
   if (!row || !RUNS[op]) throw new Error(`no operation ${op}`);
-  // A face only offers what it serves; this is the backstop.
+  // A backstop only: each face offers only what it serves (the MCP lists its tools from the rows' faces, the CLI's
+  // commands name only operations it serves, and the web's routes are built from the rows' faces), so no face relies on
+  // this check. It throws before the try: no activity or usage line for a call no face offers.
   if (!row.faces.includes(ctx.face)) throw new Error(`${op} is not served on the ${ctx.face} face`);
   const { settings, words } = ctx;
   const log = logWords(words);
