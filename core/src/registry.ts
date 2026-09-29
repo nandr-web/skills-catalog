@@ -120,28 +120,28 @@ function fail(field: string, why: string, extra: Record<string, unknown> = {}): 
 function check(schema: Schema, value: unknown, field: string): void {
   switch (schema.type) {
     case 'string':
-      if (typeof value !== 'string') fail(field, 'must be text');
-      if (schema.enum && !schema.enum.includes(value)) fail(field, `must be one of ${schema.enum.join(', ')}`);
-      if (schema.maxLength !== undefined && value.length > schema.maxLength) fail(field, 'is too long', { limit: schema.maxLength, value: value.length });
+      if (typeof value !== 'string') fail(field, 'not_text');
+      if (schema.enum && !schema.enum.includes(value)) fail(field, 'not_one_of', { allowed: schema.enum });
+      if (schema.maxLength !== undefined && value.length > schema.maxLength) fail(field, 'too_long', { limit: schema.maxLength, value: value.length });
       return;
     case 'integer':
-      if (typeof value !== 'number' || !Number.isInteger(value)) fail(field, 'must be a whole number');
-      if (schema.minimum !== undefined && value < schema.minimum) fail(field, 'is too low', { limit: schema.minimum, value });
-      if (schema.maximum !== undefined && value > schema.maximum) fail(field, 'is too high', { limit: schema.maximum, value });
+      if (typeof value !== 'number' || !Number.isInteger(value)) fail(field, 'not_integer');
+      if (schema.minimum !== undefined && value < schema.minimum) fail(field, 'too_low', { limit: schema.minimum, value });
+      if (schema.maximum !== undefined && value > schema.maximum) fail(field, 'too_high', { limit: schema.maximum, value });
       return;
     case 'boolean':
-      if (typeof value !== 'boolean') fail(field, 'must be true or false');
+      if (typeof value !== 'boolean') fail(field, 'not_boolean');
       return;
     case 'array':
-      if (!Array.isArray(value)) fail(field, 'must be a list');
-      if (schema.maxItems !== undefined && value.length > schema.maxItems) fail(field, 'has too many items', { limit: schema.maxItems, value: value.length });
+      if (!Array.isArray(value)) fail(field, 'not_list');
+      if (schema.maxItems !== undefined && value.length > schema.maxItems) fail(field, 'too_many_items', { limit: schema.maxItems, value: value.length });
       value.forEach((v, i) => check(schema.items, v, `${field}[${i}]`));
       return;
     case 'object': {
-      if (value === null || typeof value !== 'object' || Array.isArray(value)) fail(field || 'request', 'must be an object');
+      if (value === null || typeof value !== 'object' || Array.isArray(value)) fail(field || 'request', 'not_object');
       const obj = value as Record<string, unknown>;
       for (const key of Object.keys(obj)) {
-        if (!(key in schema.properties)) fail(field ? `${field}.${key}` : key, 'unknown field');
+        if (!Object.hasOwn(schema.properties, key)) fail(field ? `${field}.${key}` : key, 'unknown_field');
       }
       for (const key of schema.required ?? []) {
         if (obj[key] === undefined) fail(field ? `${field}.${key}` : key, 'required');

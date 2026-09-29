@@ -6,10 +6,15 @@ import { decodeText, isText, type Mode, type TreeFile } from './tree.ts';
 
 export type RiskKind = 'runnable_file' | 'non_markdown' | 'capability_frontmatter' | 'new_publisher' | 'prompt_injection' | 'context_cost';
 
+// One reason the gate would hold, in one shape everywhere (contract §5.3). A change carries its sides as data
+// (`field`, `from`, `to`), so nothing has to parse `detail`.
 export interface RiskFlag {
   kind: RiskKind;
   path?: string;
   line?: number;
+  field?: string;
+  from?: unknown;
+  to?: unknown;
   detail: string;
 }
 
@@ -40,7 +45,8 @@ export interface DiffSide {
   label?: string;
 }
 
-export const DEFAULT_CAPABILITY_KEYS: readonly string[] = ['allowed-tools'];
+// Front matter keys that grant capability: tool grants, and hooks (Claude Code skill front matter can run commands).
+export const DEFAULT_CAPABILITY_KEYS: readonly string[] = ['allowed-tools', 'hooks'];
 
 const SCRIPT_EXT = /\.(sh|bash|zsh|fish|ksh|py|js|mjs|cjs|ts|mts|cts|rb|pl|php|ps1|psm1|bat|cmd|exe|com|jar|lua|tcl|applescript|scpt)$/i;
 const MARKDOWN_EXT = /\.(md|markdown)$/i;
@@ -135,10 +141,10 @@ export function diffTrees(from: DiffSide | null, to: DiffSide, capabilityKeys: r
     const detail =
       was === undefined ? `${k} added: ${show(now)}` : now === undefined ? `${k} removed` : `${k} changed: ${show(was)} → ${show(now)}`;
     const line = now === undefined ? undefined : keyLine(fb.lines, k);
-    risk.push({ kind: 'capability_frontmatter', path: MANIFEST, ...(line ? { line } : {}), detail });
+    risk.push({ kind: 'capability_frontmatter', path: MANIFEST, ...(line ? { line } : {}), field: k, from: was ?? null, to: now ?? null, detail });
   }
   const publisher_changed = from !== null && from.publisher !== to.publisher;
-  if (publisher_changed) risk.push({ kind: 'new_publisher', detail: `${from!.publisher} → ${to.publisher}` });
+  if (publisher_changed) risk.push({ kind: 'new_publisher', from: from!.publisher, to: to.publisher, detail: `${from!.publisher} → ${to.publisher}` });
   return { files, frontmatter_changes, publisher_changed, risk_flags: risk };
 }
 

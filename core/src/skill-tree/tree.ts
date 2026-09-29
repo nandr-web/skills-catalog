@@ -55,26 +55,56 @@ export function fingerprint(entries: readonly { path: string; mode: Mode; sha256
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f]/;
+// Invisible format characters (bidi overrides, zero-width joiners and spaces): a path that reads as one thing and is
+// another.
+const INVISIBLE = /\p{Cf}/u;
+export const MAX_PATH_BYTES = 1024;
+export const MAX_SEGMENT_BYTES = 255;
+
+// Why a path is refused, as a code; the words for each are in the agent-facing surface (errors.why).
+export type PathWhy =
+  | 'empty'
+  | 'not_utf8'
+  | 'control_character'
+  | 'invisible_character'
+  | 'backslash'
+  | 'absolute'
+  | 'empty_segment'
+  | 'dot_segment'
+  | 'git_folder'
+  | 'segment_too_long'
+  | 'too_long'
+  | 'bad_mode'
+  | 'duplicate'
+  | 'case_clash'
+  | 'file_is_folder';
+
+function refuse(path: string, why: PathWhy, extra: Record<string, unknown> = {}): never {
+  throw new CatalogError('invalid_path', { path, why, ...extra });
+}
 
 // One path: returns its NFC form, or throws invalid_path {path, why}.
 export function checkPath(raw: unknown): string {
-  if (typeof raw !== 'string' || raw === '') throw new CatalogError('invalid_path', { path: String(raw ?? ''), why: 'empty' });
-  if (!raw.isWellFormed()) throw new CatalogError('invalid_path', { path: raw, why: 'not valid UTF-8' });
-  if (CONTROL.test(raw)) throw new CatalogError('invalid_path', { path: raw, why: 'control character' });
-  if (raw.includes('\\')) throw new CatalogError('invalid_path', { path: raw, why: 'backslash; use /' });
-  if (raw.startsWith('/') || /^[A-Za-z]:/.test(raw)) throw new CatalogError('invalid_path', { path: raw, why: 'absolute' });
+  if (typeof raw !== 'string' || raw === '') refuse(String(raw ?? ''), 'empty');
+  if (!raw.isWellFormed()) refuse(raw, 'not_utf8');
+  if (CONTROL.test(raw)) refuse(raw, 'control_character');
+  if (INVISIBLE.test(raw)) refuse(raw, 'invisible_character');
+  if (raw.includes('\\')) refuse(raw, 'backslash');
+  if (raw.startsWith('/') || /^[A-Za-z]:/.test(raw)) refuse(raw, 'absolute');
   const path = raw.normalize('NFC');
   for (const seg of path.split('/')) {
-    if (seg === '') throw new CatalogError('invalid_path', { path: raw, why: 'empty segment' });
-    if (seg === '.' || seg === '..') throw new CatalogError('invalid_path', { path: raw, why: `"${seg}" segment` });
+    if (seg === '') refuse(raw, 'empty_segment');
+    if (seg === '.' || seg === '..') refuse(raw, 'dot_segment');
+    if (foldKey(seg) === '.git') refuse(raw, 'git_folder');
+    if (Buffer.byteLength(seg, 'utf8') > MAX_SEGMENT_BYTES) refuse(raw, 'segment_too_long', { limit: MAX_SEGMENT_BYTES });
   }
-  if (Buffer.byteLength(path, 'utf8') > 1024) throw new CatalogError('invalid_path', { path: raw, why: 'longer than 1024 bytes' });
+  if (Buffer.byteLength(path, 'utf8') > MAX_PATH_BYTES) refuse(raw, 'too_long', { limit: MAX_PATH_BYTES });
   return path;
 }
 
 export function checkMode(path: string, mode: unknown): Mode {
   if (typeof mode === 'string' && (MODES as readonly string[]).includes(mode)) return mode as Mode;
-  throw new CatalogError('invalid_path', { path, why: `mode ${String(mode)}; only 0644 or 0755` });
+  return refuse(path, 'bad_mode', { mode: String(mode) });
 }
 
 // Two paths that a case-insensitive file system (macOS APFS, Windows) would store as one file fold to the same key:
@@ -94,9 +124,7 @@ export function checkTree(files: readonly { path: unknown; mode: unknown; bytes:
     const mode = checkMode(path, f.mode);
     const key = foldKey(path);
     const clash = folded.get(key);
-    if (clash !== undefined) {
-      throw new CatalogError('invalid_path', { path, why: clash === path ? 'duplicate path' : `same as ${clash} ignoring case` });
-    }
+    if (clash !== undefined) refuse(path, clash === path ? 'duplicate' : 'case_clash', clash === path ? {} : { other: clash });
     folded.set(key, path);
     out.push({ path, mode, bytes: f.bytes });
   }
@@ -104,7 +132,7 @@ export function checkTree(files: readonly { path: unknown; mode: unknown; bytes:
     const segs = foldKey(f.path).split('/');
     for (let i = 1; i < segs.length; i++) {
       const folder = segs.slice(0, i).join('/');
-      if (folded.has(folder)) throw new CatalogError('invalid_path', { path: f.path, why: `${folded.get(folder)} is a file, not a folder` });
+      if (folded.has(folder)) refuse(f.path, 'file_is_folder', { other: folded.get(folder) });
     }
   }
   if (out.length > limits.files) throw new CatalogError('too_large', { limit: 'files', max: limits.files, value: out.length });

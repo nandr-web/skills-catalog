@@ -170,8 +170,8 @@ describe('diffs (golden/histories.yaml diffs, golden/diffs/)', () => {
     expect(got.risk_flags).toEqual([
       { kind: 'non_markdown', path: 'logo.png', detail: '.png file' },
       { kind: 'runnable_file', path: 'run.py', detail: 'executable script' },
-      { kind: 'capability_frontmatter', path: 'SKILL.md', line: 4, detail: 'allowed-tools added: Bash' },
-      { kind: 'new_publisher', detail: 'alice → bob' },
+      { kind: 'capability_frontmatter', path: 'SKILL.md', line: 4, field: 'allowed-tools', from: null, to: 'Bash', detail: 'allowed-tools added: Bash' },
+      { kind: 'new_publisher', from: 'alice', to: 'bob', detail: 'alice → bob' },
     ]);
     expect(got.frontmatter_changes).toEqual([{ field: 'allowed-tools', from: null, to: 'Bash' }]);
     expect(got.files.find((f) => f.path === 'logo.png')!.unified).toBeUndefined();

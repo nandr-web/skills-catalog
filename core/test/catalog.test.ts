@@ -114,7 +114,7 @@ describe('all or nothing: a refused publish stores nothing', () => {
     const before = snapshot(dir);
     const bad = { name: 'x', files: [{ path: 'SKILL.md', mode: '0644', content_base64: '%%%' }] };
     expect((await errorOf(async () => (await catalog.publish(bad, actAs('dev1'))))).data).toMatchObject({ field: 'files[0].content_base64' });
-    expect((await errorOf(async () => (await catalog.publish({ ...bad, publisher: 'eve' }, actAs('dev1'))))).data).toMatchObject({ field: 'publisher', why: 'unknown field' });
+    expect((await errorOf(async () => (await catalog.publish({ ...bad, publisher: 'eve' }, actAs('dev1'))))).data).toMatchObject({ field: 'publisher', why: 'unknown_field' });
     expect(snapshot(dir)).toBe(before);
   });
 });
