@@ -372,8 +372,26 @@ export function inputSchema(op: string | OperationDef, face: Face, where: Where)
   return properties === def.input.properties ? def.input : { ...def.input, properties };
 }
 
+// Whether the HTTP API serves an operation where the catalog runs: its row has the web face and isn't only for the other
+// place. By name (as a route reads it), only the table's own keys are operations.
+export function webRow(op: string | OperationDef, where: Where): boolean {
+  const def = typeof op === 'string' ? (Object.hasOwn(OPERATIONS, op) ? OPERATIONS[op] : undefined) : op;
+  return def !== undefined && def.faces.includes('web') && (def.where === undefined || def.where === where);
+}
+
 function fail(field: string, why: string, extra: Record<string, unknown> = {}): never {
   throw new CatalogError('invalid_request', { field, why, ...extra });
+}
+
+// An unknown key is the request's own text, so an answer names at most its first MAX_ECHOED_KEY whole characters (a
+// pair of UTF-16 halves is one character, never split) and says it cut it (contract §9).
+const MAX_ECHOED_KEY = 200;
+function unknownField(path: string, key: string): never {
+  let end = 0;
+  for (let n = 0; n < MAX_ECHOED_KEY && end < key.length; n++) end += key.codePointAt(end)! > 0xffff ? 2 : 1;
+  const prefix = path ? `${path}.` : '';
+  if (end >= key.length) fail(prefix + key, 'unknown_field');
+  fail(prefix + key.slice(0, end), 'unknown_field', { field_cut: true });
 }
 
 function check(schema: Schema, value: unknown, field: string): void {
@@ -401,7 +419,7 @@ function check(schema: Schema, value: unknown, field: string): void {
       if (value === null || typeof value !== 'object' || Array.isArray(value)) fail(field || 'request', 'not_object');
       const obj = value as Record<string, unknown>;
       for (const key of Object.keys(obj)) {
-        if (!Object.hasOwn(schema.properties, key)) fail(field ? `${field}.${key}` : key, 'unknown_field');
+        if (!Object.hasOwn(schema.properties, key)) unknownField(field, key);
       }
       for (const key of schema.required ?? []) {
         if (own(obj, key) === undefined) fail(field ? `${field}.${key}` : key, 'required');

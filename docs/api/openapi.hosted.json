@@ -654,7 +654,7 @@
               },
               "error": {
                 "type": "object",
-                "description": "The error's code and its data (contract §9).",
+                "description": "The error's code and its data (contract §9). An invalid_request naming an unknown key longer than 200 characters names its first 200 and carries field_cut: true.",
                 "properties": {
                   "code": {
                     "type": "string",
@@ -664,6 +664,10 @@
                       "forbidden",
                       "invalid_developer_setting"
                     ]
+                  },
+                  "field_cut": {
+                    "type": "boolean",
+                    "description": "The field names only the first 200 characters of an unknown key."
                   }
                 },
                 "required": [
@@ -946,7 +950,7 @@
               },
               "error": {
                 "type": "object",
-                "description": "The error's code and its data (contract §9).",
+                "description": "The error's code and its data (contract §9). An invalid_request naming an unknown key longer than 200 characters names its first 200 and carries field_cut: true.",
                 "properties": {
                   "code": {
                     "type": "string",
@@ -958,6 +962,10 @@
                       "forbidden",
                       "invalid_developer_setting"
                     ]
+                  },
+                  "field_cut": {
+                    "type": "boolean",
+                    "description": "The field names only the first 200 characters of an unknown key."
                   }
                 },
                 "required": [
@@ -1116,7 +1124,7 @@
               },
               "error": {
                 "type": "object",
-                "description": "The error's code and its data (contract §9).",
+                "description": "The error's code and its data (contract §9). An invalid_request naming an unknown key longer than 200 characters names its first 200 and carries field_cut: true.",
                 "properties": {
                   "code": {
                     "type": "string",
@@ -1128,6 +1136,10 @@
                       "forbidden",
                       "invalid_developer_setting"
                     ]
+                  },
+                  "field_cut": {
+                    "type": "boolean",
+                    "description": "The field names only the first 200 characters of an unknown key."
                   }
                 },
                 "required": [
@@ -1334,7 +1346,7 @@
               },
               "error": {
                 "type": "object",
-                "description": "The error's code and its data (contract §9).",
+                "description": "The error's code and its data (contract §9). An invalid_request naming an unknown key longer than 200 characters names its first 200 and carries field_cut: true.",
                 "properties": {
                   "code": {
                     "type": "string",
@@ -1346,6 +1358,10 @@
                       "forbidden",
                       "invalid_developer_setting"
                     ]
+                  },
+                  "field_cut": {
+                    "type": "boolean",
+                    "description": "The field names only the first 200 characters of an unknown key."
                   }
                 },
                 "required": [
@@ -1650,7 +1666,7 @@
               },
               "error": {
                 "type": "object",
-                "description": "The error's code and its data (contract §9).",
+                "description": "The error's code and its data (contract §9). An invalid_request naming an unknown key longer than 200 characters names its first 200 and carries field_cut: true.",
                 "properties": {
                   "code": {
                     "type": "string",
@@ -1668,6 +1684,10 @@
                       "secret_suspected",
                       "invalid_developer_setting"
                     ]
+                  },
+                  "field_cut": {
+                    "type": "boolean",
+                    "description": "The field names only the first 200 characters of an unknown key."
                   }
                 },
                 "required": [
@@ -1782,7 +1802,7 @@
               },
               "error": {
                 "type": "object",
-                "description": "The error's code and its data (contract §9).",
+                "description": "The error's code and its data (contract §9). An invalid_request naming an unknown key longer than 200 characters names its first 200 and carries field_cut: true.",
                 "properties": {
                   "code": {
                     "type": "string",
@@ -1794,6 +1814,10 @@
                       "forbidden",
                       "invalid_developer_setting"
                     ]
+                  },
+                  "field_cut": {
+                    "type": "boolean",
+                    "description": "The field names only the first 200 characters of an unknown key."
                   }
                 },
                 "required": [

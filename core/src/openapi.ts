@@ -2,7 +2,7 @@
 // operation served on the web face, one schema for each place the catalog runs. `npm run schema` writes them to
 // docs/api/openapi.local.json and openapi.hosted.json; a test fails when either is out of date.
 
-import { OPERATIONS, inputSchema, type OperationDef, type OutputSchema, type Schema, type Where } from './api.ts';
+import { OPERATIONS, inputSchema, webRow, type OperationDef, type OutputSchema, type Schema, type Where } from './api.ts';
 import { COMMON_ERRORS, ERROR_CODES } from './errors.ts';
 
 // v1 in the path; a new operation, optional input or output field raises the minor version, a removal or a change of
@@ -41,8 +41,12 @@ function envelope(def: OperationDef): Json {
           ok: { const: false },
           error: {
             type: 'object',
-            description: 'The error\'s code and its data (contract §9).',
-            properties: { code: { type: 'string', enum: ERROR_CODES.filter((c) => own.has(c)) } },
+            description:
+              'The error\'s code and its data (contract §9). An invalid_request naming an unknown key longer than 200 characters names its first 200 and carries field_cut: true.',
+            properties: {
+              code: { type: 'string', enum: ERROR_CODES.filter((c) => own.has(c)) },
+              field_cut: { type: 'boolean', description: 'The field names only the first 200 characters of an unknown key.' },
+            },
             required: ['code'],
             additionalProperties: true, // each code's own fields
           },
@@ -167,7 +171,7 @@ function fileRoute(where: Where): Json {
 // The schema of the catalog's HTTP API where it runs: its operations served on the web face there (a hosted-only one
 // only hosted), each input as that place takes it.
 export function openapi(where: Where, ops: Record<string, OperationDef> = OPERATIONS): Json {
-  const web = Object.values(ops).filter((d) => d.faces.includes('web') && (d.where === undefined || d.where === where));
+  const web = Object.values(ops).filter((d) => webRow(d, where));
   const schemas: Json = {
     ErrorCode: { type: 'string', enum: [...ERROR_CODES] },
     Words: {
