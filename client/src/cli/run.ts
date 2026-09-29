@@ -9,6 +9,8 @@
 
 import { parseArgs } from 'node:util';
 import { CatalogError, Surface, checkActor, inputSchema, renderError, shellQuote, toCatalogError } from '@skills-catalog/core';
+import { NAME_RE } from '@skills-catalog/core/skill-tree';
+import { appendActivity, logWords } from '../activity.ts';
 import { actingAs, contextFor, perform, type Context } from '../operations.ts';
 import { pendingHold } from '../machine/installer.ts';
 import type { Target } from '../machine/lock.ts';
@@ -121,6 +123,11 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
   if (accept && !io.tty) {
     const command = [s.cli, ...argv.filter((a, i) => !(a === '--as' || argv[i - 1] === '--as')).map(shellQuote)].join(' ');
     io.stderr(withActing(s.format(s.word('errors.person_only'), { command })) + '\n');
+    // The activity log shows the step waiting for the person; its target only when it's a skill's name (the log holds
+    // names and versions only, never text someone typed).
+    const log = logWords(s);
+    const name = positionals.length === 1 && NAME_RE.test(positionals[0]!) ? positionals[0]! : '-';
+    appendActivity(settings.activityLog, { at: new Date(), who: settings.developer, tool: 'update --accept', target: name, result: log.error('person_only') }, { ownFolder: settings.activityLogInHome, resultWidth: log.width });
     return 3;
   }
 

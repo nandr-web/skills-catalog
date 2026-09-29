@@ -118,6 +118,9 @@ describe('the CLI face', () => {
     expect(r.asked).toEqual([]);
     expect(r.out + r.err).toContain(S.format(S.word('errors.person_only'), { command: 'skills-catalog update release-notes-kit --accept' }));
     expect(existsSync(join(skills(p), 'release-notes-kit'))).toBe(false);
+    // The activity log shows it too, as waiting for the person, with the skill it was about.
+    const last = readFileSync(join(p.home, 'activity.log'), 'utf8').trimEnd().split('\n').at(-1)!;
+    expect(last.split(/\s{2,}/).slice(1)).toEqual(['-', 'update --accept', S.doc.log.error.person_only, 'release-notes-kit']);
   });
 
   it('update and list on the command line: a text-only change updates, names limit it, the list shows it', async () => {
