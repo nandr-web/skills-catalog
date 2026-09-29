@@ -118,6 +118,8 @@ describe('the table of which versions name a file (local)', () => {
       }),
     ).rejects.toThrow(/injected crash/);
     expect(hasTable(root)).toBe(false);
+    // The failed open closed its connection: leaving WAL mode needs the only one there is.
+    expect(withDb(root, (db) => (db.prepare('PRAGMA journal_mode = DELETE').get() as { journal_mode: string }).journal_mode)).toBe('delete');
     (await openLocalCatalog(root)).close();
     expect(rows(root)).toEqual(whole);
   });
