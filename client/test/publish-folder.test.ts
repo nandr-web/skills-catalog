@@ -3,7 +3,7 @@
 // folder's fingerprint; step 2 with that confirm publishes, unless the folder or the catalog changed in between. The
 // folder is read as regular files only (golden/skills.yaml hostile), and the ignore list is skipped and reported.
 import { chmodSync, linkSync, mkdirSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { mkfifo } from '@skills-catalog/core/testing';
 import { dirname, join } from 'node:path';
 import { CatalogError, Words, actAs } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
@@ -153,7 +153,7 @@ describe('publish a folder, in two steps (contract §3)', () => {
     const cases: [string, (dir: string) => void, string][] = [
       ['symlink-out', (dir) => symlinkSync(outside, join(dir, 'secrets')), 'secrets'],
       ['hardlink', (dir) => linkSync(outside, join(dir, 'linked.md')), 'linked.md'],
-      ['special-file', (dir) => execFileSync('mkfifo', [join(dir, 'pipe')]), 'pipe'],
+      ['special-file', (dir) => mkfifo(join(dir, 'pipe')), 'pipe'],
     ];
     for (const [name, plant, path] of cases) {
       const dir = folder(p, name, { 'SKILL.md': skillMd(name, 'Holds something that is not a regular file.') });
@@ -200,7 +200,7 @@ describe('the folder is read as it was checked (a swap in between is refused)', 
     ['a link out', (full, p) => { rmSync(full); symlinkSync(outsideSecret(p), full); }],
     ['another regular file', (full) => { writeFileSync(`${full}.new`, 'swapped in\n'); renameSync(`${full}.new`, full); }],   // both exist at once: a new inode
     ['a hard link to a file outside', (full, p) => { rmSync(full); linkSync(outsideSecret(p), full); }],
-    ['a fifo (the read never blocks)', (full) => { rmSync(full); execFileSync('mkfifo', [full]); }],
+    ['a fifo (the read never blocks)', (full) => { rmSync(full); mkfifo(full); }],
   ];
   for (const [what, swap] of swaps) {
     it(`a file swapped for ${what} after its check is invalid_path {why: not_regular_file}, and nothing of it leaks`, () => {

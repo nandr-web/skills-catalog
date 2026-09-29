@@ -4,13 +4,16 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { spawnsWithoutEnv } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
 import { childEnv, place, tripwireBin } from './server.ts';
 
 describe('the environment of a process a test starts', () => {
-  it('finds the tripwire when it looks up claude, whatever else is on PATH, and the tripwire fails and notes the run', () => {
+  it('has the tripwire first on PATH, so a lookup of claude finds it before any other; it fails and notes the run', () => {
     const p = place();
     const env = childEnv(p);
+    // First, not merely somewhere: this machine may have no other claude for a later entry to find.
+    expect(env['PATH']!.split(':')[0]).toBe(tripwireBin(p));
     const found = spawnSync('/bin/sh', ['-c', 'command -v claude'], { env, encoding: 'utf8' });
     expect(found.stdout.trim()).toBe(join(tripwireBin(p), 'claude'));
     const ran = spawnSync('/bin/sh', ['-c', 'claude --version'], { env, encoding: 'utf8' });
@@ -44,5 +47,9 @@ describe('the environment of a process a test starts', () => {
     for (const k of ['HOME', 'XDG_CONFIG_HOME', 'SKILLS_HOME', 'SKILLS_ASSISTANT_HOME', 'SKILLS_MANAGED_SETTINGS', 'CLAUDE_CONFIG_DIR']) {
       expect(() => childEnv(place(), { [k]: homedir() }), k).toThrow(/fail-safe/);
     }
+  });
+
+  it('is what every process the client\'s tests start gets: none is started without an env (a source scan)', () => {
+    expect(spawnsWithoutEnv(import.meta.dirname)).toEqual([]);
   });
 });

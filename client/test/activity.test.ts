@@ -3,7 +3,7 @@
 // longest one, so a long target (skill names run to 64 characters) comes last and never shifts a column. It says who
 // called which tool, how it ended and on which skills, never what was asked: the target comes from the result (skill
 // names and versions, a match count), never from the arguments; no skill text, no paths, no secrets.
-import { execFileSync } from 'node:child_process';
+import { mkfifo } from '@skills-catalog/core/testing';
 import { chmodSync, closeSync, constants, existsSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { actAs, Words } from '@skills-catalog/core';
@@ -172,7 +172,7 @@ describe('the activity log', () => {
     await seed(p);
     mkdirSync(p.home, { recursive: true, mode: 0o700 });
     const fifo = join(p.home, 'activity.log');
-    execFileSync('mkfifo', [fifo]);
+    mkfifo(fifo);
     const s = start(p);
     await s.initialize();
     const r = await s.call(N.search, { query: 'release' });            // no reader: opening it for writing would block

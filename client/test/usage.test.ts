@@ -2,10 +2,9 @@
 // UTC day, kept 90 days and never sent anywhere. A skill's name is stored only as a keyed hash made with a secret this
 // machine keeps, and each event keeps only its own fields, so nothing a person or a publisher typed is ever written.
 // Recording never fails or slows what it records.
-import { execFileSync } from 'node:child_process';
 import { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { sandbox } from '@skills-catalog/core/testing';
+import { mkfifo, sandbox } from '@skills-catalog/core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { holdWithinADay, readUsage, recordUsage, USAGE_DAYS, USAGE_READ_MAX_BYTES } from '../src/usage/record.ts';
 
@@ -107,7 +106,7 @@ describe('recording usage', () => {
     const h = home();
     recordUsage(h, { event: 'notice', face: 'hook', waiting: 1 }, day('2026-06-30'));
     const today = join(h, 'usage', '2026-09-29.jsonl');
-    execFileSync('mkfifo', [today]);
+    mkfifo(today);
     recordUsage(h, { event: 'notice', face: 'hook', waiting: 2 }, day('2026-09-29'));
     expect(readdirSync(join(h, 'usage'))).toEqual(['2026-09-29.jsonl']);
     expect(lstatSync(today).isFIFO()).toBe(true);
@@ -254,7 +253,7 @@ describe('reading usage back', () => {
     const elsewhere = join(sandbox(), 'elsewhere.jsonl');
     writeFileSync(elsewhere, JSON.stringify({ v: 1, at: '2026-09-28T12:00:00.000Z', event: 'notice', face: 'mcp', waiting: 9 }) + '\n');
     symlinkSync(elsewhere, join(h, 'usage', '2026-09-28.jsonl'));
-    execFileSync('mkfifo', [join(h, 'usage', '2026-09-27.jsonl')]);
+    mkfifo(join(h, 'usage', '2026-09-27.jsonl'));
     writeFileSync(join(h, 'usage', '2026-09-26.jsonl'), Buffer.alloc(USAGE_READ_MAX_BYTES + 1, 0x20));
     expect(readUsage(h, day('2026-09-29')).map((e) => (e.event === 'notice' ? e.waiting : 0))).toEqual([1]);
   });

@@ -2,10 +2,9 @@
 // environment is given here, nothing inherited: SKILLS_HOME, the catalog and HOME are all inside a folder this test run
 // made, and the core's fail-safe refuses any other place before the server starts (contract §8).
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { refuseRealPlaces, sandbox } from '@skills-catalog/core/testing';
+import { processEnv, refuseRealPlaces, sandbox, tripwireBin as coreTripwireBin } from '@skills-catalog/core/testing';
 import { onTestFinished } from 'vitest';
 
 const CLI = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
@@ -25,30 +24,16 @@ export function place(): Place {
   return { dir, home: join(dir, 'skills-home'), catalogDir, catalogUrl: pathToFileURL(catalogDir).href, osHome: join(dir, 'os-home'), managed: join(dir, 'managed-settings') };
 }
 
-/** The tripwire `claude` in a place's own bin folder: it notes each run in `ran` beside it and fails, so a child that
- *  looks up `claude` finds this, never a real one (the product never starts an assistant). */
-export function tripwireBin(p: Place): string {
-  const bin = join(p.dir, 'tripwire-bin');
-  const claude = join(bin, 'claude');
-  if (!existsSync(claude)) {
-    mkdirSync(bin, { recursive: true });
-    writeFileSync(claude, `#!/bin/sh\necho "claude $*" >> '${join(bin, 'ran')}'\nexit 1\n`, { mode: 0o755 });
-  }
-  return bin;
-}
+/** The tripwire `claude` in a place's own bin folder (core's, in the place's sandbox): it notes each run and fails. */
+export const tripwireBin = (p: Place): string => coreTripwireBin(p.dir);
 
-/** The whole environment of a process a test starts, nothing inherited: the tripwire first on PATH, then the system's
- *  folders and node's own; HOME and the other home-like places, and every SKILLS_ root, in the place's sandbox, each
- *  refused by the fail-safe if it's anywhere else. CLAUDE_CONFIG_DIR is the product's input, so it's unset unless given. */
+/** The whole environment of a process a test starts, nothing inherited: core's built one for the place's sandbox (the
+ *  tripwire first on PATH, then the system's folders and node's own; HOME, the place's os-home, and the other home-like
+ *  places in the sandbox), and every SKILLS_ root in the place, each refused by the fail-safe if it's anywhere else.
+ *  CLAUDE_CONFIG_DIR is the product's input, so it's unset unless given. */
 export function childEnv(p: Place, env: Record<string, string> = {}): Record<string, string> {
-  const tmp = join(p.dir, 'tmp');
-  mkdirSync(tmp, { recursive: true });
   const full: Record<string, string> = {
-    PATH: [tripwireBin(p), '/usr/bin', '/bin', dirname(process.execPath)].join(':'),
-    HOME: p.osHome,
-    XDG_CONFIG_HOME: join(p.osHome, '.config'),
-    XDG_DATA_HOME: join(p.osHome, '.local', 'share'),
-    TMPDIR: tmp,
+    ...processEnv(p.dir),
     SKILLS_HOME: p.home,
     SKILLS_CATALOG: p.catalogUrl,
     SKILLS_ASSISTANT_HOME: p.osHome,

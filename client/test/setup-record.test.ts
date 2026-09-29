@@ -98,6 +98,8 @@ describe('reading a hook line back', () => {
       line.replace("'/s'", '/s'),
       line.replace("'/s'", "'/s''"),
       `x ${line}`,
+      // Parses word by word, but hookLine never writes an empty setting: only the round trip refuses it.
+      line.replace(/^SKILLS_HOME='[^']*'/, "SKILLS_HOME=''"),
     ];
     for (const other of others) expect([other, parseHookLine(other)]).toEqual([other, undefined]);
   });
