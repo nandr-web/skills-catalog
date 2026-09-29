@@ -93,14 +93,28 @@ const MUTATIONS = [
   ['machine/installer.ts', 'a staging folder already there is checked only once the skills folder is made', '  if (existsSync(early)) realFolder(early, target);\n', ''],
   ['machine/installer.ts', 'staging isn\'t looked at again before the temp folder is made', '  stagingThere();\n  const tmp', '  const tmp'],
   ['machine/installer.ts', 'a .gitignore already in a new staging folder is a failure of the tool', "      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;\n      failed ??= stagingDir;", '      throw e;\n      failed ??= stagingDir;'],
-  ['machine/installer.ts', 'an update with nothing newer never records a recreated copy again', '        if (folderFingerprint(here) === e.fingerprint) await recordAgain(ctx, here, e.target, e);\n', ''],
+  ['machine/installer.ts', 'an update with nothing newer never records a recreated copy again', '          if (folderFingerprint(here) === e.fingerprint) await recordAgain(ctx, here, e.target, e, hold.change);\n', ''],
+  ['machine/installer.ts', 'an update with nothing newer skips the folder checks', '          const here = checkTarget(ctx, e.target, e.name, lock);', '          const here = destOf(ctx, e.target, e.name);'],
   // installing over an installed copy (held-table.test.ts)
   ['machine/installer.ts', 'the same version from another catalog replaces the installed copy', 'const otherCatalog = existing !== undefined && existing.catalog !== ctx.settings.catalog;', 'const otherCatalog = false;'],
   ['machine/installer.ts', 'a held copy from another catalog at the same version isn\'t found by --accept', 'e.catalog === ctx.settings.catalog) return { installed: e.version };', 'true) return { installed: e.version };'],
-  // one writer at a time (lock-race.test.ts)
+  // one writer at a time (lock-race.test.ts, lock-faults.test.ts)
   ['machine/lock.ts', 'a holder\'s start is read as a local time', "['-o', 'etime=', '-p', String(pid)]", "['-o', 'lstart=', '-p', String(pid)]"],
-  ['machine/installer.ts', 'an update takes the lock again for each skill', '        written = await hold.change((fresh) => {', '        written = await withLock(ctx.settings.home, clockOf(ctx), (fresh) => {'],
+  ['machine/installer.ts', 'an update takes the lock again for each skill', '        done = await hold.change(async (fresh) => {', '        done = await withLock(ctx.settings.home, clockOf(ctx), async (fresh) => {'],
   ['machine/lock.ts', 'a live holder is taken for a stale one', "    if ((e as NodeJS.ErrnoException).code === 'ESRCH') return true;", '    return true;'],
+  ['machine/lock.ts', 'a call of this process takes the lock another call of it holds', '    if (!heldHere.has(path)) {', '    if (true) {'],
+  ['machine/lock.ts', 'the lock file is made without being marked held here', '    heldHere.add(path);\n    return mine;', '    return mine;'],
+  ['machine/lock.ts', 'a change joins another hold of this process', '      mine ??= await take(path, now);', '      if (!heldHere.has(path)) mine ??= await take(path, now);'],
+  ['machine/lock.ts', 'a lock file whose holder couldn\'t be written is left behind', '      if (there && there.dev === made.dev && there.ino === made.ino) unlinkSync(path);\n', ''],
+  ['machine/lock.ts', 'another user\'s stale lock file is removed', ' || st.uid !== process.getuid?.()) return false;', ') return false;'],
+  ['machine/lock.ts', 'a lock file changed since it was looked at is removed', 'if (st.ctimeMs !== was.ctimeMs || st.birthtimeMs', 'if (st.birthtimeMs'],
+  ['machine/lock.ts', 'this process\'s start is read on another clock than ps', '(myStart ??= startOf(process.pid) ?? Date.now()', '(myStart ??= Date.now()'],
+  ['machine/lock.ts', 'days in ps etime are dropped', '(((days * 24 + hours)', '(((0 * 24 + hours)'],
+  // decisions are taken under the lock (installer-race.test.ts)
+  ['machine/installer.ts', 'accept writes over an entry another run changed', '    if (!sameDecision(existing, now)) throw conflict();\n', ''],
+  ['machine/installer.ts', 'an install keeps its decision after another run changed the entry', '    if (!sameDecision(existing, now)) {', '    if (false) {'],
+  ['machine/installer.ts', 'an update keeps its decision after another run changed the entry', '          if (!sameDecision(e, now)) {', '          if (false) {'],
+  ['machine/installer.ts', 'an update flags against the version it first read, not the one installed now', '            if (now.version !== e.version || now.catalog !== e.catalog) dNow = gate(await installedSide(catalog, now), to);\n', ''],
 ];
 
 // A mutant is caught by its first failing test, so mutant runs stop there (--bail 1); the baseline runs everything.
