@@ -12,7 +12,7 @@
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CatalogError, validateInput, type Catalog, type Surface, type VersionsResult } from '@skills-catalog/core';
-import { checkFetched, diffTrees, flagText, type RiskFlag, type TreeDiff, type TreeFile } from '@skills-catalog/core/skill-tree';
+import { checkFetched, checkName, diffTrees, flagText, type RiskFlag, type TreeDiff, type TreeFile } from '@skills-catalog/core/skill-tree';
 import { reasons } from '@skills-catalog/core';
 import { logWords } from '../activity.ts';
 import type { Context, Done } from '../operations.ts';
@@ -336,6 +336,14 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
   };
   for (const e of chosen) {
     const v = await allVersions(catalog, e.name);
+    // A name reserved since it was installed is refused at every update, up to date or not (§5.3 step 2).
+    try {
+      checkName(e.name);
+    } catch (err) {
+      if (!(err instanceof CatalogError)) throw err;
+      lines.push(s.format(w.refused, { name: e.name, from: e.version, to: v.latest, reason: refusalReason(s, err) }));
+      continue;
+    }
     if (v.latest === e.version) {
       unchanged++;
       continue;
