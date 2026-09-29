@@ -2,13 +2,13 @@
 
 <p align="center">Publish an AI-assistant skill once; another developer's assistant finds it, installs the same skill, and keeps it up to date.</p>
 
-<p align="center"><img alt="Node.js 24.15 or later" src="https://img.shields.io/badge/node-%E2%89%A5%2024.15-2f6f3e"> <img alt="Runs on macOS and Linux" src="https://img.shields.io/badge/runs%20on-macOS%20%7C%20Linux-3a4a56"> <img alt="Status: usable today, guided setup next" src="https://img.shields.io/badge/status-usable%20today%2C%20setup%20next-2f6f3e"></p>
+<p align="center"><img alt="Node.js 24.15 or later" src="https://img.shields.io/badge/node-%E2%89%A5%2024.15-2f6f3e"> <img alt="Runs on macOS and Linux" src="https://img.shields.io/badge/runs%20on-macOS%20%7C%20Linux-3a4a56"> <img alt="Status: usable locally" src="https://img.shields.io/badge/status-usable%20locally-2f6f3e"></p>
 
 <p align="center"><img alt="The one-click demo in one terminal window: on the left, ana's assistant publishes two skills, then version 2 of one, which adds a script; in the middle, bob's assistant finds and installs it, compares the versions, is refused publishing over ana's skill, searches for something the catalog doesn't have and gets only a close match, and his update that could run something new is held until he says yes; on the right, the steps to look for, each ticked when the demo sees it (the first, setup, is planned and not in the demo yet); at the bottom, the catalog server logs every call" src="docs/pictures/one-click-demo.gif" width="100%"></p>
 
 <p align="center"><sub>Two developers' assistants (scripted stand-ins, no model) on the real catalog and its MCP server, recorded from <a href="qa/README.md#the-one-click-demo">the one-click demo</a>.</sub></p>
 
-<p align="center"><a href="#try-it">Try it</a> · <a href="docs/architecture.md">Architecture</a> · <a href="docs/decisions.md">Decisions</a> · <a href="docs/contract.md">Contract</a></p>
+<p align="center"><a href="#install">Install</a> · <a href="#try-it">Try it</a> · <a href="docs/architecture.md">Architecture</a> · <a href="docs/decisions.md">Decisions</a> · <a href="docs/contract.md">Contract</a></p>
 
 - **Publish once.** A skill goes into a shared catalog with its version and fingerprint; nobody hands files around.
 - **Find it by asking.** An assistant searches the catalog in plain words, and says so when nothing really fits.
@@ -24,19 +24,77 @@
 
 <p align="center"><img alt="Close up on bob's assistant and the steps: bob finds ana's skill and installs it, compares versions 1 and 2 (the new script in orange), is refused publishing over ana's skill, gets only a close match for a graphql schema, and takes the held update with his own yes; each step is ticked on the right when the demo sees it" src="docs/pictures/one-click-demo-closeup.gif" width="100%"></p>
 
-## Try it
+## Install
 
-Watch two developers' assistants share a skill in one terminal window, on your machine, in about two minutes. Needs git, Node.js 24.15 or later, tmux 3.2 or later (macOS: `brew install tmux`; Linux: `sudo apt install tmux` on Debian 12, Ubuntu 22.04 or later), and a full-size terminal, about 200 by 50.
+**Status: usable locally.** The catalog, the assistant's tools and the CLI run on your machine today. The hosted catalog in AWS is built and being validated; this line will say so when it's ready.
+
+Needs git, Node.js 24.15 or later (`node --version`), macOS or Linux (with `ps`, from procps: slim container images lack it), and [Claude Code](https://code.claude.com/docs/en/overview).
+
+**Ask your assistant.** Paste this into Claude Code:
+
+```text
+Install the Skills Catalog from https://github.com/nandr-web/skills-catalog for me: clone it into ~/skills-catalog,
+run `npm ci --ignore-scripts` in its core/ and client/ folders (it needs Node.js 24.15 or later), then register its
+MCP server for all my projects with
+`claude mcp add skills-catalog --scope user -- "$(command -v node)" --disable-warning=ExperimentalWarning ~/skills-catalog/client/src/cli.ts mcp`.
+Show me each command before you run it, and tell me to restart Claude Code when it's done.
+```
+
+**Or run it yourself:**
 
 ```sh
-git clone https://github.com/nandr-web/skills-catalog.git
-cd skills-catalog/core && npm ci --ignore-scripts
+git clone https://github.com/nandr-web/skills-catalog.git ~/skills-catalog
+cd ~/skills-catalog/core && npm ci --ignore-scripts
+cd ~/skills-catalog/client && npm ci --ignore-scripts
+claude mcp add skills-catalog --scope user -- "$(command -v node)" --disable-warning=ExperimentalWarning ~/skills-catalog/client/src/cli.ts mcp
+```
+
+Restart Claude Code, then ask it, for example, *"find a shared skill for release notes"* or *"publish my skill in ./my-skill"*. The catalog lives in `~/.skills-catalog/catalog`; set `SKILLS_CATALOG` (with `-e SKILLS_CATALOG=file:///path/to/a/shared/folder` on the `claude mcp add` line) to share one with your team. Installed skills go to `~/.claude/skills`, or the project's `.claude/skills` when you ask for this project.
+
+To uninstall: `claude mcp remove skills-catalog --scope user`, then `rm -rf ~/skills-catalog ~/.skills-catalog`. Skills you installed stay in `.claude/skills` until you delete them.
+
+## Try it
+
+Three ways, from a clone of this repository; each cleans up after itself.
+
+### In real Claude Code (about two minutes)
+
+One script plays two developers, ana and bob, each a project wired to this checkout's MCP server, sharing one catalog in a sandbox folder (`~/sc-try`); nothing touches your own `~/.claude`.
+
+```sh
+qa/try-claude.sh install                # installs core/ and client/, makes the sandbox
+qa/try-claude.sh launch ana publish     # Claude Code as ana: publishes two skills (say yes to the preview)
+qa/try-claude.sh launch bob install     # Claude Code as bob: finds ana's skill and installs it
+qa/try-claude.sh launch ana publish-v2  # ana publishes version 2, which adds a script
+qa/try-claude.sh launch bob update      # bob's update is held: it could run something new
+qa/try-claude.sh accept                 # bob takes it, in his own terminal (y)
+qa/try-claude.sh status                 # what's published and installed; qa/try-claude.sh log follows every call
+qa/try-claude.sh uninstall
+```
+
+`qa/try-claude.sh selftest` runs the whole walk-through unattended with `claude -p` (Haiku, a few cents) and checks each step on the catalog's own log. `qa/try-claude.sh` alone lists every scenario.
+
+### In Docker (nothing on your machine but Docker)
+
+```sh
+docker build -t skills-catalog .
+docker run --rm skills-catalog                                   # the tests, then two developers in a script
+docker run --rm -it skills-catalog npm --prefix qa run demo      # the one-window demo below, inside the container
+docker run --rm -e ANTHROPIC_API_KEY skills-catalog qa/try-claude.sh selftest   # real Claude Code, end to end
+```
+
+### Watch the demo (one terminal window)
+
+Two developers' assistants share a skill in one terminal window. The assistants here are scripted stand-ins (no model) calling the real MCP server and CLI. Needs tmux 3.2 or later (macOS: `brew install tmux`; Linux: `sudo apt install tmux` on Debian 12, Ubuntu 22.04 or later), and a full-size terminal, about 200 by 50.
+
+```sh
+cd core && npm ci --ignore-scripts
 cd ../client && npm ci --ignore-scripts
 cd ../qa && npm ci --ignore-scripts
 npm run demo
 ```
 
-You should see **the window above, playing**, and the Steps pane ending with **Done: 7 seen, 1 planned, 0 missed**. Enter moves to the next step, p pauses, q stops; everything the demo made is removed when it ends. What each pane shows: [the one-click demo](qa/README.md#the-one-click-demo).
+You should see **the window at the top, playing**, and the Steps pane ending with **Done: 7 seen, 1 planned, 0 missed**. Enter moves to the next step, p pauses, q stops; everything the demo made is removed when it ends. What each pane shows: [the one-click demo](qa/README.md#the-one-click-demo).
 
 <details><summary><b>Step by step</b>: check Node, install, run the tests, two developers in a script, check the speed (about two minutes)</summary>
 
