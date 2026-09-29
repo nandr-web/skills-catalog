@@ -140,7 +140,7 @@ names:
     search: ${cli} search <words>
     get: ${cli} read <name>
     versions: ${cli} versions <name>
-    diff: ${cli} diff <name> <from> <to>
+    diff: ${cli} diff <name> --from <from> --to <to>
     install: ${cli} install <name>
     update: ${cli} update
     status: ${cli} list
@@ -549,8 +549,8 @@ results:
       context_cost: it got much longer ({detail})
     accept_intro: "{name} v{from} -> v{to} is waiting for your OK, because {reasons}."
     accept_intro_install: "{name} v{to} is waiting for your OK before it's installed, because {reasons}."
-    accept_look: "To see exactly what changes first: ${cli} diff {name} {from} {to}"
-    accept_look_install: "To read it first: ${cli} read {name} --version {to}"
+    accept_look: To see exactly what changes first, ask your assistant to show you the diff of {name} from v{from} to v{to}.
+    accept_look_install: To read it first, ask your assistant to show you {name} v{to}.
     accept_ask: "Take it? (y/N) "
     accept_declined: "Nothing changed: {name} stays on v{from}."
     accept_declined_install: "Nothing changed: {name} isn't installed."
