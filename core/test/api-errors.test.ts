@@ -38,6 +38,11 @@ const MISSING_GOLDENS: [op: string, code: string, where: string][] = [
   ['request_upload_links', 'not_owner', 'catalog.uploadLinks: a name someone else owns'],
   ['request_upload_links', 'invalid_name', 'catalog.uploadLinks → checkName'],
   ['request_upload_links', 'too_large', 'catalog.uploadLinks → checkSizes'],
+  // The token operations (hosted only, sign-in.test.ts proves each); golden rows to ask for.
+  ['sign_in_with_github', 'unauthenticated', 'catalog.signIn: the token\'s shape, GitHub\'s check, the sign-in list'],
+  ['list_tokens', 'unauthenticated', 'catalog.listTokens → checkActor'],
+  ['revoke_token', 'unauthenticated', 'catalog.revokeToken → checkActor'],
+  ['revoke_token', 'not_found', 'catalog.revokeToken: no token of the caller\'s has that id'],
   ['accept_held_update', 'fingerprint_mismatch', 'installer.ts fetchChecked'],
   ['accept_held_update', 'exists_untracked', 'installer.ts writeSkill'],
   ['accept_held_update', 'name_in_use', 'installer.ts checkTarget'],

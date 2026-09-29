@@ -18,7 +18,10 @@ export const sha256Of = (bytes: Uint8Array | string) => createHash('sha256').upd
 export class MemoryTokens implements TokenStore {
   readonly byToken = new Map<string, TokenInfo>();
   private n = 0;
-  constructor(private readonly clock: { now(): Date }) {}
+  private readonly clock: { now(): Date };
+  constructor(clock: { now(): Date }) {
+    this.clock = clock;
+  }
   async issue(t: TokenHolder & { expiresAt: Date }) {
     const id = `id${String(++this.n).padStart(14, '0')}`;
     const token = `tok-${id}`;

@@ -121,6 +121,9 @@ describe('request fields are the operation\'s own (golden request_fields)', () =
       publish_version: (r) => catalog.publish(r, ana),
       fetch_version: (r) => catalog.fetch(r),
       request_upload_links: (r) => hosted.catalog.uploadLinks(r),
+      sign_in_with_github: (r) => hosted.catalog.signIn(r),
+      list_tokens: (r) => hosted.catalog.listTokens(r),
+      revoke_token: (r) => hosted.catalog.revokeToken(r),
     };
     expect(Object.keys(call).sort()).toEqual(Object.values(OPERATIONS).filter((o) => o.kind === 'catalog').map((o) => o.name).sort());
     for (const [op, fn] of Object.entries(call)) {

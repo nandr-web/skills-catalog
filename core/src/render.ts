@@ -185,6 +185,8 @@ export function renderError(s: Words, e: CatalogError): string {
   };
   switch (e.code) {
     case 'not_found': {
+      // A token (revoke_token) is named by its id only, never whose it is.
+      if (d['id'] !== undefined) return fill(w.not_found_token, d);
       const names = (d['suggestions'] as string[] | undefined) ?? [];
       const suggest = names.length ? s.format(w.not_found_suggest, { names: list(names) }) : '';
       const name = d['version'] !== undefined ? `${d['name']} v${d['version']}` : String(d['name'] ?? d['fingerprint']);

@@ -386,6 +386,169 @@
         }
       }
     },
+    "/api/v1/sign_in_with_github": {
+      "post": {
+        "operationId": "sign_in_with_github",
+        "x-effect": "writes_catalog",
+        "x-faces": [
+          "web"
+        ],
+        "x-errors": [
+          "unauthenticated"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/sign_in_with_github_input"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The operation's answer, error or not.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/sign_in_with_github_envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/TokenOnly"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoToken"
+          },
+          "403": {
+            "$ref": "#/components/responses/Refused"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "415": {
+            "$ref": "#/components/responses/NotJson"
+          }
+        }
+      }
+    },
+    "/api/v1/list_tokens": {
+      "post": {
+        "operationId": "list_tokens",
+        "x-effect": "reads",
+        "x-faces": [
+          "web"
+        ],
+        "x-errors": [
+          "unauthenticated"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/list_tokens_input"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The operation's answer, error or not.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/list_tokens_envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/TokenOnly"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoToken"
+          },
+          "403": {
+            "$ref": "#/components/responses/Refused"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "415": {
+            "$ref": "#/components/responses/NotJson"
+          }
+        }
+      }
+    },
+    "/api/v1/revoke_token": {
+      "post": {
+        "operationId": "revoke_token",
+        "x-effect": "writes_catalog",
+        "x-faces": [
+          "web"
+        ],
+        "x-errors": [
+          "unauthenticated",
+          "not_found"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/revoke_token_input"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The operation's answer, error or not.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/revoke_token_envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/TokenOnly"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoToken"
+          },
+          "403": {
+            "$ref": "#/components/responses/Refused"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "415": {
+            "$ref": "#/components/responses/NotJson"
+          }
+        }
+      }
+    },
     "/api/v1/fetch_version": {
       "post": {
         "operationId": "fetch_version",
@@ -1934,6 +2097,329 @@
                       "invalid_name",
                       "too_large",
                       "not_owner",
+                      "forbidden",
+                      "unauthenticated",
+                      "invalid_developer_setting"
+                    ]
+                  },
+                  "field_cut": {
+                    "type": "boolean",
+                    "description": "The field names only the first 200 characters of an unknown key."
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "additionalProperties": true
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "sign_in_with_github_input": {
+        "type": "object",
+        "properties": {
+          "github_token": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "read",
+              "publish"
+            ]
+          }
+        },
+        "required": [
+          "github_token",
+          "scope"
+        ],
+        "additionalProperties": false
+      },
+      "sign_in_with_github_output": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "read",
+              "publish"
+            ]
+          },
+          "expires_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "id",
+          "scope",
+          "expires_at"
+        ],
+        "additionalProperties": false
+      },
+      "sign_in_with_github_envelope": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": true
+              },
+              "data": {
+                "$ref": "#/components/schemas/sign_in_with_github_output"
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": false
+              },
+              "error": {
+                "type": "object",
+                "description": "The error's code and its data (contract §9). An invalid_request naming an unknown key longer than 200 characters names its first 200 and carries field_cut: true.",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "enum": [
+                      "internal_error",
+                      "invalid_request",
+                      "forbidden",
+                      "unauthenticated",
+                      "invalid_developer_setting"
+                    ]
+                  },
+                  "field_cut": {
+                    "type": "boolean",
+                    "description": "The field names only the first 200 characters of an unknown key."
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "additionalProperties": true
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "list_tokens_input": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "list_tokens_output": {
+        "type": "object",
+        "properties": {
+          "tokens": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "scope": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "publish"
+                  ]
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "session",
+                    "personal"
+                  ]
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "expires_at": {
+                  "type": "string"
+                },
+                "last_used_at": {
+                  "type": "string"
+                },
+                "revoked_at": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "scope",
+                "kind",
+                "created_at",
+                "expires_at"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "tokens"
+        ],
+        "additionalProperties": false
+      },
+      "list_tokens_envelope": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": true
+              },
+              "data": {
+                "$ref": "#/components/schemas/list_tokens_output"
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": false
+              },
+              "error": {
+                "type": "object",
+                "description": "The error's code and its data (contract §9). An invalid_request naming an unknown key longer than 200 characters names its first 200 and carries field_cut: true.",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "enum": [
+                      "internal_error",
+                      "invalid_request",
+                      "forbidden",
+                      "unauthenticated",
+                      "invalid_developer_setting"
+                    ]
+                  },
+                  "field_cut": {
+                    "type": "boolean",
+                    "description": "The field names only the first 200 characters of an unknown key."
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "additionalProperties": true
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "revoke_token_input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "revoke_token_output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "revoke_token_envelope": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": true
+              },
+              "data": {
+                "$ref": "#/components/schemas/revoke_token_output"
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": false
+              },
+              "error": {
+                "type": "object",
+                "description": "The error's code and its data (contract §9). An invalid_request naming an unknown key longer than 200 characters names its first 200 and carries field_cut: true.",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "enum": [
+                      "internal_error",
+                      "invalid_request",
+                      "not_found",
                       "forbidden",
                       "unauthenticated",
                       "invalid_developer_setting"

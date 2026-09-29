@@ -54,6 +54,8 @@ export interface OperationDef {
   hostedForm?: Record<string, Schema>;
   // Its result on a hosted catalog, where that differs (a fetch answers links there, not bytes).
   hostedOutput?: OutputSchema;
+  // Called with no Bearer token (hosted): only signing in, which is how one is got.
+  token?: 'none';
 }
 
 // Request limits are errors that name the field and the limit, never silent clamps (contract §9).
@@ -159,6 +161,7 @@ export const SHA256_PATTERN = '^[0-9a-f]{64}$';
 const sha256 = { type: 'string', pattern: SHA256_PATTERN } as const;
 // The most files one publish may name, in either form (the request's own cap; the skill's file limit is config).
 const MAX_PUBLISH_FILES = 10_000;
+const tokenInfo = obj({ id: str, scope: oneOf('read', 'publish'), kind: oneOf('session', 'personal'), created_at: str, expires_at: str, last_used_at: str, revoked_at: str }, ['last_used_at', 'revoked_at']);
 // The most files one request for upload links may name (contract §1.1).
 export const MAX_UPLOAD_LINKS = 100;
 
@@ -293,6 +296,47 @@ export const OPERATIONS: Record<string, OperationDef> = {
       },
       required: ['name', 'files'],
     },
+  },
+  sign_in_with_github: {
+    name: 'sign_in_with_github',
+    kind: 'catalog',
+    phase: 'aws',
+    faces: ['web'],
+    where: 'hosted',
+    token: 'none',
+    effect: 'writes_catalog', // it issues a token
+    run: 'signIn',
+    output: obj({ token: str, id: str, scope: oneOf('read', 'publish'), expires_at: str }),
+    errors: ['unauthenticated'],
+    input: {
+      type: 'object',
+      properties: { github_token: { type: 'string', maxLength: 255 }, scope: { type: 'string', enum: ['read', 'publish'] } },
+      required: ['github_token', 'scope'],
+    },
+  },
+  list_tokens: {
+    name: 'list_tokens',
+    kind: 'catalog',
+    phase: 'aws',
+    faces: ['web'],
+    where: 'hosted',
+    effect: 'reads',
+    run: 'listTokens',
+    output: obj({ tokens: list(tokenInfo) }),
+    errors: ['unauthenticated'],
+    input: { type: 'object', properties: {} },
+  },
+  revoke_token: {
+    name: 'revoke_token',
+    kind: 'catalog',
+    phase: 'aws',
+    faces: ['web'],
+    where: 'hosted',
+    effect: 'writes_catalog',
+    run: 'revokeToken',
+    output: obj({ id: str }),
+    errors: ['unauthenticated', 'not_found'],
+    input: { type: 'object', properties: { id: { type: 'string', maxLength: 64 } }, required: ['id'] },
   },
   fetch_version: {
     name: 'fetch_version',

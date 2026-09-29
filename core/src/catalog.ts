@@ -2,7 +2,7 @@
 // here knows how versions and bytes are stored or kept consistent.
 
 import { CatalogError } from './errors.ts';
-import type { BlobLinks, Clock, Events, Identity, Ids, SearchCard, SearchIndex, Storage, UploadAnswer, VersionRecord } from './ports.ts';
+import type { BlobLinks, Clock, Events, GitHubSignIn, Identity, Ids, SearchCard, SearchIndex, Storage, TokenInfo, TokenScope, TokenStore, UploadAnswer, VersionRecord } from './ports.ts';
 import { DEFAULT_SEARCH_LIMIT, SHA256_PATTERN, VERSIONS_PAGE, validateInput, type Face, type Where } from './api.ts';
 
 // Each operation checks its input as the face its caller gives (contract §1.1): the client passes its own, the web page's
@@ -40,6 +40,8 @@ export interface CatalogConfig {
   nonGrantingKeys: readonly string[]; // keys known to grant nothing: with only these, a changed file is no reason to ask
   commonWords: readonly string[];
   readInlineBudget: number; // bytes of text one read inlines (contract §2: 24 KB keeps a result under 8,000 tokens)
+  signInLogins: readonly string[]; // hosted: the GitHub logins that may sign in (§1.1); none, nobody
+  sessionDays: number; // hosted: how long a sign-in's token lasts
 }
 
 export const DEFAULT_CONFIG: CatalogConfig = {
@@ -48,6 +50,8 @@ export const DEFAULT_CONFIG: CatalogConfig = {
   nonGrantingKeys: DEFAULT_NON_GRANTING_KEYS,
   commonWords: COMMON_WORDS,
   readInlineBudget: 24 * 1024,
+  signInLogins: [],
+  sessionDays: 7,
 };
 
 export interface CatalogPorts {
@@ -61,12 +65,17 @@ export interface CatalogPorts {
   config?: Partial<CatalogConfig>;
   close?: () => void;
   links?: BlobLinks; // hosted only: files go up and come back by link, never as bytes in a request or an answer
+  tokens?: TokenStore; // hosted only: the Bearer tokens
+  signIn?: GitHubSignIn; // hosted only: GitHub's check of a token for our OAuth app
 }
 
 // A stored version's file, as the files route answers it (§1.1): its bytes (local), a link to them (hosted), on its
 // way (hosted, seconds after a publish), or unknown.
 export type FileAnswer = { kind: 'bytes'; bytes: Uint8Array } | { kind: 'link'; url: string } | { kind: 'on_its_way' } | { kind: 'unknown' };
 const SHA256_HEX = new RegExp(SHA256_PATTERN);
+// A GitHub token as GitHub issues them: an app's user token (gho_, ghu_, ghp_ and 36 or more letters and digits), or
+// the older 40 hex characters. Anything else is refused before GitHub is asked.
+const GITHUB_TOKEN = /^(?:gh[opu]_[A-Za-z0-9]{36,251}|[0-9a-f]{40})$/;
 // How many uploaded files a hosted publish reads at once.
 const UPLOAD_READS = 8;
 
@@ -204,6 +213,13 @@ export function inlineFiles(r: FetchResult): InlineFetched[] {
   throw new Error("this fetch answered with links (a hosted catalog's); the bytes are at each file's url");
 }
 
+export interface SignInResult {
+  token: string; // shown once, here
+  id: string;
+  scope: TokenScope;
+  expires_at: string;
+}
+
 export interface UploadLinksInput {
   name: string;
   files: { sha256: string; size: number }[];
@@ -316,6 +332,8 @@ export class Catalog {
     if (ports.where !== 'local' && ports.where !== 'hosted') throw new Error(`where the catalog runs must be said: 'local' or 'hosted', not ${String(ports.where)}`);
     if (ports.where === 'hosted' && !ports.links) throw new Error('a hosted catalog needs a links port (its files are served by link)');
     if (ports.where === 'local' && ports.links) throw new Error('a local catalog has no links port (its files are served as bytes)');
+    if (ports.where === 'hosted' && !(ports.tokens && ports.signIn)) throw new Error('a hosted catalog needs its tokens and sign-in ports');
+    if (ports.where === 'local' && (ports.tokens || ports.signIn)) throw new Error('a local catalog has no tokens or sign-in ports (who acts is said, not signed in)');
     const catalog = new Catalog(ports);
     await ports.events.deliver();
     return catalog;
@@ -618,6 +636,34 @@ export class Catalog {
     }
     const files = (await this.tree(record)).map((f) => ({ path: f.path, mode: f.mode, content_base64: Buffer.from(f.bytes).toString('base64') }));
     return { name: record.name, version: record.version, fingerprint: record.fingerprint, files };
+  }
+
+  // sign_in_with_github (hosted only, §1.1): GitHub's check that the token is one our OAuth app issued, then the login
+  // on the sign-in list (as GitHub compares logins: whatever its case), then a new session token of the scope asked for.
+  // Every refusal is unauthenticated and says nothing more; the token's shape is checked before GitHub is asked.
+  async signIn(input: unknown, face: Face = CATALOG_FACE): Promise<SignInResult> {
+    const req = validateInput<{ github_token: string; scope: TokenScope }>('sign_in_with_github', input, face, this.p.where);
+    if (!GITHUB_TOKEN.test(req.github_token)) throw new CatalogError('unauthenticated', {});
+    const login = (await this.p.signIn!.login(req.github_token))?.toLowerCase();
+    if (login === undefined || !ACTOR.test(login) || !this.config.signInLogins.some((l) => l.toLowerCase() === login)) throw new CatalogError('unauthenticated', {});
+    const expiresAt = new Date(this.p.clock.now().getTime() + this.config.sessionDays * 86_400_000);
+    const { id, token } = await this.p.tokens!.issue({ owner: login, scope: req.scope, kind: 'session', expiresAt });
+    return { token, id, scope: req.scope, expires_at: expiresAt.toISOString() };
+  }
+
+  // list_tokens (hosted only): the caller's own tokens by id, never a token.
+  async listTokens(input: unknown, identity: Identity = this.p.identity, face: Face = CATALOG_FACE): Promise<{ tokens: Omit<TokenInfo, 'owner'>[] }> {
+    validateInput('list_tokens', input, face, this.p.where);
+    const owner = checkActor(await identity.actor());
+    return { tokens: (await this.p.tokens!.list(owner)).map(({ owner: _, ...t }) => t) };
+  }
+
+  // revoke_token (hosted only): one of the caller's own tokens, at once; another's id is the same not_found as none.
+  async revokeToken(input: unknown, identity: Identity = this.p.identity, face: Face = CATALOG_FACE): Promise<{ id: string }> {
+    const req = validateInput<{ id: string }>('revoke_token', input, face, this.p.where);
+    const owner = checkActor(await identity.actor());
+    if (!(await this.p.tokens!.revoke(owner, req.id))) throw new CatalogError('not_found', { id: req.id });
+    return { id: req.id };
   }
 
   // request_upload_links (hosted only, §1.1): each file's sha256, then every check a publish makes before its files (who

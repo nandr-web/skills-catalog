@@ -159,3 +159,10 @@ export interface TokenStore {
   list(owner: string): Promise<TokenInfo[]>; // oldest first
   revoke(owner: string, id: string): Promise<boolean>; // false: no token of theirs has that id
 }
+
+// Signing in with GitHub (§1.1), hosted only: the login of a GitHub token issued to the catalog's own OAuth app, by
+// GitHub's check for that app's tokens; undefined when GitHub says it isn't one (another app's, revoked, unknown).
+// GitHub unreachable is thrown, never undefined: a person whose sign-in is fine is never told it's wrong.
+export interface GitHubSignIn {
+  login(githubToken: string): Promise<string | undefined>;
+}

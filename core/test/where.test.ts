@@ -6,7 +6,7 @@ import { inputSchema, validateInput, type OperationDef } from '../src/api.ts';
 import { Catalog, type CatalogPorts } from '../src/catalog.ts';
 import { actAs } from '../src/local/index.ts';
 import { openapi } from '../src/openapi.ts';
-import type { BlobLinks, Storage } from '../src/ports.ts';
+import type { BlobLinks, Storage, TokenStore } from '../src/ports.ts';
 import { counterIds, errorOf, fixedClock, openTest } from './helpers.ts';
 
 // A row with both kinds, as the hosted publish and the upload links will have them.
@@ -67,7 +67,8 @@ describe('a hosted-only operation', () => {
 });
 
 describe('where the catalog runs is said when it\'s opened', () => {
-  const ports = (where: 'local' | 'hosted', links?: BlobLinks): CatalogPorts => ({
+  const tokenPorts = { tokens: {} as TokenStore, signIn: { login: async () => undefined } };
+  const ports = (where: 'local' | 'hosted', links?: BlobLinks, tokens = where === 'hosted'): CatalogPorts => ({
     where,
     storage: {} as Storage,
     index: {} as never,
@@ -76,6 +77,7 @@ describe('where the catalog runs is said when it\'s opened', () => {
     clock: fixedClock(),
     ids: counterIds(),
     ...(links ? { links } : {}),
+    ...(tokens ? tokenPorts : {}),
   });
   const links: BlobLinks = { uploadLinks: async () => [], downloadLink: async (s) => s };
 
@@ -84,6 +86,9 @@ describe('where the catalog runs is said when it\'s opened', () => {
     expect((await Catalog.open(ports('local'))).where).toBe('local');
     await expect(Catalog.open(ports('hosted'))).rejects.toThrow(/hosted catalog needs a links port/);
     await expect(Catalog.open(ports('local', links))).rejects.toThrow(/local catalog has no links port/);
+    // and its token ports: a local catalog is told who acts, never signed in to
+    await expect(Catalog.open(ports('hosted', links, false))).rejects.toThrow(/hosted catalog needs its tokens and sign-in ports/);
+    await expect(Catalog.open(ports('local', undefined, true))).rejects.toThrow(/local catalog has no tokens or sign-in ports/);
     for (const where of [undefined, 'Local', 'remote']) await expect(Catalog.open({ ...ports('local'), where } as never)).rejects.toThrow(/where the catalog runs/);
   });
 

@@ -48,6 +48,9 @@ const FACES: Record<string, readonly string[]> = {
   publish_version: ['web'],
   fetch_version: ['web'],
   request_upload_links: ['web'], // hosted only
+  sign_in_with_github: ['web'], // hosted only
+  list_tokens: ['web'], // hosted only
+  revoke_token: ['web'], // hosted only
   publish_skill_to_catalog: ['mcp'], // its CLI command is on a branch
   install_shared_skill: ['mcp', 'cli'],
   update_installed_skills: ['mcp', 'cli'],
@@ -63,6 +66,9 @@ const EFFECT: Record<string, string> = {
   publish_version: 'writes_catalog',
   fetch_version: 'reads',
   request_upload_links: 'writes_catalog', // it claims each stored file it's asked about
+  sign_in_with_github: 'writes_catalog', // it issues a token
+  list_tokens: 'reads',
+  revoke_token: 'writes_catalog',
   publish_skill_to_catalog: 'writes_catalog',
   install_shared_skill: 'writes_machine',
   update_installed_skills: 'writes_machine',
@@ -79,6 +85,9 @@ const RUN: Record<string, string> = {
   publish_version: 'publish',
   fetch_version: 'fetch',
   request_upload_links: 'uploadLinks',
+  sign_in_with_github: 'signIn',
+  list_tokens: 'listTokens',
+  revoke_token: 'revokeToken',
   publish_skill_to_catalog: 'publishFolder',
   install_shared_skill: 'install',
   update_installed_skills: 'update',
@@ -298,7 +307,8 @@ describe('each operation\'s output (contract §1)', () => {
     for (const [op, r] of seen) expect([op, conforms(out(op), r)]).toEqual([op, []]);
 
     // hosted: the upload links' three answers, a publish by sha256, and a fetch's links, against the hosted schemas
-    const hosted = await openHostedStandIn({ removing: { [sha256Of('going')]: '2026-09-28T13:00:00.000Z' } });
+    const github = `gho_${'a'.repeat(36)}`;
+    const hosted = await openHostedStandIn({ removing: { [sha256Of('going')]: '2026-09-28T13:00:00.000Z' }, github: () => 'dana', config: { signInLogins: ['dana'] } });
     const hostedOut = (op: string) => OPERATIONS[op]!.hostedOutput ?? out(op);
     const seenHosted: [string, unknown][] = [];
     const md = '---\nname: up\ndescription: Uploaded.\n---\nBody.\n';
@@ -306,6 +316,12 @@ describe('each operation\'s output (contract §1)', () => {
     seenHosted.push(['request_upload_links', await hosted.catalog.uploadLinks({ name: 'up', files: [{ sha256: sha256Of('new'), size: 3 }, { sha256: have, size: md.length }, { sha256: sha256Of('going'), size: 5 }] })]);
     seenHosted.push(['publish_version', await hosted.catalog.publish({ name: 'up', files: [{ path: 'SKILL.md', mode: '0644', sha256: have }] })]);
     seenHosted.push(['fetch_version', await hosted.catalog.fetch({ name: 'up', version: 1 })]);
+    const signedIn = await hosted.catalog.signIn({ github_token: github, scope: 'read' });
+    seenHosted.push(['sign_in_with_github', signedIn]);
+    await hosted.tokens.verify(signedIn.token);
+    seenHosted.push(['list_tokens', await hosted.catalog.listTokens({})]);
+    seenHosted.push(['revoke_token', await hosted.catalog.revokeToken({ id: signedIn.id })]);
+    seenHosted.push(['list_tokens', await hosted.catalog.listTokens({})]); // with revoked_at
     hosted.close();
     expect((seenHosted[0]![1] as { files: { kind: string }[] }).files.map((f) => f.kind)).toEqual(['upload', 'stored', 'removing']);
     for (const [op, r] of seenHosted) expect([op, conforms(hostedOut(op), r)]).toEqual([op, []]);

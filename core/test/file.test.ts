@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { Catalog, type FileAnswer } from '../src/catalog.ts';
 import { actAs, openLocalCatalog } from '../src/local/index.ts';
-import type { BlobLinks, Storage } from '../src/ports.ts';
+import type { BlobLinks, Storage, TokenStore } from '../src/ports.ts';
 import { sha256Hex } from '../src/skill-tree/index.ts';
 import { historyVersion, loadGolden } from './golden.ts';
 import { fixedClock, counterIds, openTest, request } from './helpers.ts';
@@ -94,6 +94,9 @@ describe('Catalog.file: a stored version\'s file by its sha256', () => {
   });
 });
 
+// The token ports a hosted catalog opens with, unused here.
+const HOSTED_ONLY = { tokens: {} as TokenStore, signIn: { login: async () => undefined } };
+
 describe('Catalog.file where storage or a link port answers otherwise (hosted)', () => {
   const sha = 'a'.repeat(64);
   const reads: string[] = []; // every blob() call: hosted never reads a file into the function (§1.1)
@@ -106,7 +109,7 @@ describe('Catalog.file where storage or a link port answers otherwise (hosted)',
     identity: actAs(undefined),
     clock: fixedClock(),
     ids: counterIds(),
-    ...(links ? { links } : {}),
+    ...(links ? { links, ...HOSTED_ONLY } : {}),
   });
   const open = (state: 'named' | 'on_its_way' | 'unknown', links?: BlobLinks) => Catalog.open(ports(state, links));
 
