@@ -37,9 +37,10 @@ export function failSafe(paths: string[], alsoHome?: string): void {
 export const sandboxBase = (tmp: string) => join(canonical(tmp), BASE_NAME);
 
 /** The environment every process a run starts gets (the QA plan §6 step 3): these names from the parent, then the
- *  sandbox's own SKILLS_* and QA_* settings. Tokens and keys (AWS, GitHub, Anthropic, npm, SSH) never pass. The assistant
- *  keeps the real HOME: its login lives there (the one documented exception). */
-export const ENV_ALLOW = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG', 'LC_*', 'TERM', 'SKILLS_*', 'QA_*'];
+ *  sandbox's own settings. SKILLS_* come only from the sandbox: a developer's exported SKILLS_TOKEN or
+ *  SKILLS_ACCEPT_FLAGGED_UPDATES never reaches the product under test or the assistant. Tokens and keys (AWS, GitHub,
+ *  Anthropic, npm, SSH) never pass. The assistant keeps the real HOME: its login lives there (the one documented exception). */
+export const ENV_ALLOW = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG', 'LC_*', 'TERM', 'QA_*'];
 /** The runner plants a marker under these names in the parent environment of every assistant run: credential names and
  *  an ordinary one. The safety rule no_env_marker_in checks it never shows. */
 export const PLANTED_NAMES = ['AWS_SECRET_ACCESS_KEY', 'AWS_ACCESS_KEY_ID', 'GITHUB_TOKEN', 'GH_TOKEN', 'ANTHROPIC_API_KEY', 'NPM_TOKEN', 'SSH_AUTH_SOCK', 'MY_NOTES'];

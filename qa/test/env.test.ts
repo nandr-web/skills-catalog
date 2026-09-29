@@ -14,29 +14,34 @@ const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 const SECRETS = ['AWS_SECRET_ACCESS_KEY', 'AWS_ACCESS_KEY_ID', 'GITHUB_TOKEN', 'GH_TOKEN', 'ANTHROPIC_API_KEY', 'NPM_TOKEN', 'SSH_AUTH_SOCK'];
 // macOS itself adds __CF_USER_TEXT_ENCODING (the text encoding id) to every process it starts; it is no secret.
 const OS_ADDED = ['__CF_USER_TEXT_ENCODING'];
-const allowed = (name: string) => OS_ADDED.includes(name) || ENV_ALLOW.some((a) => (a.endsWith('*') ? name.startsWith(a.slice(0, -1)) : name === a));
+// A child may also carry the sandbox's own SKILLS_* settings (never the parent's).
+const allowed = (name: string) => OS_ADDED.includes(name) || name.startsWith('SKILLS_') || ENV_ALLOW.some((a) => (a.endsWith('*') ? name.startsWith(a.slice(0, -1)) : name === a));
+// The product's own settings a developer may have exported: they must not reach the product under test or the assistant.
+const PARENT_SKILLS = ['SKILLS_TOKEN', 'SKILLS_ACCEPT_FLAGGED_UPDATES'];
 const saved = { ...process.env };
 afterEach(() => {
   cleanup();
   for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
   Object.assign(process.env, saved);
 });
-const plant = () => { for (const k of [...SECRETS, 'MY_NOTES']) process.env[k] = `QA-PLANT-${k}`; };
+const plant = () => { for (const k of [...SECRETS, 'MY_NOTES', ...PARENT_SKILLS]) process.env[k] = `QA-PLANT-${k}`; };
 const clean = (env: Record<string, string>, where: string) => {
   expect(Object.values(env).filter((v) => v.includes('QA-PLANT')), where).toEqual([]);
   expect(Object.keys(env).filter((k) => !allowed(k)), where).toEqual([]);
+  for (const k of PARENT_SKILLS) expect(env[k], `${where}: ${k}`).toBeUndefined();
 };
 
 describe('the environment a run\'s processes get', () => {
-  it('childEnv keeps exactly the allow-list, with the sandbox\'s SKILLS_* and QA_* on top', () => {
+  it('childEnv keeps exactly the allow-list from the parent, and SKILLS_* only from the sandbox', () => {
     const parent: Record<string, string> = {
       PATH: '/usr/bin', HOME: '/Users/me', USER: 'me', LOGNAME: 'me', SHELL: '/bin/zsh', TMPDIR: '/tmp/x', LANG: 'en_US.UTF-8', LC_CTYPE: 'UTF-8', TERM: 'xterm',
-      MY_NOTES: 'x', SKILLS_AS: 'parent', ...Object.fromEntries(SECRETS.map((k) => [k, `QA-PLANT-${k}`])),
+      MY_NOTES: 'x', SKILLS_AS: 'parent', SKILLS_TOKEN: 'QA-PLANT-SKILLS_TOKEN', SKILLS_ACCEPT_FLAGGED_UPDATES: '1', QA_OTHER: 'kept',
+      ...Object.fromEntries(SECRETS.map((k) => [k, `QA-PLANT-${k}`])),
     };
     const env = childEnv({ env: { SKILLS_AS: 'me', SKILLS_HOME: '/run/home', QA_RUN_ID: 'r', PATH: '/run/bin:/usr/bin' } }, parent);
-    expect(Object.keys(env).sort()).toEqual(['HOME', 'LANG', 'LC_CTYPE', 'LOGNAME', 'PATH', 'QA_RUN_ID', 'SHELL', 'SKILLS_AS', 'SKILLS_HOME', 'TERM', 'TMPDIR', 'USER']);
+    expect(Object.keys(env).sort()).toEqual(['HOME', 'LANG', 'LC_CTYPE', 'LOGNAME', 'PATH', 'QA_OTHER', 'QA_RUN_ID', 'SHELL', 'SKILLS_AS', 'SKILLS_HOME', 'TERM', 'TMPDIR', 'USER']);
     expect(env).toMatchObject({ HOME: '/Users/me', SKILLS_AS: 'me', PATH: '/run/bin:/usr/bin' });
-    expect(ENV_ALLOW).toEqual(['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG', 'LC_*', 'TERM', 'SKILLS_*', 'QA_*']);
+    expect(ENV_ALLOW).toEqual(['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG', 'LC_*', 'TERM', 'QA_*']);   // SKILLS_*: the sandbox's only
     expect(PLANTED_NAMES).toEqual([...SECRETS, 'MY_NOTES']);   // the credential names, and an ordinary one
   });
 

@@ -30,7 +30,7 @@ export async function preflight(o: PreflightOptions): Promise<string[]> {
   // 1. The unit tests (the live and real-machine checks stay off: QA_LIVE and QA_REAL are removed).
   if (!o.skipTests) {
     const env = { ...process.env }; delete env.QA_LIVE; delete env.QA_REAL;
-    const r = spawnSync('npx', ['vitest', 'run'], { cwd: o.qaDir, env, encoding: 'utf8' });
+    const r = spawnSync('npx', ['--no-install', 'vitest', 'run'], { cwd: o.qaDir, env, encoding: 'utf8' });   // never fetches a package
     if (r.status !== 0) problems.push(`unit tests: failing (run \`npm test\` in ${o.qaDir})`);
   }
 

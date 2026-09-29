@@ -72,14 +72,20 @@ function readJson(path: string): Record<string, unknown> {
   try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return {}; }
 }
 
-/** This user's processes whose environment carries QA_RUN_ID=<runId> (`ps -E` shows a process's environment to its owner). */
+/** This user's processes whose environment carries QA_RUN_ID=<runId>. `ps -E` appends a process's environment to its
+ *  command line (shown to its owner); the command line without -E is taken off the front, so a mention in the
+ *  arguments doesn't count. */
 export function runProcesses(runId: string): { pid: number; command: string }[] {
-  const r = spawnSync('ps', ['-E', '-x', '-o', 'pid=,command='], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const lines = (withEnv: boolean) => {
+    const r = spawnSync('ps', [...(withEnv ? ['-E'] : []), '-x', '-o', 'pid=,command='], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    return new Map((r.stdout ?? '').split('\n').flatMap((line) => { const m = line.match(/^\s*(\d+) (.*)$/); return m ? [[Number(m[1]), m[2]] as [number, string]] : []; }));
+  };
+  const plain = lines(false), full = lines(true);
   const mark = new RegExp(`(^|\\s)QA_RUN_ID=${runId}(\\s|$)`);
-  return (r.stdout ?? '').split('\n').flatMap((line) => {
-    const m = line.match(/^\s*(\d+)\s+(.*)$/);
-    if (!m || Number(m[1]) === process.pid || !mark.test(m[2])) return [];
-    return [{ pid: Number(m[1]), command: m[2].split(/\s+[A-Z_][A-Z0-9_]*=/)[0].slice(0, 80) }];
+  return [...full].flatMap(([pid, line]) => {
+    const command = plain.get(pid);
+    if (pid === process.pid || command === undefined || !line.startsWith(command)) return [];
+    return mark.test(line.slice(command.length)) ? [{ pid, command: command.slice(0, 80) }] : [];
   });
 }
 

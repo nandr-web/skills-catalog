@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { leftoverNames, slug } from '../src/leftovers.ts';
 import { createSandbox, DIRS, FailSafeError, failSafe, newRunId, realHome } from '../src/sandbox.ts';
 import { teardown } from '../src/teardown.ts';
-import { compare, PRODUCT_DEFAULTS, snapshot, watchOn, type Watch } from '../src/check.ts';
+import { compare, PRODUCT_DEFAULTS, runProcesses, snapshot, watchOn, type Watch } from '../src/check.ts';
 import { cleanup, machine as fakeMachine, scratch, type TestMachine } from './machine.ts';
 
 afterEach(cleanup);
@@ -174,6 +174,19 @@ describe('before/after check: processes and ports (plan §6.6)', () => {
     const child = spawn(process.execPath, ['-e', "require('net').createServer().listen(0, '127.0.0.1', function () { console.log(this.address().port) })"], { detached: true, stdio: ['ignore', 'pipe', 'ignore'], env });
     return { child, port: new Promise<string>((ok) => child.stdout!.once('data', (b) => ok(String(b).trim()))) };
   };
+
+  it('a process is the run\'s only by its environment: QA_RUN_ID in its arguments doesn\'t count', async () => {
+    const m = machine();
+    const sb = sandbox(m);
+    const decoy = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)', `QA_RUN_ID=${sb.runId}`], { detached: true, stdio: 'ignore', env: { ...process.env } });
+    const ours = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { detached: true, stdio: 'ignore', env: { ...process.env, ...sb.env } });
+    try {
+      await new Promise((ok) => setTimeout(ok, 200));
+      expect(runProcesses(sb.runId).map((p) => p.pid)).toEqual([ours.pid]);
+    } finally {
+      for (const c of [decoy, ours]) process.kill(-c.pid!, 'SIGKILL');
+    }
+  });
 
   it('sees a process from this run that left its process group, and the port it listens on; ignores everyone else\'s', async () => {
     const m = machine();

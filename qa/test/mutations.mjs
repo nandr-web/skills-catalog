@@ -68,6 +68,8 @@ const MUTATIONS = [
   ['agent/score.ts', 'no_env_marker_in passes whatever the trace shows', 'return { ok: !texts.some((t) => t.includes(ctx.envMarker!)) };', 'return { ok: true };'],
   ['agent/scrub.ts', 'secrets are not redacted in a scrubbed trace', 'for (const [kind, re] of SECRETS) out = out.replace(', 'for (const [kind, re] of []) out = out.replace('],
   ['agent/score.ts', 'a rule the scorer doesn\'t know passes the pre-flight (found only after a paid round)', ' else unknown.add(`${s.id}: ${name}`);', ''],
+  ['sandbox.ts', 'a developer\'s exported SKILLS_* reach the run', "'TERM', 'QA_*'];", "'TERM', 'SKILLS_*', 'QA_*'];"],
+  ['check.ts', 'a process mentioning the run\'s id in its arguments counts as the run\'s', 'return mark.test(line.slice(command.length))', 'return mark.test(line)'],
   ['trace-check.ts', 'a check\'s stray key (a comma in an unquoted name) goes unnoticed', 'if (stray.length) problems.push(', 'if (false) problems.push('],
   ['sandbox.ts', 'run.json is written in place (a reader can see half of it)', "renameSync(tmp, join(root, 'run.json'));", "writeFileSync(join(root, 'run.json'), readFileSync(tmp));"],
 ];
