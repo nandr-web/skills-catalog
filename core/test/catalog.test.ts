@@ -312,6 +312,19 @@ describe('search: discoverable, any word, and says how it matched (contract §2)
   });
 });
 
+describe('SKILLS_CATALOG (contract §8)', () => {
+  it('file:// opens the local catalog; https:// (hosted, not built yet) and anything else are refused', async () => {
+    const { openCatalog } = await import('../src/local/index.ts');
+    const { pathToFileURL } = await import('node:url');
+    const dir = sandbox();
+    const c = openCatalog(pathToFileURL(dir + '/catalog').href);
+    expect(c.search({}).catalog_size).toBe(0);
+    c.close();
+    expect(errorOf(() => openCatalog('https://catalog.example.invalid')).code).toBe('forbidden');
+    expect(errorOf(() => openCatalog('/just/a/path')).code).toBe('invalid_request');
+  });
+});
+
 describe('the platform (contract §8)', () => {
   it('node:sqlite has FTS5', async () => {
     const { fts5Works } = await import('../src/local/db.ts');

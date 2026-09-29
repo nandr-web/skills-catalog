@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { readdirSync, rmSync, utimesSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { MetadataStore, SearchIndex } from '../src/ports.ts';
+import type { BlobStore, MetadataStore, SearchIndex } from '../src/ports.ts';
 import { openLocalCatalog } from '../src/local/index.ts';
 import { FolderBlobStore } from '../src/local/blobs.ts';
 import { historyVersion, loadGolden } from './golden.ts';
@@ -215,6 +215,42 @@ describe('fault injection (histories.fault)', () => {
     armed = true;
     expect(catalog.publish(request('pr-review-checklist', historyVersion(histories.versions['prc.v1'])), 'ana')).toMatchObject({ created: true, version: 1 });
     expect(swept).toBe(true);
+    expect(catalog.fetch({ name: 'pr-review-checklist', version: 1 }).files).toHaveLength(2);
+  });
+
+  it('if putting the missing blob back fails too, no version is stored, and a retry lands', () => {
+    const dir = sandbox();
+    let phase: 'open' | 'armed' | 'failing' | 'done' = 'open';
+    const { catalog } = openTest(
+      {
+        wrapMeta: (m: MetadataStore): MetadataStore =>
+          Object.assign(Object.create(m), {
+            withWriteLock: <T,>(fn: () => T): T => {
+              if (phase === 'armed') {
+                phase = 'failing';
+                rmSync(join(dir, 'catalog', 'blobs'), { recursive: true, force: true });
+              }
+              return m.withWriteLock(fn);
+            },
+          }),
+        wrapBlobs: (b: BlobStore): BlobStore =>
+          Object.assign(Object.create(b), {
+            put: (sha: string, bytes: Uint8Array) => {
+              if (phase === 'failing') {
+                phase = 'done';
+                throw new Error('injected: re-put failed');
+              }
+              return b.put(sha, bytes);
+            },
+          }),
+      },
+      dir,
+    );
+    phase = 'armed';
+    const v1 = historyVersion(histories.versions['prc.v1']);
+    expect(() => catalog.publish(request('pr-review-checklist', v1), 'ana')).toThrow(/re-put failed/);
+    expect(versionsIn(dir, 'pr-review-checklist')).toEqual([]);
+    expect(catalog.publish(request('pr-review-checklist', v1), 'ana')).toMatchObject({ created: true, version: 1 });
     expect(catalog.fetch({ name: 'pr-review-checklist', version: 1 }).files).toHaveLength(2);
   });
 
