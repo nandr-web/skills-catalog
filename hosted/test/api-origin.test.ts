@@ -7,7 +7,7 @@
 import { Words } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
 import { createHostedHandler, type HostedRequest } from '../src/api/handler.ts';
-import { ORIGIN_HEADER, ORIGIN_VALUES_MS, originGuard } from '../src/api/origin.ts';
+import { ORIGIN_HEADER, ORIGIN_KEEP_MS, ORIGIN_VALUES_MS, originGuard } from '../src/api/origin.ts';
 import type { TokenHolder } from '../src/index.ts';
 
 const CURRENT = 'c'.repeat(43);
@@ -83,6 +83,43 @@ describe('the origin guard', () => {
     expect(await g.allows(CURRENT)).toBe(false);
     fail = false;
     expect(await g.allows(CURRENT)).toBe(true);
+  });
+
+  it('a refresh that fails keeps the last good values for up to an hour (a blip in reading them never takes the API down), then refuses', async () => {
+    let fail = false;
+    let t = 0;
+    const g = originGuard({
+      names: NAMES,
+      read: async (n) => {
+        if (fail) throw new Error('ThrottlingException');
+        return n === NAMES.current ? CURRENT : PREVIOUS;
+      },
+      clock: { now: () => new Date(t) },
+    });
+    expect(await g.allows(CURRENT)).toBe(true);
+    fail = true;
+    t = ORIGIN_VALUES_MS;
+    expect(await g.allows(CURRENT)).toBe(true);
+    expect(await g.allows(PREVIOUS)).toBe(true);
+    expect(await g.allows('o'.repeat(43))).toBe(false);
+    t = ORIGIN_KEEP_MS - 1;
+    expect(await g.allows(CURRENT)).toBe(true);
+    t = ORIGIN_KEEP_MS;
+    expect(await g.allows(CURRENT)).toBe(false);
+    fail = false;
+    expect(await g.allows(CURRENT)).toBe(true);
+    expect(ORIGIN_KEEP_MS).toBe(60 * 60_000);
+  });
+
+  it('requests that arrive while the values are being read share that one read (no read ever undoes another)', async () => {
+    let t = 0;
+    const p = parameters({ [NAMES.current]: CURRENT, [NAMES.previous]: PREVIOUS });
+    const g = originGuard({ names: NAMES, read: p.read, clock: { now: () => new Date(t) } });
+    expect(await Promise.all([g.allows(CURRENT), g.allows(PREVIOUS), g.allows('x')])).toEqual([true, true, false]);
+    expect(p.reads.length).toBe(2);
+    t = ORIGIN_VALUES_MS;
+    expect(await Promise.all([g.allows(CURRENT), g.allows(CURRENT), g.allows(PREVIOUS)])).toEqual([true, true, true]);
+    expect(p.reads.length).toBe(4);
   });
 });
 
