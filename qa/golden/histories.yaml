@@ -92,6 +92,27 @@ versions:
   gate.g1-ref:
     SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\nallowed-tools: Bash(python3 *)\n---\nFollow reference.md.\n"
     reference.md: "Step one.\nStep two.\n"
+  gate.g0-bang-inline:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n- PR diff: !`echo QA-MARKER`\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-assign:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\nKEY=!`echo QA-MARKER`\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-line-ref:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n!`python3 -c \"print('QA-MARKER')\"`\n"
+    reference.md: "Step one.\nStep two.\n"
+  gate.gm:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\nmodel: claude-haiku-4-5\n---\nFollow reference.md.\n"
+    reference.md: "Step one.\n"
+  gate.gm-edit:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\nmodel: claude-haiku-4-5\n---\nFollow reference.md.\nThen run the checks.\n"
+    reference.md: "Step one.\n"
+  gate.ga:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\nagent: Explore\n---\nFollow reference.md.\n"
+    reference.md: "Step one.\n"
+  gate.ga-edit:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\nagent: Explore\n---\nFollow reference.md.\nThen run the checks.\n"
+    reference.md: "Step one.\n"
   gate.g1-notes-bang:
     SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\nallowed-tools: Bash(python3 *)\n---\nFollow reference.md.\n"
     reference.md: "Step one.\n"
@@ -153,6 +174,14 @@ histories:
       - {from: gate.g1, to: gate.g1-notes-bang, risk_flags: [{kind: runs_at_load, path: notes.md, line: 1}], note: "runs_at_load and no other reason for that file, though the skill grants"}
       - {from: null, to: gate.g1, risk_flags: [{kind: capability_frontmatter, path: SKILL.md, line: 4, field: allowed-tools, from: null, to: "Bash(python3 *)"}, {kind: instructions_changed, path: SKILL.md}, {kind: instructions_changed, path: reference.md}], note: "a first install is an update from nothing"}
       - {from: null, to: gate.g0, risk_flags: [], note: "a first install of a skill that grants nothing installs"}
+      # 682aa08: a ! command counts at a line start or after whitespace; a skill grants when it has a frontmatter key that is
+      # neither safe nor in non_granting_keys (model, effort, disable-model-invocation, user-invocable, paths,
+      # disallowed-tools), or an injected command.
+      - {from: gate.g0, to: gate.g0-bang-inline, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "`- PR diff: !` + command: the ! follows whitespace, so it counts"}
+      - {from: gate.g0, to: gate.g0-bang-assign, risk_flags: [], note: "`KEY=!` + command: the ! follows '=', so it is not a command; a markdown change in a skill with no grants raises nothing"}
+      - {from: gate.gm, to: gate.gm-edit, risk_flags: [], note: "model is a non-granting key: a body edit gives no instructions_changed"}
+      - {from: gate.ga, to: gate.ga-edit, risk_flags: [{kind: instructions_changed, path: SKILL.md}], note: "agent grants: the same body edit gives instructions_changed"}
+      - {from: gate.g0-bang-line, to: gate.g0-bang-line-ref, risk_flags: [{kind: instructions_changed, path: reference.md}], note: "an injected command is a grant, so a changed reference.md gives instructions_changed"}
 
   concurrent:
     name: concurrent-skill

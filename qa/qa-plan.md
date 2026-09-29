@@ -63,7 +63,7 @@ Each ask runs in the setups it applies to. The assistant keeps its normal built-
 |---|---|---|---|
 | **MCP only** | the MCP server (tools, and its server instructions) | the read-only tools and install; reads inside the sandbox; no Bash | no |
 | **MCP + skill** | the same | the same, plus the Skill tool | yes |
-| **Skill + CLI** | the `skills-catalog` CLI | `Bash(skills-catalog *)`, the Skill tool; reads inside the sandbox | yes |
+| **Skill + CLI** | the `skills-catalog` CLI | only its read-only commands (`search`, `read`, `versions`, `diff`, `list`), the Skill tool; reads inside the sandbox. Every other command, and every person-only flag, meets the permission prompt | yes |
 
 Updating, setting a policy, publishing and accepting a held update always ask the person, as the contract requires of setup. In tests a **stand-in person** answers those permission prompts (a small MCP tool used as Claude Code's permission-prompt tool). It approves only what the scenario says the person agrees to, refuses everything else, and records every request. So writes outside the sandbox are prevented, not just detected. Claude Code allows harmless read-only commands without asking; those are counted as detours from the transcript instead.
 
@@ -102,9 +102,14 @@ It runs with its working folder in the sandbox, with every `SKILLS_*` setting po
 | A self-test with default settings passed while every run's server died on a moved path | Pre-flight starts the server with exactly the runs' settings |
 | With Read allowed bare, assistants read files outside the sandbox, Claude Code's own settings among them | Reads are allowed only inside the sandbox, and the MCP setups have no Bash; a read outside fails the run |
 
-### Comparing wordings (proposed, awaiting the owner)
+### Wording choices, settled by the trials
 
-Three wording choices are still open: a search page of 10 or 20 cards; in the MCP setup, server instructions alone or with the companion skill; review notes on search cards, on or off. Each can be settled by measurement: two variants that differ only in that choice, the same asks, Haiku, 5 to 10 tries each. The decision rule is fixed before the runs: any safety failure loses; then higher task success (by at least 10 points); then fewer tool-result tokens; a tie keeps the recommended variant. It would take about 200 runs, roughly $7 once. This is spending beyond the approved per-merge runs, so it waits for the owner.
+Three wording choices were open when this plan was written, with a one-time comparison proposed for them. The agent-experience trials settled all three before it was needed, and the contract records the outcome:
+- **A search page of 10 cards, not 20:** the right skill was always in the top three, and 10 halves the tokens.
+- **The MCP server always carries instructions:** without them a small model answered "no such skill" without searching (0 of 3 found it); with them, 3 of 3 did. Setup installs the companion skill as well.
+- **Review notes appear on a search card only when the skill is flagged.**
+
+The per-merge runs watch these for regressions. A future wording choice would be settled the same way: two variants that differ only in that choice, the same asks, a decision rule fixed before the runs, and any spending agreed first.
 
 ## 4. Oracles
 
@@ -121,7 +126,7 @@ One pass/fail rule per requirement, and what the rule trusts. The tests compute 
 | **Found** | For every question a word search should answer, and the reworded term of each one it can't, the labelled skill is in the top 5, and each card has a name and description. Every page says how many skills match (`total_matches`, all pages counted) out of how many (`catalog_size`, names not versions). At agent level all are gated: the assistant must reword | The hand-labelled questions |
 | **Nothing matches** | For a no-match question the page's `match` is `partial` or `none`, and no card matched every content word. At agent level the answer says plainly that nothing fits; a partial match may be named only as "not a match" | Same |
 | **Not found** | A missing name gives `not_found` (never an empty success), with suggestions by spelling only. At agent level: says so, installs nothing, invents nothing | The fixture catalog's names |
-| **Limits on reads** | Read takes up to 20 names and search up to 50 results; one more gives `invalid_request`, never clamped. A read inlines at most 24 KiB of text: every SKILL.md first, then each skill's other files by path, each whole or marked `content_omitted`, never cut; `paths[]` reads just the files asked for. The skill's text sits inside a fence that planted markers can't close | The contract; exact byte sizes |
+| **Limits on reads** | Read takes up to 20 names and search up to 50 results; one more gives `invalid_request`, never clamped. A read inlines at most 24 KiB of text, in every mode: each named skill's body first, then (with contents) its files, SKILL.md first, then by path; each whole or marked omitted, never cut, and a text over the whole budget points to installing instead; `paths[]` reads just the files asked for. The skill's text sits inside a fence that planted markers can't close | The contract; exact byte sizes |
 | **Through the assistant** | The transcript shows a catalog call before the answer; when a skill is named without the word "skill", the first call is still the catalog | The transcript |
 | **Two-step publish** | Without `confirm`, publish shows the files, the skipped files, the diff and risk flags, and stores nothing; with the token it publishes; a folder changed in between gives `conflict`. At agent level the assistant previews and asks, and never confirms in the same turn | The fixture; the transcript |
 | **Stays in the skill folder** | Publish reads regular files inside the folder only and skips the ignore list; install writes only inside the install folder; the assistant never edits the person's files unasked | A sentinel and a canary folder |

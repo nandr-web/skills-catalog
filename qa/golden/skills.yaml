@@ -292,8 +292,13 @@ fence:
   fixture: "fence-plant: a valid SKILL.md whose body holds the end-marker wording from the agent-experience notes three ways: without a token, with token 'x', and upper-cased"
   expect: {start_markers: 1, end_markers: 1, token: "the injected test id", planted_text_inside_intact: true, paths_outside_json_quoted: true}
 
-# A read inlines at most the configured budget of text (contract §2, `read_inline_budget`, 24 KB). Byte sizes are exact; the
-# files are fill "x" unless given. Not in `valid`: these fixtures exist for the budget, not for the rules review.
+# A read inlines at most the configured budget of text (contract §2, `read_inline_budget`, 24,576 bytes), in every include
+# mode (682aa08): first every named skill's body (SKILL.md after the closing '---' line, as stored), in the order asked; then,
+# with `contents`, each skill's text files, SKILL.md first, then by path, skill by skill. SKILL.md's content repeats its body and
+# both count. Each item is whole or left out: a body that doesn't fit has body_omitted (the frontmatter is always returned), a
+# file content_omitted; `omitted` counts bodies and files together; a text over the whole budget gets a sentence pointing to
+# install. Byte sizes are exact; files are fill "x" unless given. Bodies: big-read 28, minimal 11, big-skillmd 24928.
+# Not in `valid`: these fixtures exist for the budget, not for the rules review.
 reads:
   fixtures:
     big-read:
@@ -306,17 +311,21 @@ reads:
       SKILL.md: {text: "---\nname: big-skillmd\ndescription: A SKILL.md over the read budget.\n---\n", pad_to: 25000, fill: "x"}
       notes.md: {size: 100, fill: "x"}
   cases:
+    - read: {name: big-read, include: manifest}
+      expect: {inlined: [body], inline_budget: {limit: 24576, used: 28, omitted: 0}}
+      note: "the body shows in every mode; no file content in manifest mode"
     - read: {name: big-read, include: contents}
       expect:
-        inlined: [SKILL.md, a.md, c.md]          # SKILL.md first, then by path; c.md still fits after b.md was omitted
+        inlined: [body, SKILL.md, a.md, c.md]    # body first, then SKILL.md, then by path; c.md still fits after b.md was left out
         content_omitted: [b.md]                  # whole or omitted, never cut
         no_content: [logo.png]                   # binary: never inlined, not counted as omitted
-        inline_budget: {limit: 24576, used: 21094, omitted: 1}   # used = 94 + 20000 + 1000 bytes inlined
+        inline_budget: {limit: 24576, used: 21122, omitted: 1}   # 28 + 94 + 20000 + 1000; b.md would make 25122
     - read: {name: big-skillmd, include: contents}
-      expect: {inlined: [notes.md], content_omitted: [SKILL.md], inline_budget: {limit: 24576, used: 100, omitted: 1}}
-      note: "a SKILL.md over the budget is omitted, not cut; a smaller file after it still fits"
+      expect: {body_omitted: true, frontmatter_returned: true, inlined: [notes.md], content_omitted: [SKILL.md], inline_budget: {limit: 24576, used: 100, omitted: 2}, sentence_points_to: install}
+      note: "a body (24928) and a SKILL.md (25000) over the whole budget are left out, not cut, and the sentence points to install; a smaller file after them still fits"
     - read: {name: big-read, include: contents, paths: [b.md]}
-      expect: {inlined: [b.md], files_returned: [b.md], inline_budget: {limit: 24576, used: 5000, omitted: 0}}
+      expect: {inlined: [b.md], files_returned: [b.md], frontmatter_returned: true, no_body_omitted_flag: true, inline_budget: {limit: 24576, used: 5000, omitted: 0}}
+      note: "with paths[] only the named files, in the order asked; the body only when SKILL.md is one of them; no body_omitted (contract §2 on main, after c758f16)"
     - read: {name: big-read, include: contents, paths: [nope.md]}
       expect: {error: not_found, path: nope.md}
     - read: {name: big-read, include: contents, paths: "21 distinct paths"}
@@ -326,11 +335,14 @@ reads:
       note: "paths only with one `name`"
     - read: {names: [minimal, big-read], include: contents}
       expect:
-        order: ["minimal/SKILL.md", "big-read/SKILL.md", "big-read/a.md", "big-read/b.md", "big-read/c.md"]
-        inlined: ["minimal/SKILL.md", "big-read/SKILL.md", "big-read/a.md", "big-read/c.md"]
+        order: ["minimal/body", "big-read/body", "minimal/SKILL.md", "big-read/SKILL.md", "big-read/a.md", "big-read/b.md", "big-read/c.md"]
+        inlined: ["minimal/body", "big-read/body", "minimal/SKILL.md", "big-read/SKILL.md", "big-read/a.md", "big-read/c.md"]
         content_omitted: ["big-read/b.md"]
-        inline_budget: {limit: 24576, used: 21166, omitted: 1}   # 72 (minimal) + 94 + 20000 + 1000; b.md would make 25166
-      note: "every SKILL.md first, in the order asked; then each skill's other text files, skill by skill, by path (pinned 64bbb9a)"
+        inline_budget: {limit: 24576, used: 21205, omitted: 1}   # 11 + 28 + 72 + 94 + 20000 + 1000; b.md would make 25205
+      note: "every body first, in the order asked; then each skill's text files, SKILL.md first, skill by skill, by path (682aa08)"
+    - read: {names: "20 generated skills, each SKILL.md body exactly 9,000 bytes (the measured median SKILL.md is 9 KB)", include: manifest}
+      expect: {inlined_bodies: 2, body_omitted: 18, frontmatter_returned: 20, inline_budget: {limit: 24576, used: 18000, omitted: 18}, tool_result_tokens_max: 8000}
+      note: "20 median-sized names in manifest mode stay under the 8,000-token cap on one tool result"
 
 missing-names:
   - {name: deploy-to-mars, error: not_found, suggestions: [], note: "no search-based 'closest' names (contract draft 3)"}
