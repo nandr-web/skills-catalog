@@ -1,23 +1,29 @@
-// The client's operations, whatever the face: the MCP server now, the CLI next. Each runs the core's operation and puts
-// its result through the core's renderer, so every face says the same thing. `perform` is one call on any face: the
-// acting developer's check, the operation, an error in words (a bug is internal_error, its traceback in a log file
-// under SKILLS_HOME, never shown), the activity log's line, the usage metrics' `use` event, and the "acting as" line.
-import { actAs, CatalogError, openCatalog, randomIds, renderDiff, renderError, renderRead, renderSearch, renderVersions, toCatalogError, type Catalog, type Ids, type ReadItem, type SearchInput, type Words } from '@skills-catalog/core';
+// The client's operations, whatever the face (contract §1): one definition runs them all. Each operation's row (the
+// core's api.ts) names what runs it, a Catalog method or a machine function (machine/index.ts); the run gives data, and
+// each face presents it: the MCP's and the CLI's text through the core's renderers, the web face never (it sends the
+// data). `perform` is one call on any face: the face's check, the acting developer's check, the operation, an error in
+// words (a bug is internal_error, its traceback in a log file under SKILLS_HOME, never shown), the activity log's line,
+// the usage metrics' `use` event, and the "acting as" line.
+import { actAs, CatalogError, OPERATIONS, openCatalog, randomIds, renderDiff, renderError, renderRead, renderSearch, renderVersions, toCatalogError, type Catalog, type Face, type Ids, type ReadItem, type SearchInput, type Words } from '@skills-catalog/core';
 import { appendActivity, logWords } from './activity.ts';
-import { MACHINE_RUNS } from './machine/index.ts';
+import { MACHINE } from './machine/index.ts';
 import type { Settings } from './settings.ts';
 import { recordUsage } from './usage/record.ts';
 
+export type { Face };
+
 /** Everything an operation needs, the same on every face. `face` says which one asks: an input only a person may give
  *  (the CLI's) is refused from the assistant's (MCP). `ids` makes the fence tokens around a publisher's text. */
-export type Face = 'mcp' | 'cli';
 export type Context = { catalog: () => Promise<Catalog>; words: Words; settings: Settings; face: Face; now: () => Date; ids: Ids };
 
-/** What an operation gives: the text for the assistant (or the person), and the activity log's target and result (the
- *  result in the words file's log words: logWords(ctx.words).result). `outcome`, a code, where the operation has one worth
- *  counting or acting on (a search's match, "none_found" for a read that found none of its names); absent means "ok". */
+/** What a run gives: its data, and the activity log's target and result (the result in the words file's log words:
+ *  logWords(ctx.words).result). `outcome`, a code, where the operation has one worth counting or acting on (a search's
+ *  match, "none_found" for a read that found none of its names); absent means "ok". */
+export type Ran = { data: unknown; target: string; result: string; outcome?: string };
+
+/** A machine operation's run: its text today (its row's output is 'text'), with the log's target and result. */
 export type Done = { text: string; target: string; result: string; outcome?: string };
-export type Run = (ctx: Context, args: unknown) => Promise<Done>;
+export type MachineRun = (ctx: Context, args: unknown) => Promise<Done>;
 
 /** Words the client waits for from the words file, as paths from the words file's top. Until one lands it's shown
  *  as data, and a test fails the moment it appears in the vendored words, so it gets wired. */
@@ -25,74 +31,106 @@ export const CLIENT_WORD_GAPS: readonly string[] = [];
 
 const NONE = '-';
 
-// Where a look happened, by face (usage metrics); a new face (the web UI's) must name its own.
-const LOOK_FACE: Record<Face, 'cli' | 'assistant' | 'web'> = { mcp: 'assistant', cli: 'cli' };
+// Where a look happened, by face (usage metrics).
+const LOOK_FACE: Record<Face, 'cli' | 'assistant' | 'web'> = { mcp: 'assistant', cli: 'cli', web: 'web' };
 
-/** The catalog's operations, keyed by the API's operation name; each face names it its own way (the MCP tool's name
- *  is the words file's). The target comes from the result (the skills it returned, a match count), never from the
- *  arguments, which can hold anything. */
-export const CATALOG_RUNS: Record<string, Run> = {
-  async search_shared_skills(ctx, args) {
-    const r = await (await ctx.catalog()).search(args);
-    const log = logWords(ctx.words);
-    return { text: renderSearch(ctx.words, r, (args ?? {}) as SearchInput), target: log.searchTarget(r.total_matches, r.catalog_size), result: log.result('search', r.match), outcome: r.match };
+// A catalog operation on this client: after the Catalog method its row names has run, what the log shows (the target
+// comes from the result, the skills it returned or a match count, never from the arguments, which can hold anything),
+// and how the MCP and CLI faces word the result (the core's renderers).
+type CatalogOp = { log(ctx: Context, data: any): Omit<Ran, 'data'>; present(ctx: Context, data: any, args: unknown): string };
+const CATALOG_OPS: Record<string, CatalogOp> = {
+  search_shared_skills: {
+    log: (ctx, r) => {
+      const log = logWords(ctx.words);
+      return { target: log.searchTarget(r.total_matches, r.catalog_size), result: log.result('search', r.match), outcome: r.match };
+    },
+    present: (ctx, r, args) => renderSearch(ctx.words, r, (args ?? {}) as SearchInput),
   },
-
-  async read_shared_skill(ctx, args) {
-    const r = await (await ctx.catalog()).read(args);
-    const items = r.skills.filter((e): e is ReadItem => !('error' in e));
-    const text = renderRead(ctx.words, r, ctx.ids);
-    return { text, target: items.map((i) => `${i.name} v${i.version}`).join(', ') || NONE, result: logWords(ctx.words).result('get'), ...(items.length ? {} : { outcome: 'none_found' }) };
+  read_shared_skill: {
+    log: (ctx, r) => {
+      const items = (r.skills as unknown[]).filter((e): e is ReadItem => !(e as object && 'error' in (e as object)));
+      return { target: items.map((i) => `${i.name} v${i.version}`).join(', ') || NONE, result: logWords(ctx.words).result('get'), ...(items.length ? {} : { outcome: 'none_found' }) };
+    },
+    present: (ctx, r) => renderRead(ctx.words, r, ctx.ids),
   },
-
-  async list_shared_skill_versions(ctx, args) {
-    const r = await (await ctx.catalog()).versions(args);
-    return { text: renderVersions(ctx.words, r), target: `${r.name} v${r.latest}`, result: logWords(ctx.words).result('versions') };
+  list_shared_skill_versions: {
+    log: (ctx, r) => ({ target: `${r.name} v${r.latest}`, result: logWords(ctx.words).result('versions') }),
+    present: (ctx, r) => renderVersions(ctx.words, r),
   },
-
-  async diff_shared_skill_versions(ctx, args) {
-    const r = await (await ctx.catalog()).diff(args);
-    const outcome = r.risk_flags.length ? 'runnable' : 'text_only';
-    // A look at the version it goes to; the usage summary counts it only when that version was held.
-    recordUsage(ctx.settings.home, { event: 'look', skill: r.name, version: r.to, face: LOOK_FACE[ctx.face] }, ctx.now());
-    return { text: renderDiff(ctx.words, r, ctx.ids), target: `${r.name} v${r.from} → v${r.to}`, result: logWords(ctx.words).result('diff', outcome), outcome };
+  diff_shared_skill_versions: {
+    log: (ctx, r) => {
+      const outcome = r.risk_flags.length ? 'runnable' : 'text_only';
+      // A look at the version it goes to; the usage summary counts it only when that version was held.
+      recordUsage(ctx.settings.home, { event: 'look', skill: r.name, version: r.to, face: LOOK_FACE[ctx.face] }, ctx.now());
+      return { target: `${r.name} v${r.from} → v${r.to}`, result: logWords(ctx.words).result('diff', outcome), outcome };
+    },
+    present: (ctx, r) => renderDiff(ctx.words, r, ctx.ids),
   },
 };
 
-/** Every operation the client runs: the catalog's, and the machine's (machine/index.ts). */
-export const RUNS: Record<string, Run> = { ...CATALOG_RUNS, ...MACHINE_RUNS };
+/** Runs an operation through its row: a Catalog method, or a machine function (whose data is its text today). */
+async function run(ctx: Context, op: string, args: unknown): Promise<Ran> {
+  const row = OPERATIONS[op]!;
+  const machine = Object.hasOwn(MACHINE, row.run) ? MACHINE[row.run]! : undefined;
+  if (machine) {
+    const { text, ...rest } = await machine(ctx, args);
+    return { data: text, ...rest };
+  }
+  const catalogOp = CATALOG_OPS[op];
+  if (!catalogOp) throw new Error(`no run for ${op} on this client yet`);
+  const catalog = (await ctx.catalog()) as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+  const data = await catalog[row.run]!.call(catalog, args);
+  return { data, ...catalogOp.log(ctx, data) };
+}
+
+/** How the MCP and CLI faces word an operation's data; the web face never presents (it sends the data). */
+function present(ctx: Context, op: string, data: unknown, args: unknown): string {
+  const catalogOp = CATALOG_OPS[op];
+  return catalogOp ? catalogOp.present(ctx, data, args) : String(data);
+}
+
+/** The operations this client runs, by operation name: each with a machine function or a catalog operation here. */
+export const RUNS: Record<string, true> = Object.fromEntries(
+  Object.entries(OPERATIONS).flatMap(([op, row]) => (Object.hasOwn(MACHINE, row.run) || Object.hasOwn(CATALOG_OPS, op) ? [[op, true as const]] : [])),
+);
 
 /** The line after every result and error while a developer is set (contract §7, "acting as"). */
 export const actingAs = (s: Words, developer: string) => s.format(s.word('acting_as'), { developer });
 
-/** `outcome`: the operation's outcome code, or the error's code. */
-export type Answer = { text: string; isError: boolean; outcome: string };
+/** `text`: the face's words ('' on the web face, which presents nothing); `data`: the operation's data, on success
+ *  only; `error`: the error, on failure only; `outcome`: the operation's outcome code, or the error's code. */
+export type Answer = { text: string; isError: boolean; outcome: string; data?: unknown; error?: CatalogError };
 
 /** One operation on any face: `op` is the API's name, `name` what this face calls it (for the log). */
 export async function perform(ctx: Context, op: string, name: string, args: unknown): Promise<Answer> {
-  const run = RUNS[op];
-  if (!run) throw new Error(`no operation ${op}`);
+  const row = Object.hasOwn(OPERATIONS, op) ? OPERATIONS[op] : undefined;
+  if (!row || !RUNS[op]) throw new Error(`no operation ${op}`);
+  // A face only offers what it serves; this is the backstop.
+  if (!row.faces.includes(ctx.face)) throw new Error(`${op} is not served on the ${ctx.face} face`);
   const { settings, words } = ctx;
   const log = logWords(words);
-  let done: Done;
-  let isError = false;
-  let outcome: string;
+  const web = ctx.face === 'web';
+  let answer: Answer;
+  let target: string;
+  let result: string;
   try {
     // SKILLS_AS that isn't a developer's name is a setting to fix, not a call to retry.
     if (settings.developerInvalid) throw new CatalogError('invalid_developer_setting', { setting: 'SKILLS_AS' });
-    done = await run(ctx, args);
-    outcome = done.outcome ?? 'ok';
+    const ran = await run(ctx, op, args);
+    ({ target, result } = ran);
+    answer = { text: web ? '' : present(ctx, op, ran.data, args), isError: false, outcome: ran.outcome ?? 'ok', data: ran.data };
   } catch (e) {
     const err = toCatalogError(e, settings.home, ctx.now());
     // A local catalog has no sign-in: no developer name is a setup matter, in its own words (not "run login").
     const local = err.code === 'unauthenticated' && settings.catalog.startsWith('file:');
-    done = { text: local ? words.word('errors.unauthenticated_local') : renderError(words, err), target: NONE, result: log.error(err.code) };
-    isError = true;
-    outcome = err.code;
+    target = NONE;
+    result = log.error(err.code);
+    answer = { text: web ? '' : local ? words.word('errors.unauthenticated_local') : renderError(words, err), isError: true, outcome: err.code, error: err };
   }
-  appendActivity(settings.activityLog, { at: ctx.now(), who: settings.developer, tool: name, target: done.target, result: done.result }, { ownFolder: settings.activityLogInHome, resultWidth: log.width });
-  recordUsage(settings.home, { event: 'use', op, result: outcome }, ctx.now());
-  return { text: settings.developer ? `${done.text}\n${actingAs(words, settings.developer)}` : done.text, isError, outcome };
+  appendActivity(settings.activityLog, { at: ctx.now(), who: settings.developer, tool: name, target, result }, { ownFolder: settings.activityLogInHome, resultWidth: log.width });
+  recordUsage(settings.home, { event: 'use', op, result: answer.outcome }, ctx.now());
+  if (settings.developer && !web) answer.text = `${answer.text}\n${actingAs(words, settings.developer)}`;
+  return answer;
 }
 
 /** The catalog, opened on first use, so a catalog that can't be opened is an error the assistant reads, not a server

@@ -43,7 +43,7 @@ describe('perform', () => {
       const a = await perform(ctx, 'search_shared_skills', 'search_shared_skills', { query: 'release notes' });
       expect(a.isError).toBe(false);
       expect(a.text).not.toBe('');
-      expect(a.data).toMatchObject({ total_matches: expect.any(Number), skills: expect.any(Array) });
+      expect(a.data).toMatchObject({ total_matches: expect.any(Number), results: expect.any(Array) });
     } finally {
       close();
     }

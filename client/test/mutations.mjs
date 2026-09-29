@@ -25,9 +25,14 @@ const MUTATIONS = [
   // equivalent while the local catalog is synchronous: every call finishes before the end of input is even read. The
   // test that calls 20 tools and closes at once stays, for a catalog whose storage waits (the hosted one).
   ['operations.ts', 'a catalog that failed to open is never tried again', '        opened = undefined;\n', ''],
+  // one definition runs every face (operations-seam.test.ts; the golden transcripts for the MCP's and CLI's bytes)
+  ['operations.ts', 'a face runs an operation it doesn\'t serve', '  if (!row.faces.includes(ctx.face)) throw', '  if (false) throw'],
+  ['operations.ts', 'the web face gets presented text', "text: web ? '' : present(ctx, op, ran.data, args)", 'text: present(ctx, op, ran.data, args)'],
+  ['operations.ts', 'a catalog operation\'s data is shown as it is, not through its presenter', 'return catalogOp ? catalogOp.present(ctx, data, args) : String(data);', 'return String(data);'],
+  ['operations.ts', 'search is worded as a read', 'present: (ctx, r, args) => renderSearch(ctx.words, r, (args ?? {}) as SearchInput),', 'present: (ctx, r) => renderRead(ctx.words, r, ctx.ids),'],
   // the words an assistant reads
-  ['operations.ts', 'a bug\'s traceback reaches the assistant', ": renderError(words, err), target: NONE, result: log.error(err.code) };", ": (err.code === 'internal_error' && e instanceof Error ? String(e.stack) : renderError(words, err)), target: NONE, result: log.error(err.code) };"],
-  ['operations.ts', 'errors don\'t say who you act as', 'return { text: settings.developer ?', 'return { text: settings.developer && !isError ?'],
+  ['operations.ts', 'a bug\'s traceback reaches the assistant', ": renderError(words, err), isError: true", ": (err.code === 'internal_error' && e instanceof Error ? String(e.stack) : renderError(words, err)), isError: true"],
+  ['operations.ts', 'errors don\'t say who you act as', '  if (settings.developer && !web) answer.text', '  if (settings.developer && !web && !answer.isError) answer.text'],
   ['operations.ts', 'the acting line is data, not the words', "s.format(s.word('acting_as'), { developer })", '`acting_as: ${developer}`'],
   ['operations.ts', 'a SKILLS_AS that isn\'t a developer name is ignored', 'if (settings.developerInvalid) throw', 'if (false) throw'],
   ['settings.ts', 'SKILLS_AS is taken whatever it holds', 'const valid = as !== undefined && ACTOR.test(as);', 'const valid = as !== undefined;'],
@@ -37,7 +42,7 @@ const MUTATIONS = [
   ['operations.ts', 'the log\'s search target is the query', 'target: log.searchTarget(r.total_matches, r.catalog_size)', 'target: String((args as { query?: string } | undefined)?.query)'],
   ['operations.ts', 'the log\'s read target comes from the arguments', "target: items.map((i) => `${i.name} v${i.version}`).join(', ') || NONE", "target: String((args as { name?: string } | undefined)?.name ?? NONE)"],
   ['operations.ts', 'the log says a diff adds nothing that can run, whatever it adds', "r.risk_flags.length ? 'runnable' : 'text_only'", "'text_only'"],
-  ['operations.ts', 'the log shows an error\'s code, not its words', 'result: log.error(err.code) };', 'result: err.code };'],
+  ['operations.ts', 'the log shows an error\'s code, not its words', '    result = log.error(err.code);', '    result = err.code;'],
   ['activity.ts', 'the result column is narrower than its longest word', 'width: Math.max(...all.map((w) => w.length)),', 'width: 16,'],
   ['operations.ts', 'the log names a developer that isn\'t one', 'who: settings.developer, tool: name', "who: process.env['SKILLS_AS'], tool: name"],
   ['activity.ts', 'a link in the log\'s place is followed', ' | constants.O_NOFOLLOW', ''],
