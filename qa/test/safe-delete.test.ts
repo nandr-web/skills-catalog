@@ -5,7 +5,7 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
 import { platform, tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { janitor } from '../src/janitor.ts';
 import { leftoverNames } from '../src/leftovers.ts';
 import { realMachine } from '../src/machine.ts';
@@ -14,7 +14,9 @@ import { DEFAULT_TTL_MS } from '../src/janitor.ts';
 import { removeLeftover, removeRun, RUN_ID, UnsafeError, verifyBase } from '../src/safe-delete.ts';
 import { createSandbox, FailSafeError, failSafe, newRunId, realHome, recordProcessGroup, sandboxBase } from '../src/sandbox.ts';
 import { teardown } from '../src/teardown.ts';
-import { cleanup, machine, qaBareSync, qaSync, scratch, type TestMachine } from './machine.ts';
+import { cleanup, PROCESS_TEST_MS, machine, qaBareSync, qaSync, scratch, type TestMachine } from './machine.ts';
+
+vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start processes (see PROCESS_TEST_MS)
 
 afterEach(cleanup);
 

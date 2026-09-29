@@ -4,11 +4,13 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runScenarios } from '../src/agent/runner.ts';
 import { qaRun } from '../src/run.ts';
 import { childEnv, ENV_ALLOW, PLANTED_NAMES } from '../src/sandbox.ts';
-import { cleanup, machine } from './machine.ts';
+import { cleanup, PROCESS_TEST_MS, machine } from './machine.ts';
+
+vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start processes (see PROCESS_TEST_MS)
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 const SECRETS = ['AWS_SECRET_ACCESS_KEY', 'AWS_ACCESS_KEY_ID', 'GITHUB_TOKEN', 'GH_TOKEN', 'ANTHROPIC_API_KEY', 'NPM_TOKEN', 'SSH_AUTH_SOCK'];

@@ -5,11 +5,13 @@
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { qaRun } from '../src/run.ts';
 import { compare, snapshot, watchOn } from '../src/check.ts';
 import { sandboxBase } from '../src/sandbox.ts';
-import { cleanup, machine, qaSpawn } from './machine.ts';
+import { cleanup, PROCESS_TEST_MS, machine, qaSpawn } from './machine.ts';
+
+vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start processes (see PROCESS_TEST_MS)
 
 afterEach(cleanup);
 

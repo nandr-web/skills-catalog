@@ -4,11 +4,13 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parse, stringify } from 'yaml';
 import { runScenarios } from '../src/agent/runner.ts';
 import { RUN_ID } from '../src/safe-delete.ts';
-import { cleanup, machine as fakeMachine } from './machine.ts';
+import { cleanup, PROCESS_TEST_MS, machine as fakeMachine } from './machine.ts';
+
+vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start processes (see PROCESS_TEST_MS)
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 afterEach(() => { cleanup(); for (const k of Object.keys(process.env)) if (k.startsWith('QA_FAKE_CLAUDE_')) delete process.env[k]; });

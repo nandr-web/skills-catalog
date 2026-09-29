@@ -4,12 +4,14 @@
 import { readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parse, stringify } from 'yaml';
 import { readFileSync } from 'node:fs';
 import { preflight } from '../src/agent/preflight.ts';
 import { sandboxBase } from '../src/sandbox.ts';
-import { cleanup, machine, scratch, type TestMachine } from './machine.ts';
+import { cleanup, PROCESS_TEST_MS, machine, scratch, type TestMachine } from './machine.ts';
+
+vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start processes (see PROCESS_TEST_MS)
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 afterEach(() => { cleanup(); delete process.env.QA_FAKE_CLAUDE_TRACE; });

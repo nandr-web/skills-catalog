@@ -12,9 +12,9 @@ import { defaultAssistant, resolveAssistant } from '../src/agent/assistant.ts';
 import { preflight } from '../src/agent/preflight.ts';
 import { runScenarios } from '../src/agent/runner.ts';
 import { UnsafeError } from '../src/safe-delete.ts';
-import { cleanup, machine, qaSync, scratch } from './machine.ts';
+import { cleanup, PROCESS_TEST_MS, machine, qaSync, scratch } from './machine.ts';
 
-vi.setConfig({ testTimeout: 30_000 });   // these tests start processes, each a few seconds on a busy machine
+vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start processes (see PROCESS_TEST_MS)
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 const FAKE = here('./fixtures/fake-claude.mjs');

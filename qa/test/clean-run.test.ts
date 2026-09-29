@@ -5,12 +5,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { leftoverNames, slug } from '../src/leftovers.ts';
 import { createSandbox, DIRS, FailSafeError, failSafe, newRunId, realHome } from '../src/sandbox.ts';
 import { teardown } from '../src/teardown.ts';
 import { compare, PRODUCT_DEFAULTS, runProcesses, snapshot, watchOn, type Watch } from '../src/check.ts';
-import { cleanup, machine as fakeMachine, scratch, type TestMachine } from './machine.ts';
+import { cleanup, PROCESS_TEST_MS, machine as fakeMachine, scratch, type TestMachine } from './machine.ts';
+
+vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start processes (see PROCESS_TEST_MS)
 
 afterEach(cleanup);
 

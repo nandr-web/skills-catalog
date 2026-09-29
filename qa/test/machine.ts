@@ -1,5 +1,5 @@
 // A fake machine per test (qa-plan §6.5a, "Tests never reach real roots"): its own tmp (where sandboxes go), a home with
-// ~/.claude, and Claude Code's tmp folder, all inside a temporary folder of the test's own. Every test of the clean-run
+// ~/.claude, and Claude Code's tmp and cache folders, all inside a temporary folder of the test's own. Every test of the clean-run
 // machinery passes one explicitly, and the qa command line runs here only with `--fake-machine <dir>`.
 // This file is the only test code that starts the qa command line (test/meta.test.ts checks that).
 import { spawn, spawnSync, type ChildProcess, type SpawnOptions } from 'node:child_process';
@@ -8,6 +8,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fakeMachine, type Machine } from '../src/machine.ts';
+
+/** The budget for a test that starts processes and runs the before/after check (`ps` over every process, `lsof`): a few
+ *  seconds each on a busy machine, near vitest's default 5 s. Set per file (vi.setConfig) in the files whose tests do
+ *  that, so a plain unit test keeps the default and still fails fast if it hangs. */
+export const PROCESS_TEST_MS = 30_000;
 
 const made: string[] = [];
 /** Call from afterEach. */
