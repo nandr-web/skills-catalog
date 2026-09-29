@@ -179,7 +179,7 @@ function inFolder(e: unknown, folder: string): unknown {
 }
 
 export async function publishFolder(ctx: Context, args: unknown): Promise<Done> {
-  const req = validateInput<Input>('publish_skill_to_catalog', args, ctx.face);
+  const req = validateInput<Input>('publish_skill_to_catalog', args, ctx.face, 'local');
   if (req.confirm === undefined) {
     if (STEP2.some((k) => req[k] !== undefined)) throw new CatalogError('invalid_request', { field: 'confirm', why: 'required' });
   } else {

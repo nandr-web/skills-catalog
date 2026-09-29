@@ -26,6 +26,10 @@ export type OutputSchema =
 // The faces an operation can be served on (contract §1): the assistant's tools, the CLI, the web page (HTTP, §1.1).
 export type Face = 'mcp' | 'cli' | 'web';
 
+// Where the catalog runs (contract §1.1): locally, or hosted. Said when it's opened, never inferred; faces say who
+// calls, this says where the catalog is.
+export type Where = 'local' | 'hosted';
+
 export interface OperationDef {
   name: string;
   kind: 'catalog' | 'machine';
@@ -44,6 +48,10 @@ export interface OperationDef {
   errors: readonly ErrorCode[];
   // Inputs only a person at the CLI gives (contract §3): never in the MCP or web schema, and refused from those faces.
   cliOnly?: readonly string[];
+  // Served only by a hosted catalog (absent: served by both).
+  where?: 'hosted';
+  // Inputs that take another form on a hosted catalog; each form refuses the other (unknown_field).
+  hostedForm?: Record<string, Schema>;
 }
 
 // Request limits are errors that name the field and the limit, never silent clamps (contract §9).
@@ -353,13 +361,15 @@ export const OPERATIONS: Record<string, OperationDef> = {
   },
 };
 
-// An operation's input schema as one face sees it: the MCP face never gets the CLI-only inputs.
-// No default face: a caller that forgets it must not get the CLI's inputs.
-export function inputSchema(op: string | OperationDef, face: Face): OperationDef['input'] {
+// An operation's input schema as one face sees it, where the catalog runs: the MCP and web faces never get the CLI-only
+// inputs, and a hosted catalog takes an input's hosted form. No defaults: a caller that forgets the face must not get
+// the CLI's inputs, and one that forgets where must not get the other place's form.
+export function inputSchema(op: string | OperationDef, face: Face, where: Where): OperationDef['input'] {
   const def = typeof op === 'string' ? OPERATIONS[op]! : op;
-  if (face === 'cli' || !def.cliOnly?.length) return def.input;
-  const properties = Object.fromEntries(Object.entries(def.input.properties).filter(([k]) => !def.cliOnly!.includes(k)));
-  return { ...def.input, properties };
+  let properties = def.input.properties;
+  if (where === 'hosted' && def.hostedForm) properties = { ...properties, ...def.hostedForm };
+  if (face !== 'cli' && def.cliOnly?.length) properties = Object.fromEntries(Object.entries(properties).filter(([k]) => !def.cliOnly!.includes(k)));
+  return properties === def.input.properties ? def.input : { ...def.input, properties };
 }
 
 function fail(field: string, why: string, extra: Record<string, unknown> = {}): never {
@@ -422,10 +432,14 @@ function ownCopy(schema: Schema, value: unknown): unknown {
   return value;
 }
 
-// Checks a request against its operation's schema as `face` sees it (the MCP face has no CLI-only input); throws
+// Checks a request against its operation's schema as `face` sees it where the catalog runs (the MCP face has no
+// CLI-only input; a hosted catalog takes the hosted forms); throws
 // invalid_request naming the field (and the limit, if any). Returns a copy of the request with only its own, known fields.
-export function validateInput<T>(op: keyof typeof OPERATIONS, input: unknown, face: Face): T {
-  const schema = inputSchema(op, face);
+export function validateInput<T>(op: keyof typeof OPERATIONS | OperationDef, input: unknown, face: Face, where: Where): T {
+  const def = typeof op === 'string' ? OPERATIONS[op]! : op;
+  // No face of a local catalog offers a hosted-only operation, so reaching one here is a bug.
+  if (def.where === 'hosted' && where !== 'hosted') throw new Error(`${def.name} is hosted only: a local catalog never serves it`);
+  const schema = inputSchema(def, face, where);
   check(schema, input ?? {}, '');
   return ownCopy(schema, input ?? {}) as T;
 }

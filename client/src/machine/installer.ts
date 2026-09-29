@@ -536,7 +536,7 @@ const acceptCommand = (s: Words, name: string, target: Target) => [s.cli, ...['u
 type InstallInput = { name: string; version?: number; target?: Target; policy?: Policy };
 
 export async function install(ctx: Context, args: unknown): Promise<Done> {
-  const req = validateInput<InstallInput>('install_shared_skill', args, ctx.face);
+  const req = validateInput<InstallInput>('install_shared_skill', args, ctx.face, 'local');
   const s = ctx.words;
   const log = logWords(s);
   const target = req.target ?? 'user';
@@ -715,7 +715,7 @@ const sameDecision = (was: LockEntry | undefined, now: LockEntry | undefined): b
 type AcceptInput = { name: string; target: Target; version: number; confirm: string; flags: string[] };
 
 export async function accept(ctx: Context, args: unknown): Promise<Done> {
-  const req = validateInput<AcceptInput>('accept_held_update', args, ctx.face);
+  const req = validateInput<AcceptInput>('accept_held_update', args, ctx.face, 'local');
   const s = ctx.words;
   const { lock, config } = readRecords(ctx.settings.home);
   const t = decode(req.confirm);
@@ -757,7 +757,7 @@ function installedHere(ctx: Context, lock: Lock): LockEntry[] {
 type UpdateInput = { names?: string[]; dry_run?: boolean; latest?: boolean };
 
 export async function update(ctx: Context, args: unknown): Promise<Done> {
-  const req = validateInput<UpdateInput>('update_installed_skills', args, ctx.face);
+  const req = validateInput<UpdateInput>('update_installed_skills', args, ctx.face, 'local');
   const s = ctx.words;
   const w = s.word('update');
   const log = logWords(s);
@@ -967,7 +967,7 @@ export async function list(ctx: Context): Promise<Done> {
 type PolicyInput = { policy: Policy; name?: string };
 
 export async function setPolicy(ctx: Context, args: unknown): Promise<Done> {
-  const req = validateInput<PolicyInput>('set_skill_update_policy', args, ctx.face);
+  const req = validateInput<PolicyInput>('set_skill_update_policy', args, ctx.face, 'local');
   const s = ctx.words;
   const home = ctx.settings.home;
   const w = s.word('policy_set');

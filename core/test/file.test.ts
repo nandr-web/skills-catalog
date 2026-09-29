@@ -98,6 +98,7 @@ describe('Catalog.file where storage or a link port answers otherwise (hosted)',
   const sha = 'a'.repeat(64);
   const bytes = new TextEncoder().encode('x');
   const ports = (state: 'named' | 'on_its_way' | 'unknown', links?: BlobLinks) => ({
+    where: links ? ('hosted' as const) : ('local' as const),
     storage: { fileState: async () => state, blob: async () => bytes } as unknown as Storage,
     index: {} as never,
     events: { subscribe: () => {}, deliver: async () => 0 },

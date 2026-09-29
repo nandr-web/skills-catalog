@@ -54,7 +54,7 @@ export const kebab = (s: string) => s.replaceAll('_', '-');
 
 /** The operation's own inputs as flags, all but `except` (those the command fills its own way). */
 export function schemaFlags(op: string, except: readonly string[] = []): Record<string, SchemaFlag> {
-  const props = (inputSchema(op, 'cli').properties ?? {}) as Record<string, Schema>;
+  const props = (inputSchema(op, 'cli', 'local').properties ?? {}) as Record<string, Schema>;
   return Object.fromEntries(
     Object.entries(props)
       .filter(([k, v]) => !except.includes(k) && v.type !== 'object')

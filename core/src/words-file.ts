@@ -101,7 +101,7 @@ export class Words {
       .filter((op) => op.faces.includes('mcp') && op.words && this.doc.tools[op.words])
       .map((op) => {
         const spec = this.doc.tools[op.words!];
-        const input = inputSchema(op, 'mcp');
+        const input = inputSchema(op, 'mcp', 'local');
         return {
           name: this.names[op.words!]!,
           op: op.name,

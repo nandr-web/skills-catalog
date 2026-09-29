@@ -1,8 +1,8 @@
-// The published schema (contract §1.1): OpenAPI 3.1, generated from the operations' definitions, one route per
-// operation served on the web face. `npm run schema` writes it to docs/api/openapi.json; a test fails when that file
-// is out of date.
+// The published schemas (contract §1.1): OpenAPI 3.1, generated from the operations' definitions, one route per
+// operation served on the web face, one schema for each place the catalog runs. `npm run schema` writes them to
+// docs/api/openapi.local.json and openapi.hosted.json; a test fails when either is out of date.
 
-import { OPERATIONS, inputSchema, type OperationDef, type OutputSchema, type Schema } from './api.ts';
+import { OPERATIONS, inputSchema, type OperationDef, type OutputSchema, type Schema, type Where } from './api.ts';
 import { COMMON_ERRORS, ERROR_CODES } from './errors.ts';
 
 // v1 in the path; a new operation, optional input or output field raises the minor version, a removal or a change of
@@ -55,27 +55,94 @@ function envelope(def: OperationDef): Json {
   };
 }
 
-const GUARDS = { '401': ref('responses', 'NoToken'), '403': ref('responses', 'Refused'), '404': ref('responses', 'NotFound'), '415': ref('responses', 'NotJson') };
-const SECURITY = [{ localToken: [] }];
+// What each place's server checks before an operation runs, and how a caller says who it is (§1.1): locally the
+// session token from pairing, the Host and Origin, and the acting developer in a header; hosted a bearer token only.
+const PLACE = {
+  local: {
+    security: [{ localToken: [] }],
+    guards: { '401': ref('responses', 'NoToken'), '403': ref('responses', 'Refused'), '404': ref('responses', 'NotFound'), '415': ref('responses', 'NotJson') },
+    parameters: { ActingAs: {
+      name: 'X-Skills-Catalog-As',
+      in: 'header',
+      required: false,
+      description: 'The developer to act as (a body field would be refused), one setup knows.',
+      schema: { type: 'string', maxLength: 200 },
+    } },
+    responses: {
+      NoToken: { description: 'The session token is missing or wrong.' },
+      Refused: { description: 'The Host or Origin isn\'t this server\'s own.' },
+      NotFound: { description: 'No such operation or file.' },
+      NotJson: { description: 'The body isn\'t application/json.' },
+    },
+    securitySchemes: {
+      localToken: { type: 'apiKey', in: 'header', name: 'X-Skills-Catalog-Token', description: 'The local server\'s session token, from pairing; compared in constant time.' },
+    },
+  },
+  hosted: {
+    security: [{ bearer: [] }],
+    guards: { '401': ref('responses', 'NoToken'), '404': ref('responses', 'NotFound'), '415': ref('responses', 'NotJson') },
+    parameters: undefined,
+    responses: {
+      NoToken: { description: 'The bearer token is missing, expired or wrong.' },
+      NotFound: { description: 'No such operation or file.' },
+      NotJson: { description: 'The body isn\'t application/json.' },
+    },
+    securitySchemes: {
+      bearer: { type: 'http', scheme: 'bearer', description: 'A session from signing in, or a personal token (read or publish scope); who is asking comes only from it.' },
+    },
+  },
+} as const;
 
-function operation(def: OperationDef): Json {
+function operation(def: OperationDef, where: Where): Json {
+  const place = PLACE[where];
   return {
     operationId: def.name,
     'x-effect': def.effect,
     'x-faces': [...def.faces],
     'x-errors': [...def.errors],
-    security: SECURITY,
-    parameters: [ref('parameters', 'ActingAs')],
+    security: place.security,
+    ...(place.parameters ? { parameters: [ref('parameters', 'ActingAs')] } : {}),
     requestBody: { required: true, content: { 'application/json': { schema: ref('schemas', `${def.name}_input`) } } },
     responses: {
       '200': { description: 'The operation\'s answer, error or not.', content: { 'application/json': { schema: ref('schemas', `${def.name}_envelope`) } } },
-      ...GUARDS,
+      ...place.guards,
     },
   };
 }
 
-export function openapi(): Json {
-  const web = Object.values(OPERATIONS).filter((d) => d.faces.includes('web'));
+// A stored version's file (§1.1): locally its bytes; hosted a short-lived link, or on its way seconds after a publish.
+function fileRoute(where: Where): Json {
+  const found: Json =
+    where === 'local'
+      ? { '200': { description: 'The file\'s bytes.', content: { 'application/octet-stream': {} } } }
+      : {
+          '302': {
+            description: 'A short-lived link to the file\'s bytes, issued after the caller\'s check.',
+            headers: { Location: { schema: { type: 'string' } }, 'Cache-Control': { schema: { type: 'string', const: 'no-store' } } },
+          },
+          '503': {
+            description: 'Uploaded for a publish that hasn\'t finished: try again shortly.',
+            headers: { 'Retry-After': { schema: { type: 'integer', const: 2 } } },
+          },
+        };
+  const { '415': _json, ...guards } = PLACE[where].guards as Json;
+  return {
+    get: {
+      operationId: 'fetch_file',
+      description: 'One file of a stored version, by its sha256; a version\'s files never change.',
+      'x-effect': 'reads',
+      'x-faces': ['web'],
+      security: PLACE[where].security,
+      parameters: [{ name: 'sha256', in: 'path', required: true, schema: { type: 'string', pattern: '^[0-9a-f]{64}$' } }],
+      responses: { ...found, ...guards },
+    },
+  };
+}
+
+// The schema of the catalog's HTTP API where it runs: its operations served on the web face there (a hosted-only one
+// only hosted), each input as that place takes it.
+export function openapi(where: Where, ops: Record<string, OperationDef> = OPERATIONS): Json {
+  const web = Object.values(ops).filter((d) => d.faces.includes('web') && (d.where === undefined || d.where === where));
   const schemas: Json = {
     ErrorCode: { type: 'string', enum: [...ERROR_CODES] },
     Words: {
@@ -87,69 +154,33 @@ export function openapi(): Json {
   };
   const paths: Json = {};
   for (const def of web) {
-    schemas[`${def.name}_input`] = strict(inputSchema(def, 'web'));
+    schemas[`${def.name}_input`] = strict(inputSchema(def, 'web', where));
     schemas[`${def.name}_output`] = def.output as OutputSchema;
     schemas[`${def.name}_envelope`] = envelope(def);
-    paths[`${API_PATH}/${def.name}`] = { post: operation(def) };
+    paths[`${API_PATH}/${def.name}`] = { post: operation(def, where) };
   }
-  paths[`${API_PATH}/files/{sha256}`] = {
-    get: {
-      operationId: 'fetch_file',
-      description: 'One file of a stored version, by its sha256; a version\'s files never change.',
-      'x-effect': 'reads',
-      'x-faces': ['web'],
-      security: SECURITY,
-      parameters: [{ name: 'sha256', in: 'path', required: true, schema: { type: 'string', pattern: '^[0-9a-f]{64}$' } }],
-      responses: {
-        '200': { description: 'The file\'s bytes (a local catalog).', content: { 'application/octet-stream': {} } },
-        '302': {
-          description: 'A short-lived link to the file\'s bytes, issued after the caller\'s check (a hosted catalog).',
-          headers: { Location: { schema: { type: 'string' } }, 'Cache-Control': { schema: { type: 'string', const: 'no-store' } } },
-        },
-        '503': {
-          description: 'Uploaded for a publish that hasn\'t finished: try again shortly.',
-          headers: { 'Retry-After': { schema: { type: 'integer' } } },
-        },
-        '404': ref('responses', 'NotFound'),
-        '401': ref('responses', 'NoToken'),
-        '403': ref('responses', 'Refused'),
-      },
-    },
-  };
+  paths[`${API_PATH}/files/{sha256}`] = fileRoute(where);
+  const place = PLACE[where];
   return {
     openapi: '3.1.0',
     info: {
       title: 'skills-catalog',
       version: API_VERSION,
-      description: 'The catalog\'s operations over HTTP, generated from the same definitions as the assistant\'s tools and the CLI.',
+      description: `The catalog's operations over HTTP on a ${where} catalog, generated from the same definitions as the assistant's tools and the CLI.`,
     },
+    'x-where': where,
     'x-error-codes': [...ERROR_CODES],
     'x-common-errors': [...COMMON_ERRORS],
     paths,
     components: {
       schemas,
-      parameters: {
-        ActingAs: {
-          name: 'X-Skills-Catalog-As',
-          in: 'header',
-          required: false,
-          description: 'The developer to act as, on a local catalog only (a body field would be refused); a hosted catalog refuses it and takes who is asking from the sign-in.',
-          schema: { type: 'string', maxLength: 200 },
-        },
-      },
-      responses: {
-        NoToken: { description: 'The session token is missing or wrong.' },
-        Refused: { description: 'The Host or Origin isn\'t this server\'s own.' },
-        NotFound: { description: 'No such operation or file.' },
-        NotJson: { description: 'The body isn\'t application/json.' },
-      },
-      securitySchemes: {
-        localToken: { type: 'apiKey', in: 'header', name: 'X-Skills-Catalog-Token', description: 'The local server\'s session token, from pairing; compared in constant time.' },
-      },
+      ...(place.parameters ? { parameters: place.parameters } : {}),
+      responses: place.responses,
+      securitySchemes: place.securitySchemes,
     },
   };
 }
 
-export function openapiJson(): string {
-  return `${JSON.stringify(openapi(), null, 2)}\n`;
+export function openapiJson(where: Where): string {
+  return `${JSON.stringify(openapi(where), null, 2)}\n`;
 }

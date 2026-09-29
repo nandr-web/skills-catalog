@@ -86,6 +86,7 @@ export async function openLocalCatalog(dir: string, opts: LocalOptions = {}): Pr
   try {
     if (!readOnly) storage.sweep();
     const catalog = await Catalog.open({
+      where: 'local',
       storage: opts.wrapStorage ? opts.wrapStorage(storage) : storage,
       index: new SqliteSearchIndex(db),
       events: readOnly ? NO_EVENTS : new LocalOutbox(db, clock),
