@@ -39,7 +39,7 @@ export const PRODUCT_REPO = fileURLToPath(new URL('../..', import.meta.url));
 
 /** Whether `pid` is still one of the run's: carrying its id, or holding its marker as the run's (marker.ts). Can't
  *  look: no. */
-function stillTheRuns(pid: number, runId: string, marker: Marker | undefined, tools?: Tools): boolean {
+export function stillTheRuns(pid: number, runId: string, marker: Marker | undefined, tools?: Tools): boolean {
   try {
     return runProcesses(runId, tools).some((p) => p.pid === pid) || (!!marker && markedProcesses(marker, tools, [pid]).ours.some((p) => p.pid === pid));
   } catch {

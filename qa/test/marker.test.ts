@@ -4,11 +4,12 @@
 // device and inode) on descriptor 3, of this user, started at or after the run did, count as the run's; any other
 // holder (an indexer, a backup agent, anything opened later on another descriptor) is never listed or signalled.
 import { spawn } from 'node:child_process';
-import { closeSync, fstatSync, openSync } from 'node:fs';
+import { chmodSync, closeSync, fstatSync, openSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CheckBlind, DEFAULT_TOOLS, markedProcesses } from '../src/check.ts';
-import { qaRun, stopEscaped } from '../src/run.ts';
-import { cleanup, machine } from './machine.ts';
+import { qaRun, stillTheRuns, stopEscaped } from '../src/run.ts';
+import { cleanup, machine, scratch } from './machine.ts';
 import { createMarker, heldOnFd3, sortHolders, type Marker } from '../src/marker.ts';
 
 const MARKER: Marker = { path: '/x/.run-marker', dev: 16777231, ino: 63215361, since: Date.parse('Tue Sep 29 03:31:30 2026') };
@@ -110,5 +111,56 @@ describe('a program that opens the marker by its path', () => {
       stranger.kill('SIGKILL');
       await gone;
     }
+  });
+});
+
+// The re-check right before a signal, through ps and lsof as they print (stand-ins by full path, in the test's own folder,
+// printing captured output and keeping the arguments they were given), so it runs the same on macOS and Linux.
+describe('right before a signal, a pid is looked at again', () => {
+  afterEach(cleanup);
+  const G = 2 ** 30;   // above any system's highest pid
+  const UID = String(process.getuid?.());
+  const ours = `${G} ${UID} Tue Sep 29 03:31:36 2026     /bin/sleep 59`;
+  const fd3 = (ino: number) => `p${G}\nf3\nD0x100000f\ni${ino}\n`;
+  const tool = (dir: string, name: string, script: string) => {
+    const p = join(dir, name);
+    writeFileSync(p, `#!/bin/sh\necho "$*" >> '${p}.args'\n${script}\n`);
+    chmodSync(p, 0o700);
+    return p;
+  };
+  // ps: the listing with environments (-E) and without, then the holders' uid and start (lstart)
+  const tools = (o: { env?: string; holders?: string; lsof?: string }) => {
+    const d = scratch();
+    const plain = (o.env ?? '').replace(/ QA_RUN_ID=\S+/, '');
+    const ps = tool(d, 'ps', `case "$*" in *lstart*) printf '%s\\n' '${o.holders ?? ''}';; *-E*) printf '%s\\n' '${o.env ?? ''}';; *) printf '%s\\n' '${plain}';; esac`);
+    const lsof = tool(d, 'lsof', `printf '${(o.lsof ?? '').replace(/\n/g, '\\n')}'`);
+    return { ps, lsof, args: () => readFileSync(`${lsof}.args`, 'utf8') };
+  };
+
+  it('holding the marker on descriptor 3, this user\'s, started after the run: still the run\'s, asked of that pid alone', () => {
+    const t = tools({ lsof: fd3(MARKER.ino), holders: ours });
+    expect(stillTheRuns(G, 'run', MARKER, t)).toBe(true);
+    expect(t.args()).toContain(`-p ${G}`);
+  });
+
+  it('another user\'s, started before the run, or holding another file: not the run\'s', () => {
+    expect(stillTheRuns(G, 'run', MARKER, tools({ lsof: fd3(MARKER.ino), holders: `${G} ${Number(UID) + 1} Tue Sep 29 03:31:36 2026     /bin/sleep 59` }))).toBe(false);
+    expect(stillTheRuns(G, 'run', MARKER, tools({ lsof: fd3(MARKER.ino), holders: `${G} ${UID} Tue Sep 29 03:31:29 2026     /bin/sleep 59` }))).toBe(false);
+    expect(stillTheRuns(G, 'run', MARKER, tools({ lsof: fd3(MARKER.ino + 1), holders: ours }))).toBe(false);
+  });
+
+  it('carrying the run\'s id: still the run\'s, whatever it holds', () => {
+    expect(stillTheRuns(G, 'run', MARKER, tools({ env: `${G} /bin/sleep 59 QA_RUN_ID=run` }))).toBe(true);
+    expect(stillTheRuns(G, 'run', MARKER, tools({ env: `${G} /bin/sleep 59 QA_RUN_ID=other` }))).toBe(false);
+  });
+
+  it('a re-check that can\'t look (lsof fails, or prints a line it can\'t read) says no, so nothing is signalled', async () => {
+    const odd = tools({ lsof: `p${G}\nf3\nx\nD0x100000f\ni${MARKER.ino}\n`, holders: ours });
+    expect(() => markedProcesses(MARKER, odd)).toThrow(CheckBlind);
+    const sent: number[] = [];
+    for (const t of [odd, { ...tools({ holders: ours }), lsof: '/bin/sh' }]) {
+      await stopEscaped('run', t, MARKER, { list: () => [{ pid: G, command: 'x' }], still: stillTheRuns, kill: (pid) => { sent.push(pid); return true; } });
+    }
+    expect(sent).toEqual([]);
   });
 });

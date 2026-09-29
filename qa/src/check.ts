@@ -156,6 +156,9 @@ export function procProcesses(runId: string, proc = '/proc', uid = process.getui
 export function markedProcesses(m: Marker, tools: Tools = DEFAULT_TOOLS, only?: number[]): { ours: Holder[]; others: (Holder & { why: string })[] } {
   const uid = process.getuid?.();
   const r = run(tools.lsof, ['-n', '-P', '-a', '-u', String(uid), '-d', '3', ...(only ? ['-p', only.join(',')] : []), '-F', 'pDi'], (status) => status === 0 || status === 1);
+  // Only the fields asked for (macOS adds f): a line it can't read makes the listing blind, never "none"
+  const odd = (r.stdout ?? '').split('\n').find((line) => line !== '' && !/^[pfDi]/.test(line));
+  if (odd !== undefined) throw new CheckBlind(`the before/after check can't read which processes hold the run's marker: ${tools.lsof} printed a line it doesn't know (${JSON.stringify(odd.slice(0, 40))}); nothing was run`);
   const pids = heldOnFd3(r.stdout ?? '', m).filter((p) => p !== process.pid && (!only || only.includes(p)));
   if (!pids.length) return { ours: [], others: [] };
   const ps = run(tools.ps, ['-o', 'pid=,uid=,lstart=,command=', '-p', pids.join(',')], (status) => status === 0 || status === 1, { LC_ALL: 'C' });   // 1: one of them is gone
