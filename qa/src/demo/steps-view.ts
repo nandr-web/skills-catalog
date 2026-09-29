@@ -9,10 +9,19 @@ const GREEN = '\x1b[32m', BOLD_GREEN = '\x1b[1;32m', ORANGE = '\x1b[38;5;208m', 
 const paint = (colour: string, s: string) => `${colour}${s}${RESET}`;
 
 export type StepView = { id: number; title: string; see: string; state: 'pending' | 'now' | 'seen' | 'missed' | 'planned'; missing?: string[] };
-export type StepsState = { title: string; mode: 'auto' | 'step'; paused: boolean; message: string; steps: StepView[] };
+/** What the conductor is doing (done: its Done line says so). Optional: a steps.json written before it existed still draws. */
+export type RunState = 'playing' | 'paused' | 'waiting' | 'done';
+export type StepsState = { title: string; mode: 'auto' | 'step'; paused: boolean; state?: RunState; message: string; steps: StepView[] };
 export type Command = 'next' | 'pause' | 'quit';
 
-export const KEYS_LINE = 'Enter next · p pause · q quit';
+/** Each key and its word; the keys line is these, joined by " · ". */
+const KEYS = [['Enter', 'next'], ['p', 'pause'], ['q', 'quit']] as const;
+export const KEYS_LINE = KEYS.map((k) => k.join(' ')).join(' · ');
+const KEY_NAMES = new Set<string>(KEYS.map(([k]) => k));
+/** The line just above the keys, for each state but done. Each glyph is one column wide (a test checks it in tmux). */
+const STATE_LINE = {
+  playing: ['▶ playing', DIM], paused: ['‖ paused: p to carry on', ORANGE], waiting: ['↵ waiting: Enter for the next step', GREEN],
+} as const;
 const MARK = { seen: '✓', now: '▶', planned: '◌', missed: '✗', pending: ' ' } as const;
 const COLOUR = { now: BOLD_GREEN, planned: DIM, missed: ORANGE } as Record<StepView['state'], string>;
 const INDENT = '     ';
@@ -36,11 +45,23 @@ function wrap(text: string, width: number, first = '', rest = INDENT): string[] 
  *  what to look for. */
 const seeLine = (see: string) => (/^(planned|next in this demo|not in this demo)\b/.test(see) ? see : `see: ${see}`);
 
+/** The keys line, wrapped at `width`: each key name in green (light, not bold), the words after it dimmed. */
+function keysLines(width: number): string[] {
+  return wrap(KEYS_LINE, width, '', '').map((line) => {
+    const runs: { key: boolean; words: string[] }[] = [];
+    for (const word of line.split(' ')) {
+      const key = KEY_NAMES.has(word), last = runs.at(-1);
+      if (last && !key && !last.key) last.words.push(word); else runs.push({ key, words: [word] });
+    }
+    return runs.map((r) => paint(r.key ? GREEN : DIM, r.words.join(' '))).join(' ');
+  });
+}
+
 /** The pane's text for a steps.json (null: the conductor hasn't written one yet). */
 export function renderSteps(state: StepsState | null, o: { width?: number } = {}): string {
   const width = o.width ?? Infinity;
   const block = (text: string, colour?: string, first = '', rest = INDENT) => wrap(text, width, first, rest).map((l) => (colour ? paint(colour, l) : l));
-  if (!state) return [...block('waiting for the demo to start…', DIM, '', ''), '', paint(DIM, KEYS_LINE)].join('\n');
+  if (!state) return [...block('waiting for the demo to start…', DIM, '', ''), '', ...keysLines(width)].join('\n');
   const out = [...block(state.title, BOLD, '', ''), ''];
   for (const s of state.steps) {
     const head = wrap(`${MARK[s.state]} ${s.id}  ${s.title}`, width);
@@ -53,9 +74,9 @@ export function renderSteps(state: StepsState | null, o: { width?: number } = {}
   }
   out.push('', ...block(`${MARK.seen} = the demo checked it too`, DIM, '', ''));
   if (state.message) out.push(...block(state.message, undefined, '', ''));
-  if (state.paused) out.push(...block('paused: p to carry on', ORANGE, '', ''));
-  else if (state.mode === 'step') out.push(...block('one step at a time: Enter for the next', DIM, '', ''));
-  out.push(...block(KEYS_LINE, DIM, '', ''));
+  const run = state.state ?? (state.paused ? 'paused' : undefined);   // an older steps.json: only paused is known
+  if (run && run !== 'done') out.push(...block(STATE_LINE[run][0], STATE_LINE[run][1], '', ''));
+  out.push(...keysLines(width));
   return out.join('\n');
 }
 

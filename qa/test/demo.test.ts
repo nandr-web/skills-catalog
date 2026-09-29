@@ -12,6 +12,7 @@ import { firstPid, pidFrom } from '../src/pids.ts';
 import { signalGroup } from '../src/groups.ts';
 import { conduct, joined, stoppedLine, type ConductorIo, type StepsFile, type Turn } from '../src/demo/conductor.ts';
 import { loadScenes, type Scenes } from '../src/demo/scenes.ts';
+import { renderSteps, type StepsState } from '../src/demo/steps-view.ts';
 import { copySkills, DEFAULTS, demoEnding, demoPaths, demoTimeoutMs, leftoverGroups, LOG_NOTE, nodeOk, preflight, repoServer, running, serverCommand } from '../src/demo/director.ts';
 import type { RunResult } from '../src/run.ts';
 import { batch, buildLayout, configure, literal, markReady, startServer, tmuxAt, tmuxVersion, versionOk, waitForServer, waitForSession, type Tmux } from '../src/demo/tmux.ts';
@@ -477,6 +478,22 @@ describe.skipIf(!!noTmux)(`qa demo with real tmux${noTmux ? ` (skipped: ${noTmux
     expect(await drawn(dir)).not.toContain(hostname());
   }, 60_000);
 
+  it('every glyph the steps pane draws, in every state, is one column wide to tmux (it lays the panes out by width)', async () => {
+    const { t, dir } = await tmuxServer();
+    const pane = t('new-session', '-d', '-s', 'demo', '-x', '48', '-y', '10', '-c', dir, '-P', '-F', '#{pane_id}', '--', 'true').trim();
+    const steps: StepsState = {
+      title: 'what to look for', mode: 'step', paused: false, message: '', steps: (['seen', 'now', 'planned', 'missed', 'pending'] as const)
+        .map((state, i) => ({ id: i + 1, title: `a step ${state}`, see: 'a text', state, ...(state === 'missed' ? { missing: ['a text'] } : {}) })),
+    };
+    const text = [null, ...(['playing', 'paused', 'waiting', 'done'] as const).map((state) => ({ ...steps, state }))].map((s) => renderSteps(s, { width: 48 })).join('\n');
+    const glyphs = [...new Set(text.replace(/\x1b\[[0-9;]*m/g, ''))].filter((c) => c > '~');
+    expect(glyphs).toEqual(expect.arrayContaining(['▶', '‖', '↵', '·', '✓', '◌', '✗']));
+    for (const g of glyphs) {
+      t('set-option', '-t', 'demo', '@glyph', g);
+      expect(t('display-message', '-p', '-t', pane, '#{w:@glyph}').trim(), `${g} U+${g.codePointAt(0)!.toString(16)}`).toBe('1');
+    }
+  }, 60_000);
+
   it('the window opens only when the demo says it\'s ready: the layout alone (titles, placeholder panes) isn\'t enough', async () => {
     const { t, dir } = await tmuxServer();
     buildLayout(t, { developers: [{ id: 'ana', title: 'Developer 1 · ana' }, { id: 'bob', title: 'Developer 2 · bob' }], size: { cols: 200, rows: 50 }, cwd: dir });
@@ -684,7 +701,7 @@ describe('the conductor', () => {
     const r = await conduct(scenes(), w.io, { mode: 'auto', pace: 0, attached: false });
     expect(r.counts).toEqual({ seen: 2, planned: 1, missed: 0 });
     expect(r.quit).toBe(false);
-    expect(w.writes[0]).toMatchObject({ title: 'what to look for', mode: 'auto', paused: false });
+    expect(w.writes[0]).toMatchObject({ title: 'what to look for', mode: 'auto', paused: false, state: 'playing' });
     expect(w.writes.map(states)).toContainEqual(['now', 'pending', 'pending']);
     expect(w.writes.map(states)).toContainEqual(['planned', 'now', 'pending']);
     expect(w.writes.map(states)).toContainEqual(['planned', 'seen', 'now']);
@@ -693,6 +710,7 @@ describe('the conductor', () => {
     expect(last.steps.map((x) => x.missing)).toEqual([undefined, undefined, undefined]);
     expect(last.steps[1]).toMatchObject({ id: 2, title: 'ana publishes hello', see: '"published hello as ana"' });
     expect(last.message).toBe('Done: 2 seen, 1 planned, 0 missed.');   // headless: there is no q to press
+    expect(last.state).toBe('done');
     expect(r.stopped).toBeNull();
     expect(w.typed.map((t) => [t.who, t.text])).toEqual([['ana', 'set me up'], ['bob', 'set me up'], ['ana', 'publish my skill, hello'], ['bob', 'find a skill that says hello']]);
     expect(w.typed.every((t) => t.instant)).toBe(true);   // pace 0 types at once
@@ -744,9 +762,9 @@ describe('the conductor', () => {
   });
 
   it('--step waits for Enter before each step', async () => {
-    const w = world({ onWrite: (s, w) => { if (s.message.startsWith('Press Enter')) w.queue('next'); } });
+    const w = world({ onWrite: (s, w) => { if (s.state === 'waiting') w.queue('next'); } });
     const r = await conduct(scenes(), w.io, { mode: 'step', pace: 3, attached: false });
-    expect(w.writes.filter((s) => s.message.startsWith('Press Enter')).map(states)).toEqual([
+    expect(w.writes.filter((s) => s.state === 'waiting').map(states)).toEqual([
       ['pending', 'pending', 'pending'], ['planned', 'pending', 'pending'], ['planned', 'seen', 'pending'],
     ]);
     expect(w.writes[0].mode).toBe('step');
@@ -760,14 +778,49 @@ describe('the conductor', () => {
       onSleep: (w) => { if (phase === 1 && w.slept > 60_000) { phase = 2; w.queue('pause'); } },
     });
     let r = await conduct(scenes(), w.io, { mode: 'auto', pace: 3, attached: false });
-    expect(w.writes.some((s) => s.paused && s.message.startsWith('Paused'))).toBe(true);
+    expect(w.writes.some((s) => s.paused && s.state === 'paused')).toBe(true);
     expect(w.writes.at(-1)!.paused).toBe(false);
     expect(w.slept).toBeGreaterThan(60_000);
     expect(r.counts).toEqual({ seen: 2, planned: 1, missed: 0 });
 
-    w = world({ onWrite: (s, w) => { if (s.steps.some((x) => x.state === 'now')) return; if (s.message === '') w.queue('next'); } });
+    w = world({ onWrite: (s, w) => { if (s.steps.some((x) => x.state === 'now')) return; if (s.state === 'playing') w.queue('next'); } });
     r = await conduct(scenes(), w.io, { mode: 'auto', pace: 30, attached: false });
     expect(w.slept).toBeLessThan(1000);   // Enter after each step: no 30 s waits
+  });
+
+  it('writes whether it is playing, paused or waiting for Enter: p shows paused within one tick, p again playing; done at the end', async () => {
+    // auto: p after step 1, p again 5 s later
+    let phase = 0, pressed = -1, again = -1;
+    const at: { state: string; paused: boolean; slept: number }[] = [];
+    let w = world({
+      onWrite: (s, w) => { at.push({ state: s.state, paused: s.paused, slept: w.slept }); if (phase === 0 && s.steps[0].state === 'planned') { phase = 1; pressed = w.slept; w.queue('pause'); } },
+      onSleep: (w) => { if (phase === 1 && w.slept >= pressed + 5000) { phase = 2; again = w.slept; w.queue('pause'); } },
+    });
+    await conduct(scenes(), w.io, { mode: 'auto', pace: 3, attached: false });
+    expect(phase).toBe(2);
+    const paused = at.findIndex((x) => x.state === 'paused');
+    expect(paused).toBeGreaterThan(-1);
+    expect(at[paused].paused).toBe(true);
+    expect(at[paused].slept - pressed).toBeLessThanOrEqual(50);   // one tick: the pane redraws within a second
+    const resumed = at.findIndex((x, i) => i > paused && x.state !== 'paused');
+    expect(at[resumed]).toMatchObject({ state: 'playing', paused: false });
+    expect(at[resumed].slept - again).toBeLessThanOrEqual(50);
+    expect(at.slice(0, paused).every((x) => x.state === 'playing')).toBe(true);
+    expect(at.at(-1)!.state).toBe('done');
+    expect(w.writes.every((s) => !/^(Paused|Press Enter)/.test(s.message))).toBe(true);   // the state says it, not the message
+
+    // --step: waiting before each step; p while waiting shows paused, p again waiting
+    phase = 0;
+    w = world({
+      onWrite: (s, w) => {
+        if (s.state !== 'waiting' && s.state !== 'paused') return;
+        if (phase === 0) { phase = 1; w.queue('pause'); } else if (phase === 1) { phase = 2; w.queue('pause'); } else if (s.state === 'waiting') w.queue('next');
+      },
+    });
+    await conduct(scenes(), w.io, { mode: 'step', pace: 3, attached: false });
+    expect(w.writes.map((s) => s.state).filter((s, i, a) => s !== a[i - 1])).toEqual([
+      'playing', 'waiting', 'paused', 'waiting', 'playing', 'waiting', 'playing', 'waiting', 'playing', 'done',
+    ]);
   });
 
   it('q ends early and leaves the rest pending: stopped after the last step played, and how many were not', async () => {
@@ -783,12 +836,12 @@ describe('the conductor', () => {
   });
 
   it('q before the first step: stopped before any step was played; q in --only counts only the steps it would play', async () => {
-    let w = world({ onWrite: (s, w) => { if (s.message.startsWith('Press Enter')) w.queue('quit'); } });
+    let w = world({ onWrite: (s, w) => { if (s.state === 'waiting') w.queue('quit'); } });
     let r = await conduct(scenes(), w.io, { mode: 'step', pace: 0, attached: true });
     expect(r.steps.map((s) => s.state)).toEqual(['pending', 'pending', 'pending']);
     expect(r.stopped).toEqual({ after: null, not_played: 3 });
     expect(stoppedLine(r.stopped!)).toBe('stopped before the first step; 3 not played');
-    w = world({ onWrite: (s, w) => { if (s.message.startsWith('Press Enter')) w.queue('quit'); } });
+    w = world({ onWrite: (s, w) => { if (s.state === 'waiting') w.queue('quit'); } });
     r = await conduct(scenes(), w.io, { mode: 'step', pace: 0, attached: true, only: ['2'] });   // step 1 at once, then Enter for 2
     expect(r.stopped).toEqual({ after: 1, not_played: 1 });   // step 3 was never going to play
   });

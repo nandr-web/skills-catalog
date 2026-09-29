@@ -5,14 +5,15 @@
 // expected) or missed. Between steps it waits the pace, or for Enter; p pauses; q ends. Everything goes through
 // ConductorIo, so the tests run it without tmux.
 import { CLI_OPS, type Scenes, type Step } from './scenes.ts';
+import type { RunState } from './steps-view.ts';
 
 /** One turns.jsonl line: the assistant finished an ask. `step` is null for an ask it didn't know; `ok` false only on an
  *  unexpected error (a catalog refusal is an expected result). */
 export type Turn = { who: string; say: string; step: number | string | null; ok: boolean; at: string };
 export type StepState = 'pending' | 'now' | 'seen' | 'missed' | 'planned';
 export type StepView = { id: number | string; title: string; see: string; state: StepState; missing?: string[] };
-/** steps.json, which the steps view draws. */
-export type StepsFile = { title: string; mode: 'auto' | 'step'; paused: boolean; message: string; steps: StepView[] };
+/** steps.json, which the steps view draws. `state`: playing, paused, waiting for Enter, or done. */
+export type StepsFile = { title: string; mode: 'auto' | 'step'; paused: boolean; state: RunState; message: string; steps: StepView[] };
 export type Counts = { seen: number; planned: number; missed: number };
 
 export type ConductorIo = {
@@ -42,8 +43,6 @@ export const TITLE = 'what to look for';
 /** The assistant's prompt: the conductor types only once every developer's pane shows it. */
 export const PROMPT = '›';
 const TICK = 50;
-const ENTER = 'Press Enter for the next step';
-const PAUSED = 'Paused: p to carry on, Enter for the next step';
 export const doneLine = (c: Counts) => `Done: ${c.seen} seen, ${c.planned} planned, ${c.missed} missed`;
 /** Attached, the window stays until q; headless, there is nothing to press. */
 export const doneMessage = (c: Counts, attached: boolean, closeAfter?: number) =>
@@ -56,7 +55,7 @@ const count = (steps: StepView[]): Counts => {
 
 /** steps.json before the first step. */
 export const initialSteps = (scenes: Scenes, mode: StepsFile['mode']): StepsFile => ({
-  title: TITLE, mode, paused: false, message: '', steps: scenes.steps.map((s) => ({ id: s.id, title: s.title, see: s.see, state: 'pending' })),
+  title: TITLE, mode, paused: false, state: 'playing', message: '', steps: scenes.steps.map((s) => ({ id: s.id, title: s.title, see: s.see, state: 'pending' })),
 });
 
 /** What a pane showed after `before` was captured: from before's last line on, less what that line already had (the
@@ -74,7 +73,8 @@ export async function conduct(scenes: Scenes, io: ConductorIo, o: ConductorOptio
   const view = initialSteps(scenes, o.mode);
   const timeout = o.turnTimeoutMs ?? 30_000, settle = o.settleMs ?? 3000;
   let quit = false, done = false, nexts = 0, waiting: 'no' | 'enter' | 'pace' = 'no';
-  const render = () => { view.message = view.paused ? PAUSED : waiting === 'enter' ? ENTER : ''; io.writeSteps(view); };
+  // The steps pane says the state; the message is left for the end.
+  const render = () => { view.state = done ? 'done' : view.paused ? 'paused' : waiting === 'enter' ? 'waiting' : 'playing'; io.writeSteps(view); };
   const poll = () => {
     for (const w of io.control()) {
       if (w === 'quit') quit = true;
@@ -165,7 +165,7 @@ export async function conduct(scenes: Scenes, io: ConductorIo, o: ConductorOptio
   const stopped: Stopped | null = quit && left ? { after: toPlay.findLast((s) => s.state !== 'pending')?.id ?? null, not_played: left } : null;
   const end = stopped ? stoppedLine(stopped).replace(/^s/, 'S') : doneLine(counts);
   view.message = stopped ? `${end}. Everything is removed.` : doneMessage(counts, o.attached, o.closeAfter);
-  io.writeSteps(view);
+  render();
   if (!quit && o.attached) for (let waited = 0; !poll() && !(o.closeAfter !== undefined && waited >= o.closeAfter * 1000); waited += TICK) await io.sleep(TICK);
   return { steps: view.steps, counts, quit, stopped, end };
 }

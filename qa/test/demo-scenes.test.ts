@@ -565,6 +565,60 @@ describe('the steps view', () => {
     expect(out).toContain("✗ 6  bob publishes over ana's\n     skill");
   });
 
+  const G = '\x1b[32m', D = '\x1b[2m', O = '\x1b[38;5;208m', R = '\x1b[0m';
+  const KEYS_PAINTED = `${G}Enter${R} ${D}next ·${R} ${G}p${R} ${D}pause ·${R} ${G}q${R} ${D}quit${R}`;
+
+  it('the keys line: each key (Enter, p, q) lightly coloured, green and not bold, its word dimmed; the same text without colours', () => {
+    for (const width of [Infinity, 48, 40]) {
+      for (const s of [state, null]) {
+        const last = renderSteps(s, { width }).split('\n').at(-1)!;
+        expect(last).toBe(KEYS_PAINTED);
+        expect(plain(last)).toBe('Enter next · p pause · q quit');
+        expect(last).not.toContain('\x1b[1;');   // never bold
+      }
+    }
+  });
+
+  it('one state line just above the keys: ▶ playing dim, ‖ paused orange, ↵ waiting for Enter green; done has none', () => {
+    const lines = (s: Partial<StepsState>) => renderSteps({ ...state, ...s }, { width: 48 }).split('\n');
+    expect(lines({ state: 'playing' }).at(-2)).toBe(`${D}▶ playing${R}`);
+    expect(lines({ state: 'paused', paused: true }).at(-2)).toBe(`${O}‖ paused: p to carry on${R}`);
+    expect(lines({ state: 'waiting', mode: 'step' }).at(-2)).toBe(`${G}↵ waiting: Enter for the next step${R}`);
+    const done = lines({ state: 'done', message: 'Done: 5 seen, 2 planned, 1 missed.' });
+    expect(done.at(-2)).toBe('Done: 5 seen, 2 planned, 1 missed.');
+    for (const s of ['playing', 'paused', 'waiting'] as const) {
+      const out = plain(lines({ state: s, paused: s === 'paused', mode: 'step' }).join('\n'));
+      // said once: the state line replaces the old paused and step-mode lines
+      expect(out.match(/playing|paused|waiting:/g), s).toHaveLength(1);
+      expect(out).not.toContain('one step at a time');
+      expect(out).not.toMatch(/Press Enter|Paused:/);
+    }
+    expect(plain(done.join('\n'))).not.toMatch(/▶ playing|‖|↵/);
+  });
+
+  it('a steps.json from before the state was written still draws: its steps and keys; paused shows paused, otherwise no state line', () => {
+    const old = { ...state } as StepsState;
+    delete old.state;
+    let lines = renderSteps(old, { width: 48 }).split('\n');
+    expect(plain(lines.join('\n'))).toContain('▶ 5  bob compares v1 and v2');
+    expect(lines.at(-1)).toBe(KEYS_PAINTED);
+    expect(plain(lines.at(-2)!)).toBe('✓ = the demo checked it too');
+    lines = renderSteps({ ...old, paused: true }, { width: 48 }).split('\n');
+    expect(lines.at(-2)).toBe(`${O}‖ paused: p to carry on${R}`);
+  });
+
+  it('every line fits the pane at 40 and 48 columns, in every state, each glyph one character', () => {
+    const long: StepsState = { ...state, message: 'Stopped after step 5; 3 not played. Everything is removed.' };
+    for (const width of [40, 48]) {
+      for (const s of ['playing', 'paused', 'waiting', 'done'] as const) {
+        const out = plain(renderSteps({ ...long, state: s, paused: s === 'paused' }, { width }));
+        for (const l of out.split('\n')) expect([...l].length, `${width} ${s}: ${l}`).toBeLessThanOrEqual(width);
+      }
+    }
+    // the glyphs the state line starts with are one character each (a tmux test shows each is one column wide)
+    for (const g of ['▶', '‖', '↵']) expect([...g]).toHaveLength(1);
+  });
+
   it('before the conductor writes steps.json, says it is waiting', () => {
     expect(plain(renderSteps(null, { width: 40 }))).toMatch(/waiting for the demo to start/);
   });
