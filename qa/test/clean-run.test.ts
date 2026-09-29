@@ -183,7 +183,7 @@ describe('before/after check: processes and ports (plan §6.6)', () => {
     const decoy = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)', `QA_RUN_ID=${sb.runId}`], { detached: true, stdio: 'ignore', env: { ...process.env } });
     const ours = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { detached: true, stdio: 'ignore', env: { ...process.env, ...sb.env } });
     try {
-      await new Promise((ok) => setTimeout(ok, 200));
+      await runningOwnCommand([decoy.pid!, ours.pid!], /setTimeout/);
       expect(runProcesses(sb.runId).map((p) => p.pid)).toEqual([ours.pid]);
     } finally {
       for (const c of [decoy, ours]) process.kill(-c.pid!, 'SIGKILL');
@@ -209,6 +209,17 @@ describe('before/after check: processes and ports (plan §6.6)', () => {
     }
   });
 });
+
+/** Waits until ps shows each process running its own command (a new process shows its parent's until it starts it). */
+async function runningOwnCommand(pids: number[], command: RegExp): Promise<void> {
+  for (let waited = 0; waited < 10_000; waited += 20) {
+    const ps = execFileSync('ps', ['-o', 'pid=,command=', '-p', pids.join(',')], { encoding: 'utf8' });
+    const shown = new Map(ps.split('\n').flatMap((l) => { const m = l.match(/^\s*(\d+) (.*)$/); return m ? [[Number(m[1]), m[2]!] as const] : []; }));
+    if (pids.every((pid) => command.test(shown.get(pid) ?? ''))) return;
+    await new Promise((ok) => setTimeout(ok, 20));
+  }
+  throw new Error(`processes ${pids.join(', ')} never showed ${command} in ps`);
+}
 
 function alive(pgid: number): boolean {
   try { process.kill(-pgid, 0); return true; } catch { return false; }

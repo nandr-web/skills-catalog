@@ -83,11 +83,12 @@ describe('qa run', () => {
 
   it('[6] a process that escapes the run\'s process group fails the run, and is stopped', async () => {
     const m = machine();
-    // the command starts a listener in a process group of its own, then exits 0
+    // the command starts a listener in a process group of its own, then exits 0 once it listens (it says so on stdout),
+    // so the after snapshot sees the port however long the listener took to start
     const r = await qaRun({
       machine: m,
-      command: node(`const c = require('child_process').spawn(process.execPath, ['-e', "require('net').createServer().listen(0, '127.0.0.1')"], { detached: true, stdio: 'ignore' });
-        require('fs').writeFileSync(require('path').join(process.env.QA_SANDBOX, '..', '..', 'escaped.pid'), String(c.pid)); c.unref(); setTimeout(() => process.exit(0), 300);`),
+      command: node(`const c = require('child_process').spawn(process.execPath, ['-e', "require('net').createServer().listen(0, '127.0.0.1', () => console.log('listening'))"], { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
+        require('fs').writeFileSync(require('path').join(process.env.QA_SANDBOX, '..', '..', 'escaped.pid'), String(c.pid)); c.stdout.once('data', () => process.exit(0));`),
     });
     expect(r.status).toBe('leak');
     const whats = r.differences.map((d) => d.what);
