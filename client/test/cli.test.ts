@@ -4,7 +4,7 @@
 // error, 3 needs the person. The person-only steps (update <name> --accept, --allow-suspected-secrets) ask in the person's
 // own terminal and refuse without one.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Surface, actAs, renderError, CatalogError } from '@skills-catalog/core';
@@ -48,7 +48,7 @@ describe('the CLI face', () => {
     expect(cliNames).toContain('skills-catalog install <name>');
     expect(cliNames).toContain('skills-catalog update <name> --accept');
     const held = S.word('install.held') as string;
-    expect(held).toContain('skills-catalog update {name} --accept');
+    expect(held).toContain('{command}');
     expect(held).not.toMatch(/accept_held_update/);
   });
 
@@ -124,6 +124,49 @@ describe('the CLI face', () => {
     // The activity log shows it too, as waiting for the person, with the skill it was about.
     const last = readFileSync(join(p.home, 'activity.log'), 'utf8').trimEnd().split('\n').at(-1)!;
     expect(last.split(/\s{2,}/).slice(1)).toEqual(['-', 'update --accept', S.doc.log.error.person_only, 'release-notes-kit']);
+  });
+
+  it('a held project install is taken into the project: the command given carries --target project, and the intro names the folder', async () => {
+    const p = place();
+    await seed(p);
+    const held = await cli(p, ['install', 'release-notes-kit', '--target', 'project']);
+    expect(held.code).toBe(0);
+    expect(held.out).toContain('skills-catalog update release-notes-kit --accept --target project');
+    const dest = join(p.dir, 'project', '.claude', 'skills', 'release-notes-kit');
+    const yes = await cli(p, ['update', 'release-notes-kit', '--accept', '--target', 'project'], { tty: true, answers: ['y'] });
+    expect(yes.code).toBe(0);
+    expect(yes.out).toContain(dest);
+    expect(readFileSync(join(dest, 'scripts', 'collect.sh'), 'utf8')).toBe('#!/bin/sh\necho collecting\n');
+    expect(existsSync(join(skills(p), 'release-notes-kit'))).toBe(false);
+    // Without a terminal, the command given to the person keeps the target.
+    const q = place();
+    await seed(q);
+    await cli(q, ['install', 'release-notes-kit', '--target', 'project']);
+    const r = await cli(q, ['update', 'release-notes-kit', '--accept', '--target', 'project']);
+    expect(r.code).toBe(3);
+    expect(r.err).toContain(S.format(S.word('errors.person_only'), { command: 'skills-catalog update release-notes-kit --accept --target project' }));
+  });
+
+  it('a "tell me first" skill: update names the command, and update <name> --accept shows it and takes it on a yes', async () => {
+    const p = place();
+    await seed(p);
+    await cli(p, ['install', 'sql-migration-helper']);
+    writeFileSync(join(p.home, 'config.json'), JSON.stringify({ update_policy: 'notify' }));
+    const c = await open(p);
+    try {
+      await c.publish(request('sql-migration-helper', [{ path: 'SKILL.md', text: skillMd('sql-migration-helper', 'Write and review SQL schema migrations.', 'Second.\n') }]), actAs('ben'));
+    } finally {
+      c.close();
+    }
+    const at = { name: 'sql-migration-helper', from: 1, to: 2 };
+    const u = await cli(p, ['update']);
+    expect(u.out).toContain(S.format(S.word('update.held_notify'), at));
+    expect(u.out).toContain(S.format(S.word('update.held_notify_next_cli'), at));
+    expect(readFileSync(join(skills(p), 'sql-migration-helper', 'SKILL.md'), 'utf8')).not.toContain('Second.');
+    const yes = await cli(p, ['update', 'sql-migration-helper', '--accept'], { tty: true, answers: ['y'] });
+    expect(yes.code).toBe(0);
+    expect(yes.out).toContain(S.format(S.word('update.accept_intro_notify'), at));
+    expect(readFileSync(join(skills(p), 'sql-migration-helper', 'SKILL.md'), 'utf8')).toContain('Second.');
   });
 
   it('--target goes only with --accept, and only as user or project; --as in either form stays out of the command given', async () => {

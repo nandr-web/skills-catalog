@@ -11,7 +11,7 @@
 
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { CatalogError, validateInput, type Catalog, type Surface, type VersionsResult } from '@skills-catalog/core';
+import { CatalogError, shellQuote, validateInput, type Catalog, type Surface, type VersionsResult } from '@skills-catalog/core';
 import { checkFetched, checkName, diffTrees, flagText, type RiskFlag, type TreeDiff, type TreeFile } from '@skills-catalog/core/skill-tree';
 import { reasons } from '@skills-catalog/core';
 import { logWords } from '../activity.ts';
@@ -200,31 +200,38 @@ function refusalReason(s: Surface, e: CatalogError): string {
 
 /** The change waiting for the person's yes for `name`, as the installer would hold it now: an update of the copy
  *  installed here (either target), else a first install into `target`. `installed` is the installed version (none for
- *  a first install); null when nothing would be held (up to date, or nothing to flag). Its confirm and flags are what
- *  accept_held_update takes. */
-export type Pending = { name: string; target: Target; installed?: number; version: number; reasons: string; confirm: string; flags: string[] };
+ *  a first install); null when nothing would be held (up to date, or nothing to flag). A "tell me first" skill's update
+ *  is held with or without flags (`notify`). `path` is where it goes. Its confirm and flags are what accept_held_update
+ *  takes. */
+export type Pending = { name: string; target: Target; path: string; installed?: number; notify: boolean; version: number; reasons: string; confirm: string; flags: string[] };
 
 export async function pendingHold(ctx: Context, name: string, target: Target = 'user'): Promise<Pending | { installed: number } | null> {
-  const { lock } = readRecords(ctx.settings.home);
+  const { lock, config } = readRecords(ctx.settings.home);
   const e = installedHere(ctx, lock).find((x) => x.name === name);
   const catalog = await ctx.catalog();
   const v = await allVersions(catalog, name);
   if (e && v.latest === e.version) return { installed: e.version };
   const at = e ? e.target : target;
-  if (!e) checkTarget(ctx, at, name, lock);
+  const path = checkTarget(ctx, at, name, lock);
   const to = await fetchListed(catalog, name, v, v.latest);
   const flags = gate(e ? await installedSide(catalog, e) : null, to).risk_flags;
-  if (!flags.length) return e ? { installed: e.version } : null;
+  const notify = e !== undefined && policyOf(e, config).policy === 'notify';
+  if (!flags.length && !notify) return e ? { installed: e.version } : null;
   return {
     name,
     target: at,
+    path,
     ...(e ? { installed: e.version } : {}),
+    notify,
     version: to.version,
-    reasons: reasons(ctx.surface, flags),
+    reasons: flags.length ? reasons(ctx.surface, flags) : '',
     confirm: encode({ name, target: at, version: to.version, fingerprint: to.fingerprint, latest: v.latest }),
     flags: kinds(flags),
   };
 }
+
+/** The command the person runs in their own terminal to take a held install into `target`. */
+const acceptCommand = (s: Surface, name: string, target: Target) => [s.cli, ...['update', name, '--accept', ...(target === 'project' ? ['--target', 'project'] : [])].map(shellQuote)].join(' ');
 
 // ---------- operations ----------
 
@@ -247,7 +254,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   if (flags.length) {
     const w = s.word('install');
     const confirm = encode({ name: req.name, target, version, fingerprint: to.fingerprint, latest: v.latest });
-    const text = s.format(ctx.face === 'cli' ? w.held_cli : w.held, { name: req.name, version, reasons: reasons(s, flags), confirm, flags: JSON.stringify(kinds(flags)) });
+    const text = s.format(ctx.face === 'cli' ? w.held_cli : w.held, { name: req.name, version, reasons: reasons(s, flags), confirm, flags: JSON.stringify(kinds(flags)), command: acceptCommand(s, req.name, target) });
     return { text, target: `${req.name} v${version}`, result: log.result('install', 'held') };
   }
   writeSkill(ctx, dest, to.files);
@@ -356,11 +363,6 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
       saw('held_pin');
       continue;
     }
-    if (policy === 'notify') {
-      lines.push(s.format(w.held_notify, at));
-      saw('held_notify');
-      continue;
-    }
     // Where it goes, checked as an install checks it: a link or a same-name skill or command may have appeared since.
     let dest: string;
     try {
@@ -385,8 +387,16 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
       continue;
     }
     const d = gate(await installedSide(catalog, e), to);
+    const confirm = encode({ name: e.name, target: e.target, version: to.version, fingerprint: to.fingerprint, latest: v.latest });
+    // "Tell me first" holds every new version, flagged or not (§5.3: pin, then notify, then the flags); it's taken with
+    // the flags it shows, [] when none.
+    if (policy === 'notify') {
+      lines.push(d.risk_flags.length ? s.format(w.held_notify_flagged, { ...at, reasons: reasons(s, d.risk_flags) }) : s.format(w.held_notify, at));
+      lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, { ...at, confirm, flags: JSON.stringify(kinds(d.risk_flags)) }));
+      saw('held_notify');
+      continue;
+    }
     if (d.risk_flags.length) {
-      const confirm = encode({ name: e.name, target: e.target, version: to.version, fingerprint: to.fingerprint, latest: v.latest });
       lines.push(s.format(w.held_flagged, { ...at, reasons: reasons(s, d.risk_flags) }));
       lines.push(s.format(ctx.face === 'cli' ? w.held_next_cli : w.held_next, { ...at, confirm, flags: JSON.stringify(kinds(d.risk_flags)) }));
       saw('held_flagged');

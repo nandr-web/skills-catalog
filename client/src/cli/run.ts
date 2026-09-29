@@ -184,8 +184,10 @@ async function acceptHeld(ctx: Context, s: Surface, io: Io, positionals: readonl
     return 0;
   }
   const first = hold.installed === undefined;
-  const at = { name, from: hold.installed, to: hold.version, reasons: hold.reasons };
-  io.stdout(said(s, first ? 'update.accept_intro_install' : 'update.accept_intro', at) + '\n' + said(s, first ? 'update.accept_look_install' : 'update.accept_look', at) + '\n');
+  const at = { name, from: hold.installed, to: hold.version, reasons: hold.reasons, path: hold.path };
+  // A first install names where it goes; a "tell me first" update with nothing flagged has no reasons to give.
+  const intro = first ? 'update.accept_intro_install' : hold.notify && !hold.flags.length ? 'update.accept_intro_notify' : 'update.accept_intro';
+  io.stdout(said(s, intro, at) + '\n' + said(s, first ? 'update.accept_look_install' : 'update.accept_look', at) + '\n');
   const answer = await io.ask(said(s, 'update.accept_ask', {}));
   if (!/^y(es)?$/i.test(answer.trim())) {
     io.stdout(withActing(said(s, first ? 'update.accept_declined_install' : 'update.accept_declined', at)) + '\n');

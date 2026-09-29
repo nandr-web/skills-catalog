@@ -166,7 +166,7 @@ describe('install (contract §3 install_shared_skill)', () => {
     const p = place();
     await publish(p, 'runner', withScript('runner'));
     const held = await install(ctxFor(p, { face: 'cli' }), { name: 'runner' });
-    expect(held.text).toBe(S.format(S.word('install.held_cli'), { name: 'runner', version: 1, reasons: S.format(S.word('update.reason.runnable_file'), { path: 'scripts/run.sh' }) }));
+    expect(held.text).toBe(S.format(S.word('install.held_cli'), { name: 'runner', version: 1, reasons: S.format(S.word('update.reason.runnable_file'), { path: 'scripts/run.sh' }), command: 'skills-catalog update runner --accept' }));
   });
 
   it('a held install is a conflict once a newer version arrives', async () => {
@@ -544,9 +544,12 @@ describe('update (contract §3 update_installed_skills, §5.3)', () => {
     await policy(ctx, { policy: 'notify', name: 'ask-first' });
     for (const name of ['pinned-one', 'ask-first', 'auto-one']) await publish(p, name, plain(name, 'Second.\n'));
     const r = await update(ctx, {});
-    expect(r.text.split('\n')).toEqual([
+    const lines = r.text.split('\n');
+    const confirm = confirmOf(lines[2]!)!;
+    expect(lines).toEqual([
       S.format(S.word('update.header'), { checked: 3 }),
       S.format(S.word('update.held_notify'), { name: 'ask-first', from: 1, to: 2 }),
+      S.format(S.word('update.held_notify_next'), { name: 'ask-first', from: 1, confirm, flags: '[]' }),
       S.format(S.word('update.updated'), { name: 'auto-one', from: 1, to: 2, changes: '"SKILL.md" changed' }),
       S.format(S.word('update.held_pin'), { name: 'pinned-one', from: 1, to: 2 }),
     ]);
@@ -555,6 +558,37 @@ describe('update (contract §3 update_installed_skills, §5.3)', () => {
     expect([e.code, e.data]).toEqual(['not_installed', { name: 'never-installed' }]);
     const one = await update(ctx, { names: ['pinned-one'] });
     expect(one.text.split('\n')[0]).toBe(S.format(S.word('update.header'), { checked: 1 }));
+    // The tell-me-first hold is taken with flags [] once the person agrees, and keeps its setting.
+    const dest = join(userSkills(p), 'ask-first');
+    const taken = await accept(ctx, { name: 'ask-first', confirm, flags: [] });
+    expect(taken.text).toBe(S.format(S.word('update.accepted'), { name: 'ask-first', from: 1, to: 2, path: JSON.stringify(dest) }));
+    expect(lockOf(p)[dest]).toMatchObject({ version: 2, policy: 'notify', accepted: [{ version: 2, flags: [] }] });
+  });
+
+  it('a tell-me-first hold that could also change what runs says why, and is taken with those flags', async () => {
+    const p = place();
+    await publish(p, 'ask-first', plain('ask-first'));
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'ask-first' });
+    await policy(ctx, { policy: 'notify', name: 'ask-first' });
+    await publish(p, 'ask-first', withScript('ask-first'));
+    const lines = (await update(ctx, {})).text.split('\n');
+    const confirm = confirmOf(lines[2]!)!;
+    const reasonsText = S.format(S.word('update.reason.runnable_file'), { path: 'scripts/run.sh' });
+    expect(lines.slice(1)).toEqual([
+      S.format(S.word('update.held_notify_flagged'), { name: 'ask-first', from: 1, to: 2, reasons: reasonsText }),
+      S.format(S.word('update.held_notify_next'), { name: 'ask-first', from: 1, confirm, flags: '["runnable_file"]' }),
+    ]);
+    expect((await refusal(() => accept(ctx, { name: 'ask-first', confirm, flags: [] }))).code).toBe('conflict');
+    await accept(ctx, { name: 'ask-first', confirm, flags: ['runnable_file'] });
+    expect(existsSync(join(userSkills(p), 'ask-first', 'scripts', 'run.sh'))).toBe(true);
+    // The CLI face names the person's own command.
+    const q = place();
+    await publish(q, 'ask-first', plain('ask-first'));
+    const cliCtx = ctxFor(q, { face: 'cli' });
+    await install(cliCtx, { name: 'ask-first', policy: 'notify' });
+    await publish(q, 'ask-first', plain('ask-first', 'Second.\n'));
+    expect((await update(cliCtx, {})).text.split('\n')[2]).toBe(S.format(S.word('update.held_notify_next_cli'), { name: 'ask-first', from: 1, to: 2 }));
   });
 
   it('the default policy is set without a name; a skill with its own keeps it', async () => {

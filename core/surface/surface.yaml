@@ -429,6 +429,7 @@ results:
     card: "- {name} (v{version}, {publisher}; tags: {tags}): {description}"
     no_tags: none
     more: 'More results: call again with cursor "{cursor}".'
+    more_cli: "More results: run the same search with --cursor {cursor}."
     next: "Next: read one with ${get}, or install it with ${install}."
     empty: 'Shared catalog: no skill matches "{query}" ({ranking}; {total} skills in the catalog). {hint}'
     partial_header: 'Shared catalog: no skill matches every word of "{query}" ({ranking}). The closest share only some of them:'
@@ -448,7 +449,9 @@ results:
     line_reviewed: "- v{version} ({published_at}, {publisher}): {message} Review: {notes}."
     no_message: (no note from the publisher)
     more: 'Older versions: call again with cursor "{cursor}".'
+    more_cli: "Older versions: run the same command with --cursor {cursor}."
     next: "To see exactly what changed between two versions: ${diff} with from and to."
+    next_cli: "To see exactly what changed between two versions: ${diff}."
   diff:
     header: "{name} v{from} -> v{to}: {n} file(s) changed. Can run something new on this machine: {executes}."
     executes_no: "no"
@@ -483,6 +486,7 @@ results:
       - --- end of {path} {token} ---
     files: "Files: {files}."
     omitted: 'Not shown here, to keep this result short ({used} of {limit} used): {files}. They are part of the skill. To read them: ${get} with name "{name}" and paths (up to 20 at a time); to use the skill, install it.'
+    omitted_cli: "Not shown here, to keep this result short ({used} of {limit} used): {files}. They are part of the skill. To read them: ${cli} read {name} --path <file> (repeat --path, up to 20 files); to use the skill, install it."
     older_rules: This version was stored before one of today's rules, so it can be read but not installed ({reason}). Its owner can publish a fix.
     older_rules_reserved: This version was stored before one of today's rules, so it can be read but not installed ({reason}). Since the name itself is now reserved, a fix has to be published under a new name.
     front_matter_unreadable: "Its front matter can't be read, even leniently. To see SKILL.md's text: ${get} with name \"{name}\" and paths [\"SKILL.md\"]."
@@ -492,9 +496,12 @@ results:
     front_matter_omitted_plain: Its front matter isn't shown here, to keep this result short ({used} of {limit} used); none of its keys grants anything.
     grant_keys_more: " and {n} more"
     body_omitted: "The skill's instructions (the body of its SKILL.md) are not shown here, to keep this result short ({used} of {limit} used). To read them: ${get} with name \"{name}\" and paths [\"SKILL.md\"]; to use the skill, install it."
+    body_omitted_cli: "The skill's instructions (the body of its SKILL.md) are not shown here, to keep this result short ({used} of {limit} used). To read them: ${cli} read {name} --path SKILL.md; to use the skill, install it."
     too_big: 'Too big to show with anything else (over {limit} each): {files}. Read each on its own: ${get} with name "{name}" and paths holding just that file.'
+    too_big_cli: "Too big to show with anything else (over {limit} each): {files}. Read each on its own: ${cli} read {name} --path <file>."
     size: "{kb} KB"
     next: 'To use it here: ${install} with name "{name}".'
+    next_cli: "To use it here: ${cli} install {name}."
   quality:
     card_flagged: "- {name} (v{version}, {publisher}; tags: {tags}). Review: {notes}. {description}"
     next: "Some cards have a review note: mention it when you recommend that skill."
@@ -520,6 +527,9 @@ results:
     held_next: 'Tell the person each reason in plain words and ask whether to take it. Do not take it yourself. Only if they agree: ${accept} with name "{name}", confirm "{confirm}" and flags {flags}. Otherwise {name} stays on v{from}.'
     held_next_cli: "Tell the person each reason in plain words and ask whether to take it. Do not take it yourself: the person takes it by running ${cli} update {name} --accept in their own terminal. Otherwise {name} stays on v{from}."
     held_notify: '- {name} v{to} is available; its setting is "tell me first", so it stays on v{from}. Ask the person whether to take it.'
+    held_notify_flagged: '- {name} v{to} is available; its setting is "tell me first", so it stays on v{from}. It could also change what runs on this machine, because {reasons}. Tell the person each reason in plain words and ask whether to take it.'
+    held_notify_next: 'Only if they want it: ${accept} with name "{name}", confirm "{confirm}" and flags {flags}. Otherwise {name} stays on v{from}.'
+    held_notify_next_cli: Only if they want it, the person takes it by running ${cli} update {name} --accept in their own terminal. Otherwise {name} stays on v{from}.
     held_pin: "- {name} stays on v{from} (pinned); v{to} is available."
     capability_unreadable_detail: front matter unreadable; its grants can't be known
     held_cooldown_cli: "- {name} v{to} waits until {until} before it updates automatically: new versions wait a few days, so a problem someone finds early stops them. It stays on v{from}. If the person wants it now, they run ${cli} update {name} --latest in their own terminal."
@@ -554,7 +564,8 @@ results:
       prompt_injection: "{path} has text that tries to steer the assistant ({detail})"
       context_cost: it got much longer ({detail})
     accept_intro: "{name} v{from} -> v{to} is waiting for your OK, because {reasons}."
-    accept_intro_install: "{name} v{to} is waiting for your OK before it's installed, because {reasons}."
+    accept_intro_install: "{name} v{to} is waiting for your OK before it's installed to {path}, because {reasons}."
+    accept_intro_notify: '{name} v{from} -> v{to} is available. Your setting for {name} is "tell me first", so it waits for your OK.'
     accept_look: To see exactly what changes first, ask your assistant to show you the diff of {name} from v{from} to v{to}.
     accept_look_install: To read it first, ask your assistant to show you {name} v{to}.
     accept_ask: "Take it? (y/N) "
@@ -594,7 +605,7 @@ results:
     identical: "Nothing to publish: {folder} is identical to {name} v{latest}, the latest version."
   install:
     held: '{name} v{version} was NOT installed yet: it can run things on this machine without asking, because {reasons}. Tell the person each reason in plain words and ask whether to install it. Only if they agree: ${accept} with name "{name}", confirm "{confirm}" and flags {flags}.'
-    held_cli: "{name} v{version} was NOT installed yet: it can run things on this machine without asking, because {reasons}. Tell the person each reason in plain words. Don't install it yourself: the person does, by running ${cli} update {name} --accept in their own terminal."
+    held_cli: "{name} v{version} was NOT installed yet: it can run things on this machine without asking, because {reasons}. Tell the person each reason in plain words. Don't install it yourself: the person does, by running {command} in their own terminal."
     installed_after_yes: "Installed {name} v{version} to {path} after the person agreed (fingerprint checked). Updates: {policy}."
     done: "Installed {name} v{version} to {path} (fingerprint checked). Updates: {policy}."
     live: "You can use it in this session as /{name}. If the Skill tool says it is unknown, wait a moment and try once more: the assistant notices new skills shortly after they are installed."
@@ -646,6 +657,7 @@ results:
       not_object: isn't a set of named fields
       unknown_field: isn't a field this tool takes
       required: is required
+      contradicting_flags: was set by two flags that contradict each other (use one)
       not_a_confirm: isn't a confirm value a preview gives
       not_a_cursor: isn't a next_cursor from an earlier result
       not_a_developer_name: isn't a valid developer name (lowercase letters, digits and single hyphens)
@@ -730,7 +742,9 @@ results:
       file_bytes: the size of one file
       skill_bytes: the size of the whole skill
     invalid_request: "invalid_request: {field} {why}, so nothing was done. Correct the call and try again."
+    invalid_request_cli: "invalid_request: {field} {why}, so nothing was done. Correct the command and run it again."
     invalid_request_limit: "invalid_request: {field} {why}; the limit is {limit}. Nothing was done: call again within it (for example in batches)."
+    invalid_request_limit_cli: "invalid_request: {field} {why}; the limit is {limit}. Nothing was done: run it again within it (for example in batches)."
     unauthenticated: "unauthenticated: the catalog needs the person to sign in, so nothing was done. Ask them to run ${cli} login in their own terminal; never ask for a password or token in the chat."
     invalid_developer_setting: "invalid_developer_setting: the developer name in {setting} isn't a valid name (lowercase letters, digits and single hyphens), so nothing was done. It's a setting, not something in this call: don't retry or change the call. Tell the person; they fix it there, or run ${cli} setup in their own terminal."
     developer_setting:
@@ -854,7 +868,7 @@ companion_skill:
 
     | To | Run |
     |---|---|
-    | find skills for a task | `${cli} search <words>` (no words: list all; `--tag <t>`, `--limit <n>`) |
+    | find skills for a task | `${cli} search <words>` (no words: list all; `--tags <a,b>`, `--limit <n>`) |
     | read one before recommending it | `${cli} read <name>` (`--version <n>`, `--files`) |
     | install one | `${cli} install <name>` (`--version <n>`, `--project` for this repository) |
     | see its history / a change | `${cli} versions <name>`, `${cli} diff <name> --from <from> --to <to>` |
