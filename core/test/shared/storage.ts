@@ -179,8 +179,10 @@ export function storageSuite(a: TestAdapter): void {
 
     it('a published file is named; one never stored, a malformed sha256 and a file only mentioned in a SKILL.md are unknown', async () => {
       const { catalog } = await openOn(a);
+      // The SKILL.md names the other file by path and by its sha256 (a publisher can write any hex into prose): all that
+      // differs is that no version holds it.
       const mentioned = new TextEncoder().encode('# Notes\n');
-      const skill = new TextEncoder().encode('---\nname: mentions-notes\ndescription: Points at notes.md, which it does not hold.\n---\nSee notes.md.\n');
+      const skill = new TextEncoder().encode(`---\nname: mentions-notes\ndescription: Points at notes.md, which it does not hold.\n---\nSee notes.md (sha256 ${sha(mentioned)}).\n`);
       await catalog.publish(request('mentions-notes', [{ path: 'SKILL.md', mode: '0644', bytes: skill }]), ana);
       const answer = await catalog.file(sha(skill));
       expect(named(answer.kind), answer.kind).toBe(true);
