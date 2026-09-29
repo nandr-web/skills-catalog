@@ -29,10 +29,41 @@ const MUTATIONS = [
   ['operations.ts', 'a face runs an operation it doesn\'t serve', '  if (!row.faces.includes(ctx.face)) throw', '  if (false) throw'],
   ['operations.ts', 'the web face gets presented text', "text: web ? '' : present(ctx, op, ran.data, args)", 'text: present(ctx, op, ran.data, args)'],
   ['operations.ts', 'a catalog operation\'s data is shown as it is, not through its presenter', 'return catalogOp?.present ? catalogOp.present(ctx, data, args) : String(data);', 'return String(data);'],
-  ['operations.ts', 'a publish acts as the catalog\'s own identity, not the calling developer', 'catalog.publish(args, actAs(ctx.settings.developer), ctx.face)', 'catalog.publish(args, undefined, ctx.face)'],
-  ['operations.ts', 'one generic call puts the face in publish\'s identity slot', "row.run === 'publish'\n      ?", 'false\n      ?'],
-  // Not listed: dropping ctx.face from either call. Equivalent today: the catalog's default is the strictest face, and
+  ['operations.ts', 'an operation runs as a developer other than the one acting', 'developer: ctx.settings.developer, face: ctx.face })', 'developer: undefined, face: ctx.face })'],
+  ['operations.ts', 'a web fetch logs as a read', "result: logWords(ctx.words).result('fetch')", "result: logWords(ctx.words).result('get')"],
+  // the per-method call into the Catalog (core/src/http: operations-seam.test.ts, web-handler.test.ts, core's http.test.ts)
+  ['core:http/index.ts', 'a publish acts as the catalog\'s own identity, not the calling developer', 'const identity: Identity = { actor: async () => o.developer };', 'const identity: Identity = { actor: async () => undefined };'],
+  ['core:http/index.ts', 'one generic call puts the face in publish\'s identity slot', "  if (row.run === 'publish') {", '  if (false) {'],
+  // Not listed: dropping the face from either call. Equivalent today: the catalog's default is the strictest face, and
   // only publish_version (web only) has a person-only input; it counts once a read gains one.
+  // the web API's shared half (core/src/http): the routes, the body, the envelope, a file's answer, the refusals' numbers
+  ['core:http/index.ts', 'an operation not served on the web is routed', "  return row && row.faces.includes('web') ? row : undefined;", '  return row;'],
+  ['core:http/index.ts', 'an inherited key is an operation', 'const row = Object.hasOwn(OPERATIONS, op) ? OPERATIONS[op] : undefined;', 'const row = (OPERATIONS as Record<string, OperationDef>)[op];'],
+  ['core:http/index.ts', 'a person-only input is taken on the web', "validateInput<Record<string, unknown>>(op, parsed, 'web')", "validateInput<Record<string, unknown>>(op, parsed, 'cli')"],
+  ['core:http/index.ts', 'a cut body is parsed as if whole', "  if (raw === 'cut') throw new CatalogError('too_large', { limit: 'request_bytes', max });\n", ''],
+  ['core:http/index.ts', 'a transport\'s own sentence replaces every error\'s', "err.code === 'unauthenticated' && s.unauthenticated !== undefined ? s.unauthenticated", 's.unauthenticated !== undefined ? s.unauthenticated'],
+  ['core:http/index.ts', 'a malformed fingerprint is looked up', "SHA256.test(sha256) ? await catalog.file(sha256) : { kind: 'unknown' }", 'await catalog.file(sha256)'],
+  ['core:http/index.ts', 'a link to a file may be cached', '{ ...api, location: answer.url }', '{ ...SECURITY_HEADERS, location: answer.url }'],
+  ['core:http/index.ts', 'a file on its way says to retry at once', "'retry-after': '2'", "'retry-after': '0'"],
+  ['core:http/index.ts', 'the act-as header on a hosted catalog sends the caller to sign in again', 'token_only: 400,', 'token_only: 401,'],
+  ['core:http/index.ts', 'a POST on a file is looked up', "  if (file) return method === 'GET' ? { kind: 'file', sha256: file[1]! } : { kind: 'method' };", "  if (file) return { kind: 'file', sha256: file[1]! };"],
+  // the local web face's guards (web-handler.test.ts): each refuses before anything is looked up or read
+  ['web/handler.ts', 'any Host is served', "    if (req.headers['host'] !== host) return", '    if (false) return'],
+  ['web/handler.ts', 'any Content-Type is read', "    if (!JSON_TYPE.test(req.headers['content-type'] ?? '')) return", '    if (false) return'],
+  ['web/handler.ts', 'a POST from another origin is served', "    if (req.headers['origin'] !== origin) return refuse('refused', sentences);\n    if (r.kind === 'pair')", "    if (r.kind === 'pair')"],
+  ['web/handler.ts', 'an operation needs no token', "    if (!same(req.headers['x-skills-catalog-token'], token)) return refuse('no_token', sentences);\n    // An operation", '    // An operation'],
+  ['web/handler.ts', 'an unknown operation is refused before the token check', "    if (r.kind === 'not_found' && !r.operationPath) return", "    if (r.kind === 'not_found') return"],
+  ['web/handler.ts', 'a file from another origin is served', "    if (req.headers['origin'] !== undefined && req.headers['origin'] !== origin) return", '    if (false) return'],
+  ['web/handler.ts', 'a cross-site file request is served', "    if (site !== undefined && site !== 'same-origin') return", '    if (false) return'],
+  ['web/handler.ts', 'a file needs no token', "    if (!same(req.headers['x-skills-catalog-token'], token)) return refuse('no_token', sentences);\n    // Opened", '    // Opened'],
+  ['web/handler.ts', 'the pairing code trades more than once', '    if (token !== undefined || raw === \'cut\') return', "    if (raw === 'cut') return"],
+  ['web/handler.ts', 'a wrong pairing code is taken', ' || !same(code, o.pairingCode)) return', ') return'],
+  ['web/handler.ts', 'any well-formed name acts', '    if (!known.includes(name)) throw', '    if (false) throw'],
+  ['web/handler.ts', 'a real publish without --publish is served', '      if (real && !o.publish) throw', '      if (false) throw'],
+  ['web/handler.ts', 'a dry run counts as a real publish', "const real = name === 'publish_version' && input['dry_run'] !== true;", "const real = name === 'publish_version';"],
+  ['web/handler.ts', 'the body is read before who is acting is checked', "    let developer: string;\n    try {\n      developer = actor(req.headers['x-skills-catalog-as']);", "    let developer: string;\n    await readBody(req.body, BODY_LIMIT);\n    try {\n      developer = actor(req.headers['x-skills-catalog-as']);"],
+  // Not listed: 'the body is read past its limit' (dropping the cut). The endless-body test then never ends: it would be
+  // caught only by the test's time limit, minutes later; the cut is shown by that test on every run.
   ['operations.ts', 'search is worded as a read', 'present: (ctx, r, args) => renderSearch(ctx.words, r, (args ?? {}) as SearchInput),', 'present: (ctx, r) => renderRead(ctx.words, r, ctx.ids),'],
   // the words an assistant reads
   ['operations.ts', 'a bug\'s traceback reaches the assistant', ": renderError(words, err), isError: true", ": (err.code === 'internal_error' && e instanceof Error ? String(e.stack) : renderError(words, err)), isError: true"],
@@ -135,10 +166,14 @@ const MUTATIONS = [
 ];
 
 // A mutant is caught by its first failing test, so mutant runs stop there (--bail 1); the baseline runs everything.
-function run(bail = false) {
+// `core`: the core's own tests of the web API's shared half, where a core:http/ mutant the client's tests don't reach
+// (a hosted answer, a link or a file on its way) is caught.
+const CORE_HTTP_TESTS = ['test/http.test.ts', 'test/http-deps.test.ts'];
+function run(bail = false, core = false) {
   const tmp = mkdtempSync(join(tmpdir(), 'client-mutate-'));
   try {
-    return spawnSync('npx', ['vitest', 'run', ...(bail ? ['--bail', '1'] : [])], { encoding: 'utf8', cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, TMPDIR: tmp } });
+    const where = new URL(core ? '../../core' : '..', import.meta.url).pathname;
+    return spawnSync('npx', ['vitest', 'run', ...(core ? CORE_HTTP_TESTS : []), ...(bail ? ['--bail', '1'] : [])], { encoding: 'utf8', cwd: where, env: { ...process.env, TMPDIR: tmp } });
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -154,13 +189,22 @@ console.log('baseline: the suite is green');
 
 const only = process.argv[2];
 const chosen = MUTATIONS.filter(([file, name]) => !only || file.includes(only) || name.includes(only));
+const coreHttp = (file) => file.startsWith('core:http/');
+if (chosen.some(([file]) => coreHttp(file))) {
+  const core = run(false, true);
+  if (core.status !== 0 || failed(core).length) {
+    console.log(`the core's http tests are red before any mutation; fix them first:\n  ${failed(core).join('\n  ') || core.stderr.slice(-2000)}`);
+    process.exit(2);
+  }
+}
 let missed = 0;
 for (const [file, name, from, to] of chosen) {
   const original = readFileSync(src(file), 'utf8');
   if (!original.includes(from)) { console.log(`STALE   ${name}: its code is gone; update this list`); missed++; continue; }
   try {
     writeFileSync(src(file), original.replace(from, to));
-    const r = run(true);
+    let r = run(true);
+    if (coreHttp(file) && !failed(r).length && r.status === 0) r = run(true, true);
     const f = failed(r);
     const caught = f.length > 0 || r.status !== 0;
     console.log(`${caught ? 'CAUGHT ' : 'MISSED '} ${name}${f.length ? `\n          by: ${f[0]}` : caught ? '\n          by: the suite failing to run' : ''}`);

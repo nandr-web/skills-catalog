@@ -2,10 +2,10 @@
 // Each command runs the API's operation and prints the core's own rendering of its result, so the CLI says what the
 // assistant's tools say, in the CLI's words (a command where a tool would be named). The oracle for each is the core's
 // renderer on the same call made directly. (preview and publish follow the API's split: their own test file.)
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { CatalogError, renderDiff, renderError, renderRead, renderSearch, renderVersions, type Catalog } from '@skills-catalog/core';
+import { CatalogError, OPERATIONS, renderDiff, renderError, renderRead, renderSearch, renderVersions, type Catalog } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
 import { COMMANDS, flagsFor } from '../src/cli/run.ts';
 import { cli, fixedTokens, lastLogLine, S, TOKEN } from './cli-io.ts';
@@ -290,6 +290,20 @@ function commandsIn(raw: string): { command: string; flags: string[] }[] {
   }
   return found;
 }
+
+describe('the operations the commands run', () => {
+  // perform's face check is a backstop only (operations.ts): each CLI command, its person-only step and every operation a
+  // command's own code performs must be one the CLI face serves. A command that isn't an operation (stats) runs on its own.
+  it('each is served on the cli face', () => {
+    const literal = readdirSync(new URL('../src/cli/commands/', import.meta.url))
+      .flatMap((f) => [...readFileSync(new URL(`../src/cli/commands/${f}`, import.meta.url), 'utf8').matchAll(/perform\(ctx, '([a-z_]+)'/g)].map((m) => m[1]!));
+    const ops = [...Object.values(COMMANDS).flatMap((c) => [c.op, ...(c.personOnlyOp ? [c.personOnlyOp] : [])]), ...literal];
+    expect(literal).toContain('accept_held_update');
+    const offFace = ops.filter((op) => Object.hasOwn(OPERATIONS, op) && !OPERATIONS[op]!.faces.includes('cli'));
+    const notOps = [...new Set(ops.filter((op) => !Object.hasOwn(OPERATIONS, op)))];
+    expect({ offFace, notOps }).toEqual({ offFace: [], notOps: ['stats'] });
+  });
+});
 
 describe('the words and the commands', () => {
   const raw = [...strings(S.doc.results, []), ...strings(S.doc.companion_skill?.cli, ['companion_skill']), ...strings(S.doc.setup, ['setup'])];

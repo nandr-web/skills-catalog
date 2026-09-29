@@ -3,8 +3,10 @@
 // back, and each face presents that data its own way (the MCP's and the CLI's text, byte for byte as before, which the
 // golden transcripts prove; the web face never presents: it sends the data). An operation a face doesn't serve is
 // refused there.
+import { readFileSync } from 'node:fs';
 import { OPERATIONS, Words } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
+import { logWords } from '../src/activity.ts';
 import { MACHINE } from '../src/machine/index.ts';
 import { contextFor, perform, type Face } from '../src/operations.ts';
 import { settingsFrom } from '../src/settings.ts';
@@ -104,6 +106,21 @@ describe('perform', () => {
       const a = await perform(ctx, 'publish_version', 'publish_version', newSkill({ allow_suspected_secrets: true }));
       expect(a.isError).toBe(true);
       expect(a.error?.toJSON()).toMatchObject({ code: 'invalid_request', field: 'allow_suspected_secrets', why: 'unknown_field' });
+    } finally {
+      close();
+    }
+  });
+
+  it('logs a web fetch as fetched, with the version it fetched', async () => {
+    const p = place();
+    await seed(p);
+    const { ctx, close } = asWeb(p);
+    try {
+      const a = await perform(ctx, 'fetch_version', 'fetch_version', { name: 'release-notes-kit', version: 1 });
+      expect(a.error?.toJSON()).toBeUndefined();
+      const line = readFileSync(ctx.settings.activityLog, 'utf8').trim().split('\n').at(-1)!;
+      expect(line).toContain('release-notes-kit v1');
+      expect(line).toContain(logWords(Words.load()).result('fetch'));
     } finally {
       close();
     }
