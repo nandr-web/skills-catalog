@@ -16,13 +16,34 @@ export type StageConfig = {
   throttle: { rate: number; burst: number };
   /** The parameter store name of the GitHub sign-in app's secret (the owner creates it; the stack only names it). */
   githubSecretParameter: string;
+  /** The origin secret CloudFront sends the API, current and previous (the deploy script creates and rotates them). */
+  originSecretParameters: { current: string; previous: string };
+  /** Requests from one address in 5 minutes before the edge blocks it. */
+  rateLimitPer5Min: number;
+  /** Demo: the exact Lambda runtime version the throwaway smoke test proved (manual runtime updates). */
+  runtimeVersionArn?: string | undefined;
+  /** Demo: a monthly budget in US dollars, and CloudFront's flat-rate Free plan. */
+  budgetUsd?: number | undefined;
+  freePlan: boolean;
 };
 
 /** Set at the deploy go (the owner's account); synth needs only a fixed value. */
 export const ACCOUNT = '111111111111';
 export const REGION = 'us-east-1';
 
+/** What each preset names the same way: its account and region, and its parameters under /skills-catalog/<preset>/. */
+function named(preset: PresetName) {
+  const p = `/skills-catalog/${preset}`;
+  return {
+    preset,
+    env: { account: ACCOUNT, region: REGION },
+    githubSecretParameter: `${p}/github-oauth-secret`,
+    originSecretParameters: { current: `${p}/origin-secret`, previous: `${p}/origin-secret-previous` },
+  };
+}
+
 export const PRESETS: Record<PresetName, StageConfig> = {
-  throwaway: { preset: 'throwaway', env: { account: ACCOUNT, region: REGION }, removal: RemovalPolicy.DESTROY, keepHistory: false, throttle: { rate: 20, burst: 40 }, githubSecretParameter: '/skills-catalog/throwaway/github-oauth-secret' },
-  demo: { preset: 'demo', env: { account: ACCOUNT, region: REGION }, removal: RemovalPolicy.RETAIN, keepHistory: true, throttle: { rate: 50, burst: 100 }, githubSecretParameter: '/skills-catalog/demo/github-oauth-secret' },
+  throwaway: { ...named('throwaway'), removal: RemovalPolicy.DESTROY, keepHistory: false, throttle: { rate: 20, burst: 40 }, rateLimitPer5Min: 1000, freePlan: false },
+  // runtimeVersionArn is set at the demo deploy go, to the version the throwaway smoke test proved.
+  demo: { ...named('demo'), removal: RemovalPolicy.RETAIN, keepHistory: true, throttle: { rate: 50, burst: 100 }, rateLimitPer5Min: 2000, budgetUsd: 10, freePlan: true },
 };

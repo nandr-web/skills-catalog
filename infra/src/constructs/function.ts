@@ -3,7 +3,7 @@
 // in the asset), given the table and bucket by name, logging to its own log group that goes with the stack.
 
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
-import { Architecture, Runtime } from 'aws-cdk-lib/aws-lambda';
+import { Architecture, Runtime, RuntimeManagementMode } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction, OutputFormat } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import type { Construct } from 'constructs';
@@ -15,7 +15,7 @@ export type CodeEntries = { api: string; indexer: string; sweep: string; project
 
 export function catalogFunction(
   scope: Construct,
-  p: { entry: string; projectRoot: string; storage: Storage; removal: RemovalPolicy; timeout?: Duration; environment?: Record<string, string> },
+  p: { entry: string; projectRoot: string; storage: Storage; removal: RemovalPolicy; runtimeVersionArn?: string | undefined; timeout?: Duration; environment?: Record<string, string> },
 ): NodejsFunction {
   const logGroup = new LogGroup(scope, 'Logs', { retention: RetentionDays.ONE_MONTH, removalPolicy: p.removal });
   return new NodejsFunction(scope, 'Handler', {
@@ -27,6 +27,8 @@ export function catalogFunction(
     memorySize: 1024,
     timeout: p.timeout ?? Duration.seconds(29),
     logGroup,
+    // Pinned to an exact runtime version where one is given (demo), so an automatic update can't swap it underneath.
+    ...(p.runtimeVersionArn ? { runtimeManagementMode: RuntimeManagementMode.manual(p.runtimeVersionArn) } : {}),
     environment: { CATALOG_TABLE: p.storage.table.tableName, CATALOG_BUCKET: p.storage.bucket.bucketName, ...p.environment },
     bundling: { forceDockerBundling: false, format: OutputFormat.ESM, target: 'node24', sourceMap: false, minify: false },
   });

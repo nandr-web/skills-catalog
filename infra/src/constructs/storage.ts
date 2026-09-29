@@ -25,6 +25,7 @@ export class Storage extends Construct {
       billingMode: BillingMode.PAY_PER_REQUEST,
       stream: StreamViewType.NEW_IMAGE,
       pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: props.keepHistory },
+      deletionProtection: props.keepHistory,
       removalPolicy: props.removal,
     });
     const destroy = props.removal === RemovalPolicy.DESTROY;

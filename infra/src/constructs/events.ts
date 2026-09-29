@@ -13,18 +13,20 @@ import type { Storage } from './storage.ts';
 
 export class Events extends Construct {
   readonly queue: Queue;
+  readonly deadLetters: Queue;
+  readonly pipe: CfnPipe;
 
   constructor(scope: Construct, id: string, p: { storage: Storage; indexer: IFunction; removal: RemovalPolicy }) {
     super(scope, id);
     const common = { fifo: true, encryption: QueueEncryption.SQS_MANAGED, enforceSSL: true, removalPolicy: p.removal };
-    const dead = new Queue(this, 'DeadLetters', { ...common, retentionPeriod: Duration.days(14) });
-    this.queue = new Queue(this, 'Queue', { ...common, visibilityTimeout: Duration.minutes(6), deadLetterQueue: { queue: dead, maxReceiveCount: 5 } });
+    this.deadLetters = new Queue(this, 'DeadLetters', { ...common, retentionPeriod: Duration.days(14) });
+    this.queue = new Queue(this, 'Queue', { ...common, visibilityTimeout: Duration.minutes(6), deadLetterQueue: { queue: this.deadLetters, maxReceiveCount: 5 } });
 
     const role = new Role(this, 'PipeRole', { assumedBy: new ServicePrincipal('pipes.amazonaws.com') });
     role.addToPolicy(new PolicyStatement({ actions: ['dynamodb:DescribeStream', 'dynamodb:GetRecords', 'dynamodb:GetShardIterator', 'dynamodb:ListStreams'], resources: [p.storage.table.tableStreamArn!] }));
     this.queue.grantSendMessages(role);
 
-    new CfnPipe(this, 'Pipe', {
+    this.pipe = new CfnPipe(this, 'Pipe', {
       roleArn: role.roleArn,
       source: p.storage.table.tableStreamArn!,
       sourceParameters: {

@@ -17,8 +17,8 @@ import { BLOB_PREFIX, type Storage } from './storage.ts';
 
 const SEARCH_KEY = 'search/cards.json';
 
-type Props = { entry: string; projectRoot: string; storage: Storage; removal: RemovalPolicy };
-export type ApiProps = Props & { throttle: { rate: number; burst: number }; githubSecretParameter: string };
+type Props = { entry: string; projectRoot: string; storage: Storage; removal: RemovalPolicy; runtimeVersionArn?: string | undefined };
+export type ApiProps = Props & { throttle: { rate: number; burst: number }; githubSecretParameter: string; originSecretParameters: { current: string; previous: string } };
 
 const records = (s: Storage, actions: string[]) => new PolicyStatement({ actions: actions.map((a) => `dynamodb:${a}`), resources: [s.table.tableArn] });
 const files = (s: Storage, actions: string[], key = `${BLOB_PREFIX}*`) => new PolicyStatement({ actions: actions.map((a) => `s3:${a}`), resources: [s.bucket.arnForObjects(key)] });
@@ -31,16 +31,18 @@ export class Api extends Construct {
 
   constructor(scope: Construct, id: string, p: ApiProps) {
     super(scope, id);
-    this.fn = catalogFunction(this, { ...p, environment: { GITHUB_SECRET_PARAMETER: p.githubSecretParameter } });
+    const origin = p.originSecretParameters;
+    this.fn = catalogFunction(this, { ...p, environment: { GITHUB_SECRET_PARAMETER: p.githubSecretParameter, ORIGIN_SECRET_PARAMETER: origin.current, ORIGIN_SECRET_PREVIOUS_PARAMETER: origin.previous } });
     // Records: read, the commit's transaction (put, conditional update, condition checks), token revokes (an update).
     this.fn.addToRolePolicy(records(p.storage, ['GetItem', 'Query', 'PutItem', 'UpdateItem', 'ConditionCheckItem']));
     // Files: upload links (put-if-absent), reading bytes to check them, claims (tags); the search file, read only.
     this.fn.addToRolePolicy(files(p.storage, ['GetObject', 'PutObject', 'GetObjectTagging', 'PutObjectTagging']));
     this.fn.addToRolePolicy(files(p.storage, ['GetObject'], SEARCH_KEY));
     this.fn.addToRolePolicy(listing(p.storage));
-    // The GitHub sign-in app's secret: that one parameter, by name.
+    // The GitHub sign-in app's secret and the origin secret (current and previous): those parameters, by name.
     const stack = Stack.of(this);
-    this.fn.addToRolePolicy(new PolicyStatement({ actions: ['ssm:GetParameter'], resources: [`arn:${stack.partition}:ssm:${stack.region}:${stack.account}:parameter${p.githubSecretParameter}`] }));
+    const parameter = (name: string) => `arn:${stack.partition}:ssm:${stack.region}:${stack.account}:parameter${name}`;
+    this.fn.addToRolePolicy(new PolicyStatement({ actions: ['ssm:GetParameter'], resources: [p.githubSecretParameter, origin.current, origin.previous].map(parameter) }));
 
     this.http = new HttpApi(this, 'Http', { defaultIntegration: new HttpLambdaIntegration('Handler', this.fn), createDefaultStage: false });
     new HttpStage(this, 'Stage', {
