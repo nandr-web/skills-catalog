@@ -4,6 +4,7 @@
 // under SKILLS_HOME, never shown), the activity log's line, and the "acting as" line.
 import { actAs, MANIFEST, openCatalog, renderDiff, renderError, renderRead, renderSearch, renderVersions, toCatalogError, type Catalog, type ReadItem, type Surface } from '@skills-catalog/core';
 import { appendActivity } from './activity.ts';
+import { MACHINE_RUNS } from './machine/index.ts';
 import type { Settings } from './settings.ts';
 
 /** Everything an operation needs, the same on every face. */
@@ -30,10 +31,10 @@ function offsetOf(cursor: unknown): number {
 
 const field = (args: unknown, key: string): unknown => (args && typeof args === 'object' ? (args as Record<string, unknown>)[key] : undefined);
 
-/** Keyed by the registry's operation name; each face names it its own way (the MCP tool's name is the surface's). The
- *  target comes from the result (the skills it returned, a match count), never from the arguments, which can hold
- *  anything. */
-export const RUNS: Record<string, Run> = {
+/** The catalog's operations, keyed by the registry's operation name; each face names it its own way (the MCP tool's name
+ *  is the surface's). The target comes from the result (the skills it returned, a match count), never from the
+ *  arguments, which can hold anything. */
+export const CATALOG_RUNS: Record<string, Run> = {
   async search_shared_skills(ctx, args) {
     const r = await (await ctx.catalog()).search(args);
     const query = field(args, 'query');
@@ -64,6 +65,9 @@ export const RUNS: Record<string, Run> = {
     return { text: renderDiff(ctx.surface, r), target: `${r.name} v${r.from} → v${r.to}`, result: OK };
   },
 };
+
+/** Every operation the client runs: the catalog's, and the machine's (machine/index.ts). */
+export const RUNS: Record<string, Run> = { ...CATALOG_RUNS, ...MACHINE_RUNS };
 
 /** The line after every result and error while a developer is set (contract §7, "acting as"): data until the
  *  surface words it. */
