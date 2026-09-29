@@ -23,7 +23,9 @@ function uploading(storage: Storage, links: HostedBlobLinks): Storage {
       for (const [i, a] of answers.entries()) {
         if (a.kind !== 'upload') continue;
         const r = await fetch(a.url, { method: 'PUT', body: Buffer.from(toSend[i]![1]), headers: a.headers });
-        if (!r.ok) throw new Error(`upload of ${a.sha256} answered ${r.status}`);
+        // 412: another publish put the same file between the link and this upload (put-if-absent); the commit checks
+        // its bytes either way.
+        if (!r.ok && r.status !== 412) throw new Error(`upload of ${a.sha256} answered ${r.status}`);
       }
       return storage.commit(v, files.map((f) => ({ sha256: f.sha256 })), cond, event);
     },
