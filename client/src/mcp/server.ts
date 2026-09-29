@@ -4,7 +4,7 @@
 // and each call is the client's face-neutral operation (operations.ts), so the MCP text is what the CLI prints.
 import type { Readable, Writable } from 'node:stream';
 import { Surface } from '@skills-catalog/core';
-import { lazyCatalog, perform, RUNS, type Context } from '../operations.ts';
+import { contextFor, perform, RUNS } from '../operations.ts';
 import type { Settings } from '../settings.ts';
 
 /** The protocol versions this server speaks, newest first. 2025-03-26 isn't offered: it requires JSON-RPC batches. */
@@ -34,8 +34,7 @@ export type ServerOptions = { settings: Settings; version: string; surface?: Sur
 
 export function createMcpServer(o: ServerOptions) {
   const surface = o.surface ?? Surface.load();
-  const catalog = lazyCatalog(o.settings);
-  const ctx: Context = { catalog: catalog.get, surface, settings: o.settings, now: o.now ?? (() => new Date()) };
+  const { ctx, close } = contextFor(o.settings, surface, o.now);
   const tools = new Map(
     surface
       .toolDefs()
@@ -91,7 +90,7 @@ export function createMcpServer(o: ServerOptions) {
     }
   }
 
-  return { handle, close: catalog.close };
+  return { handle, close };
 }
 
 /** The input's lines, each at most MAX_LINE characters: a longer one is reported (`tooLong`) and skipped to its end,

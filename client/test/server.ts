@@ -4,7 +4,7 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { refuseRealPlaces, sandbox } from '../../core/test/sandbox.ts';
+import { refuseRealPlaces, sandbox } from '@skills-catalog/core/testing';
 
 const CLI = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
 

@@ -25,15 +25,19 @@ const MUTATIONS = [
   // test that calls 20 tools and closes at once stays, for a catalog whose storage waits (the hosted one).
   ['operations.ts', 'a catalog that failed to open is never tried again', '        opened = undefined;\n', ''],
   // the words an assistant reads
-  ['operations.ts', 'a bug\'s traceback reaches the assistant', 'done = { text: renderError(ctx.surface, err), target:', "done = { text: err.code === 'internal_error' && e instanceof Error ? String(e.stack) : renderError(ctx.surface, err), target:"],
+  ['operations.ts', 'a bug\'s traceback reaches the assistant', 'done = { text: renderError(surface, err), target:', "done = { text: err.code === 'internal_error' && e instanceof Error ? String(e.stack) : renderError(surface, err), target:"],
   ['operations.ts', 'errors don\'t say who you act as', 'return { text: settings.developer ?', 'return { text: settings.developer && !isError ?'],
-  ['operations.ts', 'a SKILLS_AS that isn\'t a developer name is ignored', 'if (settings.developerInvalid) {', 'if (false) {'],
-  ['settings.ts', 'SKILLS_AS is taken whatever it holds', 'const valid = as !== undefined && DEVELOPER.test(as);', 'const valid = as !== undefined;'],
-  ['operations.ts', 'a later page says it shows the first cards', "offsetOf(field(args, 'cursor'))", '0'],
-  ['operations.ts', 'a read of an older version shows the latest SKILL.md', 'c.fetch({ name: i.name, version: i.version })', 'c.fetch({ name: i.name, version: i.latest_version })'],
+  ['operations.ts', 'the acting line is data, not the surface\'s words', "s.format(s.word('acting_as'), { developer })", '`acting_as: ${developer}`'],
+  ['operations.ts', 'a SKILLS_AS that isn\'t a developer name is ignored', 'if (settings.developerInvalid) throw', 'if (false) throw'],
+  ['settings.ts', 'SKILLS_AS is taken whatever it holds', 'const valid = as !== undefined && ACTOR.test(as);', 'const valid = as !== undefined;'],
+  ['operations.ts', 'a later page says it shows the first cards (the request isn\'t passed on)', 'renderSearch(ctx.surface, r, (args ?? {}) as SearchInput)', 'renderSearch(ctx.surface, r, {})'],
+  ['operations.ts', 'every read\'s fence has the same token', 'renderRead(ctx.surface, r, ctx.ids)', "renderRead(ctx.surface, r, { next: () => 'fixed' })"],
   // the activity log
-  ['operations.ts', 'the log\'s search target is the query', 'target: `${r.total_matches}/${r.catalog_size}`', "target: String(field(args, 'query'))"],
-  ['operations.ts', 'the log\'s read target comes from the arguments', "const target = items.map((i) => `${i.name} v${i.version}`).join(', ') || NONE;", "const target = String(field(args, 'name') ?? NONE);"],
+  ['operations.ts', 'the log\'s search target is the query', 'target: log.searchTarget(r.total_matches, r.catalog_size)', 'target: String((args as { query?: string } | undefined)?.query)'],
+  ['operations.ts', 'the log\'s read target comes from the arguments', "target: items.map((i) => `${i.name} v${i.version}`).join(', ') || NONE", "target: String((args as { name?: string } | undefined)?.name ?? NONE)"],
+  ['operations.ts', 'the log says a diff adds nothing that can run, whatever it adds', "r.risk_flags.length ? 'runnable' : 'text_only'", "'text_only'"],
+  ['operations.ts', 'the log shows an error\'s code, not its words', 'result: log.error(err.code) };', 'result: err.code };'],
+  ['activity.ts', 'the result column is narrower than its longest word', 'width: Math.max(...all.map((w) => w.length)),', 'width: 16,'],
   ['operations.ts', 'the log names a developer that isn\'t one', 'who: settings.developer, tool: name', "who: process.env['SKILLS_AS'], tool: name"],
   ['activity.ts', 'a link in the log\'s place is followed', ' | constants.O_NOFOLLOW', ''],
   ['activity.ts', 'a FIFO in the log\'s place stalls the server', ' | constants.O_NONBLOCK', ''],
@@ -46,7 +50,7 @@ const MUTATIONS = [
   ['activity.ts', 'a folder the person named is tightened too', '    if (o.ownFolder) {', '    if (true) {'],
   ['activity.ts', 'a log that can\'t be written fails the call', '  } catch {\n    // dropped', '  } finally {\n    // dropped'],
   ['activity.ts', 'the log\'s time is local, not UTC', 'a.at.toISOString().slice(11, 19)', 'a.at.toTimeString().slice(0, 8)'],
-  ['activity.ts', 'the target comes before the result (a long one shifts the columns)', '${a.result.padEnd(RESULT_WIDTH)}  ${a.target}', '${a.target.padEnd(26)}  ${a.result}'],
+  ['activity.ts', 'the target comes before the result (a long one shifts the columns)', '${a.result.padEnd(resultWidth)}  ${a.target}', '${a.target.padEnd(26)}  ${a.result}'],
   ['settings.ts', 'SKILLS_ACTIVITY_LOG is ignored', "resolve(env['SKILLS_ACTIVITY_LOG'] || join(home, 'activity.log'))", "resolve(join(home, 'activity.log'))"],
 ];
 

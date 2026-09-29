@@ -28,9 +28,12 @@ afterEach(async () => {
 
 const logOf = (p: Place, path = join(p.home, 'activity.log')) => readFileSync(path, 'utf8');
 const linesOf = (p: Place, path?: string) => logOf(p, path).split('\n').filter(Boolean);
-/** A line without its time, as the format lays it out. Until the log's words land, a result is its code: the longest is
- *  25 characters (invalid_developer_setting). */
-const row = (who: string, tool: string, target: string, result: string) => `  ${who.padEnd(4)}  ${tool.padEnd(27)}  ${result.padEnd(25)}  ${target}`;
+/** The surface's log words (its top-level `log` section), and the result column's width: the longest of them. */
+const LOG = S.fill(S.doc.log) as { search_target: string; result: Record<string, any>; error: Record<string, string> };
+const WIDTH = Math.max(...[...Object.values(LOG.result).flatMap((w) => (typeof w === 'string' ? [w] : Object.values(w as Record<string, string>))), ...Object.values(LOG.error)].map((w) => w.length));
+const matched = (count: number, total: number) => S.format(LOG.search_target, { count, total });
+/** A line without its time, as the format lays it out. */
+const row = (who: string, tool: string, target: string, result: string) => `  ${who.padEnd(4)}  ${tool.padEnd(27)}  ${result.padEnd(WIDTH)}  ${target}`;
 
 describe('the activity log', () => {
   it('one line per tool call: time, who, tool, the target from the result, how it ended; nothing for other messages', async () => {
@@ -52,13 +55,14 @@ describe('the activity log', () => {
     await s.send('tools/list');
     await s.send('tools/call', { name: 'no_such_tool', arguments: {} });
     const lines = linesOf(p);
+    expect(found.match).toBe('all');
     expect(lines.map((l) => l.slice(8))).toEqual([
-      row('dev2', N.search, `${found.total_matches}/${found.catalog_size}`, 'ok'),
-      row('dev2', N.get, 'release-notes-kit v2', 'ok'),
-      row('dev2', N.get, 'release-notes-kit v2, sql-migration-helper v1', 'ok'),
-      row('dev2', N.versions, 'release-notes-kit v2', 'ok'),
-      row('dev2', N.diff, 'release-notes-kit v1 → v2', 'ok'),
-      row('dev2', N.get, '-', 'not_found'),
+      row('dev2', N.search, matched(found.total_matches, found.catalog_size), LOG.result.search.all),
+      row('dev2', N.get, 'release-notes-kit v2', LOG.result.get),
+      row('dev2', N.get, 'release-notes-kit v2, sql-migration-helper v1', LOG.result.get),
+      row('dev2', N.versions, 'release-notes-kit v2', LOG.result.versions),
+      row('dev2', N.diff, 'release-notes-kit v1 → v2', LOG.result.diff.runnable),   // v2 adds a script that can run
+      row('dev2', N.get, '-', LOG.error.not_found),
     ]);
     for (const l of lines) {
       expect(l.slice(0, 8)).toMatch(TIME);
@@ -79,8 +83,8 @@ describe('the activity log', () => {
     await b.call(N.search, { query: 'release' });
     const lines = linesOf(p);
     expect(lines).toHaveLength(2);
-    expect(lines[0]!.slice(8)).toBe(row('-', N.search, '0/14', 'ok'));
-    expect(lines[1]!.slice(8)).toBe(row('-', N.search, '-', 'invalid_developer_setting'));
+    expect(lines[0]!.slice(8)).toBe(row('-', N.search, matched(0, 14), LOG.result.search.none));
+    expect(lines[1]!.slice(8)).toBe(row('-', N.search, '-', LOG.error.invalid_developer_setting));
     expect(logOf(p)).not.toContain('admin');
   });
 
@@ -88,7 +92,8 @@ describe('the activity log', () => {
     const marker = ['PLANTED', 'AKIA' + 'IOSFODNN7' + 'EXAMPLE'].join('-');
     const p = place();
     await seed(p, async (c) => {
-      await c.publish(request('marker-skill', [{ path: 'SKILL.md', text: skillMd('marker-skill', 'Holds a planted value.', `The value: ${marker}\n`) }]), actAs('ana'));
+      // A secret-shaped value is refused unless a person lets it through for that one publish (as here, on purpose).
+      await c.publish({ ...request('marker-skill', [{ path: 'SKILL.md', text: skillMd('marker-skill', 'Holds a planted value.', `The value: ${marker}\n`) }]), allow_suspected_secrets: true }, actAs('ana'));
     });
     const s = start(p, { SKILLS_AS: 'dev2' });
     await s.initialize();
@@ -219,13 +224,18 @@ describe('the activity log', () => {
     await s.call(N.diff, { name: long, from: 1, to: 2 });
     await s.call(N.search, { query: 'release' });
     const lines = linesOf(p);
-    expect(lines[0]!.slice(8)).toBe(row('dev2', N.diff, `${long} v1 → v2`, 'ok'));
-    const at = (l: string) => l.indexOf('ok  ');
-    expect(at(lines[0]!)).toBe(at(lines[1]!));
+    expect(lines[0]!.slice(8)).toBe(row('dev2', N.diff, `${long} v1 → v2`, LOG.result.diff.text_only));
+    // The target starts at the same column on every line, whatever the result's words.
+    const column = 8 + row('dev2', N.search, '', '').length;
+    expect(lines[0]!.slice(column)).toBe(`${long} v1 → v2`);
+    expect(lines[1]!.slice(column)).toMatch(/^\d+ of \d+ match$|^\S/);
+    expect(lines[1]!.slice(0, column).trimEnd()).not.toContain(long);
   });
 
-  it('the log\'s words are still a gap in the surface (wire them when they land)', () => {
-    expect(CLIENT_WORD_GAPS).toContain('log');
-    expect(S.doc.log, 'the surface now has a log section: wire it and drop "log" from CLIENT_WORD_GAPS').toBeUndefined();
+  it('the log\'s words are the surface\'s, not a gap: every operation served has a result word, and every word is one line with no double space', () => {
+    expect(CLIENT_WORD_GAPS).not.toContain('log');
+    for (const op of ['search', 'get', 'versions', 'diff']) expect(LOG.result[op], op).toBeDefined();
+    const words = [LOG.search_target, ...Object.values(LOG.result).flatMap((w) => (typeof w === 'string' ? [w] : Object.values(w as Record<string, string>))), ...Object.values(LOG.error)];
+    for (const w of words) expect(w, w).not.toMatch(/\n| {2}/);   // the columns are split on double spaces
   });
 });

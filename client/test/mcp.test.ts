@@ -3,11 +3,11 @@
 // own result for the same call, put through the same renderer: one registry, one set of words, the same answer.
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CatalogError, Surface, openCatalog, renderDiff, renderError, renderRead, renderSearch, renderVersions, type Catalog, type ReadItem } from '@skills-catalog/core';
+import { CatalogError, Surface, openCatalog, renderDiff, renderError, renderRead, renderSearch, renderVersions, type Catalog } from '@skills-catalog/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { MAX_LINE } from '../src/mcp/server.ts';
 import { CLIENT_WORD_GAPS } from '../src/operations.ts';
-import { open, seed, skillMd } from './seed.ts';
+import { open, seed } from './seed.ts';
 import { place, startServer, type Place, type Server } from './server.ts';
 
 const S = Surface.load();
@@ -38,6 +38,14 @@ afterEach(async () => {
     for (const line of s.lines) expect(() => JSON.parse(line), `a stdout line that isn't JSON-RPC: ${line}`).not.toThrow();
   }
 });
+
+/** The fence token in a text, found with the surface's own opening marker (e.g. "--- SKILL.md {token} ---"). */
+function tokenIn(text: string, marker: string): string {
+  const [before, after] = marker.split('{token}').map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const m = new RegExp(`^${before}(\\S+)${after}$`, 'm').exec(text);
+  if (!m) throw new Error(`no fence like ${JSON.stringify(marker)} in: ${text.slice(0, 200)}`);
+  return m[1]!;
+}
 
 async function errorOf(fn: () => Promise<unknown>): Promise<CatalogError> {
   try {
@@ -215,7 +223,7 @@ describe('the same result as the core, in the surface\'s words', () => {
     for (const args of [{ query: 'release notes' }, { query: 'graphql schema' }, { query: 'sourdough bread' }, {}]) {
       const r = await s.call(N.search, args);
       expect(r.isError).toBeUndefined();
-      expect(r.content).toEqual([{ type: 'text', text: renderSearch(S, await c.search(args), args.query ?? '') }]);
+      expect(r.content).toEqual([{ type: 'text', text: renderSearch(S, await c.search(args), args) }]);
     }
   });
 
@@ -224,34 +232,35 @@ describe('the same result as the core, in the surface\'s words', () => {
     const first = await c.search({ limit: 5 });
     const args = { limit: 5, cursor: first.next_cursor! };
     const text = await s.text(N.search, args);
-    expect(text).toBe(renderSearch(S, await c.search(args), '', 5));
+    expect(text).toBe(renderSearch(S, await c.search(args), args));
     expect(text).toContain(S.format(S.word('search').header_all, { total: first.catalog_size, first: 6, last: 10 }));
   });
 
-  it('read: the latest, an older version, with contents, and several names at once (one misspelled)', async () => {
+  it('read: the latest, an older version, with contents, and several names at once (one misspelled); the fence carries a fresh token each read', async () => {
     const { c, s } = await seeded();
-    const published: Record<string, string> = {
-      'release-notes-kit@1': skillMd('release-notes-kit', 'Draft release notes from merged pull requests.'),
-      'release-notes-kit@2': skillMd('release-notes-kit', 'Draft release notes and a changelog from merged pull requests.', 'Body, second version.\n'),
-      'sql-migration-helper@1': skillMd('sql-migration-helper', 'Write and review SQL schema migrations.'),
-    };
-    const md = (i: ReadItem) => published[`${i.name}@${i.version}`]!;
+    const tokens: string[] = [];
     for (const args of [
       { name: 'release-notes-kit' },
       { name: 'release-notes-kit', version: 1 },
       { name: 'release-notes-kit', include: 'contents' as const },
       { names: ['release-notes-kit', 'relase-notes-kit', 'sql-migration-helper'] },
     ]) {
-      expect(await s.text(N.get, args)).toBe(renderRead(S, await c.read(args), md));
+      const text = await s.text(N.get, args);
+      const token = tokenIn(text, S.word('get').fence[0]);
+      tokens.push(token);
+      expect(text).toBe(renderRead(S, await c.read(args), { next: () => token }));
     }
+    expect(new Set(tokens).size).toBe(tokens.length);
   });
 
-  it('versions and diff', async () => {
+  it('versions and diff (the changed lines fenced with a token of their own)', async () => {
     const { c, s } = await seeded();
     expect(await s.text(N.versions, { name: 'release-notes-kit' })).toBe(renderVersions(S, await c.versions({ name: 'release-notes-kit' })));
-    for (const args of [{ name: 'release-notes-kit', from: 1, to: 2 }, { name: 'release-notes-kit', from: 2, to: 2 }]) {
-      expect(await s.text(N.diff, args)).toBe(renderDiff(S, await c.diff(args)));
-    }
+    const changed = await s.text(N.diff, { name: 'release-notes-kit', from: 1, to: 2 });
+    const token = tokenIn(changed, S.word('diff').fence[0]);
+    expect(changed).toBe(renderDiff(S, await c.diff({ name: 'release-notes-kit', from: 1, to: 2 }), { next: () => token }));
+    const none = { next: (): string => { throw new Error('the same content has no lines to fence'); } };
+    expect(await s.text(N.diff, { name: 'release-notes-kit', from: 2, to: 2 })).toBe(renderDiff(S, await c.diff({ name: 'release-notes-kit', from: 2, to: 2 }), none));
   });
 
   it('errors are tool results marked isError, in the surface\'s words: not found (with spellings), limits, a field that isn\'t the operation\'s', async () => {
@@ -320,22 +329,26 @@ describe('when something is wrong', () => {
 describe('the acting developer (SKILLS_AS, the server\'s config)', () => {
   it('every result, errors too, says who you act as (as data until the surface has words for it)', async () => {
     const { c, s } = await seeded({ SKILLS_AS: 'dev2' });
-    expect(await s.text(N.search, { query: 'release notes' })).toBe(renderSearch(S, await c.search({ query: 'release notes' }), 'release notes') + '\nacting_as: dev2');
-    expect(await s.text(N.get, { name: 'relase-notes-kit' })).toBe(renderError(S, await errorOf(() => c.read({ name: 'relase-notes-kit' }))) + '\nacting_as: dev2');
+    const line = '\n' + S.format(S.word('acting_as'), { developer: 'dev2' });
+    expect(line).toContain('dev2');
+    expect(await s.text(N.search, { query: 'release notes' })).toBe(renderSearch(S, await c.search({ query: 'release notes' }), { query: 'release notes' }) + line);
+    expect(await s.text(N.get, { name: 'relase-notes-kit' })).toBe(renderError(S, await errorOf(() => c.read({ name: 'relase-notes-kit' }))) + line);
   });
 
   it('with no SKILLS_AS, reads work and no result names a developer', async () => {
     const { s } = await seeded();
     const r = await s.call(N.search, { query: 'release notes' });
     expect(r.isError).toBeUndefined();
-    expect(r.content[0]!.text).not.toContain('acting_as');
+    expect(r.content[0]!.text).not.toMatch(/acting/i);
   });
 
   it('a SKILLS_AS that isn\'t a developer name: every call says so (as data until the surface words it; a retry can\'t fix it), and nothing is done', async () => {
     const { s } = await seeded({ SKILLS_AS: 'Dev Two\nacting_as: admin' });
     const r = await s.call(N.search, { query: 'release notes' });
     expect(r.isError).toBe(true);
-    expect(r.content).toEqual([{ type: 'text', text: 'invalid_developer_setting: setting: SKILLS_AS' }]);
+    expect(r.content).toEqual([{ type: 'text', text: renderError(S, new CatalogError('invalid_developer_setting', { setting: 'SKILLS_AS' })) }]);
+    expect(r.content[0]!.text).toMatch(/SKILLS_AS setting/);
+    expect(r.content[0]!.text).not.toContain('admin');
   });
 
   it('the words the client still waits for are gaps in the surface (wire each one when it lands)', () => {

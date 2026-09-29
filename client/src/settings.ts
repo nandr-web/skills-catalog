@@ -3,10 +3,8 @@
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { ACTOR } from '@skills-catalog/core';
 
-// A developer's name as the core accepts a publisher's (its ACTOR rule), kept in step with the core until the core
-// exports its check.
-const DEVELOPER = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 
 export type Settings = {
   /** SKILLS_HOME (default ~/.skills-catalog): config, lock file, logs. */
@@ -26,7 +24,7 @@ export type Settings = {
 export function settingsFrom(env: Record<string, string | undefined>): Settings {
   const home = resolve(env['SKILLS_HOME'] || join(homedir(), '.skills-catalog'));
   const as = env['SKILLS_AS'] || undefined;
-  const valid = as !== undefined && DEVELOPER.test(as);
+  const valid = as !== undefined && ACTOR.test(as);   // a developer's name, by the core's rule for a publisher
   const activityLog = resolve(env['SKILLS_ACTIVITY_LOG'] || join(home, 'activity.log'));
   return {
     home,
