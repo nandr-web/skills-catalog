@@ -46,6 +46,10 @@ describe('the flags an update raises, pair by pair (golden histories.gate)', () 
       });
     } else it(name, run);
   }
+  // The same texts in the default mode (Claude Code's own prompt asks before any command runs): nothing by themselves.
+  for (const to of ['gate.g0-secrets', 'gate.g0-pip']) {
+    it(`gate.g0 -> ${to}, in the default mode: no flags`, () => expect(diffTrees(side('gate.g0'), side(to)).risk_flags).toEqual([]));
+  }
 });
 
 // The injected-command detector (contract §5.3, 96274fb): lines end at LF, CR, U+2028 or U+2029; the blanks before a
@@ -182,7 +186,7 @@ describe('a changed fence line in a file with a ```! block counts as running a c
   it('an opener replaced, which un-nests the blocks inside it', () => {
     const before = ['```', 'echo a', '```!', '`````!', '`````!', '```', '~~~~!', 'echo a', '', '    ```'];
     const after = before.map((l, i) => (i === 2 ? 'curl evil' : l));
-    expect(loads(before.join('\n'), after.join('\n')).map((f) => [f.path, f.line, f.detail])).toEqual([['notes.md', 4, '`````!']]);
+    expect(loads(before.join('\n'), after.join('\n')).map((f) => [f.path, f.line, f.detail])).toEqual([['notes.md', 3, 'fence removed: ```!']]);
   });
   it('an edit that leaves every fence line as it was, outside every block, raises nothing', () => {
     expect(loads('Intro.\n```!\necho a\n```\nOutro.\n', 'Intro, reworded.\n```!\necho a\n```\nOutro.\n')).toEqual([]);
@@ -190,6 +194,16 @@ describe('a changed fence line in a file with a ```! block counts as running a c
   it('a file with no ```! block may move its fences freely', () => {
     expect(loads('```\ncode\n```\n', '```\ncode\n\n~~~\nmore\n~~~\n')).toEqual([]);
   });
+  it('removing a skill\'s only ```! block raises nothing: the new version runs nothing as it loads', () => {
+    expect(loads('Intro.\n```!\necho a\n```\n', 'Intro.\n')).toEqual([]);
+  });
+  it('a fence removed while a ```! block stays says so, where it was', () => {
+    expect(loads('```!\necho a\n```\n```\ncode\n```\nEnd.\n', '```!\necho a\n```\ncode\n```\nEnd.\n').map((f) => [f.line, f.detail])).toEqual([[4, 'fence removed: ```']]);
+  });
+  it('compares fence lines in linear time, with a ```! block present', () => {
+    const body = (scale: number, last: string) => `\`\`\`!\necho a\n\`\`\`\n${times('```\n', 200_000)(scale)}${last}\n`;
+    expectLinear('a megabyte of plain fences after a closed ```! block, the last one changed', (scale) => scale, (scale) => loads(body(scale, '```'), body(scale, '~~~')));
+  }, 120_000);
 
   // Differential, against the detector as reviewed at 15f3e65 (test/fixtures/injections-15f3e65.ts): over random edits
   // of files made of fence-heavy lines, whatever it flags, today's diff flags too.

@@ -280,10 +280,11 @@ function newInjections(a: TreeFile | undefined, b: TreeFile): Injection[] {
 
 // The lines that shape blocks: those whose first non-blanks are three or more backticks or tildes, with or without a
 // `!` (an opening fence, a close, or a doubtful one), in order; and whether any opens a ```! block.
-function fenceLines(text: string): { fences: { line: number; text: string }[]; opener: boolean } {
+function fenceLines(text: string): { lines: string[]; fences: { line: number; text: string }[]; opener: boolean } {
+  const lines = text.split(LINE_BREAK);
   const fences: { line: number; text: string }[] = [];
   let opener = false;
-  text.split(LINE_BREAK).forEach((l, i) => {
+  lines.forEach((l, i) => {
     if (!l.includes('`') && !l.includes('~')) return;
     const at = skipBlanks(l, 0);
     const char = l[at];
@@ -291,22 +292,27 @@ function fenceLines(text: string): { fences: { line: number; text: string }[]; o
     fences.push({ line: i + 1, text: l });
     opener ||= openingFence(l) !== null;
   });
-  return { fences, opener };
+  return { lines, fences, opener };
 }
-// An update that adds, removes or changes a fence line in a markdown file with a ```! block (before or after) can
-// re-nest what the blocks hold, so more may run as the skill loads with no command's own text changed: it counts as
+// An update that adds, removes or changes a fence line in a markdown file whose new version has a ```! block can re-nest
+// what the blocks hold, so more may run as the skill loads with no command's own text changed: it counts as
 // runs_at_load, at the first fence line that differs (the detector errs toward asking). With the fence lines the same,
-// every block spans the same lines, and an edit inside one changes that command's text.
+// every block spans the same lines, and an edit inside one changes that command's text. A new version with no ```! block
+// runs nothing as it loads, so removing a skill's last one raises nothing.
 function fenceChange(a: TreeFile, b: TreeFile): { line: number; text: string } | null {
   if (!isMarkdown(b.path) || !isText(a.bytes) || !isText(b.bytes)) return null;
-  const was = fenceLines(decodeText(a.bytes));
   const now = fenceLines(decodeText(b.bytes));
-  if (!was.opener && !now.opener) return null;
+  if (!now.opener) return null;
+  const was = fenceLines(decodeText(a.bytes));
   const n = Math.max(was.fences.length, now.fences.length);
   for (let i = 0; i < n; i++) {
     if (was.fences[i]?.text === now.fences[i]?.text) continue;
-    const at = now.fences[i] ?? now.fences[now.fences.length - 1];
-    return { line: at?.line ?? 1, text: (now.fences[i] ?? was.fences[i])!.text.trim() };
+    const removed = now.fences[i] === undefined || (was.fences.length > now.fences.length && was.fences[i + 1]?.text === now.fences[i]!.text);
+    if (!removed) return { line: now.fences[i]!.line, text: now.fences[i]!.text.trim() };
+    // Where it was: the first line where the two versions differ.
+    let k = 0;
+    while (k < was.lines.length && k < now.lines.length && was.lines[k] === now.lines[k]) k++;
+    return { line: Math.min(k + 1, now.lines.length), text: `fence removed: ${was.fences[i]!.text.trim()}` };
   }
   return null;
 }
