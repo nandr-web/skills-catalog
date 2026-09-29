@@ -474,33 +474,94 @@ results:
     not_found_suggest: " Names spelled like it: {names}."
     not_found_next: "Next: ${search} with words from the task, or tell the user it isn't in the catalog."
     invalid_manifest: "invalid_manifest: {folder}/SKILL.md {problem}. Nothing was published. Fix: {fix} Then preview again."
+    why:
+      empty: is empty
+      not_utf8: isn't valid UTF-8 text
+      control_character: contains a control character
+      invisible_character: contains an invisible character
+      backslash: uses a backslash (paths use /)
+      absolute: is an absolute path (paths start at the skill's folder)
+      empty_segment: has an empty part (//)
+      dot_segment: has a . or .. part
+      git_folder: is inside a .git folder
+      segment_too_long: has a folder or file name that is too long
+      too_long: is too long
+      bad_mode: has a file mode other than 0644 or 0755
+      duplicate: appears twice
+      case_clash: differs from another path only in upper or lower case
+      file_is_folder: is inside a path that is also a file
+      bad_characters: has characters other than lowercase letters, digits and single hyphens
+      differs_from_front_matter: isn't the name in the skill's SKILL.md front matter
+      not_text: isn't text
+      not_one_of: isn't one of the allowed values
+      not_integer: isn't a whole number
+      too_low: is too low
+      too_high: is too high
+      not_boolean: isn't true or false
+      not_list: isn't a list
+      too_many_items: has too many items
+      not_object: isn't a set of named fields
+      unknown_field: isn't a field this tool takes
+      required: is required
+      not_a_cursor: isn't a next_cursor from an earlier result
+      not_a_developer_name: isn't a valid developer name
+      not_base64: isn't base64 text
+      name_and_names: can't be given together with name (use one of them)
+      fingerprint_or_name_and_version: goes alone (give a fingerprint, or a name and a version, not both)
+      not_a_catalog_url: isn't a catalog address (a file:// URL to a local folder)
+      hosted_not_available: is a hosted catalog, which this version doesn't support yet
     invalid_manifest_problem:
       missing: is missing
       name: has no name in its front matter
       description: has no description in its front matter
       bad_name: has a name that isn't lowercase letters, digits and single hyphens (64 at most)
+      missing_fields: is missing required fields in its front matter
+      not_utf8: isn't valid UTF-8 text
+      no_front_matter: has no front matter (the block between --- lines at the top)
+      invalid_yaml: has front matter that isn't valid YAML
+      front_matter_not_a_mapping: "has front matter that isn't a set of key: value lines"
+      description_not_text: has a description that isn't plain text
+      description_too_long: has a description longer than 1024 characters
+      description_angle_brackets: has < or > in its description
+      metadata_not_a_mapping: "has a metadata field that isn't a set of key: value lines"
+      tags_not_a_string: has tags that aren't one comma-separated line (metadata.tags)
+      bad_tag: has a tag that isn't 1-32 lowercase letters, digits and hyphens, or an empty item between commas
+      too_many_tags: has more than 10 tags
     invalid_manifest_fix:
       missing: the folder needs a SKILL.md with a name and a description in its front matter; ask the person to add one, or offer to draft it with them.
       name: suggest a name to the person (lowercase words joined by hyphens, like {suggestion}) and add it to the front matter once they agree.
       description: propose a one-line description to the person (what the skill does, and when to use it); add it to the front matter only once they agree.
       bad_name: suggest {suggestion} to the person and change the front matter once they agree.
+      missing_fields: propose the missing fields to the person (a name, and a one-line description of what the skill does and when to use it); add them only once they agree.
+      not_utf8: ask the person to save SKILL.md as UTF-8 text; offer to convert it, and do it only once they agree.
+      no_front_matter: propose a front matter block with a name and a one-line description to the person; add it only once they agree.
+      invalid_yaml: show the person the front matter and propose a correction; change it only once they agree.
+      front_matter_not_a_mapping: "show the person the front matter and propose it as key: value lines; change it only once they agree."
+      description_not_text: propose the description as one plain line to the person; change it only once they agree.
+      description_too_long: propose a shorter description to the person (what the skill does, and when to use it); change it only once they agree.
+      description_angle_brackets: propose the description without < and > to the person; change it only once they agree.
+      metadata_not_a_mapping: "show the person the metadata field and propose it as key: value lines; change it only once they agree."
+      tags_not_a_string: "propose the tags as one line under metadata, like `tags: git, release`, to the person; change it only once they agree."
+      bad_tag: show the person which tag breaks the rule and propose a fixed one; change it only once they agree.
+      too_many_tags: ask the person which 10 tags to keep; change them only once they agree.
     exists_untracked: "exists_untracked: {path} already exists and wasn't installed from the catalog, so it was left alone. Ask the user whether to remove or rename it, or install into the other target."
     secret_suspected: "secret_suspected: {path} line {line} looks like a {kind}. Nothing was published. Tell the person where it is (not the value itself); only they can remove it, or allow it for one publish from the command line (${cli} publish --allow-suspected-secrets). Do not try to get around it."
     publish_conflict: "conflict: {folder} changed since the preview, so nothing was published. Preview again and show the person the new lists."
     conflict: "conflict: {name} has a newer version (v{latest}) than the one this change started from, so nothing was published. Read v{latest}, tell the person what changed, and ask how to go on."
     accept_conflict: "conflict: the update held for {name} changed since the person was told about it, so nothing was installed. Run ${update} again and tell them the new reasons."
     not_owner: "not_owner: {name} belongs to {owners}; only they publish new versions of it, so nothing was published. Tell the person: they can ask {owners} to publish the change, or publish it as a new skill under another name (propose one; use it only once they agree)."
-    invalid_name: "invalid_name: \"{name}\" can't be a skill name ({why}). Names are lowercase letters, digits and single hyphens, at most 64 characters. Nothing was published. Propose a valid name to the person and use it only once they agree."
+    invalid_name: "invalid_name: the name \"{name}\" {why}, so it can't be a skill name. Names are lowercase letters, digits and single hyphens, at most 64 characters. Nothing was published. Propose a valid name to the person and use it only once they agree."
     invalid_path: "invalid_path: {path} {why}, so nothing was published. Tell the person which file it is; they decide whether to move, rename or remove it."
     too_large: "too_large: {limit} is {value}, over the limit of {max}, so nothing was published. Tell the person; they decide what to leave out (for example large examples or generated files)."
     too_large_limit:
       files: the number of files
       file_bytes: the size of one file
       skill_bytes: the size of the whole skill
-    invalid_request: "invalid_request: {field} {why}, so nothing was done. Call again within the limit."
+    invalid_request: "invalid_request: {field} {why}, so nothing was done. Correct the call and try again."
     invalid_request_limit: "invalid_request: {field} {why}; the limit is {limit}. Nothing was done: call again within it (for example in batches)."
     unauthenticated: "unauthenticated: the catalog needs the person to sign in, so nothing was done. Ask them to run ${cli} login in their own terminal; never ask for a password or token in the chat."
     forbidden: "forbidden: the catalog doesn't allow this for the person signed in, so nothing was done. Tell them; don't look for another way around it."
+    forbidden_hosted: "forbidden: {catalog} is a hosted catalog, and this version runs locally only, so nothing was done. Tell the person; ${cli} setup points it at a local folder."
     internal_error: "internal_error: ${cli} hit a bug (the details are in {log}). The bug is in ${cli}, not in the person's setup: nothing on this machine needs fixing, and don't edit ${cli}'s files. Tell the person, and give them the log's path."
     target_symlink: "target_symlink: {path} is a link to somewhere else, so ${cli} won't install through it. Nothing was changed. Tell the person; they decide whether to replace the link."
 setup:

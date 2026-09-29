@@ -58,6 +58,33 @@ describe('the surface (vendored, recommended variant)', () => {
     for (const op of ['search', 'get', 'versions', 'diff']) expect(Object.keys(OPERATIONS)).toContain(s.names[op]);
   });
 
+  it('words every reason: no raw code reaches an agent, and each manifest problem reads as itself', async () => {
+    const s = Surface.load();
+    const { catalog } = await openTest();
+    const b64 = (t: string) => Buffer.from(t).toString('base64');
+    const md = (fm: string, body = 'Body.\n') => [{ path: 'SKILL.md', mode: '0644', content_base64: b64(`---\n${fm}---\n${body}`) }];
+    const ok = md('name: x\ndescription: y\n');
+    const errors = [
+      await errorOf(() => catalog.search({ limit: 99 })),
+      await errorOf(() => catalog.search({ unknown: 1 })),
+      await errorOf(() => catalog.search({ cursor: 'nope' })),
+      await errorOf(() => catalog.read({ name: 'Bad Name' })),
+      await errorOf(() => catalog.publish({ name: 'x', files: [{ path: 'SKILL.md', mode: '0644', content_base64: '%%' }] }, actAs('ana'))),
+      await errorOf(() => catalog.publish({ name: 'x', files: [...ok, { path: 'a/../b.md', mode: '0644', content_base64: '' }] }, actAs('ana'))),
+      await errorOf(() => catalog.publish({ name: 'x', files: [...ok, { path: '.git/config', mode: '0644', content_base64: '' }] }, actAs('ana'))),
+      await errorOf(() => catalog.publish({ name: 'x', files: [...ok, { path: 'A.md', mode: '0644', content_base64: '' }, { path: 'a.md', mode: '0644', content_base64: '' }] }, actAs('ana'))),
+      await errorOf(() => catalog.publish({ name: 'x', files: ok }, actAs('Not A Dev'))),
+    ];
+    const codes = /\b(too_high|unknown_field|not_a_cursor|bad_characters|not_base64|dot_segment|git_folder|case_clash|not_a_developer_name)\b/;
+    for (const e of errors) expect(renderError(s, e), JSON.stringify(e.toJSON())).not.toMatch(codes);
+    const yamlBroken = new CatalogError('invalid_manifest', { folder: 'x', problem: 'invalid_yaml', fields: ['SKILL.md'] });
+    expect(renderError(s, yamlBroken)).toContain(s.word('errors.invalid_manifest_problem.invalid_yaml'));
+    expect(renderError(s, yamlBroken)).not.toContain(s.word('errors.invalid_manifest_problem.missing') + '.');
+    const noDescription = new CatalogError('invalid_manifest', { folder: 'x', problem: 'missing_fields', fields: ['description'] });
+    expect(renderError(s, noDescription)).toContain(s.word('errors.invalid_manifest_problem.description'));
+    expect(renderError(s, new CatalogError('forbidden', { catalog: 'https://c.example.invalid', why: 'hosted_not_available' }))).toContain('https://c.example.invalid');
+  });
+
   it('keeps a skill inside its fence: a planted closing marker is escaped', async () => {
     const s = Surface.load();
     const { catalog } = await openTest();

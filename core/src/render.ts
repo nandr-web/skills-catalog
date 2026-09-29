@@ -9,7 +9,7 @@ import type { Surface } from './surface.ts';
 
 // Words the agent-facing surface doesn't have yet (asked for). A test fails when one of them appears in the surface,
 // so each is wired as soon as it lands.
-export const WORD_GAPS = ['errors.why'] as const;
+export const WORD_GAPS: readonly string[] = [];
 
 function asData(code: string, data: Record<string, unknown>): string {
   return `${code}: ` + Object.entries(data).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ');
@@ -142,12 +142,14 @@ export function renderError(s: Surface, e: CatalogError): string {
       return s.format(w.not_found, { name, suggest }) + '\n' + s.format(w.not_found_next);
     }
     case 'invalid_manifest': {
-      // Problem and fix are worded per field, for the first failing one; the folder is known to the machine
-      // operation (publish a folder), while a raw publish_version has none and renders as data.
+      // Problem and fix are worded per problem code; missing fields are worded per field (name, description) when the
+      // first missing one has its own words. The folder is known to the machine operation (publish a folder), while a
+      // raw publish_version has none and renders as data.
+      const code = String(d['problem'] ?? 'missing');
       const first = ((d['fields'] as string[] | undefined) ?? [])[0];
-      const key = first === 'SKILL.md' ? 'missing' : first;
-      const problem = key ? w.invalid_manifest_problem?.[key] : undefined;
-      const fix = key ? w.invalid_manifest_fix?.[key] : undefined;
+      const key = code === 'missing_fields' && first && w.invalid_manifest_problem?.[first] ? first : code;
+      const problem = w.invalid_manifest_problem?.[key];
+      const fix = w.invalid_manifest_fix?.[key];
       if (d['folder'] === undefined || !problem || !fix) return asData(e.code, d);
       return fill(w.invalid_manifest, { folder: d['folder'], problem, fix: fill(fix, { suggestion: d['suggestion'] }) });
     }
@@ -166,6 +168,9 @@ export function renderError(s: Surface, e: CatalogError): string {
       return fill(d['limit'] !== undefined ? w.invalid_request_limit : w.invalid_request, d);
     case 'conflict':
       return fill(d['folder'] !== undefined ? w.publish_conflict : w.conflict, d);
+    case 'forbidden':
+      // A hosted catalog asked of this local-only version is a setup matter, not a permission.
+      return e.data['why'] === 'hosted_not_available' ? fill(w.forbidden_hosted, d) : fill(w.forbidden, d);
     default: {
       const t = w[e.code];
       return typeof t === 'string' ? fill(t, d) : asData(e.code, d);
