@@ -141,6 +141,26 @@ describe('the error list at run time (contract §9)', () => {
     expect([...ERROR_CODES]).toEqual(codes);
   });
 
+  // A code added anywhere else in §9 (a table, a later sentence) must be in the list too: every other backticked word
+  // there, outside a {…} or (…), is a why the words file has a sentence for, or one of these.
+  const NOT_CODES: Record<string, string> = {
+    problem: 'a field of invalid_manifest',
+    why: 'a field of invalid_request and others',
+    safe_frontmatter_keys: 'a setup config key',
+    non_granting_keys: 'a setup config key',
+    person_only: 'a CLI outcome (exit 3), never an error',
+  };
+  it('names no code outside its list: every other word it marks as code is a why with a sentence, or a named field or outcome', () => {
+    const text = readFileSync(join(import.meta.dirname, '..', '..', 'docs', 'contract.md'), 'utf8');
+    let s9 = text.slice(text.indexOf('## 9. Error codes'), text.indexOf('## 10.'));
+    for (let prev = ''; prev !== s9; ) [prev, s9] = [s9, s9.replace(/\{[^{}]*\}/g, '').replace(/\([^()]*\)/g, '')];
+    const marked = new Set([...s9.matchAll(/`([a-z_]+)`/g)].map((m) => m[1]!));
+    const whys = Object.keys(Words.load().word('errors.why') as Record<string, string>);
+    const known = new Set<string>([...ERROR_CODES, ...whys, ...Object.keys(NOT_CODES)]);
+    expect([...marked].filter((w) => !known.has(w)).sort()).toEqual([]);
+    for (const w of Object.keys(NOT_CODES)) expect([w, marked.has(w), (ERROR_CODES as readonly string[]).includes(w) || whys.includes(w)]).toEqual([w, true, false]);
+  });
+
   it('a CatalogError takes only a listed code, and any call may return the common four', () => {
     expect([...COMMON_ERRORS]).toEqual(['invalid_request', 'invalid_developer_setting', 'internal_error', 'forbidden']);
     for (const c of COMMON_ERRORS) expect(ERROR_CODES).toContain(c);
