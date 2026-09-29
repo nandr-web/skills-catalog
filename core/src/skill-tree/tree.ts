@@ -71,6 +71,19 @@ function readInvisible(text = INVISIBLE_CHARACTERS_TEXT): RegExp {
   return new RegExp(`[${ranges.join('')}]`, 'u');
 }
 export const INVISIBLE = readInvisible();
+// The path rules also use the runtime's normalize(), which is safe only if the runtime knows at least the table's Unicode
+// version: normalisation never changes an assigned character, and every code point unassigned in the table's version is
+// refused before any normalising. A runtime with an older Unicode, or none, is refused before any path is checked.
+export const TABLE_UNICODE = /^# Unicode (\d+\.\d+\.\d+),/m.exec(readFileSync(INVISIBLE_FILE, 'utf8'))![1]!;
+const versionParts = (v: string) => v.split('.').map((n) => Number.parseInt(n, 10) || 0);
+export function unicodeProblem(have: string | undefined, need: string = TABLE_UNICODE): string | null {
+  const [a = 0, b = 0, c = 0] = versionParts(have ?? '');
+  const [x = 0, y = 0, z = 0] = versionParts(need);
+  const older = a !== x ? a < x : b !== y ? b < y : c < z;
+  return have && !older ? null : `skills-catalog needs a Node.js built with Unicode ${need} or later; this one has ${have ? `Unicode ${have}` : 'no Unicode data'}`;
+}
+const runtimeUnicode = unicodeProblem(process.versions.unicode);
+if (runtimeUnicode) throw new Error(runtimeUnicode);
 // Not portable to Windows (Microsoft's file-naming rules): these characters, a trailing dot or space, a device name.
 const WINDOWS_CHARS = /[<>:"|?*]/;
 const WINDOWS_DEVICE = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(\.|$)/i;
