@@ -4,6 +4,7 @@
 
 import { basename, isAbsolute, join } from 'node:path';
 import { isCopyIdentity } from './lock.ts';
+import { isOwnHookGroup, isOwnMcpEntry } from './setup-values.ts';
 
 export const RECORD_VERSION = 1;
 export type EntryKind = 'mcp_entry' | 'hook_group' | 'allow_rule';
@@ -62,23 +63,11 @@ export function recordWhy(x: unknown): 'wrong_shape' | undefined {
   if (!Array.isArray(created) || !created.every((f) => isObject(f) && onlyKeys(f, ['file', 'sha256']) && isPath(f['file']) && isHash(f['sha256']))) return 'wrong_shape';
   const isBackup = (b: unknown) => isObject(b) && onlyKeys(b, ['file', 'path', 'sha256', 'dev', 'ino', 'birth']) && isPath(b['file']) && isPath(b['path']) && isHash(b['sha256']) && b['birth'] !== undefined && isCopyIdentity(b);
   if (!Array.isArray(backups) || !backups.every(isBackup)) return 'wrong_shape';
-  // Each value setup wrote carries this setup id: the MCP entry in its env, the hook's one handler on its line.
-  if (!entries.every((e: RecordEntry) => carriesId(e, x['setup_id'] as string))) return 'wrong_shape';
+  // Each value is exactly one setup builds with this setup id (the MCP entry from its own command, script and settings;
+  // the hook group from its line, read back whole), never one that merely contains the id.
+  const id = x['setup_id'] as string;
+  if (!entries.every((e: RecordEntry) => (e.kind === 'mcp_entry' ? isOwnMcpEntry(e.value, id) : e.kind === 'hook_group' ? isOwnHookGroup(e.value, id) : true))) return 'wrong_shape';
   return undefined;
-}
-
-function carriesId(e: RecordEntry, id: string): boolean {
-  if (e.kind === 'mcp_entry') {
-    const env = (e.value as Record<string, unknown>)['env'];
-    return isObject(env) && env['SKILLS_SETUP_ID'] === id;
-  }
-  if (e.kind === 'hook_group') {
-    const hooks = (e.value as Record<string, unknown>)['hooks'];
-    if (!Array.isArray(hooks) || hooks.length !== 1 || !isObject(hooks[0])) return false;
-    const line = hooks[0]['command'];
-    return typeof line === 'string' && line.includes(` hook session-start --setup-id ${id} `);
-  }
-  return true;
 }
 
 /** Where setup writes, rebuilt from its own settings, never taken from the record. */

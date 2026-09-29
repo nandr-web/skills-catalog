@@ -4,31 +4,7 @@
 import { OPERATIONS, type OperationDef, type Words } from '@skills-catalog/core';
 import { COMMANDS } from '../cli/run.ts';
 
-/** What a setup run knows about itself: node and the script by absolute path, the setup id, and its environment. */
-export type SetupRun = { node: string; script: string; id: string; env: Readonly<Record<string, string | undefined>> };
-
-// The settings that go with the entry and the hook, in this order, when setup ran with them (never SKILLS_AS: who acts is
-// the config's `me`). SKILLS_SETUP_ID goes first in the entry and in --setup-id on the hook's line.
-const CARRIED = ['SKILLS_HOME', 'SKILLS_CATALOG', 'SKILLS_ASSISTANT_HOME', 'SKILLS_MANAGED_SETTINGS', 'SKILLS_INSTALL_DIR', 'SKILLS_ACTIVITY_LOG'] as const;
-const carried = (r: SetupRun): [string, string][] => CARRIED.flatMap((k) => (r.env[k] ? [[k, r.env[k]!] as [string, string]] : []));
-
-export function mcpEntry(r: SetupRun): Record<string, unknown> {
-  return { type: 'stdio', command: r.node, args: [r.script, 'mcp'], env: Object.fromEntries([['SKILLS_SETUP_ID', r.id], ...carried(r)]) };
-}
-
-// Single quotes keep every character as it is; a quote inside is closed, escaped and reopened, so a home folder with an
-// apostrophe is quoted, never refused.
-const quote = (v: string) => `'${v.replaceAll("'", "'\\''")}'`;
-
-/** The hook's shell line: the settings, node and the script, then the hook command. `|| true` keeps a session clean when
- *  the product or that node was removed without a teardown. */
-export function hookLine(r: SetupRun): string {
-  const words = [...carried(r).map(([k, v]) => `${k}=${quote(v)}`), quote(r.node), quote(r.script), 'hook', 'session-start', '--setup-id', r.id];
-  return `${words.join(' ')} 2>/dev/null || true`;
-}
-
-/** One matcher group of its own (no matcher: every source), with a timeout that caps a hang. */
-export const hookGroup = (r: SetupRun): Record<string, unknown> => ({ hooks: [{ type: 'command', command: hookLine(r), timeout: 10 }] });
+export { hookGroup, hookLine, mcpEntry, type SetupRun } from './setup-values.ts';
 
 // The two tools that change the installed skills and are still safe to run unasked (contract §6): their inputs can't
 // choose where bytes come from or go, and anything flagged is held for the person. Every other writing tool asks.

