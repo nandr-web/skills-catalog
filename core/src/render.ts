@@ -263,9 +263,10 @@ export function renderError(s: Words, e: CatalogError): string {
     case 'invalid_local_file': {
       // A damaged lock or config file: what removing it would do depends on which file it is.
       const effect = w.local_file_effect?.[String(d['file'])];
-      // A config key that can't be used (unknown, added to a key list, or of the wrong type) is named, never its value.
-      const keyed = e.data['why'] === 'wrong_shape' && d['key'] !== undefined && typeof w.invalid_local_file_key === 'string';
-      return effect === undefined ? asData(e.code, d) : fill(keyed ? w.invalid_local_file_key : w.invalid_local_file, { ...d, effect });
+      // A config key that can't be used (unknown, added to a key list, or of the wrong type), or a policy setting that
+      // isn't one, is named, never its value; any other why is said as before.
+      const keyed = d['key'] === undefined ? undefined : e.data['why'] === 'wrong_shape' ? 'invalid_local_file_key' : e.data['why'] === 'unknown_policy' ? 'invalid_local_file_policy' : undefined;
+      return effect === undefined ? asData(e.code, d) : fill(w[keyed ?? 'invalid_local_file'], { ...d, effect });
     }
     case 'target_changed': {
       // Whether the folder moved aside is back or sits in staging (named, whatever changed), whether what changed was the
