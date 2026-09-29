@@ -41,8 +41,8 @@ The check of `qa run` on the real machine is a script, run by hand: `node test/l
   process; tests pass `--fake-machine <dir>`. A test process that asks to create or delete anything under the real home,
   the real Claude tmp folder or the real sandbox base fails before anything is looked at.
 - **No secrets reach a run.** Every process a run starts (the command, the assistant, the MCP servers) gets only an
-  allow-listed environment (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `LANG`, `LC_*`, `TERM`, `SKILLS_*`,
-  `QA_*`); tokens and keys never pass. The assistant keeps the real `HOME`, where its login lives. Each assistant run
+  allow-listed environment (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `LANG`, `LC_*`, `TERM`,
+  `SKILLS_*` (set by the sandbox, never passed from yours), `QA_*`); tokens and keys never pass. The assistant keeps the real `HOME`, where its login lives. Each assistant run
   plants a marker under the usual secret names in its own environment, and a safety rule checks it never shows.
 - **One place deletes: `src/safe-delete.ts`.** Run folders only inside `<tmp>/skills-catalog-qa`, which must be a real
   directory you own, mode 0700, at its exact real path; each run folder is named by a run id
