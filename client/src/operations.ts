@@ -50,6 +50,8 @@ export const CATALOG_RUNS: Record<string, Run> = {
   async diff_shared_skill_versions(ctx, args) {
     const r = await (await ctx.catalog()).diff(args);
     const outcome = r.risk_flags.length ? 'runnable' : 'text_only';
+    // A look at the version it goes to; the usage summary counts it only when that version was held.
+    recordUsage(ctx.settings.home, { event: 'look', skill: r.name, version: r.to, surface: ctx.face === 'mcp' ? 'assistant' : 'cli' }, ctx.now());
     return { text: renderDiff(ctx.surface, r, ctx.ids), target: `${r.name} v${r.from} → v${r.to}`, result: logWords(ctx.surface).result('diff', outcome), outcome };
   },
 };

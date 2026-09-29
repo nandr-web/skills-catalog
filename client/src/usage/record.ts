@@ -61,6 +61,9 @@ const FIELDS: Record<UsageEvent['event'], Record<string, Check>> = {
 const usageKey = (home: string) => createHmac('sha256', confirmKey(home)).update('skills-catalog usage metrics v1').digest();
 const hashed = (key: Buffer, name: string) => createHmac('sha256', key).update(name).digest('base64url').slice(0, 16);
 
+/** A skill's name as this machine's usage events store it. */
+export const skillHash = (home: string, name: string) => hashed(usageKey(home), name);
+
 /** The event with only its own fields, or null when it isn't one of the seven or a field isn't what it may hold. */
 function checked(e: UsageEvent): Record<string, unknown> | null {
   const fields = Object.hasOwn(FIELDS, e?.event) ? FIELDS[e.event] : undefined;

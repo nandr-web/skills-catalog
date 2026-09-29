@@ -9,6 +9,7 @@ import { pendingHold } from '../../machine/installer.ts';
 import type { Target } from '../../machine/lock.ts';
 import { perform } from '../../operations.ts';
 import type { Settings } from '../../settings.ts';
+import { recordUsage } from '../../usage/record.ts';
 import { fromSchemaFlags, schemaFlags, Usage, type Command, type Env } from '../command.ts';
 
 const own = schemaFlags('update_installed_skills', ['names']);
@@ -66,10 +67,14 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
   // A first install names where it goes; a "tell me first" update with nothing flagged has no reasons to give.
   const intro = first ? 'update.accept_intro_install' : hold.notify && !hold.flags.length ? 'update.accept_intro_notify' : 'update.accept_intro';
   io.stdout(said(s, intro, at) + '\n' + said(s, first ? 'update.accept_look_install' : 'update.accept_look', at) + '\n');
+  // Showing the person the reasons is a look (usage metrics); their no is an answer. A yes is recorded where the held
+  // update is taken, on every face.
+  recordUsage(ctx.settings.home, { event: 'look', skill: name, version: hold.version, surface: 'cli' }, ctx.now());
   const answer = await io.ask(said(s, 'update.accept_ask', {}));
   if (!/^y(es)?$/i.test(answer.trim())) {
     io.stdout(withActing(said(s, first ? 'update.accept_declined_install' : 'update.accept_declined', at)) + '\n');
     logAccept(ctx.settings, s, `${name} v${hold.version}`, logWords(s).result('accept_declined'));
+    recordUsage(ctx.settings.home, { event: 'answer', skill: name, version: hold.version, answer: 'no', together: 1 }, ctx.now());
     return 0;
   }
   const a = await perform(ctx, 'accept_held_update', 'update --accept', { name, confirm: hold.confirm, flags: hold.flags });
