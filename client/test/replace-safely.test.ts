@@ -9,6 +9,8 @@ import { actAs } from '@skills-catalog/core';
 import { loadGolden } from '@skills-catalog/core/testing';
 import { describe, expect, it, vi } from 'vitest';
 import { readLock } from '../src/machine/lock.ts';
+import { contextFor } from '../src/operations.ts';
+import { settingsFrom } from '../src/settings.ts';
 import { race } from './race-fs.ts';
 import { S, clearHooks, ctxFor, install, refusalOf, refused, unformat, update } from './race.ts';
 import { open, request } from './seed.ts';
@@ -51,20 +53,23 @@ type Row = {
   outside_unchanged?: true;
   pre_existing_unchanged?: true;
   needs?: string;
+  stat?: { path: string; mode: string };
+  observe?: { seam: string; staging: string };
+  no_writes_under?: string;
 };
 
 // Rows this runner can't run yet, and why (reported as skipped, never as passed).
 const CANT: Record<string, string> = {
-  'install-dir-set': 'SKILLS_INSTALL_DIR comes with guided setup (P1)',
-  'install-dir-parent-world-writable': 'SKILLS_INSTALL_DIR comes with guided setup (P1)',
   'project-on-another-volume': 'needs a second volume (the QA safety rules: an APFS image or a Docker tmpfs)',
   'recreated-checked-folders-fail': 'its seam fires in the check of an unchanged recreated copy, which makes no rename to hook',
 };
 
 type Paths = { A: string; P: string; S: string; ST: string; RUN: string; dest: string };
-const pathsOf = (p: Place): Paths => {
+// With SKILLS_INSTALL_DIR the skills folder is that folder, and staging goes beside it (§8).
+const pathsOf = (p: Place, installDir?: string): Paths => {
   const A = p.osHome;
-  return { A, P: join(p.dir, 'project'), S: join(A, '.claude', 'skills'), ST: join(A, '.claude', '.skills-catalog-staging'), RUN: p.dir, dest: join(A, '.claude', 'skills', NAME) };
+  const S = installDir ?? join(A, '.claude', 'skills');
+  return { A, P: join(p.dir, 'project'), S, ST: join(S, '..', '.skills-catalog-staging'), RUN: p.dir, dest: join(S, NAME) };
 };
 const at = (x: Paths, s: string) => s.replace('$ST', x.ST).replace('$S', x.S).replace('$A', x.A).replace('$P', x.P).replace('$RUN', x.RUN);
 
@@ -146,9 +151,20 @@ describe('replacing an installed copy safely (golden histories.replace_safely)',
     const why = CANT[row.id];
     (why ? it.skip : it)(`replace_safely ${row.id}${why ? ` (${why})` : ''}`, async () => {
       const p = place();
-      const x = pathsOf(p);
-      const ctx = ctxFor(p);
+      // `env`: the row's settings for the call, $RUN being the run's own folder.
+      const env = Object.fromEntries(Object.entries(row.env ?? {}).map(([k, v]) => [k, v.replace('$RUN', p.dir)]));
+      const x = pathsOf(p, env['SKILLS_INSTALL_DIR']);
+      const ctx = row.env
+        ? contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed, ...env }, join(p.dir, 'project')), S, 'mcp').ctx
+        : ctxFor(p);
       race.fs.mkdirSync(join(x.RUN, 'outside'), { recursive: true });
+      // `stat`: the folder's mode, set with a real chmod in the sandbox (made first when it isn't there).
+      if (row.stat) {
+        race.fs.mkdirSync(at(x, row.stat.path), { recursive: true });
+        race.fs.chmodSync(at(x, row.stat.path), parseInt(row.stat.mode, 8));
+      }
+      // `observe.staging`: the staging folder every move of the row's calls goes through.
+      const moves: string[] = [];
       try {
         // The catalog, and the installed copy (a real install of stale-v1 as version 1).
         const [first, ...rest] = [...row.plant].sort((a, b) => a.version - b.version);
@@ -230,6 +246,7 @@ describe('replacing an installed copy safely (golden histories.replace_safely)',
         race.afterRename = (from, to) => {
           // Moves of folders in the assistant's home (the lock file's own rename, in SKILLS_HOME, isn't one).
           if (from.startsWith(x.A) || to.startsWith(x.A)) renames++;
+          moves.push(from, to);
           if (s.before_place && !once.before && from === x.dest) {
             once.before = true;
             act(x, s.before_place);
@@ -305,11 +322,22 @@ describe('replacing an installed copy safely (golden histories.replace_safely)',
         // A second call, where the row has one.
         if (row.then && row.installed === 'none') for (const v of rest) await publish(p, versions[v.files]!);
         for (const t of then) {
+          race.afterRename = (from, to) => void moves.push(from, to);
           const r2 = t['update'] ? await update(ctx, {}) : await install(ctx, { name: NAME });
+          race.afterRename = undefined;
           const got2 = said(r2);
           if (t['update']?.updated) expect(got2.updated).toEqual({ from: t['update'].updated.from, to: t['update'].updated.to });
           if (t['old_copy'] === 'deleted') expect(race.fs.existsSync(x.ST)).toBe(false);
         }
+        if (row.observe) {
+          const staging = at(x, row.observe.staging);
+          expect([row.id, moves.some((m) => m.startsWith(`${staging}/`))]).toEqual([row.id, true]);
+          expect([row.id, moves.filter((m) => m.includes('.skills-catalog-staging') && !m.startsWith(`${staging}/`))]).toEqual([row.id, []]);
+        }
+        // A description "absent (<path>)": that path is gone after every call.
+        const absent = /^absent \((\$[^)]+)\)$/.exec(row.staging_after ?? '');
+        if (absent) expect(race.fs.existsSync(at(x, absent[1]!))).toBe(false);
+        if (row.no_writes_under) expect(race.fs.existsSync(at(x, row.no_writes_under))).toBe(false);
       } finally {
         clearHooks();
       }

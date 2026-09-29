@@ -30,7 +30,10 @@ const TARGETS: readonly Target[] = ['user', 'project'];
 // ---------- where skills go ----------
 
 const rootOf = (ctx: Context, t: Target) => (t === 'user' ? ctx.settings.assistantHome : ctx.settings.projectDir);
-export const skillsDir = (ctx: Context, t: Target) => join(rootOf(ctx, t), '.claude', 'skills');
+/** SKILLS_INSTALL_DIR stands in for the user target's .claude/skills (§8): its parent takes .claude's checks, and the
+ *  assistant home above isn't the folder above it. */
+const standsIn = (ctx: Context, t: Target) => t === 'user' && ctx.settings.installDir !== undefined;
+export const skillsDir = (ctx: Context, t: Target) => (standsIn(ctx, t) ? ctx.settings.installDir! : join(rootOf(ctx, t), '.claude', 'skills'));
 const destOf = (ctx: Context, t: Target, name: string) => join(skillsDir(ctx, t), name);
 
 function isLink(path: string): boolean {
@@ -45,7 +48,7 @@ function isLink(path: string): boolean {
 // command of the same name that this one would replace for the assistant. Returns where the skill goes.
 function checkTarget(ctx: Context, target: Target, name: string, lock: Lock): string {
   const root = rootOf(ctx, target);
-  for (const p of [join(root, '.claude'), skillsDir(ctx, target)]) if (isLink(p)) throw new CatalogError('target_symlink', { path: p });
+  for (const p of [dirname(skillsDir(ctx, target)), skillsDir(ctx, target)]) if (isLink(p)) throw new CatalogError('target_symlink', { path: p });
   const dest = destOf(ctx, target, name);
   if (isLink(dest)) throw new CatalogError('target_symlink', { path: dest });
   if (existsSync(dest) && !lock.skills[dest]) throw new CatalogError('exists_untracked', { path: dest });
@@ -65,7 +68,7 @@ function checkTarget(ctx: Context, target: Target, name: string, lock: Lock): st
 // checkTarget is refused, not followed. writeSkill checks these identities again after every move. The folders it makes
 // are 0755 whatever the umask (madeAs), so they pass the privacy check (a umask of 002 would make them group-writable).
 type Anchor = { path: string; id: Id };
-function skillsFolderFor(dest: string, target: Target): Anchor[] {
+function skillsFolderFor(dest: string, target: Target, standIn = false): Anchor[] {
   const skills = dirname(dest);
   const claude = dirname(skills);
   const root = dirname(claude);
@@ -90,7 +93,7 @@ function skillsFolderFor(dest: string, target: Target): Anchor[] {
   const uid = process.getuid?.();
   const ownedWell = uid !== undefined && (r.uid === BigInt(uid) || r.uid === 0n);
   const open = target === 'user' ? !isPrivate(r) : uid !== undefined && (!ownedWell || ((r.mode & 0o1000n) === 0n && !writableOnlyAsPrivate(r)));
-  if (open) throw notPrivate(root, target, r, target === 'user');
+  if (open && !standIn) throw notPrivate(root, target, r, target === 'user');
   return [claude, skills].map((path) => {
     make(path);
     return realFolder(path, target);
@@ -226,11 +229,11 @@ function moved(from: string, to: string): boolean {
 //   may have gone where a swapped-in link pointed. It never reports success after a failed check.
 // - Nothing is removed by path unless its identity is one recorded here.
 // Returns the new copy's identity, for the lock, and where a replaced copy was kept, if it was.
-function writeSkill(dest: string, target: Target, files: readonly TreeFile[], entry: LockEntry | undefined): { copy: Id; kept?: string } {
+function writeSkill(dest: string, target: Target, files: readonly TreeFile[], entry: LockEntry | undefined, standIn = false): { copy: Id; kept?: string } {
   // A staging folder already there is checked before anything is made, so a refusal for it leaves nothing behind.
   const early = join(dirname(dirname(dest)), STAGING);
   if (existsSync(early)) realFolder(early, target);
-  const anchors = skillsFolderFor(dest, target);
+  const anchors = skillsFolderFor(dest, target, standIn);
   const stagingDir = join(anchors[0]!.path, STAGING);
   const made = makeFolder(stagingDir, 0o700);
   const staging = realFolder(stagingDir, target);
@@ -606,7 +609,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
       const held = heldOver(existing, flags);
       if (held) return held;
     }
-    const written = writeSkill(dest, target, to.files, now);
+    const written = writeSkill(dest, target, to.files, now, standsIn(ctx, target));
     return { written, entry: record(ctx, fresh, dest, { name: req.name, target }, to, req.policy ?? now?.policy, now?.accepted ?? [], toLock(written.copy)) };
   });
   if (!('written' in done)) return done;
@@ -684,7 +687,7 @@ function folderFingerprint(dir: string): string | undefined {
 async function recordAgain(ctx: Context, dest: string, target: Target, e: LockEntry, write: <T>(fn: (lock: Lock) => T) => Promise<T> = (fn) => withLock(ctx.settings.home, clockOf(ctx), fn)): Promise<void> {
   const now = idOf(dest);
   if (now === undefined || same(now, fromLock(e.copy))) return;
-  skillsFolderFor(dest, target);
+  skillsFolderFor(dest, target, standsIn(ctx, target));
   if (!isCopy(lstatOf(dest), now)) return;
   // Only onto the entry this was decided from: another run may have installed, updated or recorded it since (§4.5).
   await write((fresh) => {
@@ -741,7 +744,7 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const { written, entry } = await withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
     const now = fresh.skills[dest];
     if (!sameDecision(existing, now)) throw conflict();
-    const written = writeSkill(dest, t.target, to.files, now);
+    const written = writeSkill(dest, t.target, to.files, now, standsIn(ctx, t.target));
     return { written, entry: record(ctx, fresh, dest, { name: req.name, target: t.target }, to, now?.policy, [...(now?.accepted ?? []), { version: to.version, flags: kinds(flags) }], toLock(written.copy)) };
   });
   // The person's yes, wherever it was given (§3's usage metrics).
@@ -920,7 +923,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
           }
           const entry = now ?? e;
           if (heldOver(entry, dNow)) return 'held';
-          const w = writeSkill(dest, e.target, to.files, entry);
+          const w = writeSkill(dest, e.target, to.files, entry, standsIn(ctx, e.target));
           record(ctx, fresh, dest, entry, to, entry.policy, entry.accepted, toLock(w.copy));
           return { written: w, from: entry.version, d: dNow };
         });

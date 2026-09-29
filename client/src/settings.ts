@@ -29,6 +29,9 @@ export type Settings = {
   /** SKILLS_MANAGED_SETTINGS (default: Claude Code's managed-settings folder for this system): read, never written, to
    *  tell a permissive mode (contract §5.3). Tests always point it into their sandbox. */
   managedSettings: string;
+  /** SKILLS_INSTALL_DIR: stands in for the user target's <assistant home>/.claude/skills (contract §8): the checks run on it
+   *  and its parent, and staging goes beside it. Tests point it into their sandbox. */
+  installDir?: string;
 };
 
 /** The file skills-catalog login saves a hosted catalog's token in (0600, in the client's own folder). */
@@ -64,5 +67,6 @@ export function settingsFrom(env: Record<string, string | undefined>, cwd: strin
     projectDir: resolve(cwd),
     ...(env['SKILLS_TOKEN'] ? { token: env['SKILLS_TOKEN'] } : {}),
     managedSettings: resolve(env['SKILLS_MANAGED_SETTINGS'] || MANAGED_SETTINGS),
+    ...(env['SKILLS_INSTALL_DIR'] ? { installDir: resolve(env['SKILLS_INSTALL_DIR']) } : {}),
   };
 }
