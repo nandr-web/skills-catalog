@@ -129,7 +129,8 @@ describe('the surface (vendored, recommended variant)', () => {
     const s = Surface.load();
     const tools = Object.fromEntries(s.toolDefs().map((t) => [t.op, t]));
     const props = (op: string) => Object.keys(tools[op]!.inputSchema.properties!);
-    expect(props('publish_skill_to_catalog')).toEqual(['folder', 'message', 'confirm']);
+    // Step 2 repeats what step 1 showed, so the person's permission prompt shows what they agree to (contract §3).
+    expect(props('publish_skill_to_catalog')).toEqual(['folder', 'message', 'confirm', 'name', 'version', 'files', 'flags']);
     expect(tools['publish_skill_to_catalog']!.inputSchema.required).toEqual(['folder']);
     expect(props('install_shared_skill')).toEqual(['name', 'version', 'target']);
     expect(tools['install_shared_skill']!.inputSchema.properties!['target']).toMatchObject({ enum: ['user', 'project'] });
@@ -152,6 +153,21 @@ describe('the surface (vendored, recommended variant)', () => {
       const field = Object.keys(input).at(-1)!;
       expect((await errorOf(() => validateInput(op, input, 'mcp'))).data, op).toMatchObject({ field, why: 'unknown_field' });
       expect(validateInput(op, input, 'cli'), op).toMatchObject(input);
+    }
+  });
+
+  it('the MCP tool list drops CLI-only inputs by the registry\'s own filter, for any operation it is given', () => {
+    const op = { name: 'probe', kind: 'machine', phase: 1, mcp: true, surface: 'publish', cliOnly: ['secret'],
+      input: { type: 'object', properties: { folder: { type: 'string' }, secret: { type: 'boolean' } }, required: ['folder'] } } as const;
+    const [tool] = Surface.load().toolDefs({ probe: op });
+    expect(Object.keys(tool!.inputSchema.properties!)).toEqual(['folder']);
+  });
+
+  it('checks a publish\'s step-2 values like any request: version from 1, files from 0, flags a list', async () => {
+    const step2 = { folder: 'x', confirm: 'c', name: 'n', version: 2, files: 1, flags: ['runnable_file'] };
+    expect(validateInput('publish_skill_to_catalog', step2, 'mcp')).toEqual(step2);
+    for (const [field, bad] of [['version', 0], ['files', -1], ['flags', 'runnable_file'], ['flags', ['made_up_kind']]] as const) {
+      expect((await errorOf(() => validateInput('publish_skill_to_catalog', { ...step2, [field]: bad }, 'mcp'))).data, field).toMatchObject({ field });
     }
   });
 

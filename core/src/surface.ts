@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
-import { OPERATIONS, type OperationDef, type Schema } from './registry.ts';
+import { OPERATIONS, inputSchema, type OperationDef, type Schema } from './registry.ts';
 
 export const SURFACE_FILE = join(import.meta.dirname, '..', 'surface', 'surface.yaml');
 
@@ -101,7 +101,7 @@ export class Surface {
       .filter((op) => op.mcp && op.surface && this.doc.tools[op.surface])
       .map((op) => {
         const spec = this.doc.tools[op.surface!];
-        const input = { ...op.input, properties: Object.fromEntries(Object.entries(op.input.properties).filter(([k]) => !op.cliOnly?.includes(k))) };
+        const input = inputSchema(op, 'mcp');
         return {
           name: this.names[op.surface!]!,
           op: op.name,

@@ -4,6 +4,11 @@
 import { CatalogError } from './errors.ts';
 import type { Clock, Events, Identity, Ids, SearchCard, SearchIndex, Storage, VersionRecord } from './ports.ts';
 import { DEFAULT_SEARCH_LIMIT, VERSIONS_PAGE, validateInput } from './registry.ts';
+
+// The catalog's own operations have no input only a person gives (a person's override, like allow_suspected_secrets,
+// is gated on the machine operation that passes it on, with its caller's face). Checked as the strictest face, so if one
+// ever gets such an input it's refused here (the CLI's override test goes red), never let through.
+const CATALOG_FACE = 'mcp';
 import {
   DEFAULT_SAFE_FRONTMATTER_KEYS,
   DEFAULT_LIMITS,
@@ -293,7 +298,7 @@ export class Catalog {
 
   // search_shared_skills
   async search(input: unknown): Promise<SearchResult> {
-    const req = validateInput<SearchInput>('search_shared_skills', input);
+    const req = validateInput<SearchInput>('search_shared_skills', input, CATALOG_FACE);
     const offset = decodeCursor(req.cursor);
     const limit = req.limit ?? DEFAULT_SEARCH_LIMIT;
     await this.p.events.deliver();
@@ -321,7 +326,7 @@ export class Catalog {
 
   // read_shared_skill
   async read(input: unknown): Promise<ReadResult> {
-    const req = validateInput<ReadInput>('read_shared_skill', input);
+    const req = validateInput<ReadInput>('read_shared_skill', input, CATALOG_FACE);
     if (req.name !== undefined && req.names !== undefined) throw new CatalogError('invalid_request', { field: 'names', why: 'name_and_names' });
     if (req.paths !== undefined && req.name === undefined) throw new CatalogError('invalid_request', { field: 'paths', why: 'paths_need_one_name' });
     const wanted = req.names ?? (req.name !== undefined ? [req.name] : []);
@@ -427,7 +432,7 @@ export class Catalog {
 
   // list_shared_skill_versions
   async versions(input: unknown): Promise<VersionsResult> {
-    const req = validateInput<{ name: string; cursor?: string }>('list_shared_skill_versions', input);
+    const req = validateInput<{ name: string; cursor?: string }>('list_shared_skill_versions', input, CATALOG_FACE);
     const offset = decodeCursor(req.cursor);
     const { latest } = await this.versionOf(req.name);
     const rows = await this.p.storage.versions(req.name, offset, VERSIONS_PAGE);
@@ -442,7 +447,7 @@ export class Catalog {
 
   // diff_shared_skill_versions
   async diff(input: unknown): Promise<DiffResult> {
-    const req = validateInput<{ name: string; from: number; to: number }>('diff_shared_skill_versions', input);
+    const req = validateInput<{ name: string; from: number; to: number }>('diff_shared_skill_versions', input, CATALOG_FACE);
     const a = (await this.versionOf(req.name, req.from)).record;
     const b = (await this.versionOf(req.name, req.to)).record;
     const d = diffTrees({ files: await this.tree(a), publisher: a.publisher }, { files: await this.tree(b), publisher: b.publisher }, this.config.safeFrontmatterKeys);
@@ -452,7 +457,7 @@ export class Catalog {
   // publish_version: check, then the storage's commit point, then the event (§5.1). The publisher is the acting
   // identity (the given one, else the catalog's), never a field in the request or the front matter.
   async publish(input: unknown, identity: Identity = this.p.identity): Promise<PublishResult> {
-    const req = validateInput<PublishInput>('publish_version', input);
+    const req = validateInput<PublishInput>('publish_version', input, CATALOG_FACE);
     // A version's message is a one-line field (contract §2, §4.1).
     if (req.message !== undefined && hasLineBreakOrControl(req.message)) throw new CatalogError('invalid_request', { field: 'message', why: 'control_character' });
     const publisher = checkActor(await identity.actor());
@@ -518,7 +523,7 @@ export class Catalog {
 
   // fetch_version: the bytes, by name and version or by fingerprint; cacheable by fingerprint.
   async fetch(input: unknown): Promise<FetchResult> {
-    const req = validateInput<FetchInput>('fetch_version', input);
+    const req = validateInput<FetchInput>('fetch_version', input, CATALOG_FACE);
     let record: VersionRecord | undefined;
     if (req.fingerprint !== undefined) {
       if (req.name !== undefined || req.version !== undefined) throw new CatalogError('invalid_request', { field: 'fingerprint', why: 'fingerprint_or_name_and_version' });

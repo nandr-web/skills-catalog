@@ -36,6 +36,9 @@ export const MAX_UPDATE_NAMES = 100;
 export const TARGETS = ['user', 'project'] as const;
 export const POLICIES = ['auto', 'notify', 'pin'] as const;
 
+// The risk flags' kinds (contract §5.3), as a publish's step 2 repeats them.
+export const FLAG_KINDS = ['runnable_file', 'runs_at_load', 'command_instruction', 'capability_frontmatter', 'instructions_changed', 'non_markdown', 'new_publisher', 'prompt_injection', 'context_cost'] as const;
+
 const name = { type: 'string', maxLength: 200 } as const;
 const version = { type: 'integer', minimum: 1 } as const;
 
@@ -144,6 +147,11 @@ export const OPERATIONS: Record<string, OperationDef> = {
         folder: { type: 'string', maxLength: 4096 },
         message: { type: 'string', maxLength: 1000 },
         confirm: { type: 'string', maxLength: 2000 },
+        // Step 2 repeats what step 1 showed, so the person's permission prompt shows what they agree to (contract §3).
+        name,
+        version,
+        files: { type: 'integer', minimum: 0 },
+        flags: { type: 'array', items: { type: 'string', enum: FLAG_KINDS }, maxItems: 20 },
         allow_suspected_secrets: { type: 'boolean' },
       },
       required: ['folder'],
@@ -206,8 +214,9 @@ export const OPERATIONS: Record<string, OperationDef> = {
 };
 
 // An operation's input schema as one face sees it: the MCP face never gets the CLI-only inputs.
-export function inputSchema(op: string, face: Face = 'cli'): OperationDef['input'] {
-  const def = OPERATIONS[op]!;
+// No default face: a caller that forgets it must not get the CLI's inputs.
+export function inputSchema(op: string | OperationDef, face: Face): OperationDef['input'] {
+  const def = typeof op === 'string' ? OPERATIONS[op]! : op;
   if (face === 'cli' || !def.cliOnly?.length) return def.input;
   const properties = Object.fromEntries(Object.entries(def.input.properties).filter(([k]) => !def.cliOnly!.includes(k)));
   return { ...def.input, properties };
@@ -275,7 +284,7 @@ function ownCopy(schema: Schema, value: unknown): unknown {
 
 // Checks a request against its operation's schema as `face` sees it (the MCP face has no CLI-only input); throws
 // invalid_request naming the field (and the limit, if any). Returns a copy of the request with only its own, known fields.
-export function validateInput<T>(op: keyof typeof OPERATIONS, input: unknown, face: Face = 'cli'): T {
+export function validateInput<T>(op: keyof typeof OPERATIONS, input: unknown, face: Face): T {
   const schema = inputSchema(op, face);
   check(schema, input ?? {}, '');
   return ownCopy(schema, input ?? {}) as T;
