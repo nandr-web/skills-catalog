@@ -5,6 +5,7 @@
 // to close are few (the drain of the run before it); where they can't be counted, it doesn't start.
 
 import { execFile } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:net';
 
 /** The lock's port: below the ephemeral range, so no outgoing connection is ever given it. */
@@ -39,17 +40,35 @@ export async function takeRunLock(o: { port?: number; timeoutMs: number; pollMs?
   }
 }
 
-/** How many TCP connections on this machine are waiting to close, or undefined when netstat can't say. */
-export const timeWaitCount = () =>
-  new Promise<number | undefined>((resolve) => {
-    execFile('/usr/sbin/netstat', ['-an', '-p', 'tcp'], { env: { PATH: '/usr/bin:/bin' }, maxBuffer: 64 * 1024 * 1024 }, (err, out) => {
-      if (err) return resolve(undefined);
-      resolve(out.split('\n').filter((l) => /\bTIME_WAIT\b/.test(l)).length);
-    });
-  });
+type Readers = { read(file: string): Promise<string | undefined>; netstat(): Promise<string | undefined> };
 
-export async function waitForFreePorts(o: { count?: () => Promise<number | undefined>; limit?: number; timeoutMs: number; pollMs?: number }): Promise<void> {
-  const count = o.count ?? timeWaitCount;
+const readers: Readers = {
+  read: (file) => readFile(file, 'utf8').catch(() => undefined),
+  netstat: () =>
+    new Promise((resolve) => {
+      execFile('/usr/sbin/netstat', ['-an', '-p', 'tcp'], { env: { PATH: '/usr/bin:/bin' }, maxBuffer: 64 * 1024 * 1024 }, (err, out) => resolve(err ? undefined : out));
+    }),
+};
+
+/** How many TCP connections on this machine are waiting to close, or undefined when it can't be counted here: on Linux
+ *  the state-06 rows of /proc/net/tcp and tcp6 (a file read, no program run), on macOS netstat's TIME_WAIT lines. */
+export async function countTimeWait(platform: string = process.platform, r: Readers = readers): Promise<number | undefined> {
+  if (platform === 'linux') {
+    const tables = (await Promise.all(['/proc/net/tcp', '/proc/net/tcp6'].map((f) => r.read(f)))).filter((t): t is string => t !== undefined);
+    if (!tables.length) return undefined;
+    // Each row after the header: "sl local_address rem_address st ..."; st 06 is TIME_WAIT.
+    return tables.reduce((n, t) => n + t.split('\n').slice(1).filter((l) => l.trim().split(/\s+/)[3] === '06').length, 0);
+  }
+  if (platform === 'darwin') {
+    const out = await r.netstat();
+    return out === undefined ? undefined : out.split('\n').filter((l) => /\bTIME_WAIT\b/.test(l)).length;
+  }
+  return undefined;
+}
+
+export async function waitForFreePorts(o: { count?: () => Promise<number | undefined>; platform?: string; limit?: number; timeoutMs: number; pollMs?: number }): Promise<void> {
+  const platform = o.platform ?? process.platform;
+  const count = o.count ?? (() => countTimeWait(platform));
   const limit = o.limit ?? FREE_PORTS_LIMIT;
   const started = Date.now();
   for (let said = false; ; ) {
@@ -59,12 +78,12 @@ export async function waitForFreePorts(o: { count?: () => Promise<number | undef
     if (Date.now() - started >= o.timeoutMs) {
       throw new Error(
         n === undefined
-          ? `can't count local ports waiting to close (netstat unreadable); a hosted run won't start blind. Waited ${Math.round(o.timeoutMs / 1000)} s.`
+          ? `can't count local ports waiting to close on ${platform}; a hosted run won't start blind. Waited ${Math.round(o.timeoutMs / 1000)} s.`
           : `${n} local ports are waiting to close (a run starts under ${limit}); waited ${Math.round(o.timeoutMs / 1000)} s.`,
       );
     }
     if (!said) {
-      process.stderr.write(n === undefined ? "can't count local ports waiting to close yet (netstat unreadable); waiting\n" : `waiting for local ports to close: ${n} (a run starts under ${limit})\n`);
+      process.stderr.write(n === undefined ? `can't count local ports waiting to close on ${platform} yet; waiting\n` : `waiting for local ports to close: ${n} (a run starts under ${limit})\n`);
       said = true;
     }
     await sleep(o.pollMs ?? 2000);
