@@ -46,19 +46,25 @@ export function renderSearch(s: Surface, r: SearchResult, query: string, offset 
   return lines.join('\n');
 }
 
+// A skill's text inside its fence. A line that would read as a fence marker is escaped with a leading backslash,
+// so a skill can't close its own fence early and put words outside it, where they'd read as ours.
+function fenced(open: string, close: string, text: string): string[] {
+  const markers = /^\\*--- (?:end of )?.+ ---\s*$/;
+  const body = text.trimEnd().split('\n').map((l) => (markers.test(l) ? '\\' + l : l));
+  return [open, ...body, close];
+}
+
 function renderItem(s: Surface, item: ReadItem, body: string): string {
   const w = s.word('get');
   const lines = [
     s.format(w.header, { name: item.name, version: item.version, latest_mark: item.version === item.latest_version ? w.latest_mark.latest : s.format(w.latest_mark.older, { latest: item.latest_version }), publisher: item.publisher, published_at: item.published_at }),
     s.format(w.data_note, { publisher: item.publisher }),
-    w.fence[0],
-    body.trimEnd(),
-    w.fence[1],
+    ...fenced(w.fence[0], w.fence[1], body),
   ];
   if (item.files) lines.push(s.format(w.files, { files: list(item.files.map((f) => `${f.path} (${f.size} B)`)) }));
   // Other text files get the same fence as SKILL.md, with their own path.
   for (const f of item.files ?? []) {
-    if (f.content !== undefined && f.path !== 'SKILL.md') lines.push(w.fence[0].replace('SKILL.md', f.path), f.content.trimEnd(), w.fence[1].replace('SKILL.md', f.path));
+    if (f.content !== undefined && f.path !== 'SKILL.md') lines.push(...fenced(w.fence[0].replace('SKILL.md', f.path), w.fence[1].replace('SKILL.md', f.path), f.content));
   }
   lines.push(s.format(w.next, { name: item.name }));
   return lines.join('\n');
