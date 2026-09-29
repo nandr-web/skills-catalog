@@ -2,9 +2,11 @@
 // a regular file; for a file setup would write, another user's or one with more than one hard link; a file swapped between
 // the look and the open (read again once); one byte over the cap; anything but strict UTF-8 JSON with an object at the top.
 // A usable file comes with the snapshot the write checks against.
+import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { constants } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { readJsonFile } from '../src/machine/json-file.ts';
 import { race } from './race-fs.ts';
 import { clearHooks } from './race.ts';
@@ -96,5 +98,47 @@ describe('reading a JSON file of the person\'s', () => {
       return undefined;
     };
     expect(whyOf(readJsonFile(path, 64, { forWrite: true }))).toBe('unreadable');
+  });
+
+  it('every open of the file is no-follow and non-blocking, so a fifo put there never hangs the read', () => {
+    const path = file('{}');
+    const flags: number[] = [];
+    race.onOpen = (p, f) => {
+      if (p === path) flags.push(Number(f));
+    };
+    readJsonFile(path, 64, { forWrite: true });
+    expect(flags.length).toBeGreaterThan(0);
+    for (const f of flags) expect([f & constants.O_NOFOLLOW, f & constants.O_NONBLOCK]).toEqual([constants.O_NOFOLLOW, constants.O_NONBLOCK]);
+  });
+
+  it('a fifo swapped in right after the look is unreadable at once, never waited on', () => {
+    const path = file('{"a": 1}');
+    const top = join(path, '..');
+    // Children get their own environment, every home-like place in the test's folder.
+    const env = { PATH: '/usr/bin:/bin', HOME: top, XDG_CONFIG_HOME: top, XDG_DATA_HOME: top, CLAUDE_CONFIG_DIR: top, TMPDIR: top };
+    // A writer opens the fifo after 2 s: a read that blocked on the open would end then, too late for the check below,
+    // instead of hanging the run.
+    let writer: ReturnType<typeof spawn> | undefined;
+    onTestFinished(() => void writer?.kill('SIGKILL'));
+    race.stats = (p) => {
+      if (p !== path || writer) return undefined;
+      race.fs.rmSync(path);
+      execFileSync('/usr/bin/mkfifo', [path], { env });
+      writer = spawn('/bin/sh', ['-c', 'sleep 2; : > "$1"', 'sh', path], { env, stdio: 'ignore' });
+      return undefined;
+    };
+    const started = performance.now();
+    const r = readJsonFile(path, 64, { forWrite: true });
+    expect([whyOf(r), performance.now() - started < 1000]).toEqual(['unreadable', true]);
+  });
+
+  it('what a refusal says is only why: nothing of the file is in it', () => {
+    const SENTINEL = 'PLANTED-SENTINEL-7f3a';
+    const texts = [`{"a": "${SENTINEL}",}`, `{"a": "${SENTINEL}${'x'.repeat(100)}"}`, `["${SENTINEL}"]`, `﻿{"a": "${SENTINEL}"}`];
+    for (const text of texts) {
+      const r = readJsonFile(file(text), 64, { forWrite: true });
+      expect('why' in r).toBe(true);
+      expect(JSON.stringify(r)).not.toContain(SENTINEL);
+    }
   });
 });

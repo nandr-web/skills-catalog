@@ -39,7 +39,8 @@ export function readJsonFile(path: string, cap: number, { forWrite }: { forWrite
     if (forWrite && st.nlink > 1n) return { why: 'hard_linked' };
     let fd: number;
     try {
-      fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+      // Never blocks: a fifo swapped in after the look is opened at once, and refused below.
+      fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     } catch (e) {
       const code = (e as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') return { absent: true };
@@ -52,6 +53,8 @@ export function readJsonFile(path: string, cap: number, { forWrite }: { forWrite
         if (attempt === 0) continue;
         return { why: 'unreadable' };
       }
+      // What was opened must be a regular file, whatever the look said.
+      if (!opened.isFile()) return { why: 'unreadable' };
       const buf = Buffer.alloc(cap + 1);
       let n = 0;
       for (let got = 1; got > 0 && n <= cap; n += got) got = readSync(fd, buf, n, buf.length - n, null);
