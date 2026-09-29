@@ -4,10 +4,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { OPERATIONS, inputSchema, validateInput, type OutputSchema } from '../src/api.ts';
+import { OPERATIONS, inputSchema, validateInput, webRow, type OperationDef, type OutputSchema, type Where } from '../src/api.ts';
 import { Catalog } from '../src/catalog.ts';
 import { COMMON_ERRORS, CatalogError, ERROR_CODES } from '../src/errors.ts';
-import { WORD_GAPS } from '../src/render.ts';
+import { openapi } from '../src/openapi.ts';
+import { WORD_GAPS, renderError } from '../src/render.ts';
 import { Words } from '../src/words-file.ts';
 import { actAs } from '../src/local/index.ts';
 import { filesOf, historyVersion, loadGolden } from './golden.ts';
@@ -122,6 +123,60 @@ describe('each operation\'s definition (contract §1)', () => {
       }
     })();
     expect(e?.toJSON()).toMatchObject({ code: 'invalid_request', field: 'policy', why: 'unknown_field' });
+  });
+
+  // §9: an unknown key longer than 200 characters is named by its first 200 whole characters, with field_cut: true, so
+  // an answer never grows with the key a request sent, and the sentence names the same cut field.
+  it('names an unknown key by at most its first 200 whole characters, and says when it cut one', () => {
+    const refused = (input: unknown) => {
+      try {
+        validateInput('search_shared_skills', input, 'web', 'local');
+      } catch (err) {
+        return err as CatalogError;
+      }
+      throw new Error('not refused');
+    };
+    const refusal = (input: unknown) => refused(input).toJSON() as Record<string, unknown>;
+    const huge = refusal({ ['k'.repeat(1_000_000)]: 1 });
+    expect(huge).toMatchObject({ code: 'invalid_request', field: 'k'.repeat(200), why: 'unknown_field', field_cut: true });
+    expect(JSON.stringify(huge).length).toBeLessThan(1000);
+    const astral = '😀'.repeat(199) + 'ab';
+    const cut = refusal({ [astral]: 1 });
+    expect(cut).toMatchObject({ field: '😀'.repeat(199) + 'a', field_cut: true });
+    expect([...(cut.field as string)].length).toBe(200);
+    expect(refusal({ ['😀'.repeat(200)]: 1 })).toMatchObject({ field: '😀'.repeat(200) });
+    expect('field_cut' in refusal({ ['k'.repeat(200)]: 1 })).toBe(false);
+    expect(refusal({ ['k'.repeat(200)]: 1 }).field).toBe('k'.repeat(200));
+    expect(refusal({ ['k'.repeat(201)]: 1 })).toMatchObject({ field: 'k'.repeat(200), field_cut: true });
+    expect(refusal({ filters: { ['o'.repeat(300)]: 1 } })).toMatchObject({ field: `filters.${'o'.repeat(200)}`, why: 'unknown_field', field_cut: true });
+    expect('field_cut' in refusal({ filters: { owner: 1 } })).toBe(false);
+    const sentence = renderError(Words.load(), refused({ ['k'.repeat(1_000_000)]: 1 }));
+    expect(sentence).toContain('k'.repeat(200));
+    expect(sentence).not.toContain('k'.repeat(201));
+  });
+
+  // One rule for which rows the HTTP API serves where the catalog runs, read by the published schema and the server alike.
+  it('the HTTP API serves a row with the web face that isn\'t only for the other place', () => {
+    const search = OPERATIONS['search_shared_skills']!;
+    const probes: Record<string, OperationDef> = {
+      web_any: { ...search, name: 'web_any' },
+      web_hosted: { ...search, name: 'web_hosted', where: 'hosted' },
+      no_web: { ...search, name: 'no_web', faces: ['mcp', 'cli'] },
+      no_web_hosted: { ...search, name: 'no_web_hosted', faces: ['cli'], where: 'hosted' },
+    };
+    const served = (where: Where) => Object.values(probes).filter((d) => webRow(d, where)).map((d) => d.name);
+    expect(served('local')).toEqual(['web_any']);
+    expect(served('hosted')).toEqual(['web_any', 'web_hosted']);
+    // By name, as a route reads it from a URL: only the table's own keys are operations.
+    expect(webRow('search_shared_skills', 'local')).toBe(true);
+    for (const name of ['__proto__', 'toString', 'constructor', 'hasOwnProperty', 'nope', '']) expect([name, webRow(name, 'hosted')]).toEqual([name, false]);
+    for (const where of ['local', 'hosted'] as const) {
+      const routes = Object.keys(openapi(where, { ...OPERATIONS, ...probes }).paths as Record<string, unknown>)
+        .filter((p) => !p.includes('{'))
+        .map((p) => p.slice(p.lastIndexOf('/') + 1))
+        .sort();
+      expect([where, routes]).toEqual([where, Object.values({ ...OPERATIONS, ...probes }).filter((d) => webRow(d, where)).map((d) => d.name).sort()]);
+    }
   });
 });
 

@@ -113,6 +113,10 @@ describe('the published schema is the definitions\' (contract §1.1)', () => {
       const codes: string[] = err.properties.error.properties.code.enum;
       expect(new Set(codes)).toEqual(new Set([...d.errors, ...COMMON_ERRORS]));
       expect(codes).toEqual(ERROR_CODES.filter((c) => codes.includes(c))); // in §9's order
+      // An unknown field cut to its first 200 characters says so (§9); the error stays open to each code's fields.
+      expect(err.properties.error.properties.field_cut.type).toBe('boolean');
+      expect(err.properties.error.required).toEqual(['code']);
+      expect(err.properties.error.additionalProperties).toBe(true);
       for (const s of [ok, err]) expect(deref(s.properties.words)).toBe(doc.components.schemas.Words);
     }
     expect(Object.keys(doc.components.schemas.Words.properties)).toEqual(['error', 'acting_as', 'demo', 'verdict']);
