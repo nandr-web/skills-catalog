@@ -80,10 +80,35 @@ const PLACE = {
   },
   hosted: {
     security: [{ bearer: [] }],
-    guards: { '401': ref('responses', 'NoToken'), '404': ref('responses', 'NotFound'), '415': ref('responses', 'NotJson') },
+    guards: {
+      '400': ref('responses', 'TokenOnly'),
+      '401': ref('responses', 'NoToken'),
+      '403': ref('responses', 'Refused'),
+      '404': ref('responses', 'NotFound'),
+      '415': ref('responses', 'NotJson'),
+    },
     parameters: undefined,
     responses: {
+      TokenOnly: {
+        description: 'The local acting header was sent: who is asking comes only from the token here (not 401: the token may be fine).',
+        content: { 'application/json': { schema: {
+          type: 'object',
+          properties: {
+            ok: { const: false },
+            error: {
+              type: 'object',
+              properties: { code: { const: 'invalid_request' }, field: { const: 'X-Skills-Catalog-As' }, why: { const: 'token_only' } },
+              required: ['code', 'field', 'why'],
+              additionalProperties: false,
+            },
+            words: ref('schemas', 'Words'),
+          },
+          required: ['ok', 'error'],
+          additionalProperties: false,
+        } } },
+      },
       NoToken: { description: 'The bearer token is missing, expired or wrong.' },
+      Refused: { description: 'The request didn\'t come through the catalog\'s own front door.' },
       NotFound: { description: 'No such operation or file.' },
       NotJson: { description: 'The body isn\'t application/json.' },
     },
