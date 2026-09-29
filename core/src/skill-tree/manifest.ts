@@ -1,5 +1,7 @@
 // SKILL.md: YAML front matter, then a markdown body (contract §4.1, the Agent Skills format).
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { parseDocument } from 'yaml';
 import { CatalogError } from './errors.ts';
 import { decodeText, isText, type TreeFile } from './tree.ts';
@@ -17,11 +19,28 @@ export interface Manifest {
   tags: string[];
 }
 
+// Names Claude Code already uses (bundled skills, built-in commands and their aliases, and this product's companion
+// skill): a skill with one of them would replace a command people trust (contract §4.1). Config, kept with its source
+// and date in config/reserved-names.txt.
+export const RESERVED_NAMES_FILE = join(import.meta.dirname, '..', '..', 'config', 'reserved-names.txt');
+
+export function readReservedNames(file = RESERVED_NAMES_FILE): ReadonlySet<string> {
+  return new Set(
+    readFileSync(file, 'utf8')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l !== '' && !l.startsWith('#')),
+  );
+}
+
+export const RESERVED_NAMES = readReservedNames();
+
 // Returns why a name is not a skill name, or null when it is one.
-export function nameProblem(name: unknown): string | null {
+export function nameProblem(name: unknown, reserved: ReadonlySet<string> = RESERVED_NAMES): string | null {
   if (typeof name !== 'string' || name === '') return 'empty';
   if (name.length > NAME_MAX) return 'too_long';
   if (!NAME_RE.test(name)) return 'bad_characters';
+  if (reserved.has(name)) return 'reserved';
   return null;
 }
 

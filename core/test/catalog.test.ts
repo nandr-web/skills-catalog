@@ -275,6 +275,16 @@ describe('limits on reads are errors, never clamped (contract §9)', () => {
     expect((await errorOf(async () => (await catalog.search({ cursor: 'not-ours' })))).data).toMatchObject({ field: 'cursor' });
     expect((await catalog.read({ names: names.slice(0, 20) })).skills).toHaveLength(20);
   });
+
+  it('reads only the request\'s own fields: constructor, __proto__ and inherited fields never count', async () => {
+    const { catalog } = await openTest();
+    expect((await errorOf(() => catalog.search({ constructor: 1 }))).data).toMatchObject({ field: 'constructor', why: 'unknown_field' });
+    expect((await errorOf(() => catalog.search(JSON.parse('{"__proto__": {"limit": 1}}')))).data).toMatchObject({ field: '__proto__', why: 'unknown_field' });
+    expect((await errorOf(() => catalog.search({ filters: { toString: 'x' } }))).data).toMatchObject({ field: 'filters.toString', why: 'unknown_field' });
+    // A required field that is only inherited is missing.
+    const inherited = Object.create({ name: 'release-note-draft' });
+    expect((await errorOf(() => catalog.versions(inherited))).data).toMatchObject({ field: 'name', why: 'required' });
+  });
 });
 
 describe('search: discoverable, any word, and says how it matched (contract §2)', () => {

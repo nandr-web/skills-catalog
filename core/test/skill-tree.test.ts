@@ -16,6 +16,8 @@ import {
   fingerprint,
   unifiedDiff,
   type TreeFile,
+  nameProblem,
+  RESERVED_NAMES_FILE,
 } from '../src/skill-tree/index.ts';
 import { GOLDEN, catalogNameOf, filesOf, generated, historyVersion, loadGolden, rawFilesOf, type RawFile } from './golden.ts';
 
@@ -138,6 +140,10 @@ describe('hostile file lists are refused (golden/skills.yaml hostile, the raw re
       ['a\u200b.md', 'invisible_character'],
       ['.git/config', 'git_folder'],
       ['x/.GIT/hooks/pre-commit', 'git_folder'],
+      ['.claude/settings.json', 'claude_folder'],
+      ['docs/.CLAUDE/agents/x.md', 'claude_folder'],
+      ['.claude-plugin/plugin.json', 'plugin_folder'],
+      ['x/.Claude-Plugin/plugin.json', 'plugin_folder'],
       [`${'a'.repeat(256)}.md`, 'segment_too_long'],
     ];
     for (const [path, why] of cases) {
@@ -155,6 +161,17 @@ describe('names (golden/skills.yaml missing-names, the name rules)', () => {
       expect(errorOf(() => checkName(m.name)).code, m.name).toBe('invalid_name');
     }
     expect(checkName('release-note-draft')).toBe('release-note-draft');
+  });
+
+  it('refuses the reserved names (the config list: bundled skills, built-in commands, aliases, the companion skill)', () => {
+    const names = readFileSync(RESERVED_NAMES_FILE, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
+    expect(names).toHaveLength(132);
+    for (const name of ['code-review', 'debug', 'doctor', 'skills-catalog', names.at(-1)!]) {
+      const e = errorOf(() => checkName(name));
+      expect([e.code, e.data['why']], name).toEqual(['invalid_name', 'reserved']);
+    }
+    expect(nameProblem('code-review', new Set())).toBeNull(); // the list is config
+    expect(checkName('code-review-checklist')).toBe('code-review-checklist');
   });
 });
 

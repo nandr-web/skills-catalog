@@ -149,17 +149,38 @@ function check(schema: Schema, value: unknown, field: string): void {
         if (!Object.hasOwn(schema.properties, key)) fail(field ? `${field}.${key}` : key, 'unknown_field');
       }
       for (const key of schema.required ?? []) {
-        if (obj[key] === undefined) fail(field ? `${field}.${key}` : key, 'required');
+        if (own(obj, key) === undefined) fail(field ? `${field}.${key}` : key, 'required');
       }
       for (const [key, sub] of Object.entries(schema.properties)) {
-        if (obj[key] !== undefined) check(sub, obj[key], field ? `${field}.${key}` : key);
+        if (own(obj, key) !== undefined) check(sub, own(obj, key), field ? `${field}.${key}` : key);
       }
     }
   }
 }
 
+// A field is read only from the request's own properties, never through an inherited name (contract §2).
+function own(obj: Record<string, unknown>, key: string): unknown {
+  return Object.hasOwn(obj, key) ? obj[key] : undefined;
+}
+
+// A copy holding only the schema's own fields, so nothing past the check can reach an inherited or extra one.
+function ownCopy(schema: Schema, value: unknown): unknown {
+  if (schema.type === 'array' && Array.isArray(value)) return value.map((v) => ownCopy(schema.items, v));
+  if (schema.type === 'object' && value !== null && typeof value === 'object') {
+    const out: Record<string, unknown> = Object.create(null);
+    for (const [key, sub] of Object.entries(schema.properties)) {
+      const v = own(value as Record<string, unknown>, key);
+      if (v !== undefined) out[key] = ownCopy(sub, v);
+    }
+    return out;
+  }
+  return value;
+}
+
 // Checks a request against its operation's schema; throws invalid_request naming the field (and the limit, if any).
+// Returns a copy of the request with only its own, known fields.
 export function validateInput<T>(op: keyof typeof OPERATIONS, input: unknown): T {
-  check(OPERATIONS[op]!.input, input ?? {}, '');
-  return (input ?? {}) as T;
+  const schema = OPERATIONS[op]!.input;
+  check(schema, input ?? {}, '');
+  return ownCopy(schema, input ?? {}) as T;
 }

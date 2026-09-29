@@ -72,6 +72,8 @@ export type PathWhy =
   | 'empty_segment'
   | 'dot_segment'
   | 'git_folder'
+  | 'claude_folder'
+  | 'plugin_folder'
   | 'segment_too_long'
   | 'too_long'
   | 'bad_mode'
@@ -95,7 +97,12 @@ export function checkPath(raw: unknown): string {
   for (const seg of path.split('/')) {
     if (seg === '') refuse(raw, 'empty_segment');
     if (seg === '.' || seg === '..') refuse(raw, 'dot_segment');
-    if (foldKey(seg) === '.git') refuse(raw, 'git_folder');
+    // Folders that make a skill something else: a repository, an assistant's own settings, a plugin (which can bundle
+    // agents, hooks and MCP servers, started every session). Compared the way a case-insensitive file system would.
+    const folded = foldKey(seg);
+    if (folded === '.git') refuse(raw, 'git_folder');
+    if (folded === '.claude') refuse(raw, 'claude_folder');
+    if (folded === '.claude-plugin') refuse(raw, 'plugin_folder');
     if (Buffer.byteLength(seg, 'utf8') > MAX_SEGMENT_BYTES) refuse(raw, 'segment_too_long', { limit: MAX_SEGMENT_BYTES });
   }
   if (Buffer.byteLength(path, 'utf8') > MAX_PATH_BYTES) refuse(raw, 'too_long', { limit: MAX_PATH_BYTES });
