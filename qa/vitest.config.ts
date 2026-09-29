@@ -7,11 +7,15 @@ import { configDefaults, defineConfig } from 'vitest/config';
 const slow = (JSON.parse(readFileSync(new URL('./test/slow.json', import.meta.url), 'utf8')) as { files: { file: string }[] }).files.map((f) => f.file);
 for (const f of slow) if (!existsSync(new URL(f, import.meta.url))) throw new Error(`test/slow.json lists ${f}, which doesn't exist`);
 
+// Every folder a test makes is checked for at the end of each project's run. Set per project: at the root it would also run
+// once for the root itself.
+const TEMP_FOLDERS = './test/temp-folders.ts';
+
 export default defineConfig({
   test: {
     projects: [
-      { extends: true, test: { name: 'fast', exclude: [...configDefaults.exclude, ...slow] } },
-      { extends: true, test: { name: 'slow', include: slow } },
+      { extends: true, test: { name: 'fast', exclude: [...configDefaults.exclude, ...slow], globalSetup: [TEMP_FOLDERS] } },
+      { extends: true, test: { name: 'slow', include: slow, globalSetup: [TEMP_FOLDERS] } },
     ],
   },
 });

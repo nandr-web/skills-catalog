@@ -3,12 +3,13 @@
 // machinery passes one explicitly, and the qa command line runs here only with `--fake-machine <dir>`.
 // This file is the only test code that starts the qa command line (test/meta.test.ts checks that).
 import { spawn, spawnSync, type ChildProcess, type SpawnOptions } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, existsSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { onTestFinished } from 'vitest';
+import { getCurrentTest } from 'vitest/suite';
 import { DEFAULT_TOOLS, PS, runProcesses } from '../src/check.ts';
 import { exists, groupIsOurs, signalGroup } from '../src/groups.ts';
 import { fakeMachine, type Machine } from '../src/machine.ts';
@@ -20,11 +21,56 @@ import { sandboxBase } from '../src/sandbox.ts';
  *  that, so a plain unit test keeps the default and still fails fast if it hangs. */
 export const PROCESS_TEST_MS = 30_000;
 
+// One finisher per test. When the test finishes (after afterEach, and after a failure or a timeout too, where a `finally`
+// in the test doesn't run), every process it registered is stopped and its exit awaited, then any process still carrying
+// the id of a run in its folders, and only then are its folders removed: no process of the test's outlives its folder
+// and makes it again (test/temp-folders.ts names any folder left at the end of the run).
+type Finisher = { stops: (() => unknown)[]; folders: string[] };
+const finishers = new WeakMap<object, Finisher>();
+function finisher(what: string): Finisher {
+  const test = getCurrentTest();
+  if (!test) throw new Error(`${what} is only for use inside a running test, which cleans it up when it finishes (not at a file's top level or in beforeAll)`);
+  const known = finishers.get(test);
+  if (known) return known;
+  const mine: Finisher = { stops: [], folders: [] };
+  finishers.set(test, mine);
+  onTestFinished(async () => {
+    for (const stop of mine.stops.splice(0).reverse()) {
+      try {
+        await stop();
+      } catch {
+        // the next one, and the folders, still go
+      }
+    }
+    try {
+      sweep(mine.folders);
+    } finally {
+      for (const d of mine.folders.splice(0)) rmSync(d, { recursive: true, force: true });   // even when the sweep can't look
+    }
+  });
+  return mine;
+}
+
+/** Something to stop before the test's folders go (a child, a server), awaited; the last registered is stopped first. */
+export const beforeFoldersGo = (stop: () => unknown): void => void finisher('a process to stop').stops.push(stop);
+
+/** Resolves once the child has exited: listened for from the moment it was started, so an exit already past counts. */
+export function exitOf(child: ChildProcess): Promise<void> {
+  return new Promise((ok) => {
+    if (child.exitCode !== null || child.signalCode !== null) ok();
+    else child.once('exit', () => ok());
+  });
+}
+
 /** A child in a process group of its own, for tests of the process checks. Its whole group is killed when the test
- *  ends, however it ends: onTestFinished runs after a failure or a timeout too, where a `finally` in the test doesn't. */
+ *  ends, however it ends, and its exit awaited before the test's folders go. */
 export function spawnDetached(command: string, args: string[], o: SpawnOptions = {}): ChildProcess {
   const child = spawn(command, args, { stdio: 'ignore', ...o, detached: true });
-  onTestFinished(() => stopGroup(child));
+  const gone = exitOf(child);
+  beforeFoldersGo(async () => {
+    stopGroup(child);
+    await gone;
+  });
   return child;
 }
 
@@ -48,22 +94,27 @@ const runsIn = (d: string) => {
   return existsSync(base) ? readdirSync(base).filter((n) => RUN_ID.test(n)) : [];
 };
 
-const made: string[] = [];
-/** Call from afterEach, which runs after a timeout too. First every process still carrying the exact id of a run whose
- *  sandbox is in the test's own folders (a test that timed out never reached its run's teardown), each one looked at
- *  again right before the signal; never by name or port. Then the folders. */
+/** Every process still carrying the exact id of a run whose sandbox is in these folders (a test that timed out never
+ *  reached its run's teardown), each one looked at again right before the signal; never by name or port. */
+function sweep(folders: string[]): void {
+  for (const d of folders) for (const id of runsIn(d)) for (const p of runProcesses(id)) if (runProcesses(id).some((q) => q.pid === p.pid)) kill(p.pid);
+}
+
+/** From afterEach: the sweep, early. The folders go when the test finishes, after the processes it registered. */
 export const cleanup = () => {
-  try {
-    for (const d of made) for (const id of runsIn(d)) for (const p of runProcesses(id)) if (runProcesses(id).some((q) => q.pid === p.pid)) kill(p.pid);
-  } finally {
-    for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true });   // even when the sweep can't look
-  }
+  const test = getCurrentTest();
+  const mine = test ? finishers.get(test) : undefined;
+  if (mine) sweep(mine.folders);
 };
 
-/** A temporary folder of the test's own, by its real path. */
+/** A temporary folder of the test's own, by its real path. Written to the run's log (test/temp-folders.ts), whose check
+ *  at the end of the run names any that's still there. */
 export function scratch(prefix = 'qa-test-'): string {
+  const mine = finisher('scratch()');
   const d = realpathSync.native(mkdtempSync(join(tmpdir(), prefix)));
-  made.push(d);
+  mine.folders.push(d);
+  const log = process.env['QA_SCRATCH_LOG'];
+  if (log) appendFileSync(log, `${d}\n`);
   return d;
 }
 
@@ -92,7 +143,13 @@ export function qaSync(m: TestMachine | null, a: string[], env: Record<string, s
   return spawnSync(process.execPath, [CLI, ...args(m, a)], { encoding: 'utf8', env: { ...process.env, ...TEST_PID, ...env }, timeout: 120_000 });
 }
 export function qaSpawn(m: TestMachine, a: string[], o: SpawnOptions = {}): ChildProcess {
-  return spawn(process.execPath, [CLI, ...args(m, a)], { stdio: ['ignore', 'pipe', 'pipe'], ...o, env: { ...process.env, ...TEST_PID, ...(o.env ?? {}) } });
+  const child = spawn(process.execPath, [CLI, ...args(m, a)], { stdio: ['ignore', 'pipe', 'pipe'], ...o, env: { ...process.env, ...TEST_PID, ...(o.env ?? {}) } });
+  const gone = exitOf(child);
+  beforeFoldersGo(async () => {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');   // through its own handle
+    await gone;
+  });
+  return child;
 }
 
 /** The same in a terminal of its own (a pseudo-terminal from script(1)), for the attached demo: everything it shows, its
@@ -106,6 +163,11 @@ export function qaSpawnInTerminal(m: TestMachine, a: string[], o: SpawnOptions =
   const quoted = command.map((w) => `'${w.replace(/'/g, `'\\''`)}'`).join(' ');
   const script = process.platform === 'darwin' ? ['script', '-q', '/dev/null', ...command] : ['script', '-qec', quoted, '/dev/null'];
   const p = spawn('sh', ['-c', 'f=$1; shift; cat "$f" | "$@"', 'sh', keys, ...script], { stdio: ['ignore', 'pipe', 'pipe'], ...o, env: { ...process.env, ...TEST_PID, ...(o.env ?? {}) } });
+  const gone = exitOf(p);
+  beforeFoldersGo(async () => {
+    if (p.exitCode === null && p.signalCode === null) p.kill('SIGKILL');   // through its own handle
+    await gone;
+  });
   const writer = open(keys, 'w');   // resolves once cat reads the FIFO
   let closed: Promise<void> | undefined;
   return { p, type: async (s: string) => { await (await writer).write(s); }, close: () => (closed ??= writer.then((h) => h.close())) };
@@ -120,7 +182,10 @@ export function qaOrphaned(m: TestMachine, a: string[]): number {
   const start = `const c = require('child_process').spawn(process.execPath, ${JSON.stringify([CLI, ...args(m, a)])}, { detached: true, stdio: 'ignore', env: { ...process.env, QA_TEST_PID: String(process.pid) } }); console.log(c.pid); c.unref();`;
   const pid = Number(spawnSync(process.execPath, ['-e', start], { encoding: 'utf8', timeout: 30_000 }).stdout.trim());
   if (!(pid > 0)) throw new Error('the stand-in parent never said the pid of qa');
-  onTestFinished(() => { stopQaGroup(pid, m.dir); });
+  beforeFoldersGo(async () => {
+    stopQaGroup(pid, m.dir);
+    for (let waited = 0; waited < 5000 && exists(pid); waited += 25) await new Promise((ok) => setTimeout(ok, 25));
+  });
   return pid;
 }
 

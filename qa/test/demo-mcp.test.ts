@@ -7,13 +7,13 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { afterEach, describe, expect, it, onTestFinished } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { pidFrom } from '../src/pids.ts';
 import { Surface } from '../../core/src/index.ts';
 import { answer, mcpBackend, serverEnv, toolName, type Stage, type Turn } from '../src/demo/assistant.ts';
 import { serverCommand } from '../src/demo/director.ts';
 import { CLI_OPS, loadScenes, SCENES_FILE, SKILLS_DIR, type Scenes } from '../src/demo/scenes.ts';
-import { cleanup, scratch } from './machine.ts';
+import { beforeFoldersGo, cleanup, scratch } from './machine.ts';
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 const FAKE = [process.execPath, here('fixtures/demo/fake-catalog-server.mjs')];
@@ -49,11 +49,19 @@ const calls = (root: string, who: string) => {
 const serverPid = (root: string, who: string) => { const f = join(skillsHome(root, who), 'pid'); return existsSync(f) ? pidFrom(readFileSync(f, 'utf8')) : undefined; };
 const logOf = (root: string) => (existsSync(join(root, 'demo', 'activity.log')) ? readFileSync(join(root, 'demo', 'activity.log'), 'utf8') : '');
 
-/** A developer's stage on an MCP backend; its server is stopped when the test ends, however it ends. */
+/** A developer's stage on an MCP backend; its server is stopped when the test ends, however it ends, and has exited
+ *  before the test's folders go (close() only signals it, and a server still starting writes into the developer's
+ *  folder); one still there 5 s after close() is killed through its own handle. */
 function stage(scenes: Scenes, root: string, who: string, command = FAKE) {
   const pane = { text: '' };
   const backend = mcpBackend({ command, ...settings(root, who), surface });
-  onTestFinished(() => backend.close());
+  beforeFoldersGo(async () => {
+    backend.close();
+    const pid = backend.pid();
+    if (!(Number.isSafeInteger(pid) && pid! > 0) || (await until(() => !alive(pid!)))) return;
+    backend.kill('SIGKILL');
+    await until(() => !alive(pid!));
+  });
   const st: Stage = { who, scenes, backend, surface, out: (s) => { pane.text += s; }, demoDir: join(root, 'demo'), pace: 0 };
   return { st, pane, backend };
 }
