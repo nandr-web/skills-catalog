@@ -5,7 +5,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { renderDiff, renderRead, renderSearch, renderVersions, type Catalog } from '@skills-catalog/core';
+import { CatalogError, renderDiff, renderError, renderRead, renderSearch, renderVersions, type Catalog } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
 import { COMMANDS, flagsFor } from '../src/cli/run.ts';
 import { cli, fixedTokens, lastLogLine, S, TOKEN } from './cli-io.ts';
@@ -95,7 +95,7 @@ describe('read', () => {
     for (const flags of [['--files', '--contents'], ['--include', 'manifest', '--files']]) {
       const both = await cli(p, ['read', 'release-notes-kit', ...flags]);
       expect(both.code, flags.join(' ')).toBe(1);
-      expect(both.err).toContain('invalid_request');
+      expect(both.err.trimEnd()).toBe(renderError(S, new CatalogError('invalid_request', { field: 'include', why: 'contradicting_flags' })));
     }
     const same = await cli(p, ['read', 'release-notes-kit', '--include', 'files', '--files']);
     expect(same.code).toBe(0);
@@ -185,7 +185,36 @@ describe('install', () => {
     expect(r.out).toContain(join(p.dir, 'project', '.claude', 'skills', 'sql-migration-helper'));
     const both = await cli(p, ['install', 'demo-skill-01', '--project', '--target', 'user']);
     expect(both.code).toBe(1);
-    expect(both.err).toContain('invalid_request');
+    expect(both.err.trimEnd()).toBe(renderError(S, new CatalogError('invalid_request', { field: 'target', why: 'contradicting_flags' })));
+    expect(both.err).toContain(S.word('errors.why.contradicting_flags'));
+  });
+});
+
+describe('update --accept on the command line', () => {
+  it('with no terminal, gives the person the command as they\'d type it: --as left out wherever it sits, the name quoted when it needs to be', async () => {
+    const p = place();
+    await seed(p);
+    const cases: [string[], string][] = [
+      [['update', '--as', 'dev2', 'release-notes-kit', '--accept'], 'skills-catalog update release-notes-kit --accept'],
+      [['update', '--as=dev2', 'release-notes-kit', '--accept'], 'skills-catalog update release-notes-kit --accept'],
+      [['update', 'x y;z', '--accept', '--as=dev2'], "skills-catalog update 'x y;z' --accept"],
+      [['update', "it's", '--accept'], "skills-catalog update 'it'\\''s' --accept"],
+    ];
+    for (const [argv, command] of cases) {
+      const r = await cli(p, argv);
+      expect([r.code, r.out], argv.join(' ')).toEqual([3, '']);
+      expect(r.err.split('\n')[0], argv.join(' ')).toBe(S.format(S.word('errors.person_only'), { command }));
+    }
+  });
+
+  it('takes exactly one skill: two names are a usage mistake before anything else, so no command that can\'t work is given', async () => {
+    const p = place();
+    await seed(p);
+    for (const tty of [false, true]) {
+      const r = await cli(p, ['update', 'release-notes-kit', 'sql-migration-helper', '--accept'], { tty, answers: ['y'] });
+      expect([r.code, r.out, r.asked], String(tty)).toEqual([1, '', []]);
+      expect(r.err).not.toContain(S.format(S.word('errors.person_only'), { command: '' }).trim());
+    }
   });
 });
 
