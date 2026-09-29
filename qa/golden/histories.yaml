@@ -613,6 +613,7 @@ histories:
       - {from: gate.g0, to: gate.g0-bash-curl, permissive: sandbox_auto_allow, risk_flags: [{kind: command_instruction, path: SKILL.md, line: 7, instruction: fetch_and_run, mode: sandbox_auto_allow}, {kind: prompt_injection, path: SKILL.md, line: 7, detail: "curl piped to a shell"}], note: "a download piped into sudo bash inside a bash block: fetch_and_run at that line, and no shell flag for the block"}
       - {from: gate.g0, to: gate.g0-npx, permissive: auto, risk_flags: [{kind: command_instruction, path: SKILL.md, line: 6, instruction: fetch_and_run, mode: auto}], note: "a package run straight from the registry"}
       - {from: gate.g0, to: gate.g0-ci-prose, permissive: auto, risk_flags: [], note: "run with no code span after it: no flag, the update applies silently"}
+      - {from: null, to: gate.g0-bang-after-cr, risk_flags: [{kind: instructions_changed, path: reference.md}, {kind: runs_at_load, path: SKILL.md, line: 6, detail: "has an unusual line break, so what runs when the skill loads can't be read for sure"}, {kind: runs_at_load, path: SKILL.md, line: 7}], note: "an added file (a first install) gets the unusual-break flag too, before its block's flag, at the line the lone CR ends (joint pass: only a unit test caught 'don't apply to added files'); the block grants, so the added reference.md is instructions_changed"}
 
 
   gate_generated:

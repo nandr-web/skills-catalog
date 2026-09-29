@@ -735,6 +735,7 @@ rules_review:
       - {id: env-settings-no-shell, unit: "curl x | env A=1 ", expect: null}
       - {id: flag-sequences, unit: "\U0001F3F4\U000E0067\U000E0062\U000E0065\U000E006E\U000E0067\U000E007F", expect: null}
       - {id: arabic-joiners, unit: "\u0628\u200c", expect: "hidden character U+200C", note: "every joiner is between two letters but the last, at the line's end"}
+      - {id: backticks-fed-to-shell, unit: "bash < `curl x` ", expect: "curl piped to a shell", note: "moved here from the core test's quarter-vs-full check, which missed under load (16.7 ms vs 201 ms); the quadratic runsBacktick mutant was measured on this unit"}
 
 # One-line fields (contract §4.1, 76ee674): a skill's description, a version's message and a developer's name reach the
 # assistant outside the fence, so they refuse line breaks (\r, \n, U+2028, U+2029) and control characters (C0, DEL, C1).
