@@ -145,6 +145,21 @@ describe('the sweep marks, then deletes', () => {
     expect(await w.tags(s)).not.toHaveProperty('deleting');
   });
 
+  it('a file referenced after its mark is kept even when the second pass comes over 7 days later (the claim has aged out too)', async () => {
+    const w = await world();
+    const s = await w.upload('late\n');
+    w.clock.advance(7 * DAY + HOUR);
+    await w.sweep.run({ beforeMark: async () => {
+      await w.links.uploadLinks([{ sha256: s, size: 5 }]);
+      expect(await w.commit([s])).toMatchObject({ kind: 'created' });
+    } });
+    // The sweep doesn't run again for over a week: the file is old from its claim as well, and still marked.
+    w.clock.advance(7 * DAY + 2 * HOUR);
+    await w.sweep.run();
+    expect(await w.stored(s)).toBe(true);
+    expect(await w.tags(s)).not.toHaveProperty('deleting');
+  });
+
   it('a claim just before the mark with no commit: the file is young again, so the second pass keeps it and takes the mark off', async () => {
     const w = await world();
     const s = await w.upload('claimed\n');
