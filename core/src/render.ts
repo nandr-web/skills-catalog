@@ -11,7 +11,7 @@ import type { Words } from './words-file.ts';
 
 // Words the words file doesn't have yet (asked for). A test fails when one of them appears in the words file,
 // so each is wired as soon as it lands.
-export const WORD_GAPS: readonly string[] = ['errors.why.not_uploaded', 'errors.why.token_only', 'errors.why.read_scope'];
+export const WORD_GAPS: readonly string[] = [];
 
 function asData(code: string, data: Record<string, unknown>): string {
   return `${code}: ` + Object.entries(data).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ');
@@ -173,7 +173,9 @@ export function renderError(s: Words, e: CatalogError): string {
   const clean = (v: unknown): unknown => (typeof v === 'string' ? oneLine(v) : Array.isArray(v) ? v.map(clean) : v);
   const data = Object.fromEntries(Object.entries(e.data).map(([k, v]) => [k, clean(v)]));
   // A reason is a code (why: 'unknown_field'); the words file words it once errors.why exists (a listed gap until then).
-  const d: Record<string, unknown> = typeof data['why'] === 'string' ? { ...data, why: w.why?.[data['why'] as string] ?? data['why'] } : data;
+  // An unknown field whose name was cut to its first 200 characters (field_cut) is worded as cut.
+  const why = data['why'] === 'unknown_field' && data['field_cut'] === true ? 'unknown_field_cut' : data['why'];
+  const d: Record<string, unknown> = typeof why === 'string' ? { ...data, why: w.why?.[why] ?? why } : data;
   const fill = (template: string, fields: Record<string, unknown>) => {
     try {
       return s.format(template, fields);
@@ -234,6 +236,8 @@ export function renderError(s: Words, e: CatalogError): string {
       // A hosted catalog asked of this local-only version is a setup matter, and a publish on a local page's server
       // started without --publish is the person's choice; neither is a permission.
       if (e.data['why'] === 'hosted_not_available') return fill(w.forbidden_hosted, d);
+      // A hosted change made with a token that may only read: the person's matter too, never a token to go looking for.
+      if (e.data['why'] === 'read_scope') return fill(w.forbidden_read_scope, d);
       return e.data['why'] === 'read_only' ? fill(w.forbidden_read_only, d) : fill(w.forbidden, d);
     case 'secret_suspected': {
       const kind = w.secret_kind?.[String(d['kind'])];

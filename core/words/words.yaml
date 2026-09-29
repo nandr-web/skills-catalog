@@ -735,6 +735,7 @@ results:
       item_too_long: has an item longer than the limit
       not_object: isn't a set of named fields
       unknown_field: isn't a field this tool takes
+      unknown_field_cut: isn't a field this tool takes (its name is cut here to its first 200 characters)
       required: is required
       contradicting_flags: was set by two flags that contradict each other (use one)
       not_a_confirm: isn't a confirm value a preview gives
@@ -750,6 +751,9 @@ results:
       catalog_unreadable: couldn't be opened
       hosted_not_available: is a hosted catalog, which this version doesn't support yet
       read_only: "publishing isn't turned on here: start skills-catalog serve with --publish to allow it"
+      token_only: can't be used with a hosted catalog, where who is acting comes only from the sign-in token (leave the header out)
+      not_uploaded: "names a file that hasn't been uploaded yet: upload it through the links request_upload_links gives, then publish again"
+      read_scope: this sign-in token can only read the catalog; changing it needs a token with the publish scope
     invalid_manifest_problem:
       missing: is missing
       name: has no name in its front matter
@@ -850,6 +854,9 @@ results:
     forbidden: "forbidden: the catalog doesn't allow this for the person signed in, so nothing was done. Tell them; don't look for another way around it."
     forbidden_hosted: "forbidden: {catalog} is a hosted catalog, and this version runs locally only, so nothing was done. Tell the person; ${cli} setup points it at a local folder."
     forbidden_read_only: "forbidden: publishing isn't turned on here (this page's server was started without --publish), so nothing was published. To allow it, stop the server and start it again with ${cli} serve --publish."
+    forbidden_read_scope: "forbidden: the sign-in token in use can only read the catalog, so nothing was changed. Publishing needs a token with the publish scope: tell the person; don't look for another token yourself."
+    port_in_use: "port_in_use: port {port} is already in use on this machine, so the server didn't start. Choose another with --port, or leave --port out to take a free one."
+    person_only_serve: "The local web page runs only in the person's own terminal: it prints a private link for their browser, so nothing was started. Give them the command to run there: {command}"
     internal_error: "internal_error: this tool (${cli}) hit a bug (the details are in {log}). The bug is in ${cli}, not in the person's setup: nothing on this machine needs fixing, and don't edit ${cli}'s files. Tell the person, and give them the log's path."
     fingerprint_mismatch: "fingerprint_mismatch: the files the catalog sent for {name} v{version} don't match that version's fingerprint, so the catalog's copy is damaged or has been altered. Nothing was written on this machine, and any copy already installed stays as it was. It isn't something the person did, and it isn't a bug in ${cli}: don't retry or work around it. Tell the person, so whoever runs the catalog can check it."
     internal_error_no_log: "internal_error: this tool (${cli}) hit a bug, and couldn't write its log either. The bug is in ${cli}, not in the person's setup: nothing on this machine needs fixing, and don't edit ${cli}'s files. Tell the person."
@@ -1092,6 +1099,7 @@ log:
       partial: closest only
       none: nothing matches
     get: read
+    fetch: fetched
     versions: listed
     diff:
       runnable: adds something that can run
