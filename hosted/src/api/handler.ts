@@ -15,8 +15,8 @@ export type HostedHandlerParts = {
   catalog: Catalog;
   tokens: { verify(token: string): Promise<TokenHolder | undefined> };
   words: Words;
-  /** A file by its fingerprint: a link when a version names it, on its way, or unknown. */
-  file(sha256: string): Promise<FileAnswer>;
+  /** A file by its fingerprint: a link when a version names it, on its way, or unknown. The catalog's own by default. */
+  file?: (sha256: string) => Promise<FileAnswer>;
   /** Where a bug's details go (the function's log): never skill text or a token. */
   log?: (line: string) => void;
 };
@@ -32,12 +32,10 @@ export function createHostedHandler(p: HostedHandlerParts): { handle(req: Hosted
 
     const asking = await whoIsAsking(req.headers, p.tokens);
     if (asking.kind === 'refused') {
-      if (asking.status === STATUS.token_only) return refuse('token_only', s);
-      const e = envelope({ error: asking.error }, s);
-      return { ...e, status: STATUS.no_token, headers: { ...e.headers, ...asking.headers } };
+      return asking.status === STATUS.token_only ? refuse('token_only', s) : refuse('no_token', { ...s, challenge: 'Bearer' });
     }
 
-    if (r.kind === 'file') return fileResponse({ file: p.file }, r.sha256);
+    if (r.kind === 'file') return fileResponse({ file: p.file ?? ((sha) => p.catalog.file(sha)) }, r.sha256);
     if (r.kind === 'method') return refuse('method', s);
     if (r.kind === 'not_found') return refuse('not_found', s);
 

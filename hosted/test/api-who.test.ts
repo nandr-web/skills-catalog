@@ -21,7 +21,7 @@ function tokens() {
 
 const refusal = (r: Awaited<ReturnType<typeof whoIsAsking>>) => {
   if (r.kind !== 'refused') throw new Error(`expected a refusal, got ${r.kind}`);
-  return { status: r.status, error: r.error.toJSON(), headers: r.headers };
+  return { status: r.status, error: r.error.toJSON() };
 };
 
 describe("who's asking", () => {
@@ -34,14 +34,14 @@ describe("who's asking", () => {
   it('no Authorization header, or one that is not a single Bearer token, is unauthenticated (401) before any lookup', async () => {
     const t = tokens();
     for (const authorization of [undefined, '', 'Bearer', 'Bearer ', 'Basic YW5hOnB3', 'Token t-ana', 'Bearer t-ana extra', 'Bearert-ana', 'Bearer t-ana, Bearer t-bo']) {
-      expect(refusal(await whoIsAsking({ authorization }, t)), String(authorization)).toEqual({ status: 401, error: { code: 'unauthenticated' }, headers: { 'www-authenticate': 'Bearer' } });
+      expect(refusal(await whoIsAsking({ authorization }, t)), String(authorization)).toEqual({ status: 401, error: { code: 'unauthenticated' } });
     }
     expect(t.looked).toEqual([]);
   });
 
-  it('an unknown, revoked or expired token (the store says nobody) is unauthenticated (401), with the Bearer challenge', async () => {
+  it('an unknown, revoked or expired token (the store says nobody) is unauthenticated (401)', async () => {
     const t = tokens();
-    expect(refusal(await whoIsAsking({ authorization: 'Bearer t-nobody' }, t))).toEqual({ status: 401, error: { code: 'unauthenticated' }, headers: { 'www-authenticate': 'Bearer' } });
+    expect(refusal(await whoIsAsking({ authorization: 'Bearer t-nobody' }, t))).toEqual({ status: 401, error: { code: 'unauthenticated' } });
     expect(t.looked).toEqual(['t-nobody']);
   });
 

@@ -67,6 +67,8 @@ export function hostedAdapter(endpoint: () => string): TestAdapter {
           const storage = new HostedStorage({ ddb, s3, place, clock });
           const links = new HostedBlobLinks({ s3, place, clock });
           return Catalog.open({
+            where: 'hosted',
+            links,
             storage: uploading(wrapStorage ? wrapStorage(storage) : storage, links),
             index: new S3SearchIndex({ s3, place }),
             events: new HostedEvents({ ddb, place }),

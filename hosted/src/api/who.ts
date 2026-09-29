@@ -10,10 +10,11 @@ import type { TokenHolder } from '../tokens.ts';
 
 export type Asking =
   | { kind: 'holder'; holder: TokenHolder }
-  | { kind: 'refused'; status: 400 | 401; error: CatalogError; headers?: Record<string, string> };
+  | { kind: 'refused'; status: 400 | 401; error: CatalogError };
 
 const BEARER = /^Bearer ([A-Za-z0-9\-._~+/]+=*)$/i;
-const unauthenticated = (): Asking => ({ kind: 'refused', status: 401, error: new CatalogError('unauthenticated', {}), headers: { 'www-authenticate': 'Bearer' } });
+// The 401's Bearer challenge is the transport's refusal (core/http), not part of who's asking.
+const unauthenticated = (): Asking => ({ kind: 'refused', status: 401, error: new CatalogError('unauthenticated', {}) });
 
 /** Headers by lower-case name, as the transport gives them. */
 export async function whoIsAsking(
