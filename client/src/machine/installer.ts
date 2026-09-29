@@ -772,10 +772,11 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
         continue;
       }
       if (v.latest === e.version) {
-        // Nothing newer: an intact copy the person recreated just has its identity recorded again; if its folders fail their
-        // check, it's refused at the version installed.
-        const here = destOf(ctx, e.target, e.name);
+        // Nothing newer: the folder is checked as an install checks it, so a link made since is refused, never up to date;
+        // an intact copy the person recreated just has its identity recorded again. A failed check is refused at the
+        // version installed.
         try {
+          const here = checkTarget(ctx, e.target, e.name, lock);
           if (folderFingerprint(here) === e.fingerprint) await recordAgain(ctx, here, e.target, e, hold.change);
         } catch (err) {
           if (!(err instanceof CatalogError) || err.code === 'lock_busy') throw err;

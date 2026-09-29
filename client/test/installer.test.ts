@@ -543,6 +543,30 @@ describe('the folder is checked again before every write (contract §3, §4.5)',
     }
   });
 
+  it('with nothing newer, a link made since the install at any of the three folders is refused at the installed version, never up to date', async () => {
+    for (const at of [(p: Place) => join(p.osHome, '.claude'), userSkills, (p: Place) => join(userSkills(p), 'notes-helper')]) {
+      const p = place();
+      await publish(p, 'notes-helper', plain('notes-helper'));
+      const ctx = ctxFor(p);
+      await install(ctx, { name: 'notes-helper' });
+      const link = at(p);
+      const moved = join(p.dir, 'elsewhere', 'moved');
+      mkdirSync(join(moved, '..'), { recursive: true });
+      renameSync(link, moved);
+      symlinkSync(moved, link);
+      const before = tree(moved);
+      const lockBefore = readFileSync(join(p.home, 'lock.json'), 'utf8');
+      for (const dry_run of [true, false]) {
+        const r = await update(ctx, { dry_run });
+        const reason = S.format(S.word('update.target_reason.target_symlink'), { path: link });
+        expect(r.text.split('\n')).toEqual([S.format(S.word('update.header'), { checked: 1 }), S.format(S.word('update.refused_target'), { name: 'notes-helper', from: 1, to: 1, path: link, reason })]);
+        expect(r.outcome).toBe('refused');
+      }
+      expect(tree(moved)).toEqual(before);
+      expect(readFileSync(join(p.home, 'lock.json'), 'utf8')).toBe(lockBefore);
+    }
+  });
+
   it('a same-name command or skill that appeared since the install: that skill is not updated', async () => {
     const { p, ctx } = await installedThenNewer();
     const command = join(p.dir, 'project', '.claude', 'commands', 'notes-helper.md');
