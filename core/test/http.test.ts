@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { Catalog } from '../src/catalog.ts';
 import { CatalogError } from '../src/errors.ts';
 import { dispatch, effectOf, fileResponse, operationResponse, refuse, route, STATUS, type FileAnswer, type HttpResponse } from '../src/http/index.ts';
+import { OPERATIONS, webRow } from '../src/api.ts';
 import { renderError } from '../src/render.ts';
 import { Words } from '../src/words-file.ts';
 import { checkHttpCase, HTTP_DEVELOPER, HTTP_SEED, httpCases, skillMd, type HttpCase } from './http-cases.ts';
@@ -27,18 +28,18 @@ async function seeded(): Promise<Catalog> {
 async function answer(c: HttpCase, catalog: Catalog): Promise<HttpResponse> {
   if (c.refuse) return refuse(c.refuse, { words: W, ...(c.challenge ? { challenge: c.challenge } : {}) });
   const req = c.request!;
-  const r = route(req.method, req.path);
+  const r = route(req.method, req.path, 'local');
   switch (r.kind) {
     case 'operation': {
       const raw = req.body === 'cut' ? 'cut' : new TextEncoder().encode(req.body ?? '');
-      return operationResponse({ op: r.op, raw, catalog, developer: HTTP_DEVELOPER, face: 'web', words: W });
+      return operationResponse({ op: r.op, raw, catalog, developer: HTTP_DEVELOPER, words: W });
     }
     case 'file': {
       const files = { file: async (sha: string): Promise<FileAnswer> => (c.file ? c.file : Promise.reject(new Error(`looked up ${sha}`))) };
       return fileResponse(files, r.sha256);
     }
     case 'method':
-      return refuse('method', { words: W });
+      return refuse('method', { words: W, allow: r.allow });
     default:   // not_found, and pairing (the local page's own, not the API's)
       return refuse('not_found', { words: W });
   }
@@ -109,13 +110,20 @@ describe('the published schemas (docs/api/openapi.local.json, openapi.hosted.jso
     expect(everyRouteLacks(hosted, STATUS.no_token)).toEqual([]);
   });
 
-  // A tripwire: contract §1.1 answers the act-as header on a hosted catalog with 400 (token_only) on every /api/v1 route,
-  // files included, and the hosted schema doesn't declare it yet (told to the core owner). When it does, this fails:
-  // make it a plain `it`.
-  it.fails('the hosted schema declares a 400 (token_only) on every route', () => {
+  // Contract §1.1: the act-as header on a hosted catalog is 400 (token_only) on every /api/v1 route, files included.
+  it('the hosted schema declares a 400 (token_only) on every route', () => {
     expect(everyRouteLacks(hosted, STATUS.token_only)).toEqual([]);
   });
 });
+
+// The web build notes' fixed headers, written out here so a weakened one (a CSP of default-src *) fails.
+const FIXED_HEADERS = {
+  'content-security-policy': "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'no-referrer',
+  'cross-origin-opener-policy': 'same-origin',
+  'cross-origin-resource-policy': 'same-origin',
+};
 
 describe('every response', () => {
   it('carries the fixed security headers and never any Access-Control-*', async () => {
@@ -123,7 +131,7 @@ describe('every response', () => {
     try {
       for (const c of httpCases) {
         const r = await answer(c, catalog);
-        for (const k of ['content-security-policy', 'x-content-type-options', 'referrer-policy', 'cross-origin-opener-policy', 'cross-origin-resource-policy']) expect(r.headers[k], `${c.name} ${k}`).toBeTruthy();
+        for (const [k, v] of Object.entries(FIXED_HEADERS)) expect(r.headers[k], `${c.name} ${k}`).toBe(v);
         expect(Object.keys(r.headers).filter((k) => k.startsWith('access-control-')), c.name).toEqual([]);
       }
     } finally {
@@ -140,17 +148,28 @@ describe('the refusals\' numbers', () => {
 
 describe('route', () => {
   it('knows the pairing path, and leaves an unknown operation to the transport to refuse after its token check', () => {
-    expect(route('POST', '/api/pair')).toEqual({ kind: 'pair' });
-    expect(route('POST', '/api/v1/nothing_here')).toEqual({ kind: 'not_found', operationPath: true });
-    expect(route('POST', '/')).toEqual({ kind: 'not_found', operationPath: false });
+    expect(route('POST', '/api/pair', 'local')).toEqual({ kind: 'pair' });
+    expect(route('POST', '/api/v1/nothing_here', 'local')).toEqual({ kind: 'not_found', operationPath: true });
+    expect(route('POST', '/', 'local')).toEqual({ kind: 'not_found', operationPath: false });
+    expect(route('GET', '/api/v1/search_shared_skills', 'local')).toEqual({ kind: 'method', allow: 'POST' });
+    expect(route('POST', `/api/v1/files/${'a'.repeat(64)}`, 'local')).toEqual({ kind: 'method', allow: 'GET' });
+  });
+
+  it('routes an operation exactly when the API\'s one rule (webRow) serves it on that kind of catalog', () => {
+    for (const where of ['local', 'hosted'] as const) {
+      for (const op of [...Object.keys(OPERATIONS), 'constructor', '__proto__', 'toString']) {
+        expect(route('POST', `/api/v1/${op}`, where).kind === 'operation', `${where} ${op}`).toBe(webRow(op, where));
+      }
+    }
   });
 });
 
 describe('effectOf', () => {
   it('says what an operation does, so a read-only caller is refused a write before dispatch', () => {
-    expect(effectOf('publish_version')).toBe('writes_catalog');
-    expect(effectOf('search_shared_skills')).toBe('reads');
-    expect(effectOf('constructor')).toBeUndefined();
+    expect(effectOf('publish_version', 'hosted')).toBe('writes_catalog');
+    expect(effectOf('search_shared_skills', 'local')).toBe('reads');
+    expect(effectOf('constructor', 'local')).toBeUndefined();
+    expect(effectOf('install_shared_skill', 'local')).toBeUndefined();
   });
 });
 
@@ -183,7 +202,7 @@ describe('operationResponse', () => {
   it('words an error with the words file; a transport overrides only unauthenticated', async () => {
     const catalog = await seeded();
     try {
-      const nobody = { op: 'publish_version', raw: new TextEncoder().encode(JSON.stringify({ name: 'x', files: [] })), catalog, developer: undefined, face: 'web' as const, words: W };
+      const nobody = { op: 'publish_version', raw: new TextEncoder().encode(JSON.stringify({ name: 'x', files: [] })), catalog, developer: undefined, words: W };
       const plain = JSON.parse(String((await operationResponse(nobody)).body));
       expect(plain.words.error).toBe(renderError(W, new CatalogError('unauthenticated', {})));
       const local = JSON.parse(String((await operationResponse({ ...nobody, unauthenticated: 'set one up' })).body));

@@ -3,7 +3,7 @@
 // checks it with `checkHttpCase`. A file case gives the catalog's answer for that fingerprint (a fake is enough); a
 // malformed fingerprint must never reach the catalog. A refusal case names a guard's kind: its status and body come from
 // the core's one table, so no transport picks its own numbers.
-import type { FileAnswer, HttpResponse, Refusal } from '../src/http/index.ts';
+import { BODY_LIMIT, type FileAnswer, type HttpResponse, type Refusal } from '../src/http/index.ts';
 
 /** The skills every runner publishes first, as `dev1`, in this order. */
 export const HTTP_SEED: readonly { name: string; description: string }[] = [
@@ -41,6 +41,8 @@ export type HttpCase = {
 const post = (op: string, body: unknown) => ({ method: 'POST', path: `/api/v1/${op}`, body: typeof body === 'string' ? body : JSON.stringify(body) });
 const file = (sha = SHA) => ({ method: 'GET', path: `/api/v1/files/${sha}` });
 export const NOT_FOUND_TEXT = 'Not found.\n';
+// Every answer under /api, a 404 included, is never stored by a cache on the way (a CDN in front of a hosted catalog).
+const NO_STORE = { 'cache-control': 'no-store' };
 
 export const httpCases: readonly HttpCase[] = [
   // Operations: a result, error or not, is 200 in the envelope.
@@ -48,23 +50,24 @@ export const httpCases: readonly HttpCase[] = [
   { name: 'an error is {ok: false, error: {code, ...data}, words: {error}}', request: post('list_shared_skill_versions', { name: 'no-such-skill' }), expect: { status: 200, json: { ok: false, error: { code: 'not_found' } }, words: ['error'] } },
   { name: 'a body that isn\'t JSON is invalid_request {field: body, why: not_json}', request: post('search_shared_skills', '{not json'), expect: { status: 200, json: { ok: false, error: { code: 'invalid_request', field: 'body', why: 'not_json' } }, words: ['error'] } },
   { name: 'a body cut at the limit is too_large {limit: request_bytes}, never a 413', request: { ...post('search_shared_skills', {}), body: 'cut' }, expect: { status: 200, json: { ok: false, error: { code: 'too_large', limit: 'request_bytes' } }, words: ['error'] } },
+  { name: 'a body over the limit is too_large even when the transport didn\'t cut it', request: { ...post('search_shared_skills', {}), body: ' '.repeat(BODY_LIMIT + 10) }, expect: { status: 200, json: { ok: false, error: { code: 'too_large', limit: 'request_bytes' } } } },
   { name: 'a person-only input is an unknown field on the web', request: post('publish_version', { ...newSkill, dry_run: true, allow_suspected_secrets: true }), expect: { status: 200, json: { ok: false, error: { code: 'invalid_request', field: 'allow_suspected_secrets', why: 'unknown_field' } } } },
   { name: 'a publish acts as the acting developer', request: post('publish_version', { ...newSkill, dry_run: true }), expect: { status: 200, json: { ok: true, data: { name: 'web-published', dry_run: true, publisher: HTTP_DEVELOPER } } } },
   // Routes: the operations whose faces include web, as own keys; anything else is the fixed 404.
   ...['nothing_here', 'constructor', '__proto__', 'toString', 'hasOwnProperty', 'install_shared_skill', 'publish_skill_to_catalog'].map(
-    (op): HttpCase => ({ name: `no web operation ${op}: the fixed 404`, request: post(op, {}), expect: { status: 404, text: NOT_FOUND_TEXT } }),
+    (op): HttpCase => ({ name: `no web operation ${op}: the fixed 404`, request: post(op, {}), expect: { status: 404, text: NOT_FOUND_TEXT, headers: NO_STORE } }),
   ),
   ...['/', '/index.html', '/api', '/api/search_shared_skills', '/api/v2/search_shared_skills'].map(
     (path): HttpCase => ({ name: `not an API path ${path}: the fixed 404`, request: { method: 'POST', path, body: '{}' }, expect: { status: 404, text: NOT_FOUND_TEXT } }),
   ),
-  ...['GET', 'PUT', 'DELETE'].map((method): HttpCase => ({ name: `${method} on an operation: 405`, request: { method, path: '/api/v1/search_shared_skills' }, expect: { status: 405 } })),
+  ...['GET', 'PUT', 'DELETE'].map((method): HttpCase => ({ name: `${method} on an operation: 405`, request: { method, path: '/api/v1/search_shared_skills' }, expect: { status: 405, headers: { allow: 'POST' } } })),
   // Files by fingerprint: the catalog's answer, whatever the transport.
   { name: 'a stored file\'s bytes: 200', request: file(), file: { kind: 'bytes', bytes: new TextEncoder().encode('hello') }, expect: { status: 200, bytes: 'hello', headers: { 'content-type': 'application/octet-stream', 'cache-control': 'no-store' } } },
   { name: 'a link to a stored file: 302, no-store', request: file(), file: { kind: 'link', url: 'https://files.example/a?sig=1' }, expect: { status: 302, headers: { location: 'https://files.example/a?sig=1', 'cache-control': 'no-store' } } },
   { name: 'a file on its way: 503, Retry-After 2', request: file(), file: { kind: 'on_its_way' }, expect: { status: 503, headers: { 'retry-after': '2' } } },
-  { name: 'a file no version names: the fixed 404', request: file(), file: { kind: 'unknown' }, expect: { status: 404, text: NOT_FOUND_TEXT } },
-  ...[SHA.toUpperCase(), SHA.slice(1), `${SHA}0`, 'z'.repeat(64), ''].map((bad): HttpCase => ({ name: `a malformed fingerprint "${bad.slice(0, 8)}…": 404, never looked up`, request: file(bad), expect: { status: 404, text: NOT_FOUND_TEXT } })),
-  { name: 'POST on a file: 405', request: { method: 'POST', path: `/api/v1/files/${SHA}`, body: '{}' }, expect: { status: 405 } },
+  { name: 'a file no version names: the fixed 404', request: file(), file: { kind: 'unknown' }, expect: { status: 404, text: NOT_FOUND_TEXT, headers: NO_STORE } },
+  ...[SHA.toUpperCase(), SHA.slice(1), `${SHA}0`, 'z'.repeat(64), ''].map((bad): HttpCase => ({ name: `a malformed fingerprint "${bad.slice(0, 8)}…": 404, never looked up`, request: file(bad), expect: { status: 404, text: NOT_FOUND_TEXT, headers: NO_STORE } })),
+  { name: 'POST on a file: 405', request: { method: 'POST', path: `/api/v1/files/${SHA}`, body: '{}' }, expect: { status: 405, headers: { allow: 'GET' } } },
   // The guards' refusals: one table of numbers.
   { name: 'no token or a wrong one: 401', refuse: 'no_token', expect: { status: 401, text: '' } },
   { name: 'no sign-in on a catalog that has one: 401, unauthenticated in the envelope, WWW-Authenticate: Bearer', refuse: 'no_token', challenge: 'Bearer', expect: { status: 401, json: { ok: false, error: { code: 'unauthenticated' } }, words: ['error'], headers: { 'www-authenticate': 'Bearer' } } },

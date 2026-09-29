@@ -3,7 +3,7 @@
 // its words, and the files route's answer. Each transport keeps its own reading of the stream (cut at its limit), every
 // guard (run before anything here and before the body is read), and who is acting. Nothing here touches a disk, a socket
 // or the process (test/http-deps.test.ts).
-import { OPERATIONS, validateInput, type Face, type OperationDef, type Where } from '../api.ts';
+import { OPERATIONS, validateInput, webRow, type Face, type OperationDef, type Where } from '../api.ts';
 import type { Catalog, FileAnswer } from '../catalog.ts';
 import { CatalogError, isCatalogError } from '../errors.ts';
 import type { Identity } from '../ports.ts';
@@ -40,41 +40,38 @@ const SHA256 = /^[0-9a-f]{64}$/;
 const API = '/api/v1/';
 const FILES = /^\/api\/v1\/files\/([^/]*)$/;
 
-/** The operations served on the web, by name, as own keys. */
-function webRow(op: string): OperationDef | undefined {
-  const row = Object.hasOwn(OPERATIONS, op) ? OPERATIONS[op] : undefined;
-  return row && row.faces.includes('web') ? row : undefined;
-}
-
 export type Route =
   | { kind: 'operation'; op: string }
   | { kind: 'file'; sha256: string }
   | { kind: 'pair' }
-  | { kind: 'method' }
+  /** `allow`: the one method the path takes (the 405's Allow header). */
+  | { kind: 'method'; allow: 'GET' | 'POST' }
   /** `operationPath`: under /api/v1/ with no such web operation. A transport refuses it after its token check, so an
    *  unknown caller learns nothing of what exists. */
   | { kind: 'not_found'; operationPath: boolean };
 
-/** Where a request goes, from its method and path alone: nothing is looked up. */
-export function route(method: string, path: string): Route {
-  if (path === '/api/pair') return method === 'POST' ? { kind: 'pair' } : { kind: 'method' };
+/** Where a request goes, from its method and path alone: nothing is looked up. An operation is routed exactly when the
+ *  API's one rule (webRow, the same one the published schemas use) serves it on the web face of this kind of catalog. */
+export function route(method: string, path: string, where: Where): Route {
+  if (path === '/api/pair') return method === 'POST' ? { kind: 'pair' } : { kind: 'method', allow: 'POST' };
   if (!path.startsWith(API)) return { kind: 'not_found', operationPath: false };
   const file = FILES.exec(path);
-  if (file) return method === 'GET' ? { kind: 'file', sha256: file[1]! } : { kind: 'method' };
-  if (method !== 'POST') return { kind: 'method' };
+  if (file) return method === 'GET' ? { kind: 'file', sha256: file[1]! } : { kind: 'method', allow: 'GET' };
+  if (method !== 'POST') return { kind: 'method', allow: 'POST' };
   const op = path.slice(API.length);
-  return webRow(op) ? { kind: 'operation', op } : { kind: 'not_found', operationPath: true };
+  return webRow(op, where) ? { kind: 'operation', op } : { kind: 'not_found', operationPath: true };
 }
 
 /** What an operation does (its row's effect), so a caller whose token may only read is refused a write before dispatch. */
-export function effectOf(op: string): OperationDef['effect'] | undefined {
-  return webRow(op)?.effect;
+export function effectOf(op: string, where: Where): OperationDef['effect'] | undefined {
+  return webRow(op, where) ? OPERATIONS[op]!.effect : undefined;
 }
 
 /** A body the transport read (or cut at its limit) as an operation's input, checked as the web face of a catalog `where`
  *  it is: a person-only input (cliOnly) is an unknown field here, and so is the other kind of catalog's own input. */
 export function parseBody(op: string, raw: Uint8Array | 'cut', where: Where, max = BODY_LIMIT): Record<string, unknown> {
-  if (raw === 'cut') throw new CatalogError('too_large', { limit: 'request_bytes', max });
+  // Size limits stay in the core, never only at the edge: a body its transport didn't cut is measured here too.
+  if (raw === 'cut' || raw.byteLength > max) throw new CatalogError('too_large', { limit: 'request_bytes', max });
   let parsed: unknown;
   try {
     parsed = JSON.parse(new TextDecoder().decode(raw));
@@ -125,12 +122,12 @@ export function envelope(answer: { data: unknown; developer?: string } | { error
 export async function operationResponse(
   o: Sentences & { op: string; raw: Uint8Array | 'cut'; developer: string | undefined; max?: number } & (
       | { run: (op: string, input: Record<string, unknown>) => Promise<unknown>; where: Where }
-      | { catalog: Catalog; face: Face }
+      | { catalog: Catalog }
     ),
 ): Promise<HttpResponse> {
   try {
     const input = parseBody(o.op, o.raw, 'run' in o ? o.where : o.catalog.where, o.max);
-    const data = await ('run' in o ? o.run(o.op, input) : dispatch(o.op, input, { catalog: o.catalog, developer: o.developer, face: o.face }));
+    const data = await ('run' in o ? o.run(o.op, input) : dispatch(o.op, input, { catalog: o.catalog, developer: o.developer, face: 'web' }));
     return envelope({ data, developer: o.developer }, o);
   } catch (e) {
     if (isCatalogError(e)) return envelope({ error: e }, o);
@@ -141,9 +138,10 @@ export async function operationResponse(
 /** A guard's refusal: its number from the one table, the fixed 404's text, and for token_only the error in the envelope.
  *  `challenge`, for a catalog with sign-in (hosted): a 401 is the envelope's unauthenticated with WWW-Authenticate naming
  *  the scheme; a local 401 (the page's session token) stays bare, since there's no sign-in to point to. */
-export function refuse(kind: Refusal, s: Sentences & { challenge?: 'Bearer' }): HttpResponse {
+export function refuse(kind: Refusal, s: Sentences & { challenge?: 'Bearer'; allow?: 'GET' | 'POST' }): HttpResponse {
   const status = STATUS[kind];
-  if (kind === 'not_found') return { status, headers: { ...SECURITY_HEADERS, 'content-type': 'text/plain; charset=utf-8' }, body: NOT_FOUND };
+  if (kind === 'not_found') return notFound();
+  if (kind === 'method') return { status, headers: { ...SECURITY_HEADERS, ...API_HEADERS, ...(s.allow ? { allow: s.allow } : {}) }, body: '' };
   if (kind === 'token_only') return { ...envelope({ error: new CatalogError('invalid_request', { field: 'X-Skills-Catalog-As', why: 'token_only' }) }, s), status };
   if (kind === 'no_token' && s.challenge) {
     const e = envelope({ error: new CatalogError('unauthenticated', {}) }, s);
@@ -164,6 +162,11 @@ export async function fileResponse(catalog: { file(sha256: string): Promise<File
     case 'on_its_way':
       return { status: STATUS.on_its_way, headers: { ...api, 'retry-after': '2' }, body: '' };
     default:
-      return { status: STATUS.not_found, headers: { ...SECURITY_HEADERS, 'content-type': 'text/plain; charset=utf-8' }, body: NOT_FOUND };
+      return notFound();
   }
+}
+
+/** The fixed 404: never stored by a cache on the way (a CDN in front of a hosted catalog), like every answer on /api. */
+function notFound(): HttpResponse {
+  return { status: STATUS.not_found, headers: { ...SECURITY_HEADERS, ...API_HEADERS, 'content-type': 'text/plain; charset=utf-8' }, body: NOT_FOUND };
 }
