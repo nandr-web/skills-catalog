@@ -59,6 +59,8 @@ export interface StandIn {
   commits: { sha256: string; bytes?: Uint8Array | undefined }[][];
   /** The storage's blob reads, by sha256. */
   blobReads: string[];
+  /** Every other storage lookup, by method: skill, version, fileState, … */
+  lookups: string[];
   /** A local catalog on the same storage (to publish a skill the ordinary way, or read what's stored). */
   local: Catalog;
   close(): void;
@@ -90,9 +92,19 @@ export async function openHostedStandIn(opts: StandInOptions = {}): Promise<Stan
   const linkCalls: StandIn['linkCalls'] = [];
   const commits: StandIn['commits'] = [];
   const blobReads: string[] = [];
+  const lookups: string[] = [];
   const stored = async (sha: string) => uploads.has(sha) || (await storage.blob(sha)) !== undefined;
 
+  const looking = (name: 'skill' | 'version' | 'byFingerprint' | 'versions' | 'fileState') => async (...args: unknown[]) => {
+    lookups.push(name);
+    return (storage[name] as (...a: unknown[]) => Promise<unknown>).apply(storage, args);
+  };
   const hosted: Storage = Object.assign(Object.create(storage), {
+    skill: looking('skill'),
+    version: looking('version'),
+    byFingerprint: looking('byFingerprint'),
+    versions: looking('versions'),
+    fileState: looking('fileState'),
     blob: async (sha: string) => {
       blobReads.push(sha);
       const altered = opts.altered?.[sha];
@@ -161,6 +173,7 @@ export async function openHostedStandIn(opts: StandInOptions = {}): Promise<Stan
     linkCalls,
     commits,
     blobReads,
+    lookups,
     close() {
       catalog.close();
       local.close();

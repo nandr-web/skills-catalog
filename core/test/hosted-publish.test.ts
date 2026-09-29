@@ -81,8 +81,10 @@ describe('publish_version, hosted: files named by sha256', () => {
       const e = await errorOf(() => s.catalog.publish({ name: 'odd', files: [{ path: 'SKILL.md', mode: '0644', sha256: good }, { path: 'x.md', mode: '0644', sha256: bad }] }));
       expect([bad, e.code, e.data]).toEqual([bad, 'invalid_request', { field: 'files[1].sha256', why: 'not_sha256' }]);
     }
-    // Not a sha256 is known before any lookup: the storage is never asked, not even for the well-formed file before it.
+    // Not a sha256 is known before any lookup: the storage is never asked, not even for the well-formed file before it,
+    // nor for the skill (its owner) or its latest version.
     expect(s.blobReads).toEqual([]);
+    expect(s.lookups).toEqual([]);
     // A well-formed one that isn't stored is still not_uploaded.
     const e = await errorOf(() => s.catalog.publish({ name: 'odd', files: [{ path: 'SKILL.md', mode: '0644', sha256: 'b'.repeat(64) }] }));
     expect([e.code, e.data]).toEqual(['invalid_request', { field: 'files[0].sha256', why: 'not_uploaded' }]);
@@ -200,8 +202,10 @@ describe('request_upload_links, hosted only', () => {
       expect([bad, odd.code, odd.data]).toEqual([bad, 'invalid_request', { field: 'files[1].sha256', why: 'not_sha256' }]);
     }
     // A pure input check, before anything is looked up: even on a name someone else owns.
+    s.lookups.length = 0;
     const notMine = await errorOf(() => s.catalog.uploadLinks(ask([{ sha256: 'A'.repeat(64), size: 1 }], 'erins')));
     expect([notMine.code, notMine.data]).toEqual(['invalid_request', { field: 'files[0].sha256', why: 'not_sha256' }]);
+    expect(s.lookups).toEqual([]);
     expect(s.linkCalls).toEqual([]);
   });
 
@@ -227,6 +231,7 @@ describe('fetch_version, hosted: links from the version it reads', () => {
     ];
     const p = await s.catalog.publish(uploaded(s, 'fetched', files));
     s.blobReads.length = 0;
+    s.lookups.length = 0;
     const r = await s.catalog.fetch({ name: 'fetched', version: 1 });
     expect(r).toEqual({
       name: 'fetched',
@@ -235,6 +240,9 @@ describe('fetch_version, hosted: links from the version it reads', () => {
       files: files.map((f) => ({ path: f.path, mode: f.mode ?? '0644', sha256: sha256Of(f.text), size: Buffer.byteLength(f.text), url: `https://files.test/${sha256Of(f.text)}` })),
     });
     expect(s.blobReads).toEqual([]);
+    // From the version it reads, never through the files route's lookup of which versions name a file.
+    expect(s.lookups).not.toContain('fileState');
+    expect(s.lookups.length).toBeGreaterThan(0);
   });
 
   it('the hosted schema says what a sha256 is, and the catalog refuses exactly what that pattern refuses', async () => {
