@@ -20,7 +20,8 @@ export type ErrorCode =
   | 'secret_suspected'
   | 'fingerprint_mismatch'
   | 'not_installed'
-  | 'invalid_local_file';
+  | 'invalid_local_file'
+  | 'target_changed';
 
 export class CatalogError extends Error {
   readonly code: ErrorCode;
