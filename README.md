@@ -16,7 +16,7 @@ This repository is published while work continues; each new piece lands after it
 
 ## Try it
 
-Until the guided `setup` command lands, these five steps show what is built, from a clone of this repository, in about two minutes. Needs git, Node.js 24.15 or later (step 1 checks; npm comes with it), and macOS or Linux. Windows isn't supported today; WSL2 behaves as Linux. Nothing is installed outside this folder, except npm's usual cache. Under each command is what it printed on our machine; the green lines are the ones to check.
+Until the guided `setup` command lands, these five steps show what is built, from a clone of this repository, in about two minutes. Needs git, Node.js 24.15 or later (step 1 checks; npm comes with it), and macOS or Linux. The test, perf and try-it commands also refuse an older Node. Windows isn't supported today; WSL2 behaves as Linux. Nothing is installed outside this folder, except npm's usual cache. Under each command is what it printed on our machine; the green lines are the ones to check.
 
 ### 1. Check Node (a few seconds)
 
