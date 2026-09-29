@@ -707,12 +707,18 @@ rules_review:
   # a fixed 250 ms limit failed a correct build in 2 runs of 4 on a busy machine, so there's no lower ceiling. A miss is measured once more with fresh samples and fails only if it misses again (as perf does). Linear,
   # no backtracking: "a hostile line can't stall the review". One pathological line per rule, and none of them flags
   # except where `expect` says.
+  # Each size is the fastest of `samples` runs; every size stays under max_ms (the hang guard); the largest size takes at
+  # most max_growth_over_span times the smallest (sizes span 4x: linear is about 4x, quadratic about 16x), checked only when
+  # the largest is over min_ms_for_growth; a miss is measured again once. Per-doubling limits failed correct builds under
+  # load (12 -> 67 ms in one doubling, a no-op). The quadratic mutant (runsBacktick re-reading a command's words at every
+  # backtick, unit "bash < `curl x` ") measured 5116 / 44185 / 77653 ms: 15x over the span, and over max_ms; the real code
+  # 10.6 / 23.1 / 42.4 ms (4.0x); every row's span 1.6x to 6.4x at load 12 (emoji-selectors the highest).
   timing:
     sizes: [100000, 200000, 400000]
-    samples: 5
+    samples: 7
     max_ms: 10000
-    max_growth: 2.5
-    min_ms_for_growth: 20
+    max_growth_over_span: 8
+    min_ms_for_growth: 50
     remeasure_on_miss: 1
     lines:
       - {id: emoji-selectors, unit: "❤️", expect: null, note: "every character takes the emoji-sequence check"}
