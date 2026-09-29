@@ -73,6 +73,11 @@ describe('the API page\'s reference section (docs/api.md)', () => {
     expect(hosted).toContain('hosted catalogs only');
     expect(hosted).not.toContain('local and hosted catalogs');
     expect(hosted.slice(hosted.indexOf('Hosted, instead'))).toMatch(/`files`[^\n]*7[\s\S]*`sha256`[^\n]*64/);
+    // A field that takes any error code points to the error list instead of repeating it: read's part names only the
+    // codes read can raise.
+    const read = partOf(ref, 'read_shared_skill');
+    expect(read).toMatch(/`code`: an error code[^\n]*\(contract\.md#9-error-codes\)/);
+    expect(read).not.toContain('`fingerprint_mismatch`');
     // Limits are said: a string's length, a list's size, a number's range, the values a field takes.
     const search = partOf(ref, 'search_shared_skills');
     expect(search).toMatch(/`limit`[^\n]*1[^\n]*50/);
