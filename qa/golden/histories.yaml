@@ -262,6 +262,12 @@ versions:
   gate.g0-bang-block-prose:
     SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md carefully.\n```!\necho QA-MARKER\n```\n"
     reference.md: "Step one.\n"
+  gate.g0-multiset:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n~~~\nnote\n~~~\n```!\necho QA-MARKER\n```\n```\nmore\n```\n"
+    reference.md: "Step one.\n"
+  gate.g0-bang-plus-code-edit:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n```!\necho QA-MARKER\n```\n```\ncode two\n```\n"
+    reference.md: "Step one.\n"
   gate.g0-bang-target:
     SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\n!`python3 tools/x.txt`\n"
     reference.md: "Step one.\n"
@@ -480,6 +486,8 @@ histories:
       - {from: gate.g0-bang-pull, to: gate.g0-bang-pull-in, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a ! block compared whole: its closer moved past a line, which now runs; flagged at its opener only (d0894bc9)"}
       - {from: gate.g0-swap-old, to: gate.g0-swap-new, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: runs_at_load, path: SKILL.md, line: 12}], note: "a ! block moved above a plain block, same texts (sizes and fences differ, so the shortest diff has one alignment): the diff keeps the plain block, the ! block's fences are new (one flag, 6) and its removed ones stand at the end (12) (d0894bc9, a1503c97)"}
       - {from: gate.g0-bang-block, to: gate.g0-bang-block-prose, risk_flags: [{kind: instructions_changed, path: SKILL.md}], note: "must not fire: prose outside any block edited, the ! block unchanged"}
+      - {from: gate.g0-bang-block, to: gate.g0-multiset, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: runs_at_load, path: SKILL.md, line: 9}, {kind: runs_at_load, path: SKILL.md, line: 12}], note: "order, not a multiset: a ~~~ block before and a ``` block after the unchanged ! block; the ! block's opener sits between the first and last difference (d0894bc9)"}
+      - {from: gate.g0-bang-plus-code, to: gate.g0-bang-plus-code-edit, risk_flags: [{kind: instructions_changed, path: SKILL.md}], note: "must not fire: an edit inside a plain block, the ! block and every fence unchanged"}
       - {from: gate.g0-bang-block, to: gate.g0-bang-unbanged, risk_flags: [], note: "only the old version had a ! block: removing it doesn't fire"}
       - {from: gate.g0-bang-block, to: gate.g0-bang-block-edit, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "an edit inside an unchanged ! block: one flag per block, at its opening line"}
       - {from: gate.g0, to: gate.g0-bang-target, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: runnable_file, path: tools/x.txt}], note: "an injected command's target is a command position: its file gets runnable_file"}
