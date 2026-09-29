@@ -1043,6 +1043,25 @@ describe('the lock entry a decision used, changed by another run before the lock
     expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('One.\n');
   });
 
+  it('update, an older version installed meanwhile, with accept_flagged_updates: let through on the flags against that version, and the lock records those', async () => {
+    const p = place();
+    await versionsOf(p, [NOTES('One.\n')], [RUN, NOTES('One.\n')]);
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha', version: 1 });
+    const held = await pendingHold(ctx, 'alpha');
+    const { target, version, confirm, flags } = held as { target: 'user'; version: number; confirm: string; flags: string[] };
+    await accept(ctx, { name: 'alpha', target, version, confirm, flags });
+    await versionsOf(p, [RUN, NOTES('Three.\n')]);
+    race.fs.writeFileSync(join(p.home, 'config.json'), JSON.stringify({ accept_flagged_updates: true }));
+    // Against the installed v2 the script isn't new; against v1, put back meanwhile, it is: only the fresh gate sees it.
+    const dest = meanwhile(p, (e) => recorded(e!, 1, [NOTES('One.\n')]));
+    await updating(ctx);
+    expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('Three.\n');
+    const entry = (JSON.parse(race.fs.readFileSync(join(p.home, 'lock.json'), 'utf8')) as { skills: Record<string, { version: number; accepted: { version: number; flags: string[]; by?: string }[] }> }).skills[dest]!;
+    expect(entry.version).toBe(3);
+    expect(entry.accepted.at(-1)).toEqual({ version: 3, flags: expect.arrayContaining(['runnable_file']), by: 'accept_flagged_updates' });
+  });
+
   // A hold is a decision too: taken again under the lock, so one another run's install made moot goes through.
   it('update, held against the version first read, but a version installed meanwhile already has what was flagged: updated from it', async () => {
     const p = place();
