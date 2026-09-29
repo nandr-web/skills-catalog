@@ -326,6 +326,22 @@ describe('the words file (vendored, recommended variant)', () => {
     expect(renderError(s, new CatalogError('forbidden', {}))).toBe(s.format(w.forbidden, {}));
   });
 
+  it('a hosted change made with a read-scope token has its own sentence; an unknown field cut to 200 characters says so; the hosted whys have words', () => {
+    const s = Words.load();
+    const w = s.word('errors');
+    expect(w.forbidden_read_scope).toEqual(expect.any(String));
+    expect(renderError(s, new CatalogError('forbidden', { why: 'read_scope' }))).toBe(s.format(w.forbidden_read_scope, {}));
+    const cut = 'k'.repeat(200);
+    expect(w.why.unknown_field_cut).toEqual(expect.any(String));
+    expect(renderError(s, new CatalogError('invalid_request', { field: cut, why: 'unknown_field', field_cut: true }))).toBe(s.format(w.invalid_request, { field: cut, why: w.why.unknown_field_cut }));
+    expect(renderError(s, new CatalogError('invalid_request', { field: 'k', why: 'unknown_field' }))).toBe(s.format(w.invalid_request, { field: 'k', why: w.why.unknown_field }));
+    for (const why of ['not_uploaded', 'token_only']) {
+      expect([why, typeof w.why[why]]).toEqual([why, 'string']);
+      expect(renderError(s, new CatalogError('invalid_request', { field: 'f', why }))).toBe(s.format(w.invalid_request, { field: 'f', why: w.why[why] }));
+    }
+    expect(WORD_GAPS).toEqual([]);
+  });
+
   it('a link in a published folder and a confirm from elsewhere each have their own sentence', () => {
     const s = Words.load();
     const w = s.word('errors');
