@@ -7,6 +7,8 @@ import { MANIFEST } from './manifest.ts';
 import { flagText, isMarkdown, type DiffSide, type RiskFlag } from './diff.ts';
 import { INVISIBLE, decodeText, isText, type TreeFile } from './tree.ts';
 import { CatalogError } from './errors.ts';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 // A CRLF is one line end; a lone CR, a lone LF, U+2028 and U+2029 each end one (contract §5.3), as in the diff's checks.
 const LINE_BREAK = /\r\n|[\n\r\u2028\u2029]/;
@@ -32,8 +34,26 @@ export function checkContextCostBudget(value: unknown): number {
 // selector or zero-width joiner inside an emoji sequence (every emoji with VS16 or ZWJ would otherwise hold an update), and
 // a byte-order mark as a file's first character, which marks its encoding. Each candidate is one character.
 const CANDIDATE = new RegExp(`[\\u202a-\\u202e\\u2066-\\u2069]|(?![\\t\\p{Zs}])(?:${INVISIBLE.source})`, 'gu');
-const PICTOGRAPH = /^\p{Extended_Pictographic}$/u;
-const MODIFIER = /^\p{Emoji_Modifier}$/u;
+// Which characters are pictographs and skin tones comes from config/emoji-properties.txt (made by
+// scripts/emoji-properties.py from Unicode's emoji-data.txt 16.0), never the runtime's properties, so a line is reviewed
+// the same on every machine: sections of code-point ranges, each after its [property] line.
+export const EMOJI_PROPERTIES_FILE = join(import.meta.dirname, '..', '..', 'config', 'emoji-properties.txt');
+function readEmojiProperties(file = EMOJI_PROPERTIES_FILE): Map<string, RegExp> {
+  const ranges = new Map<string, string[]>();
+  let current: string[] | undefined;
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    if (line === '' || line.startsWith('#')) continue;
+    const section = /^\[(\w+)\]$/.exec(line);
+    if (section) ranges.set(section[1]!, (current = []));
+    else current!.push(line.split('..').map((hex) => `\\u{${hex}}`).join('-'));
+  }
+  return new Map([...ranges].map(([name, r]) => [name, new RegExp(`^[${r.join('')}]$`, 'u')]));
+}
+const EMOJI = readEmojiProperties();
+export const EXTENDED_PICTOGRAPHIC = EMOJI.get('Extended_Pictographic')!;
+export const EMOJI_MODIFIER = EMOJI.get('Emoji_Modifier')!;
+const PICTOGRAPH = EXTENDED_PICTOGRAPHIC;
+const MODIFIER = EMOJI_MODIFIER;
 const codePoint = (c: string) => `U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`;
 const pointBefore = (text: string, at: number) => (at > 0 ? String.fromCodePoint(text.codePointAt(at - (at > 1 && /[\udc00-\udfff]/.test(text[at - 1]!) ? 2 : 1))!) : '');
 const pointAfter = (text: string, at: number) => (at < text.length ? String.fromCodePoint(text.codePointAt(at)!) : '');
