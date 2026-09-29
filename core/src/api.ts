@@ -301,7 +301,8 @@ export const OPERATIONS: Record<string, OperationDef> = {
     effect: 'writes_machine',
     run: 'update',
     output: 'text',
-    errors: ['not_installed', 'not_found', 'invalid_manifest', 'invalid_name', 'invalid_path', 'too_large', 'fingerprint_mismatch', 'exists_untracked', 'name_in_use', 'target_symlink', 'target_changed', 'target_not_private', 'target_unavailable', 'lock_busy', 'invalid_local_file'],
+    // A skill it can't update is a refused line in its answer, not an error: only these stop the whole call.
+    errors: ['not_installed', 'not_found', 'lock_busy', 'invalid_local_file'],
     input: {
       type: 'object',
       properties: { names: { type: 'array', items: name, maxItems: MAX_UPDATE_NAMES }, dry_run: { type: 'boolean' }, latest: { type: 'boolean' } },
@@ -317,7 +318,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     effect: 'writes_machine',
     run: 'accept',
     output: 'text',
-    errors: ['conflict', 'not_found', 'invalid_manifest', 'invalid_name', 'invalid_path', 'too_large', 'fingerprint_mismatch', 'exists_untracked', 'name_in_use', 'target_symlink', 'target_changed', 'target_not_private', 'target_unavailable', 'lock_busy', 'invalid_local_file'],
+    errors: ['conflict', 'not_installed', 'not_found', 'invalid_manifest', 'invalid_name', 'invalid_path', 'too_large', 'fingerprint_mismatch', 'exists_untracked', 'name_in_use', 'target_symlink', 'target_changed', 'target_not_private', 'target_unavailable', 'lock_busy', 'invalid_local_file'],
     input: {
       type: 'object',
       properties: { name, target: { type: 'string', enum: TARGETS }, version, confirm: { type: 'string', maxLength: 2000 }, flags: { type: 'array', items: { type: 'string', maxLength: 40 }, maxItems: 20 } },
