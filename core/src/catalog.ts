@@ -360,7 +360,22 @@ export class Catalog {
     if (latest && latest.fingerprint === fingerprint) return { ...result(latest.version, false), diff_from_latest: { ...diff, files: [] }, risk_flags: [] };
     if (req.dry_run) return result(latestNo + 1, false);
 
-    for (const f of tree) this.p.blobs.put(sha256Hex(f.bytes), f.bytes);
+    const added = new Set<string>();
+    const putAll = () => {
+      for (const f of tree) if (this.p.blobs.put(sha256Hex(f.bytes), f.bytes)) added.add(sha256Hex(f.bytes));
+    };
+    // A refused or failed commit takes back the blobs this publish added that no version references, under the write
+    // lock, so storage is exactly as it was (rows and blobs) even when another publish won the race.
+    const takeBack = () => {
+      try {
+        this.p.meta.withWriteLock(() => {
+          for (const sha of added) if (!this.p.meta.referencesBlob(sha)) this.p.blobs.delete(sha);
+        });
+      } catch {
+        // Left for a later cleanup; no version points at them.
+      }
+    };
+    putAll();
     const record: Omit<VersionRecord, 'version'> = {
       name,
       fingerprint,
@@ -372,31 +387,43 @@ export class Catalog {
       tags: md.tags,
       frontmatter: md.frontmatter,
     };
+    const event = (version: number) => ({ type: 'version_published' as const, name, version, fingerprint, publisher, at: record.published_at });
     for (let attempt = 1; ; attempt++) {
       let r;
       try {
-        r = this.p.meta.append(record, { expectedLatest: req.expected_latest }, (version) => ({
-          type: 'version_published',
-          name,
-          version,
-          fingerprint,
-          publisher,
-          at: record.published_at,
-        }));
+        // Every blob must still be there at the commit point: a racing publish may have taken back one this
+        // publish found already stored. If so, put them again and retry.
+        r = this.p.meta.withWriteLock(() =>
+          entries.every((e) => this.p.blobs.has(e.sha256)) ? this.p.meta.append(record, { expectedLatest: req.expected_latest }, event) : null,
+        );
       } catch (e) {
-        // A clash on the version number (another writer won it): try again with the next one.
+        // A clash on the version number or a busy lock: try again.
         if (attempt < APPEND_TRIES && /UNIQUE|constraint|busy|locked/i.test(String((e as Error).message))) continue;
+        takeBack();
         throw e;
+      }
+      if (r === null) {
+        if (attempt >= APPEND_TRIES) throw new Error('storage: blobs kept disappearing before the commit');
+        putAll();
+        continue;
       }
       switch (r.kind) {
         case 'not_owner':
+          takeBack();
           throw new CatalogError('not_owner', { name, owners: r.owners });
         case 'conflict':
+          takeBack();
           throw new CatalogError('conflict', { name, latest: r.latest, expected_latest: req.expected_latest });
         case 'identical':
+          takeBack();
           return { ...result(r.record.version, false), diff_from_latest: { ...diff, files: [] }, risk_flags: [] };
         case 'created':
-          this.p.events.deliver();
+          try {
+            this.p.events.deliver();
+          } catch {
+            // The version is committed; its event stays in the outbox and the next delivery (a search, the next
+            // process to open the catalog) retries it. The search index may lag; it never loses a version.
+          }
           return result(r.record.version, true);
       }
     }

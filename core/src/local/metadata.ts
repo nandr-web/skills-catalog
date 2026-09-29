@@ -77,6 +77,17 @@ export class SqliteMetadataStore implements MetadataStore {
     return (this.db.prepare('SELECT count(*) AS n FROM skills').get() as { n: number }).n;
   }
 
+  referencesBlob(sha256: string): boolean {
+    return (
+      this.db.prepare("SELECT 1 FROM versions, json_each(versions.files) AS f WHERE json_extract(f.value, '$.sha256') = ? LIMIT 1").get(sha256) !==
+      undefined
+    );
+  }
+
+  withWriteLock<T>(fn: () => T): T {
+    return this.local.immediate(fn);
+  }
+
   append(v: Omit<VersionRecord, 'version'>, cond: { expectedLatest?: number | undefined }, event: (version: number) => VersionPublished): AppendResult {
     return this.local.immediate((): AppendResult => {
       const s = this.skill(v.name);

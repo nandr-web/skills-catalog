@@ -33,9 +33,13 @@ export class FolderBlobStore implements BlobStore {
     }
   }
 
-  put(sha256: string, bytes: Uint8Array): void {
+  delete(sha256: string): void {
+    rmSync(this.path(sha256), { force: true });
+  }
+
+  put(sha256: string, bytes: Uint8Array): boolean {
     const final = this.path(sha256);
-    if (this.has(sha256)) return;
+    if (this.has(sha256)) return false;
     mkdirSync(join(this.dir, sha256.slice(0, 2)), { recursive: true, mode: 0o700 });
     const temp = join(this.tmp, `${sha256}.${process.pid}.${this.ids.next()}`);
     const fd = openSync(temp, 'wx', 0o600);
@@ -51,6 +55,7 @@ export class FolderBlobStore implements BlobStore {
       rmSync(temp, { force: true });
       throw e;
     }
+    return true;
   }
 
   get(sha256: string): Uint8Array | undefined {

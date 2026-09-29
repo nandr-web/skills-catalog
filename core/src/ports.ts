@@ -47,6 +47,9 @@ export interface MetadataStore {
   latestVersions(): Iterable<VersionRecord>; // every skill's latest, for rebuilding the index
   names(): string[];
   count(): number;
+  referencesBlob(sha256: string): boolean;
+  // Runs fn while no other writer can append (locally: one BEGIN IMMEDIATE; nested calls join it).
+  withWriteLock<T>(fn: () => T): T;
   append(
     v: Omit<VersionRecord, 'version'>,
     cond: { expectedLatest?: number | undefined },
@@ -54,11 +57,13 @@ export interface MetadataStore {
   ): AppendResult;
 }
 
-// File bytes by sha256: put-if-absent, safe to repeat.
+// File bytes by sha256: put-if-absent, safe to repeat. `put` says whether this call created the blob, so a publish
+// that is refused at its commit point can remove exactly the blobs it added.
 export interface BlobStore {
-  put(sha256: string, bytes: Uint8Array): void;
+  put(sha256: string, bytes: Uint8Array): boolean;
   get(sha256: string): Uint8Array | undefined;
   has(sha256: string): boolean;
+  delete(sha256: string): void;
 }
 
 export interface SearchCard {
