@@ -386,6 +386,9 @@ versions:
   gate.g0-bang-after-ps:
     SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\nNote. ```!\necho QA-MARKER\n```\n"
     reference.md: "Step one.\n"
+  gate.g0-cr-no-bang:
+    SKILL.md: "---\nname: gate-skill\ndescription: A plain skill.\n---\nFollow reference.md.\nNote.\rStep two.\n"
+    reference.md: "Step one.\n"
   gate.g0-bang-crlf:
     SKILL.md: "---\r\nname: gate-skill\r\ndescription: A plain skill.\r\n---\r\nFollow reference.md.\r\n```!\r\necho QA-MARKER\r\n```\r\n"
     reference.md: "Step one.\n"
@@ -591,9 +594,11 @@ histories:
       - {from: gate.g0, to: gate.g0-bang-curl, permissive: auto, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: prompt_injection, path: SKILL.md, line: 6, detail: "curl piped to a shell"}], note: "an injected command is runs_at_load, which comes first: no command_instruction for that line (the reviewer's flag joins beside it)"}
       - {from: null, to: gate.g0-curl, permissive: auto, risk_flags: [{kind: command_instruction, path: SKILL.md, line: 6, instruction: fetch_and_run, mode: auto}, {kind: prompt_injection, path: SKILL.md, line: 6, detail: "curl piped to a shell"}], note: "a first install in auto mode is checked too, so it's held: flagged"}
       # runs_at_load's line ends and blanks (contract 96274fb, 2fe012b).
-      - {from: gate.g0, to: gate.g0-bang-after-cr, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 7}], note: "a lone CR ends line 6, so the fence opens line 7"}
-      - {from: gate.g0, to: gate.g0-bang-after-ls, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 7}], note: "U+2028 ends a line (so the reviewer sees no hidden character: it's a line end)"}
-      - {from: gate.g0, to: gate.g0-bang-after-ps, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 7}], note: "U+2029 ends a line"}
+      - {from: gate.g0, to: gate.g0-bang-after-cr, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6, detail: "has an unusual line break, so what runs when the skill loads can't be read for sure"}, {kind: runs_at_load, path: SKILL.md, line: 7}], note: "a lone CR ends line 6, so the fence opens line 7; and the unusual break is flagged once, at line 6, the line it ends (11f0111e)"}
+      - {from: gate.g0, to: gate.g0-bang-after-ls, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6, detail: "has an unusual line break, so what runs when the skill loads can't be read for sure"}, {kind: runs_at_load, path: SKILL.md, line: 7}], note: "U+2028 ends a line (so the reviewer sees no hidden character: it's a line end); and the unusual break is flagged once, at line 6, the line it ends (11f0111e)"}
+      - {from: gate.g0, to: gate.g0-bang-after-ps, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6, detail: "has an unusual line break, so what runs when the skill loads can't be read for sure"}, {kind: runs_at_load, path: SKILL.md, line: 7}], note: "U+2029 ends a line; and the unusual break is flagged once, at line 6, the line it ends (11f0111e)"}
+      - {from: gate.g0-bang-after-ls, to: gate.g0-bang-block, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 1, detail: "has an unusual line break, so what runs when the skill loads can't be read for sure"}], note: "only the old version had an unusual break (U+2028): line 1 (b5348461); the ! block's text is the same"}
+      - {from: gate.g0, to: gate.g0-cr-no-bang, risk_flags: [], note: "must not fire: a lone CR with no ! block (and nothing grants)"}
       - {from: gate.g0, to: gate.g0-bang-crlf, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}], note: "a CRLF is one line end: the fence is line 6, as an editor shows it, and the other lines match gate.g0's"}
       - {from: gate.g0, to: gate.g0-bang-zwsp-fence, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: prompt_injection, path: SKILL.md, line: 6, detail: "hidden character U+200B"}], note: "a zero-width space is a blank before the !; the reviewer flags it too"}
       - {from: gate.g0, to: gate.g0-bang-bom-fence, risk_flags: [{kind: runs_at_load, path: SKILL.md, line: 6}, {kind: prompt_injection, path: SKILL.md, line: 6, detail: "hidden character U+FEFF"}], note: "a BOM that isn't the file's first character is a blank, and hidden"}
