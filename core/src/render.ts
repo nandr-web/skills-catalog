@@ -247,14 +247,17 @@ export function renderError(s: Surface, e: CatalogError): string {
       return effect === undefined ? asData(e.code, d) : fill(w.invalid_local_file, { ...d, effect });
     }
     case 'target_changed': {
-      // Whether the folder moved aside is back or sits in staging, and whether a copy may have gone elsewhere.
-      const base = d['staging'] === undefined ? fill(w.target_changed, d) : fill(w.target_changed_staging, d);
+      // Whether the folder moved aside is back or sits in staging (named, whatever changed), whether what changed was the
+      // temp folder the new copy was being written in, and whether a copy may have gone elsewhere.
+      const t = d['staging'] !== undefined ? w.target_changed_staging : d['temp'] === true ? w.target_changed_temp : w.target_changed;
+      const base = fill(t, d);
       return d['elsewhere'] === true ? base + fill(w.target_changed_elsewhere, {}) : base;
     }
     case 'target_not_private': {
-      // The sentence by what the folder is: the person's home, a project, or a folder inside; the path goes into a chmod.
-      const t = d['home'] === true ? w.target_not_private_home : d['target'] === 'project' ? w.target_not_private_project : w.target_not_private;
-      return fill(t, { ...d, path: shellQuote(String(d['path'])) });
+      // The sentence by what the folder is (the person's home, a project, or a folder inside) and whether it's their own:
+      // only their own folder gets a chmod, its path shell-quoted; another's gets another way on.
+      const what = d['home'] === true ? 'target_not_private_home' : d['target'] === 'project' ? 'target_not_private_project' : 'target_not_private';
+      return fill(w[d['own'] === false ? `${what}_not_own` : what], { ...d, path: shellQuote(String(d['path'])) });
     }
     case 'invalid_developer_setting': {
       // A bad developer name from a setting (SKILLS_AS, the MCP server's config, setup's `me`): fix it there.

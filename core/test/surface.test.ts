@@ -369,17 +369,28 @@ describe('the surface (vendored, recommended variant)', () => {
     expect(r({ path, staging })).toBe(s.format(w.target_changed_staging, { path, staging }));
     expect(r({ path, elsewhere: true })).toBe(s.format(w.target_changed, { path }) + s.format(w.target_changed_elsewhere));
     expect(r({ path, staging, elsewhere: true })).toBe(s.format(w.target_changed_staging, { path, staging }) + s.format(w.target_changed_elsewhere));
+    // A staging folder that changed (the temp folder the new copy was being written in): nothing installed was touched.
+    const temp = '/work/app/.claude/.skills-catalog-staging/install-x';
+    expect(r({ path: temp, temp: true })).toBe(s.format(w.target_changed_temp, { path: temp }));
+    expect(r({ path: temp, temp: true, elsewhere: true })).toBe(s.format(w.target_changed_temp, { path: temp }) + s.format(w.target_changed_elsewhere));
+    // A replaced copy that couldn't be put back is named, whatever changed.
+    expect(r({ path: temp, temp: true, staging })).toBe(s.format(w.target_changed_staging, { path: temp, staging }));
   });
 
   it('a folder that isn\'t private picks its sentence by what it is: the home folder, a project, or a folder inside', () => {
     const s = Surface.load();
     const w = s.word('errors');
     const r = (data: Record<string, unknown>) => renderError(s, new CatalogError('target_not_private', data));
-    expect(r({ path: '/home/ana', target: 'user', home: true })).toBe(s.format(w.target_not_private_home, { path: '/home/ana' }));
-    expect(r({ path: '/work/app', target: 'project' })).toBe(s.format(w.target_not_private_project, { path: '/work/app' }));
-    expect(r({ path: '/home/ana/.claude', target: 'user' })).toBe(s.format(w.target_not_private, { path: '/home/ana/.claude' }));
-    // The path goes into a chmod the person may run: shell-quoted.
-    expect(r({ path: '/work/team app/.claude', target: 'user' })).toContain(`chmod go-w ${shellQuote('/work/team app/.claude')}`);
+    expect(r({ path: '/home/ana', target: 'user', home: true, own: true })).toBe(s.format(w.target_not_private_home, { path: '/home/ana' }));
+    expect(r({ path: '/work/app', target: 'project', own: true })).toBe(s.format(w.target_not_private_project, { path: '/work/app' }));
+    expect(r({ path: '/home/ana/.claude', target: 'user', own: true })).toBe(s.format(w.target_not_private, { path: '/home/ana/.claude' }));
+    // A folder that isn't the person's own gets a way on other than chmod (a root-owned or CI home, another's project).
+    expect(r({ path: '/tmp', target: 'user', home: true, own: false })).toBe(s.format(w.target_not_private_home_not_own, { path: '/tmp' }));
+    expect(r({ path: '/work/app', target: 'project', own: false })).toBe(s.format(w.target_not_private_project_not_own, { path: '/work/app' }));
+    expect(r({ path: '/home/ana/.claude', target: 'user', own: false })).toBe(s.format(w.target_not_private_not_own, { path: '/home/ana/.claude' }));
+    // chmod is offered exactly on the person's own folders, and the path goes into it shell-quoted.
+    expect(r({ path: '/work/team app/.claude', target: 'user', own: true })).toContain(`chmod go-w ${shellQuote('/work/team app/.claude')}`);
+    for (const d of [{ home: true }, { target: 'project' }, {}]) expect(r({ path: '/x', target: 'user', ...d, own: false })).not.toContain('chmod');
   });
 
   it('a damaged lock or config file names the file by its path, says why, and what removing it would do', () => {
