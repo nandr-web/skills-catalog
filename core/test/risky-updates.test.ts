@@ -52,6 +52,24 @@ describe('the flags an update raises, pair by pair (golden histories.gate)', () 
   }
 });
 
+// Pairs too big to write out (golden histories.gate_generated): each file is its `parts` joined, a string as it is or
+// {repeat, count} written count times with {n} = 1..count.
+describe('the flags an update raises, generated pairs (golden histories.gate_generated)', () => {
+  type Part = string | { repeat: string; count: number };
+  type Cases = { id: string; from: Record<string, string | { parts: Part[] }>; to: Record<string, string | { parts: Part[] }>; risk_flags: Partial<RiskFlag>[]; note?: string }[];
+  const text = (v: string | { parts: Part[] }) =>
+    typeof v === 'string'
+      ? v
+      : v.parts.map((p) => (typeof p === 'string' ? p : Array.from({ length: p.count }, (_, i) => p.repeat.replaceAll('{n}', String(i + 1))).join(''))).join('');
+  const made = (files: Record<string, string | { parts: Part[] }>) => ({
+    files: checkTree(Object.entries(files).map(([path, v]) => ({ path, mode: '0644', bytes: Buffer.from(text(v)) }))),
+    publisher: 'dev1',
+  });
+  for (const c of histories.histories.gate_generated.cases as Cases) {
+    it(c.id, () => expect(sorted(diffTrees(made(c.from), made(c.to)).risk_flags), c.note).toMatchObject(sorted(c.risk_flags)));
+  }
+}, 60_000);
+
 // The injected-command detector (contract §5.3, 96274fb): lines end at LF, CR, U+2028 or U+2029; the blanks before a
 // fence are spaces, tabs and the invisible set; a markdown file that isn't valid UTF-8 is flagged at line 1.
 describe('the keys known to grant nothing are fixed: config can only take one off the list', () => {

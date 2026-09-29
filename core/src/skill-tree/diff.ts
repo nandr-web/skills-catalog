@@ -351,12 +351,17 @@ function fenceChanges(a: TreeFile, b: TreeFile, flagged: ReadonlySet<number>): {
   };
   let m = middle();
   // Removed fence lines (only possible when an old one lies between the differences), then the order of what's left.
-  // When the edit script gives up (past MAX_EDIT) it removes every old line, so every new fence line counts as changed.
+  // When the edit script gives up (more than MAX_EDIT differing lines), every new fence line counts as changed, and no
+  // removal has a place to stand.
   const removed: { line: number; text: string }[] = [];
-  if (m.removedAny) {
+  const ops = m.removedAny ? alignedScript(was.lines, now.lines) : [];
+  if (ops === null) {
+    x = [];
+    m = middle();
+  } else if (m.removedAny) {
     const last = lastShown(now.lines);
     const gone = new Set<number>();
-    for (const op of editScript(was.lines, now.lines)) {
+    for (const op of ops) {
       if (op.kind !== '-' || !isFenceLine(op.line)) continue;
       gone.add(op.ai + 1);
       removed.push({ line: Math.max(1, Math.min(op.bi + 1, last)), text: `fence removed: ${op.line.trim()}` });
@@ -522,6 +527,10 @@ const MAX_EDIT = 4000;
 
 // Shortest edit script (Myers 1986). Past MAX_EDIT differences it gives up on alignment and replaces the whole file.
 function editScript(a: string[], b: string[]): Op[] {
+  return alignedScript(a, b) ?? [...a.map((line, i) => ({ kind: '-' as const, line, ai: i, bi: 0 })), ...b.map((line, i) => ({ kind: '+' as const, line, ai: a.length, bi: i }))];
+}
+// The same, or null when there are more than MAX_EDIT differing lines (removed and added together).
+function alignedScript(a: string[], b: string[]): Op[] | null {
   const n = a.length;
   const m = b.length;
   const max = Math.min(n + m, MAX_EDIT);
@@ -545,9 +554,7 @@ function editScript(a: string[], b: string[]): Op[] {
       }
     }
   }
-  if (found < 0) {
-    return [...a.map((line, i) => ({ kind: '-' as const, line, ai: i, bi: 0 })), ...b.map((line, i) => ({ kind: '+' as const, line, ai: n, bi: i }))];
-  }
+  if (found < 0) return null;
   const ops: Op[] = [];
   let x = n;
   let y = m;

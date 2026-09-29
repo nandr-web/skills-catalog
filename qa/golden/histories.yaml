@@ -534,7 +534,6 @@ histories:
       written N times with {n} replaced by 1..N. The version diff gives up past 4,000 differing lines, removed and added
       together (contract §5.3, fb0c9682); then every fence line of the new version counts as changed, deduped as usual.
       reference.md is gate.g0's in both versions.
-    pending: "a version diff that gives up past 4,000 differing lines (contract fb0c9682)"
     cases:
       - id: diff-gives-up
         from:
