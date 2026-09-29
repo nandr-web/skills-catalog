@@ -30,6 +30,7 @@ export function contentOf(v: any, limits: Limits = DEFAULT_LIMITS): { bytes: Uin
   }
   let text: string = v.text ?? '';
   if (v.crlf) text = text.replace(/\n/g, '\r\n');
+  if (v.pad_to !== undefined) text = text.padEnd(v.pad_to, v.fill ?? 'x'); // {text, pad_to, fill}: text, then fill to pad_to bytes (ASCII)
   const bytes = Buffer.from(text, 'utf8');
   return { bytes: v.bom ? Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), bytes]) : bytes, mode: v.mode ?? '0644' };
 }

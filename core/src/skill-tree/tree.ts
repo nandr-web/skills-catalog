@@ -98,7 +98,8 @@ export function checkPath(raw: unknown): string {
   if (CONTROL.test(raw)) refuse(raw, 'control_character');
   if (INVISIBLE.test(raw)) refuse(raw, 'invisible_character');
   if (raw.includes('\\')) refuse(raw, 'backslash');
-  if (raw.startsWith('/') || /^[A-Za-z]:/.test(raw)) refuse(raw, 'absolute');
+  // A leading / or a drive letter (C:/). "a:b.md" is no drive: its colon is caught below as not portable.
+  if (raw.startsWith('/') || /^[A-Za-z]:\//.test(raw)) refuse(raw, 'absolute');
   const path = raw.normalize('NFC');
   for (const seg of path.split('/')) {
     if (seg === '') refuse(raw, 'empty_segment');

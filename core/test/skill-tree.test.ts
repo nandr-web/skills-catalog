@@ -180,7 +180,7 @@ describe('hostile file lists are refused (golden/skills.yaml hostile, the raw re
       // not portable: Windows' reserved characters, a trailing dot or space, device names in any case
       ['a<b.md', 'not_portable'],
       ['ab:c.md', 'not_portable'],
-      ['a:b.md', 'absolute'], // a drive letter, checked before any segment rule
+      ['a:b.md', 'not_portable'], // no drive letter without a slash
       ['a"b.md', 'not_portable'],
       ['a|b.md', 'not_portable'],
       ['a?.md', 'not_portable'],
