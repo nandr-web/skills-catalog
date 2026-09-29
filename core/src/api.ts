@@ -233,6 +233,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
       },
       required: ['name', 'files'],
     },
+    cliOnly: ['allow_suspected_secrets'],
   },
   fetch_version: {
     name: 'fetch_version',

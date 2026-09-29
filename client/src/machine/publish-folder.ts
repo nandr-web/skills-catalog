@@ -211,7 +211,7 @@ export async function publishFolder(ctx: Context, args: unknown): Promise<Done> 
     if (req.confirm === undefined) {
       // A dry run creates nothing: the same bytes as the latest come back as that version with nothing changed; anything
       // else as the version it would become.
-      const r: PublishResult = await catalog.publish({ ...input, dry_run: true });
+      const r: PublishResult = await catalog.publish({ ...input, dry_run: true }, undefined, ctx.face);
       const identical = r.diff_from_latest !== null && r.diff_from_latest.files.length === 0;
       const latest = identical ? r.version : r.version - 1;
       if (identical) return { text: s.format(w.identical, { folder: quoted(req.folder), name, latest }), target: `${name} v${latest}`, result: log.result('publish', 'identical') };
@@ -241,7 +241,7 @@ export async function publishFolder(ctx: Context, args: unknown): Promise<Done> 
     const given = Buffer.from(req.confirm, 'base64url');
     const expected = mac(key, bound);
     if (given.length !== expected.length || !timingSafeEqual(given, expected)) throw new CatalogError('conflict', { name, folder: real });
-    const r = await catalog.publish({ ...input, expected_latest: bound.latest });
+    const r = await catalog.publish({ ...input, expected_latest: bound.latest }, undefined, ctx.face);
     return { text: s.format(w.published, { name, version: r.version }), target: `${name} v${r.version}`, result: log.result('publish', 'published') };
   } catch (e) {
     throw inFolder(e, real);

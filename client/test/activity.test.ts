@@ -96,7 +96,7 @@ describe('the activity log', () => {
     const p = place();
     await seed(p, async (c) => {
       // A secret-shaped value is refused unless a person lets it through for that one publish (as here, on purpose).
-      await c.publish({ ...request('marker-skill', [{ path: 'SKILL.md', text: skillMd('marker-skill', 'Holds a planted value.', `The value: ${marker}\n`) }]), allow_suspected_secrets: true }, actAs('ana'));
+      await c.publish({ ...request('marker-skill', [{ path: 'SKILL.md', text: skillMd('marker-skill', 'Holds a planted value.', `The value: ${marker}\n`) }]), allow_suspected_secrets: true }, actAs('ana'), 'cli');
     });
     const s = start(p, { SKILLS_AS: 'dev2' });
     await s.initialize();

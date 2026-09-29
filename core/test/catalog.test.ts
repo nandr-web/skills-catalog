@@ -313,7 +313,7 @@ describe('the secret scan in the core\'s publish (contract §2)', () => {
     const { catalog } = await openTest();
     const files = withScript('#!/bin/sh\nexport AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\n');
     expect((await errorOf(() => catalog.publish(request('keys', files), actAs('ana')))).data).toMatchObject({ kind: 'aws_access_key', line: 2 });
-    expect(await catalog.publish(request('keys', files, { allow_suspected_secrets: true }), actAs('ana'))).toMatchObject({ created: true, version: 1 });
+    expect(await catalog.publish(request('keys', files, { allow_suspected_secrets: true }), actAs('ana'), 'cli')).toMatchObject({ created: true, version: 1 });
   });
 
   it('leaves ordinary text alone', async () => {
