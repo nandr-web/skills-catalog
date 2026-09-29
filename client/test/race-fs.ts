@@ -1,4 +1,4 @@
-// The race tests' view of node:fs: every lstatSync, renameSync and writeSync call runs the test's hooks first, and a stat can be
+// The race tests' view of node:fs: every lstatSync, renameSync, writeSync and openSync call runs the test's hooks first, and a stat can be
 // rewritten (an owner or mode another user's folder would have). A test file mocks node:fs with mockFs:
 //   vi.mock('node:fs', async (original) => (await import('./race-fs.ts')).mockFs(await original()));
 // No value import of node:fs here: this module is loaded while that mock is being made.
@@ -15,6 +15,8 @@ export const race = {
   stats: undefined as undefined | ((path: string, s: Stats) => Partial<Stats> | undefined),
   // Runs before every writeSync to a descriptor; throwing makes the write fail (a full disk).
   onWrite: undefined as undefined | ((fd: number) => void),
+  // Runs before every openSync, with its path and flags (the lock file is made with 'wx').
+  onOpen: undefined as undefined | ((path: string, flags: unknown) => void),
 };
 
 export function mockFs(fs: Fs): Fs {
@@ -39,5 +41,9 @@ export function mockFs(fs: Fs): Fs {
     race.onWrite?.(fd);
     return (fs.writeSync as (...a: unknown[]) => number)(fd, ...rest);
   }) as Fs['writeSync'];
-  return { ...fs, lstatSync, statSync, renameSync, writeSync, default: { ...fs, lstatSync, statSync, renameSync, writeSync } } as Fs;
+  const openSync = ((path: string, flags: unknown, ...rest: unknown[]) => {
+    race.onOpen?.(String(path), flags);
+    return (fs.openSync as (...a: unknown[]) => number)(path, flags, ...rest);
+  }) as Fs['openSync'];
+  return { ...fs, lstatSync, statSync, renameSync, writeSync, openSync, default: { ...fs, lstatSync, statSync, renameSync, writeSync, openSync } } as Fs;
 }

@@ -123,6 +123,8 @@ export const clearHooks = () => {
   race.onRename = undefined;
   race.afterRename = undefined;
   race.stats = undefined;
+  race.onWrite = undefined;
+  race.onOpen = undefined;
 };
 
 /** The swap sweeps: every interleaving up to the k-th check. The fast suite runs a small bound; the slow one reaches every
