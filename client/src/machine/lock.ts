@@ -90,10 +90,14 @@ const CONFIG_KEYS: Record<string, (x: unknown) => Refusal | undefined> = {
   hosting: (x) => (typeof x === 'string' && HOSTING.includes(x) ? undefined : 'wrong_shape'),
   catalog: (x) => (typeof x === 'string' && x !== '' ? undefined : 'wrong_shape'),
   update_policy: policyWhy,
+  // A skill's own policy is named by its path in the file, overrides.<name>.
   overrides: (x) => {
     if (!isObject(x)) return 'wrong_shape';
-    const whys = Object.values(x).map(policyWhy);
-    return whys.includes('wrong_shape') ? 'wrong_shape' : whys.find((w) => w !== undefined);
+    const whys = Object.entries(x).flatMap(([name, p]) => {
+      const why = policyWhy(p);
+      return why ? [{ why, key: `overrides.${name}` }] : [];
+    });
+    return whys.find((w) => w.why === 'wrong_shape') ?? whys[0];
   },
   // A wait in whole seconds, up to a year (§5.3's cooldown; built with shared and hosted catalogs).
   cooldown: (x) => (Number.isSafeInteger(x) && (x as number) >= 0 && (x as number) <= MAX_COOLDOWN_S ? undefined : 'wrong_shape'),
@@ -115,15 +119,18 @@ const CONFIG_KEYS: Record<string, (x: unknown) => Refusal | undefined> = {
   aws: (x) => (isObject(x) ? undefined : 'wrong_shape'),
 };
 
-/** Why config.json is refused, if it is: the first unknown key (in the order JSON.parse keeps, which puts integer-like
- *  keys first), else the first shape that's wrong (the wrong shape before an unknown policy or a bad budget). */
+/** Why config.json is refused, if it is, naming the key (§9) so the person knows which line to fix: the first unknown
+ *  key (in the order JSON.parse keeps, which puts integer-like keys first), else the first key whose value is wrong (the
+ *  wrong shape before an unknown policy or a bad budget). */
 function configWhy(x: unknown): Refusal | undefined {
   if (!isObject(x)) return 'wrong_shape';
   const unknown = Object.keys(x).find((k) => !Object.hasOwn(CONFIG_KEYS, k));
   if (unknown !== undefined) return { why: 'wrong_shape', key: unknown };
-  const whys = Object.entries(x).map(([k, v]) => CONFIG_KEYS[k]!(v)).filter((w) => w !== undefined);
-  const why = (w: Refusal) => (typeof w === 'string' ? w : w.why);
-  return whys.find((w) => why(w) === 'wrong_shape') ?? whys[0];
+  const whys = Object.entries(x).flatMap(([k, v]) => {
+    const w = CONFIG_KEYS[k]!(v);
+    return w === undefined ? [] : [typeof w === 'string' ? { why: w, key: k } : w];
+  });
+  return whys.find((w) => w.why === 'wrong_shape') ?? whys[0];
 }
 
 function readJson<T>(home: string, name: 'lock.json' | 'config.json', empty: T, why: (x: unknown) => Refusal | undefined): T {

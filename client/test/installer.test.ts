@@ -1027,7 +1027,7 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
       '{"cooldown": 31536001}',
       '{"cooldown": 1.5}',
     ].map((b) => ({ file: 'config.json' as const, why: 'wrong_shape', bytes: () => b })),
-    { file: 'config.json', why: 'unknown_policy', bytes: () => '{"overrides": {"runner": "Pin"}}' },
+    { file: 'config.json', why: 'unknown_policy', key: 'overrides.runner', bytes: () => '{"overrides": {"runner": "Pin"}}' },
   ];
 
   it('the setup keys, well formed, are read as they are (a whole budget written as 5000.0, the largest safe one, empty lists)', async () => {
@@ -1042,6 +1042,15 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
       expect(readFileSync(join(p.home, 'config.json'), 'utf8')).toBe(bytes);
     }
   });
+
+  // A config.json refusal tied to one key names it (§9): the row's own key, else the one key its file sets. A lock.json
+  // refusal, and a file that isn't JSON or an object, name none.
+  const keyOf = (d: (typeof damages)[number], bytes: string): string | undefined => {
+    if (d.key || d.file !== 'config.json' || d.why === 'not_json') return d.key;
+    const v = JSON.parse(bytes) as unknown;
+    const keys = typeof v === 'object' && v !== null && !Array.isArray(v) ? Object.keys(v) : [];
+    return keys.length === 1 ? keys[0] : undefined;
+  };
 
   // Every damage runs a publish, an install and each installer call (about 14 s alone for all of them, more in a loaded full run).
   it('every installer call refuses it with the file and why, and nothing changes', async () => {
@@ -1067,7 +1076,7 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
       ];
       for (const [what, call] of calls) {
         const e = await refusal(call);
-        expect([what, d.why, e.code, e.data]).toEqual([what, d.why, 'invalid_local_file', { file: d.file, why: d.why, path: file, ...(d.key ? { key: d.key } : {}) }]);
+        expect([what, d.why, e.code, e.data]).toEqual([what, d.why, 'invalid_local_file', { file: d.file, why: d.why, path: file, ...(keyOf(d, bytes) ? { key: keyOf(d, bytes) } : {}) }]);
       }
       expect(readFileSync(file, 'utf8')).toBe(bytes);
       expect(tree(join(userSkills(p), 'runner'))).toEqual(installed);
