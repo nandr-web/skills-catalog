@@ -35,6 +35,8 @@ describe('pending golden rows', () => {
 });
 
 const PENDING: string[] = [
+  // Install and update decide again under the lock from the fresh entry.
+  'histories.histories.under_lock',
   // Held-update examples that need the installer to check for commands run at load, and the rules reviewer's findings.
   'policy.cases[40]',
   'policy.cases[46]',
