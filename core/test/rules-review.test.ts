@@ -101,31 +101,33 @@ describe('the rules reviewer against the golden rows (skills.rules_review)', () 
     }
   });
 
-  // Each size is timed best of 3, and a check that misses is measured once more (other test files can stall one run);
-  // doubling the size may take max_growth times as long, plus 20 ms of timer noise.
+  // As the golden says: each size is the best of `samples` runs; every size stays under max_ms; doubling the size takes at
+  // most max_growth times as long, checked only where the larger time is over min_ms_for_growth (a few milliseconds are
+  // noise on a busy machine); a miss is measured again with fresh samples, `remeasure_on_miss` times.
   describe('a hostile line can\'t stall the review (timing)', () => {
-    const { sizes, max_ms: maxMs, max_growth: maxGrowth } = golden.timing as { sizes: number[]; max_ms: number; max_growth: number };
+    const t = golden.timing as { sizes: number[]; samples: number; max_ms: number; max_growth: number; min_ms_for_growth: number; remeasure_on_miss: number };
     const time = (run: () => unknown) => {
       let best = Infinity;
-      for (let i = 0; i < 3; i++) {
-        const t = performance.now();
+      for (let i = 0; i < t.samples; i++) {
+        const start = performance.now();
         run();
-        best = Math.min(best, performance.now() - t);
+        best = Math.min(best, performance.now() - start);
       }
       return best;
     };
+    const fits = (ms: number[]) =>
+      ms.every((x) => x < t.max_ms) && ms.slice(1).every((x, i) => x <= t.min_ms_for_growth || x <= t.max_growth * ms[i]!);
     for (const row of golden.timing.lines as { id: string; unit: string; expect: string | null }[]) {
       it(row.id, () => {
-        const inputs = sizes.map((size) => {
+        const inputs = t.sizes.map((size) => {
           const unitBytes = Buffer.byteLength(row.unit);
           return side({ 'SKILL.md': head + row.unit.repeat(Math.ceil(size / unitBytes)) + '\n' });
         });
         for (const input of inputs) expect(injected(reviewFlags(null, input)).map((f) => f.detail)).toEqual(row.expect === null ? [] : [row.expect]);
         const measure = () => inputs.map((input) => time(() => reviewFlags(null, input)));
-        const fits = (ms: number[]) => ms.every((t) => t < maxMs) && ms.slice(1).every((t, i) => t <= maxGrowth * ms[i]! + 20);
         let ms = measure();
-        if (!fits(ms)) ms = measure();
-        expect(ms.map((t) => Math.round(t)), `${row.id}: under ${maxMs} ms each, at most ${maxGrowth}x per doubling`).toSatisfy(() => fits(ms));
+        for (let again = 0; again < t.remeasure_on_miss && !fits(ms); again++) ms = measure();
+        expect(fits(ms), `${row.id}: ${ms.map((x) => x.toFixed(1)).join(', ')} ms; under ${t.max_ms} ms each, at most ${t.max_growth}x per doubling over ${t.min_ms_for_growth} ms`).toBe(true);
       }, 60_000);
     }
   });

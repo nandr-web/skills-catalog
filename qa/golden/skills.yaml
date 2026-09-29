@@ -459,14 +459,19 @@ rules_review:
     - {id: budget-config-over, budget: 100, bytes: 401, expect: "about 101 tokens (budget 100)"}
     - {id: budget-config-at, budget: 100, bytes: 400, expect: null}
     - {id: multibyte, bytes: 20002, fill: "é", expect: "about 5001 tokens (budget 5000)", note: "UTF-8 bytes, not characters: about 10,000 characters"}
-  # timing: each line is `unit` repeated to `sizes` bytes (under the 1 MB file limit), on a first install. The review of
-  # every size stays under max_ms, and doubling the size never more than max_growth times the time (linear, no
-  # backtracking: "a hostile line can't stall the review"). One pathological line per rule, and none of them flags except
-  # where `expect` says.
+  # timing: each line is `unit` repeated to `sizes` bytes (under the 1 MB file limit), on a first install. Each size's time
+  # is the best of `samples` runs. Every size stays under max_ms, and doubling the size is never more than max_growth
+  # times the time, checked only where the larger time is over min_ms_for_growth (a few milliseconds are noise on a busy
+  # machine). A miss is measured once more with fresh samples and fails only if it misses again (as perf does). Linear,
+  # no backtracking: "a hostile line can't stall the review". One pathological line per rule, and none of them flags
+  # except where `expect` says.
   timing:
     sizes: [100000, 200000, 400000]
+    samples: 5
     max_ms: 250
     max_growth: 2.5
+    min_ms_for_growth: 20
+    remeasure_on_miss: 1
     lines:
       - {id: emoji-selectors, unit: "❤️", expect: null, note: "every character takes the emoji-sequence check"}
       - {id: ignore-no-noun, unit: "ignore all previous ", expect: null}
