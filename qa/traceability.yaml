@@ -416,6 +416,7 @@ requirements:
     oracles: [setup-one-config, teardown-restores]
     checks:
       - {layer: setup, name: "wizard through a pseudo-terminal: Enter at the auto-update prompt means yes; AWS prompt defaults to no", auto: true}
+      - {layer: setup, name: "setup writes only its own entries (one MCP server in .claude.json, one SessionStart group and the 8 allow rules in settings.json) byte for byte by the agreed layout, keeps every other byte, backs each changed file up (two kept), refuses a link, an unusable or foreign file, a race it can't win, sudo, a folder that isn't private, an unsafe install folder and CLAUDE_CONFIG_DIR without SKILLS_ASSISTANT_HOME, changing nothing; teardown gives the input back byte for byte and leaves what the person changed; the hook exits 0 within 2.5 s and never opens the transcript; claude is never started (golden/setup.yaml)", auto: true}
       - {layer: setup, name: "--yes means auto-updates on and hosting local", auto: true}
       - {layer: agent, name: A12 set it up from the README's hand-off prompt, golden: agent.A12, auto: true}
       - {layer: agent, name: "A12s a vague ask never touches the assistant's own settings", golden: agent.A12s, auto: true}

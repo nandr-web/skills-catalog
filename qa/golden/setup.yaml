@@ -1,0 +1,274 @@
+# Guided setup, teardown and the session-start hook (P1b): contract §3, §4.5, §6, §9 (f346e12e, 9f73a75a, 58c294c9) and
+# setup-build-notes.md (its tests table is the case list; its "Byte pins for the goldens" fix the layout).
+#
+# Every run is in the sandbox: SKILLS_HOME=$H, SKILLS_ASSISTANT_HOME=$A, SKILLS_MANAGED_SETTINGS=$M, and no other SKILLS_*
+# variable unless a row adds one. A tripwire `claude` sits first on PATH and fails the run if it's ever executed; the
+# fail-safe fails any write under the real home or ~/.claude. Paths in expected text are written with these placeholders:
+#   $A, $H, $M      the sandbox's folders (real paths, no trailing slash)
+#   <node>          process.execPath of the run (realpath)
+#   <script>        the realpath of the file the package's bin names
+#   <id>            the SKILLS_SETUP_ID setup made (32 lowercase hex); the runner reads it from the record, then checks it
+#                   appears exactly where the text below puts it
+#   <line>          the hook line below, JSON-escaped where it sits in JSON
+# Files: `claude_json` is $A/.claude.json, `settings_json` is $A/.claude/settings.json, `record` is $H/setup-record.json.
+# A file given as {text, crlf?, final_newline?} is that text with LF turned into CRLF when crlf is true, and without its
+# last newline when final_newline is false (YAML's block text always ends in one). `absent` means no file.
+# `unchanged` means bytes, inode and mtime (nanoseconds) all equal what they were before the run.
+# `backups`: the number of files in $H/backups/ named ^\d{8}T\d{6}Z-[0-9a-f]{4}-(claude\.json|settings\.json)$, per file;
+# each equals the bytes the file had just before that run changed it.
+
+setup:
+  pending: "guided setup, teardown and the session-start hook (P1b)"
+  mcp_entry: |-
+    {
+      "type": "stdio",
+      "command": "<node>",
+      "args": [
+        "<script>",
+        "mcp"
+      ],
+      "env": {
+        "SKILLS_SETUP_ID": "<id>",
+        "SKILLS_HOME": "$H",
+        "SKILLS_ASSISTANT_HOME": "$A",
+        "SKILLS_MANAGED_SETTINGS": "$M"
+      }
+    }
+  hook_line: "SKILLS_HOME='$H' SKILLS_ASSISTANT_HOME='$A' SKILLS_MANAGED_SETTINGS='$M' '<node>' '<script>' hook session-start --setup-id <id> 2>/dev/null || true"
+  allow_rules:
+    - mcp__skills-catalog__search_shared_skills
+    - mcp__skills-catalog__read_shared_skill
+    - mcp__skills-catalog__list_shared_skill_versions
+    - mcp__skills-catalog__diff_shared_skill_versions
+    - mcp__skills-catalog__list_installed_skills
+    - mcp__skills-catalog__install_shared_skill
+    - mcp__skills-catalog__update_installed_skills
+    - Bash(skills-catalog update)
+  never_rules: [mcp__skills-catalog, "mcp__skills-catalog__*", mcp__skills-catalog__accept_held_update, mcp__skills-catalog__publish_skill_to_catalog, mcp__skills-catalog__preview_skill_publish, mcp__skills-catalog__set_skill_update_policy, mcp__skills-catalog__setup, mcp__skills-catalog__teardown]
+
+  fresh:
+    claude_json: |
+      {
+        "mcpServers": {
+          "skills-catalog": {
+            "type": "stdio",
+            "command": "<node>",
+            "args": [
+              "<script>",
+              "mcp"
+            ],
+            "env": {
+              "SKILLS_SETUP_ID": "<id>",
+              "SKILLS_HOME": "$H",
+              "SKILLS_ASSISTANT_HOME": "$A",
+              "SKILLS_MANAGED_SETTINGS": "$M"
+            }
+          }
+        }
+      }
+    settings_json: |
+      {
+        "hooks": {
+          "SessionStart": [
+            {
+              "hooks": [
+                {
+                  "type": "command",
+                  "command": "<line>",
+                  "timeout": 10
+                }
+              ]
+            }
+          ]
+        },
+        "permissions": {
+          "allow": [
+            "mcp__skills-catalog__search_shared_skills",
+            "mcp__skills-catalog__read_shared_skill",
+            "mcp__skills-catalog__list_shared_skill_versions",
+            "mcp__skills-catalog__diff_shared_skill_versions",
+            "mcp__skills-catalog__list_installed_skills",
+            "mcp__skills-catalog__install_shared_skill",
+            "mcp__skills-catalog__update_installed_skills",
+            "Bash(skills-catalog update)"
+          ]
+        }
+      }
+
+  # A person's files with other keys: tabs and CRLF with no final newline, a number past 2^53, 1.0, an escape, a raw
+  # non-ASCII character, integer-like keys out of order, another MCP server; and a 4-space settings file with another
+  # SessionStart group and other rules. Only setup's spans may change.
+  kept_input:
+    claude_json:
+      crlf: true
+      final_newline: false
+      text: |
+        {
+        	"numStartups": 12345678901234567890,
+        	"ratio": 1.0,
+        	"name": "\u00e9 é",
+        	"10": "ten",
+        	"2": "two",
+        	"mcpServers": {
+        		"other": {
+        			"type": "stdio",
+        			"command": "/opt/other/bin/server"
+        		}
+        	}
+        }
+    settings_json:
+      text: |
+        {
+            "model": "opus",
+            "hooks": {
+                "SessionStart": [
+                    {
+                        "matcher": "startup",
+                        "hooks": [
+                            {"type": "command", "command": "echo hi"}
+                        ]
+                    }
+                ]
+            },
+            "permissions": {
+                "allow": [
+                    "Bash(git *)"
+                ],
+                "deny": []
+            }
+        }
+  kept_expected:
+    claude_json:
+      crlf: true
+      final_newline: false
+      text: |
+        {
+        	"numStartups": 12345678901234567890,
+        	"ratio": 1.0,
+        	"name": "\u00e9 é",
+        	"10": "ten",
+        	"2": "two",
+        	"mcpServers": {
+        		"other": {
+        			"type": "stdio",
+        			"command": "/opt/other/bin/server"
+        		},
+        		"skills-catalog": {
+        			"type": "stdio",
+        			"command": "<node>",
+        			"args": [
+        				"<script>",
+        				"mcp"
+        			],
+        			"env": {
+        				"SKILLS_SETUP_ID": "<id>",
+        				"SKILLS_HOME": "$H",
+        				"SKILLS_ASSISTANT_HOME": "$A",
+        				"SKILLS_MANAGED_SETTINGS": "$M"
+        			}
+        		}
+        	}
+        }
+    settings_json:
+      text: |
+        {
+            "model": "opus",
+            "hooks": {
+                "SessionStart": [
+                    {
+                        "matcher": "startup",
+                        "hooks": [
+                            {"type": "command", "command": "echo hi"}
+                        ]
+                    },
+                    {
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "<line>",
+                                "timeout": 10
+                            }
+                        ]
+                    }
+                ]
+            },
+            "permissions": {
+                "allow": [
+                    "Bash(git *)",
+                    "mcp__skills-catalog__search_shared_skills",
+                    "mcp__skills-catalog__read_shared_skill",
+                    "mcp__skills-catalog__list_shared_skill_versions",
+                    "mcp__skills-catalog__diff_shared_skill_versions",
+                    "mcp__skills-catalog__list_installed_skills",
+                    "mcp__skills-catalog__install_shared_skill",
+                    "mcp__skills-catalog__update_installed_skills",
+                    "Bash(skills-catalog update)"
+                ],
+                "deny": []
+            }
+        }
+
+  # `before`: files and state before the run (fresh: nothing under $A). `run`: the commands in order, each as the
+  # person's CLI with `--yes` unless the row says otherwise. `expect`: after the last command (or per step when a list).
+  cases:
+    - {id: fresh-home, before: {}, run: [setup], expect: {exit: 0, claude_json: fresh.claude_json, settings_json: fresh.settings_json, modes: {claude_json: "0600", settings_json: "0600", claude_dir: "0700"}, backups: {claude_json: 0, settings_json: 0}, record: {entries: [mcp_entry, hook_group, allow_rules]}, config_json: one}}
+    - {id: other-keys-kept, before: {claude_json: kept_input.claude_json, settings_json: kept_input.settings_json}, run: [setup], expect: {exit: 0, claude_json: kept_expected.claude_json, settings_json: kept_expected.settings_json, backups: {claude_json: 1, settings_json: 1}, backups_equal_input: true, modes_kept: true}}
+    - {id: rerun, before: {after: [setup]}, run: [setup], expect: {exit: 0, claude_json: unchanged, settings_json: unchanged, backups: {claude_json: 0, settings_json: 0}, no_file_written: true}, note: "nothing to do: no write, no backup, inode and mtime kept"}
+    - {id: rerun-node-moved, before: {after: [setup]}, run: [{setup: {node: "<node2>"}}], expect: {exit: 0, claude_json: "fresh.claude_json with <node> as <node2>", settings_json: "fresh.settings_json with <node> as <node2>", backups: {claude_json: 1, settings_json: 1}, same_position: true}, note: "setup's recorded entry, now different from this run's: replaced in place. <node2> is another node binary the runner copies into the sandbox"}
+    - {id: name-taken, before: {claude_json: {text: "{\n  \"mcpServers\": {\n    \"skills-catalog\": {\"type\": \"stdio\", \"command\": \"/opt/mine/server\"}\n  }\n}\n"}}, run: [setup], expect: {exit: 1, error: name_taken, fields: {path: "$A/.claude.json", name: skills-catalog}, claude_json: unchanged, settings_json: absent, nothing_created: true}}
+    - {id: setup-entry-edited-then-rerun, before: {after: [setup], edit: {claude_json: "mcpServers.skills-catalog.args[1] = \"serve\""}}, run: [setup], expect: {exit: 1, error: name_taken, claude_json: unchanged, settings_json: unchanged}, note: "setup's own entry the person changed isn't setup's any more"}
+    # links, one place at a time; each link points at a sandbox file that must stay as it was
+    - {id: link-claude-json, before: {claude_json: {link_to: "$RUN/outside/claude.json"}}, run: [setup], expect: {exit: 1, error: assistant_file_unusable, fields: {path: "$A/.claude.json", why: link}, link_and_target_unchanged: true, nothing_created: true, by_hand_entries: true}, pending: words}
+    - {id: link-claude-dir, before: {claude_dir: {link_to: "$RUN/outside/claude-dir"}}, run: [setup], expect: {exit: 1, error: target_symlink, fields: {path: "$A/.claude"}, link_and_target_unchanged: true, nothing_created: true}}
+    - {id: link-settings-json, before: {settings_json: {link_to: "$RUN/outside/settings.json"}}, run: [setup], expect: {exit: 1, error: assistant_file_unusable, fields: {path: "$A/.claude/settings.json", why: link}, link_and_target_unchanged: true, nothing_created: true, by_hand_entries: true}, pending: words}
+    - {id: link-backups, before: {after: [setup], edit: {settings_json: "permissions.allow removed"}, backups_dir: {link_to: "$RUN/outside/backups"}}, run: [setup], expect: {exit: 1, error: target_symlink, fields: {path: "$H/backups"}, link_and_target_unchanged: true, claude_json: unchanged, settings_json: unchanged}, note: "the backup folder is checked before anything is written"}
+    - {id: link-record, before: {record: {link_to: "$RUN/outside/record.json"}}, run: [setup], expect: {exit: 1, error: invalid_local_file, fields: {file: setup-record.json, why: link}, link_and_target_unchanged: true, nothing_created_under_A: true}}
+    - {id: link-setup-lock, before: {setup_lock: {link_to: "$RUN/outside/lock"}}, run: [setup], expect: {exit: 1, error: lock_busy, fields: {pid: null}, waited_s: [5, 7], link_and_target_unchanged: true, nothing_created_under_A: true}}
+    # unusable files (each for .claude.json and for settings.json: `file` names which)
+    - {id: unusable, each: {file: [claude_json, settings_json], fault: [too_big, not_json, bom, bad_utf8, duplicate_key, wrong_type_mcpServers, wrong_type_session_start, wrong_type_allow, other_user, hard_linked]}, run: [setup], expect: {exit: 1, error: assistant_file_unusable, why_by_fault: {too_big: too_big, not_json: not_json, bom: not_json, bad_utf8: not_json, duplicate_key: duplicate_key, wrong_type_mcpServers: wrong_type, wrong_type_session_start: wrong_type, wrong_type_allow: wrong_type, other_user: other_user, hard_linked: hard_linked}, key_by_fault: {duplicate_key: mcpServers, wrong_type_mcpServers: mcpServers, wrong_type_session_start: hooks.SessionStart, wrong_type_allow: permissions.allow}, both_files_unchanged: true, nothing_created: true, output_never_contains: "QA-SENTINEL-$RUN_ID"}, note: "each faulty file holds the sentinel; too_big is the cap + 1 byte (32 MiB for .claude.json, 1 MiB for settings.json) of valid JSON padded with spaces; wrong_type sets mcpServers: [] / hooks.SessionStart: {} / permissions.allow: \"x\" (only the one that belongs in that file); other_user is stat rewritten through the test seam"}
+    # races (the runner's seam after_read)
+    - {id: changed-once, before: {claude_json: kept_input.claude_json}, seam: {after_read: {claude_json: {times: 1, write: "adds \"projects\": {} as the last top-level member"}}}, run: [setup], expect: {exit: 0, claude_json_has: [projects, mcpServers.skills-catalog], claude_json_rest_as: "kept_expected.claude_json plus the other writer's member"}}
+    - {id: changed-every-time, before: {claude_json: kept_input.claude_json}, seam: {after_read: {claude_json: {times: every, write: "adds a new top-level member each time"}}}, run: [setup], expect: {exit: 1, error: assistant_file_changed, fields: {path: "$A/.claude.json"}, claude_json: "as the other writer last left it", temp_files: none, attempts: 3}}
+    - {id: appeared-meanwhile, before: {}, seam: {after_read: {claude_json: {times: 1, create: "{\n  \"projects\": {}\n}\n"}}}, run: [setup], expect: {exit: 0, claude_json_has: [projects, mcpServers.skills-catalog], no_clobber: true}}
+    - {id: crash-after-first-file, before: {}, seam: {after_rename: {claude_json: crash}}, run: [setup, setup, teardown], expect: [{exit: 1, record_states: {claude_json: written, settings_json: pending}}, {exit: 0, claude_json: fresh.claude_json, settings_json: fresh.settings_json}, {exit: 0, claude_json: absent, settings_json: absent}], note: "teardown after the finished rerun gives back the start: both files setup created are gone"}
+    # answers
+    - {id: no-terminal, before: {}, run: [{setup: {yes: false, tty: false}}], expect: {exit: 3, words: setup.no_terminal, lists_every_question_with_flag: true, nothing_created: true}}
+    - {id: three-ways-same, before: {}, run: [{setup: {yes: true}}, {setup: {config: "the same answers as a file"}}, {setup: {wizard: "the same answers typed"}}], expect: {exit: 0, same_files_byte_for_byte: true}, note: "each in a fresh sandbox; <id> differs, so compare with each run's own <id> substituted"}
+    - {id: config-refusals, each: {config: [{accept_flagged_updates: true}, {unknown_key: 1}, {flag_contradicts: "--for claude-code with a file answering another"}]}, run: [setup], expect: {exit: 1, error: invalid_request, field_by_case: [accept_flagged_updates, unknown_key, for], why_by_case: [null, unknown_field, contradicting_flags], nothing_created: true}}
+    - {id: dry-run, before: {claude_json: kept_input.claude_json, settings_json: kept_input.settings_json}, run: [{setup: {dry_run: true}}], expect: {exit: 0, claude_json: unchanged, settings_json: unchanged, nothing_created: true}, pending: words}
+    # teardown
+    - {id: teardown-untouched, before: {claude_json: kept_input.claude_json, settings_json: kept_input.settings_json}, run: [setup, teardown], expect: {exit: 0, claude_json: kept_input.claude_json, settings_json: kept_input.settings_json, backups: {claude_json: 2, settings_json: 2}}, note: "byte for byte the input; backups kept"}
+    - {id: teardown-fresh-created, before: {}, run: [setup, teardown], expect: {exit: 0, claude_json: absent, settings_json: absent, claude_dir: kept}, note: "files setup created from nothing and nobody changed are deleted; the .claude folder stays"}
+    - {id: teardown-edited-around, before: {after: [setup], edit: {claude_json: "adds another server before and after setup's", settings_json: "adds a hook group before and after setup's, reorders the person's rules"}}, run: [teardown], expect: {exit: 0, setup_entries_gone: true, rest_byte_for_byte_as_person_left: true}}
+    - {id: teardown-entry-edited, before: {after: [setup], edit: {claude_json: "mcpServers.skills-catalog.args[1] = \"serve\""}}, run: [teardown], expect: {exit: 0, claude_json: unchanged, settings_json_setup_entries_gone: true, named_left: [mcp_entry]}, pending: words}
+    - {id: teardown-rule-was-there, before: {settings_json: {text: "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(skills-catalog update)\"\n    ]\n  }\n}\n"}}, run: [setup, teardown], expect: {exit: 0, settings_json: "as before setup, the rule kept"}}
+    - {id: teardown-damaged-lock-config, before: {after: [setup], lock_json: {raw: "not json"}, config_json: {raw: "not json"}}, run: [teardown], expect: {exit: 0, claude_json: absent, settings_json: absent, lock_json: unchanged, config_json: unchanged, named_damaged: [lock.json, config.json]}, pending: words}
+    - {id: teardown-damaged-record, before: {after: [setup], record: {raw: "not json"}}, run: [teardown], expect: {exit: 1, claude_json: unchanged, settings_json: unchanged, named_not_removed: [mcp_entry, hook_group]}, pending: words}
+    - {id: teardown-record-elsewhere, before: {after: [setup], record_adds: {created_file: "$RUN/outside/other.json"}, outside_file: "$RUN/outside/other.json"}, run: [teardown], expect: {exit: 0, outside_unchanged: true, never_opened: "$RUN/outside/other.json", named: not_here}, pending: words}
+    # what setup reads and reports
+    - {id: person-only-rules, each: {file: [user, project, managed], rule: ["Bash(*)", "Bash(skills-catalog *)", "Bash(skills-catalog:*)", "Bash(skills-catalog update *)", "Bash(skills-catalog update * --accept)", "Bash(skills-catalog publish *)", "mcp__skills-catalog__*", mcp__skills-catalog]}, run: [setup], expect: {exit: 0, named_with_file: true}, pending: words}
+    - {id: generated-rules-never-person-only, run: [setup], expect: {no_generated_rule_matches: ["skills-catalog update x --accept", "skills-catalog clear-kept", "skills-catalog publish x --confirm c --name x --version 1 --files 1 --flags none --allow-suspected-secrets", accept_held_update, publish_skill_to_catalog]}, note: "a unit check over allow_rules: none matches a probe"}
+    - {id: read-rule-not-person-only, before: {settings_json: {text: "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(skills-catalog read *)\"\n    ]\n  }\n}\n"}}, run: [setup], expect: {exit: 0, not_named: "Bash(skills-catalog read *)"}, pending: words}
+    - {id: read-rules-switch, run: [{setup: {read_rules_switch: on}}], expect: {allow_rules_plus: ["Bash(skills-catalog search *)", "Bash(skills-catalog read *)", "Bash(skills-catalog versions *)", "Bash(skills-catalog diff *)", "Bash(skills-catalog list *)"]}, pending: "the read rules' switch stays off until the permissions docs cover a redirection under an allow rule"}
+    - {id: permissive-and-unknown, each: {mode: [auto, bypass, sandbox_auto_allow, broad_bash_rule, unknown]}, run: [setup], expect: {exit: 0, words_by_mode: {unknown: updates_permissive_unknown, default: updates_permissive_now}}, pending: words}
+    - {id: sudo, each: {as: [{uid_differs: "stat rewritten"}, {uid: 0, SUDO_USER: person}]}, run: [setup], expect: {exit: 1, error: target_not_private, fields: {own: false}, nothing_created: true, never_created: ["$H", "$H/setup.lock", "$A/.claude"]}}
+    - {id: skills-home-not-private, each: {skills_home: [{mode: "0777"}, {owner: other_user}]}, run: [setup], expect: {exit: 1, error: target_not_private, nothing_created: true}}
+    - {id: install-folder, each: {script: [{under: "_npx", why: temporary}, {under: "$TMPDIR", why: temporary}, {under: "a world-writable folder without the sticky bit", why: writable_by_others}, {path_has: "$", why: path_characters}, {dependency: "node_modules/yaml world-writable", why: writable_by_others}, {dependency: "the linked core, another user's", why: writable_by_others}]}, run: [setup], expect: {exit: 1, error: install_unsafe, why_by_case: true, nothing_created: true}}
+    - {id: backups-kept-two, before: {claude_json: kept_input.claude_json, stray: "$H/backups/notes.txt"}, run: [setup, teardown, setup, teardown], expect: {exit: 0, backups: {claude_json: 2, settings_json: 2}, stray_unchanged: true, gitignore: {"$H/.gitignore": "*\n", "$H/backups/.gitignore": "*\n"}}, note: "four runs each change .claude.json; the two newest of each file stay, and the stray file is never read"}
+    - {id: inside-claude-code, env: {CLAUDECODE: "1"}, run: [setup], expect: {exit: 0, first_line_words: setup.next_claude_code}, pending: words}
+    - {id: config-moved, env: {CLAUDE_CONFIG_DIR: "$RUN/claude-config"}, env_unset: [SKILLS_ASSISTANT_HOME], run: [setup], expect: {exit: 1, error: assistant_config_elsewhere, fields: {setting: CLAUDE_CONFIG_DIR}, nothing_created: true, by_hand_entries: true}, note: "with SKILLS_ASSISTANT_HOME unset the runner points HOME's stand-in through the code's own parameter, never HOME"}
+    - {id: config-moved-with-home-set, env: {CLAUDE_CONFIG_DIR: "$RUN/claude-config"}, run: [setup], expect: {exit: 0, claude_json: fresh.claude_json, config_json_has: {claude_config_dir: "$RUN/claude-config"}}, note: "SKILLS_ASSISTANT_HOME set: setup goes on and records claude_config_dir (b8522dc3)"}
+    - {id: managed-policy, each: {managed: ["managed-mcp.json present", {allowManagedMcpServersOnly: true}, {allowedMcpServers: [{serverName: other}]}, {deniedMcpServers: [{serverName: skills-catalog}]}, {strictPluginOnlyCustomization: true}, {allowManagedHooksOnly: true}, {disableAllHooks: true}]}, run: [setup], expect: {exit: 0, one_line_each: true}, pending: words}
+    - {id: apostrophe-path, env: {SKILLS_HOME: "$RUN/o'neil/skills-home"}, script_under: "$RUN/o'neil/pkg", run: [setup], expect: {exit: 0, hook_line: "SKILLS_HOME='$RUN/o'\\''neil/skills-home' SKILLS_ASSISTANT_HOME='$A' SKILLS_MANAGED_SETTINGS='$M' '<node>' '$RUN/o'\\''neil/pkg/<bin>' hook session-start --setup-id <id> 2>/dev/null || true", sh_c_runs_with: {argv_1: "$RUN/o'neil/pkg/<bin>", env: {SKILLS_HOME: "$RUN/o'neil/skills-home"}}}, note: "a stand-in script at <bin> records its argv and environment; `sh -c` on the line must hand it these exact values"}
+    # the hook
+    - {id: hook-entry-gone, before: {after: [setup], edit: {claude_json: "mcpServers.skills-catalog removed"}}, run: [hook], expect: {exit: 0, words: "the missing-entry line: run setup again"}, pending: words}
+    - {id: hook, each: {state: [nothing_held, two_held, damaged_lock, thrown_error, sync_hangs]}, run: [hook], expect: {exit: 0, within_s: 2.5, stdout_by_state: {nothing_held: "", two_held: "one JSON object: systemMessage (update.held_hook_person) and hookSpecificOutput {hookEventName: SessionStart, additionalContext (update.held_hook_context)}", damaged_lock: "§4.5's one fixed line", thrown_error: "", sync_hangs: ""}, never_opens: transcript_path}, note: "stdin carries a transcript_path the fail-safe watches"}
+    - {id: never-starts-claude, run: [setup, hook, teardown], expect: {tripwire_untouched: true}, note: "every row checks this too; here on its own"}
+  property:
+    note: >-
+      Generated JSON files through setup then teardown give back the input byte for byte, and setup alone changes no byte
+      outside its spans (the text before the first changed byte and after the last is the input's). 200 cases from
+      these seeds, with random nesting (up to 64 deep), numbers (exponents, -0, 2^53+1), escapes (\u, surrogate pairs),
+      whitespace (tabs, CRLF, none), and each of the containers present, empty, on one line, or absent.
+    seeds: [1, 2, 3, 5, 8, 13, 21, 34, 55, 89]
+    cases: 200
