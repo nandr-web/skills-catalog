@@ -238,6 +238,19 @@ describe('a changed fence line in a file with a ```! block counts as running a c
     const got = loads(text('x', '~~~\n~~~\n'), text('y', '')).map((f) => [f.line, f.detail]);
     expect(got).toEqual([[1, '```!'], [4104, '```']]);
   }, 60_000);
+  it('about 3,900 fence lines removed all through a megabyte, in linear time (the removals grow with the file)', () => {
+    // every 52nd line of 200,000 is a removed fence: 3,847 removals, under the line diff's 4,000, so it doesn't give up
+    const versions = (scale: number) => {
+      const n = Math.round(200_000 * scale);
+      const lines = Array.from({ length: n }, (_, i) => (i % 2 ? `text ${i % 997}` : '```'));
+      const body = (l: string[]) => `\`\`\`!\necho a\n\`\`\`\n${l.join('\n')}\n`;
+      return [body(lines), body(lines.filter((_, i) => i % 52 !== 0))] as const;
+    };
+    const [before, after] = versions(1);
+    expect(Buffer.byteLength(before)).toBeGreaterThan(1_000_000);
+    expect(loads(before, after).filter((f) => f.detail.startsWith('fence removed')).length).toBeGreaterThan(3_800);
+    expectLinear('3,900 removals through a megabyte', versions, ([a, b]) => loads(a, b));
+  }, 120_000);
   it('fence lines removed in a megabyte of them, each where it was, in linear time', () => {
     const lines = (scale: number) => Array.from({ length: Math.round(100_000 * scale) }, (_, i) => (i % 2 ? 'text' : '```'));
     const body = (l: string[]) => `\`\`\`!\necho a\n\`\`\`\n${l.join('\n')}\n`;
