@@ -67,7 +67,9 @@ describe('waiting for free ports', () => {
     await expect(waitForFreePorts({ count: async () => 9000, limit: 4000, timeoutMs: 50, pollMs: 10 })).rejects.toThrow(/9000 local ports.*4000/);
   });
 
-  it('a machine where the count cannot be read goes on (the lock still holds)', async () => {
-    await waitForFreePorts({ count: async () => undefined, limit: 4000, timeoutMs: 50, pollMs: 10 });
+  it('a machine where the count cannot be read never starts a run blind: it keeps asking, then refuses', async () => {
+    let asked = 0;
+    await expect(waitForFreePorts({ count: async () => (asked++, undefined), limit: 4000, timeoutMs: 50, pollMs: 10 })).rejects.toThrow(/can't count local ports waiting to close.*won't start blind/);
+    expect(asked).toBeGreaterThan(1);
   });
 });
