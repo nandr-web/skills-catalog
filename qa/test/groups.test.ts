@@ -4,6 +4,7 @@
 import { spawn } from 'node:child_process';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { groupIsOurs, running, signalGroup } from '../src/groups.ts';
+import { pidFrom } from '../src/pids.ts';
 import { spawnDetached } from './machine.ts';
 
 const G = 2 ** 30;   // above any system's highest pid: a real signal to it could reach no one
@@ -38,12 +39,14 @@ describe('signalling a group qa started', () => {
   it('reaches the members that outlived their leader', { timeout: 15_000 }, async () => {
     // The leader starts a sleep in its own group and exits at once; once node has reaped it, the sleep is still there.
     const leader = spawn('/bin/sh', ['-c', '/bin/sleep 30 & echo $!'], { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
-    const member = Number(await new Promise<string>((ok) => leader.stdout!.once('data', (b) => ok(String(b).trim()))));
+    const exited = new Promise((ok) => leader.once('exit', ok));   // listened for at once: it may exit before its line is read
+    const member = pidFrom(await new Promise<string>((ok) => leader.stdout!.once('data', (b) => ok(String(b)))));
     onTestFinished(() => { signalGroup(leader.pid!, 'SIGKILL', leader); });
-    await new Promise((ok) => leader.once('exit', ok));
-    expect(alive(member)).toBe(true);
+    expect(member).toBeGreaterThan(0);
+    await exited;
+    expect(alive(member!)).toBe(true);
     expect(signalGroup(leader.pid!, 'SIGKILL', leader)).toBe(true);
-    expect(await until(() => !alive(member), 5000)).toBe(true);
+    expect(await until(() => !alive(member!), 5000)).toBe(true);
   });
 
   it('reaches a group whose leader is still running', { timeout: 15_000 }, async () => {

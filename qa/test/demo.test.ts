@@ -889,11 +889,12 @@ describe('the director kills only its own leftovers', () => {
     // as the stand-in and its catalog server are
     const script = `const c = require('node:child_process').spawn(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], { env: { PATH: '/usr/bin:/bin', QA_RUN_ID: ${JSON.stringify(id)} }, stdio: 'ignore' }); console.log(c.pid); c.unref();`;
     const leader = spawn(process.execPath, ['-e', script], { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
+    const exited = new Promise((ok) => leader.on('exit', ok));   // listened for at once: it ends right after its line
     const child = pidFrom(await new Promise<string>((ok) => leader.stdout!.once('data', (b) => ok(String(b)))));
     // Only while it's still this run's process: once gone, its number may be someone else's.
     onTestFinished(() => { if (child && runProcesses(id).some((p) => p.pid === child)) { try { process.kill(child, 'SIGKILL'); } catch { /* gone */ } } });
     expect(child).toBeGreaterThan(0);
-    await new Promise((ok) => leader.on('exit', ok));
+    await exited;
     const other = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], { detached: true, stdio: 'ignore', env: { PATH: '/usr/bin:/bin' } });
     onTestFinished(() => { other.kill('SIGKILL'); });
     await new Promise((r) => setTimeout(r, 300));   // both are sleeping by now
