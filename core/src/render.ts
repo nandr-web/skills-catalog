@@ -6,7 +6,7 @@ import { stringify } from 'yaml';
 import { cursorOffset, type DiffResult, type InlineBudget, type ReadItem, type ReadResult, type SearchInput, type SearchResult, type VersionsResult } from './catalog.ts';
 import { CatalogError } from './errors.ts';
 import type { Ids } from './ports.ts';
-import { MANIFEST, type RiskFlag } from './skill-tree/index.ts';
+import { INVISIBLE, MANIFEST, oneLine, type RiskFlag } from './skill-tree/index.ts';
 import type { Surface } from './surface.ts';
 
 // Words the agent-facing surface doesn't have yet (asked for). A test fails when one of them appears in the surface,
@@ -18,6 +18,18 @@ function asData(code: string, data: Record<string, unknown>): string {
 }
 
 const list = (xs: readonly string[]) => xs.join(', ');
+
+// Publisher text shown outside a fence can't forge the product's own lines (contract §5.2): a one-line field (a
+// description, a message, a developer's name) shows a line break or control character as a space, and flag text (a
+// path, a key's old and new values, the detail) shows invisible characters escaped, then is cut to 200 characters.
+const INVISIBLE_ALL = new RegExp(INVISIBLE.source, 'gu');
+export const flagText = (text: string): string => [...text.replace(INVISIBLE_ALL, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`)].slice(0, 200).join('');
+
+// A timestamp shows as its day (UTC), in the surface's date words; the data keeps the full ISO time.
+const day = (s: Surface, iso: string) => {
+  const [yyyy, mm, dd] = iso.slice(0, 10).split('-');
+  return s.format(s.word('date'), { yyyy, mm, dd });
+};
 
 // `req` is the search as asked: its words and, for a later page, its cursor (read here, so no face parses one).
 export function renderSearch(s: Surface, r: SearchResult, req: SearchInput): string {
@@ -36,14 +48,14 @@ export function renderSearch(s: Surface, r: SearchResult, req: SearchInput): str
     // Nothing matched every word: the closest cards, each with the words it shares, never presented as a fit.
     lines = [
       s.format(w.partial_header, { query, ranking }),
-      ...r.results.map((c) => s.format(w.partial_card, { name: c.name, version: c.latest_version, publisher: c.publisher, shared: list(c.matched_words), description: c.description })),
+      ...r.results.map((c) => s.format(w.partial_card, { name: c.name, version: c.latest_version, publisher: oneLine(c.publisher), shared: list(c.matched_words), description: oneLine(c.description) })),
     ];
   } else {
     lines = [
       r.ranking === 'none'
         ? s.format(w.header_all, { total: r.catalog_size, first: offset + 1, last: offset + r.results.length })
         : s.format(w.header, { count: r.total_matches, total: r.catalog_size, query, ranking }),
-      ...r.results.map((c) => s.format(w.card, { name: c.name, version: c.latest_version, publisher: c.publisher, tags: tags(c.tags), description: c.description })),
+      ...r.results.map((c) => s.format(w.card, { name: c.name, version: c.latest_version, publisher: oneLine(c.publisher), tags: tags(c.tags), description: oneLine(c.description) })),
     ];
   }
   if (r.next_cursor) lines.push(s.format(w.more, { cursor: r.next_cursor }));
@@ -61,12 +73,13 @@ const quoted = (path: string) => JSON.stringify(path);
 function renderItem(s: Surface, item: ReadItem, token: string, budget: InlineBudget): string {
   const w = s.word('get');
   const size = (bytes: number) => s.format(w.size, { kb: Math.ceil(bytes / 1024) });
-  const lines = [s.format(w.header, { name: item.name, version: item.version, latest_mark: item.version === item.latest_version ? w.latest_mark.latest : s.format(w.latest_mark.older, { latest: item.latest_version }), publisher: item.publisher, published_at: item.published_at })];
+  const publisher = oneLine(item.publisher);
+  const lines = [s.format(w.header, { name: item.name, version: item.version, latest_mark: item.version === item.latest_version ? w.latest_mark.latest : s.format(w.latest_mark.older, { latest: item.latest_version }), publisher, published_at: day(s, item.published_at) })];
   const body = item.manifest.body;
   const shown = body !== undefined;
   if (shown) {
     const skillMd = `---\n${stringify(item.manifest.frontmatter, { lineWidth: 0 })}---\n${body}`;
-    lines.push(s.format(w.data_note, { publisher: item.publisher }), s.format(w.fence[0], { token }), skillMd.trimEnd(), s.format(w.fence[1], { token }));
+    lines.push(s.format(w.data_note, { publisher }), s.format(w.fence[0], { token }), skillMd.trimEnd(), s.format(w.fence[1], { token }));
   }
   if (item.files) lines.push(s.format(w.files, { files: list(item.files.map((f) => `${quoted(f.path)} (${f.size} B)`)) }));
   for (const f of item.files ?? []) {
@@ -104,7 +117,7 @@ export function renderVersions(s: Surface, r: VersionsResult): string {
   const w = s.word('versions');
   const lines = [
     s.format(w.header, { name: r.name, n: r.latest, latest: r.latest }),
-    ...r.versions.map((v) => s.format(w.line, { version: v.version, published_at: v.published_at, publisher: v.publisher, message: v.message || w.no_message })),
+    ...r.versions.map((v) => s.format(w.line, { version: v.version, published_at: day(s, v.published_at), publisher: oneLine(v.publisher), message: oneLine(v.message) || w.no_message })),
   ];
   if (r.next_cursor) lines.push(s.format(w.more, { cursor: r.next_cursor }));
   if (r.latest > 1) lines.push(s.format(w.next));
@@ -114,10 +127,11 @@ export function renderVersions(s: Surface, r: VersionsResult): string {
 // One sentence per risk flag, from the update gate's reasons.
 export function reasons(s: Surface, flags: readonly RiskFlag[]): string {
   const w = s.word('update.reason');
-  return flags.map((f) => s.format(w[f.kind], { path: f.path ?? '', detail: f.detail })).join('; ');
+  return flags.map((f) => s.format(w[f.kind], { path: flagText(f.path ?? ''), detail: flagText(f.detail) })).join('; ');
 }
 
-export function renderDiff(s: Surface, r: DiffResult): string {
+// `ids` makes the fence token for the changed lines, which are the publishers' data, like a read's text (§5.2).
+export function renderDiff(s: Surface, r: DiffResult, ids: Ids): string {
   if (!s.guided) return JSON.stringify(r);
   const w = s.word('diff');
   if (r.files.length === 0 && !r.publisher_changed) return s.format(w.same, { name: r.name, from: r.from, to: r.to });
@@ -127,23 +141,26 @@ export function renderDiff(s: Surface, r: DiffResult): string {
     const kind = f.flags.executable ? w.kind.executable : f.flags.script ? w.kind.script : f.flags.binary ? w.kind.binary : '';
     lines.push(s.format(w.file, { status: f.status, path: f.path, kind }));
   }
-  const show = (v: unknown) => (v === null ? w.absent : Array.isArray(v) ? list(v.map(String)) : typeof v === 'object' ? JSON.stringify(v) : String(v));
-  for (const c of r.frontmatter_changes) lines.push(s.format(w.frontmatter, { field: c.field, from: show(c.from), to: show(c.to) }));
+  const show = (v: unknown) => (v === null ? w.absent : flagText(Array.isArray(v) ? list(v.map(String)) : typeof v === 'object' ? JSON.stringify(v) : String(v)));
+  for (const c of r.frontmatter_changes) lines.push(s.format(w.frontmatter, { field: flagText(c.field), from: show(c.from), to: show(c.to) }));
   const publisher = r.risk_flags.find((f) => f.kind === 'new_publisher');
-  if (publisher) {
-    const { from, to } = publisher;
-    lines.push(s.format(w.publisher, { from, to }));
-  }
+  if (publisher) lines.push(s.format(w.publisher, { from: flagText(String(publisher.from)), to: flagText(String(publisher.to)) }));
   const hunks = r.files.map((f) => f.unified).filter((u): u is string => !!u);
-  if (hunks.length) lines.push(w.lines_intro, ...hunks.map((u) => u.trimEnd()));
+  if (hunks.length) {
+    const token = ids.next();
+    lines.push(w.lines_intro, w.data_note, s.format(w.fence[0], { token }), ...hunks.map((u) => u.trimEnd()), s.format(w.fence[1], { token }));
+  }
   return lines.join('\n');
 }
 
 export function renderError(s: Surface, e: CatalogError): string {
   if (!s.guided) return JSON.stringify({ error: e.toJSON() });
   const w = s.word('errors');
+  // An error's data can carry a request's or a publisher's text (a path, an owner's name): each shown on one line.
+  const clean = (v: unknown): unknown => (typeof v === 'string' ? oneLine(v) : Array.isArray(v) ? v.map(clean) : v);
+  const data = Object.fromEntries(Object.entries(e.data).map(([k, v]) => [k, clean(v)]));
   // A reason is a code (why: 'unknown_field'); the surface words it once errors.why exists (a listed gap until then).
-  const d: Record<string, unknown> = typeof e.data['why'] === 'string' ? { ...e.data, why: w.why?.[e.data['why'] as string] ?? e.data['why'] } : e.data;
+  const d: Record<string, unknown> = typeof data['why'] === 'string' ? { ...data, why: w.why?.[data['why'] as string] ?? data['why'] } : data;
   const fill = (template: string, fields: Record<string, unknown>) => {
     try {
       return s.format(template, fields);
@@ -199,6 +216,11 @@ export function renderError(s: Surface, e: CatalogError): string {
     }
     case 'internal_error':
       return d['log'] === undefined ? fill(w.internal_error_no_log, d) : fill(w.internal_error, d);
+    case 'invalid_developer_setting': {
+      // A bad developer name from a setting (SKILLS_AS, the MCP server's config, setup's `me`): fix it there.
+      const setting = w.developer_setting?.[String(d['setting'])];
+      return setting === undefined ? asData(e.code, d) : fill(w.invalid_developer_setting, { setting });
+    }
     default: {
       const t = w[e.code];
       return typeof t === 'string' ? fill(t, d) : asData(e.code, d);

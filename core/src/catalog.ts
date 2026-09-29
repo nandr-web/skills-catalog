@@ -14,6 +14,7 @@ import {
   diffTrees,
   entryOf,
   fingerprint as fingerprintOf,
+  hasLineBreakOrControl,
   isText,
   decodeText,
   sha256Hex,
@@ -173,8 +174,11 @@ export interface FetchResult {
 // ---------- helpers ----------
 
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
-// A developer name, the acting identity (the faces check SKILLS_AS and --as with it once, at start).
-export const ACTOR = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+// A developer name, the acting identity (the faces check SKILLS_AS and --as with it once, at start). It follows the
+// skill-name rule (contract §4.1): 1-64 lowercase letters, digits and single hyphens, so it is always one line.
+export const ACTOR = /^(?=.{1,64}$)[a-z0-9]+(-[a-z0-9]+)*$/;
+// No catalog pages this far; a larger offset is a cursor this catalog never gave out.
+const MAX_CURSOR_OFFSET = 1_000_000;
 
 function encodeCursor(offset: number): string {
   return Buffer.from(JSON.stringify({ o: offset })).toString('base64url');
@@ -190,7 +194,7 @@ function decodeCursor(cursor: string | undefined): number {
   if (cursor === undefined) return 0;
   try {
     const o = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')).o;
-    if (Number.isInteger(o) && o >= 0) return o;
+    if (Number.isSafeInteger(o) && o >= 0 && o <= MAX_CURSOR_OFFSET) return o;
   } catch {
     // falls through
   }
@@ -448,6 +452,8 @@ export class Catalog {
   // identity (the given one, else the catalog's), never a field in the request or the front matter.
   async publish(input: unknown, identity: Identity = this.p.identity): Promise<PublishResult> {
     const req = validateInput<PublishInput>('publish_version', input);
+    // A version's message is a one-line field (contract §2, §4.1).
+    if (req.message !== undefined && hasLineBreakOrControl(req.message)) throw new CatalogError('invalid_request', { field: 'message', why: 'control_character' });
     const publisher = checkActor(await identity.actor());
     const name = checkName(req.name);
 

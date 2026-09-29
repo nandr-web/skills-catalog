@@ -487,6 +487,12 @@ describe('search: discoverable, any word, and says how it matched (contract §2)
     expect(cursorOffset(undefined)).toBe(0);
     expect(cursorOffset(first.next_cursor)).toBe(3);
     expect((await errorOf(() => cursorOffset('not-ours'))).data).toMatchObject({ field: 'cursor' });
+    // A cursor this catalog never gave out is invalid_request, never a failed query (and an internal error's log).
+    const cursor = (o: unknown) => Buffer.from(JSON.stringify({ o })).toString('base64url');
+    for (const o of [1e308, 2 ** 53, 1_000_001, -1, 1.5, '3']) {
+      expect((await errorOf(() => catalog.search({ cursor: cursor(o) }))).data, String(o)).toMatchObject({ field: 'cursor', why: 'not_a_cursor' });
+      expect((await errorOf(() => catalog.versions({ name: 'note-1', cursor: cursor(o) }))).data, String(o)).toMatchObject({ field: 'cursor', why: 'not_a_cursor' });
+    }
     expect(checkActor('dev2')).toBe('dev2');
     expect((await errorOf(() => checkActor('Dev 2\n'))).data).toMatchObject({ field: 'as' });
     expect((await errorOf(() => checkActor(undefined))).code).toBe('unauthenticated');

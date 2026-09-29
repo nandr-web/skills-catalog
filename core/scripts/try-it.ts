@@ -101,7 +101,7 @@ try {
   show(renderVersions(surface, await catalog.versions({ name: 'release-note-draft' })));
 
   step('bob', 'compares version 1 with version 2');
-  show(renderDiff(surface, await catalog.diff({ name: 'release-note-draft', from: 1, to: 2 })));
+  show(renderDiff(surface, await catalog.diff({ name: 'release-note-draft', from: 1, to: 2 }), randomIds));
 
   step('bob', 'tries to publish over release-note-draft (only ana, who published it first, may)');
   await refused(() => catalog.publish({ name: 'release-note-draft', files: releaseNotesV1 }, bob));

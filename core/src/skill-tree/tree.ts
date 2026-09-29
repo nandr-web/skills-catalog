@@ -59,7 +59,7 @@ export function fingerprint(entries: readonly { path: string; mode: Mode; sha256
 const CONTROL = /[\u0000-\u001f\u007f]/;
 // Anything that reads as one thing and is another (contract §4.2): any \p{C} code point (format, private-use, unassigned), a
 // line or paragraph separator, a default-ignorable code point, U+2800 Braille blank, or a space other than the plain one.
-const INVISIBLE = /[\p{C}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u2800]|(?! )\p{Zs}/u;
+export const INVISIBLE = /[\p{C}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u2800]|(?! )\p{Zs}/u;
 // Not portable to Windows (Microsoft's file-naming rules): these characters, a trailing dot or space, a device name.
 const WINDOWS_CHARS = /[<>:"|?*]/;
 const WINDOWS_DEVICE = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(\.|$)/i;

@@ -11,6 +11,14 @@ export const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 export const NAME_MAX = 64;
 export const DESCRIPTION_MAX = 1024;
 
+// One-line fields (a description, a version's message, a developer's name) reach an assistant outside any fence, so
+// a line break could forge a line shaped like the product's own guidance (contract §4.1, §5.2): no line break (\r,
+// \n, U+2028, U+2029) and no control character (C0, tab included; DEL; C1). Publish refuses them; every face shows
+// one with a space instead, for anything stored before the rule.
+const LINE_BREAK_OR_CONTROL = /[\u0000-\u001f\u007f-\u009f\u{2028}\u{2029}]/u;
+export const hasLineBreakOrControl = (text: string): boolean => LINE_BREAK_OR_CONTROL.test(text);
+export const oneLine = (text: string): string => text.replace(new RegExp(LINE_BREAK_OR_CONTROL.source, 'gu'), ' ');
+
 export interface Manifest {
   frontmatter: Record<string, unknown>;
   body: string;
@@ -63,6 +71,7 @@ export type ManifestProblem =
   | 'missing_fields'
   | 'description_not_text'
   | 'description_too_long'
+  | 'control_character'
   | 'description_angle_brackets'
   | 'metadata_not_a_mapping'
   | 'tags_not_a_string'
@@ -148,6 +157,7 @@ export function checkManifest(files: readonly TreeFile[], catalogName?: string):
   if (description === undefined || description === null || description === '') missing.push('description');
   else if (typeof description !== 'string') descriptionProblem = 'description_not_text';
   else if ([...description].length > DESCRIPTION_MAX) descriptionProblem = 'description_too_long';
+  else if (hasLineBreakOrControl(description)) descriptionProblem = 'control_character';
   else if (/[<>]/.test(description)) descriptionProblem = 'description_angle_brackets';
   if (body.trim() === '') missing.push('body');
   if (missing.length > 0) throw manifestError('missing_fields', missing);

@@ -4,6 +4,7 @@
 export type ErrorCode =
   | 'internal_error'
   | 'invalid_request'
+  | 'invalid_developer_setting'
   | 'invalid_manifest'
   | 'invalid_name'
   | 'invalid_path'
@@ -14,6 +15,7 @@ export type ErrorCode =
   | 'forbidden'
   | 'unauthenticated'
   | 'exists_untracked'
+  | 'name_in_use'
   | 'target_symlink'
   | 'secret_suspected';
 
