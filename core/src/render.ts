@@ -19,6 +19,11 @@ function asData(code: string, data: Record<string, unknown>): string {
 
 const list = (xs: readonly string[]) => xs.join(', ');
 
+// Text inside a fence can't drive a terminal (contract §5.2): every C0 control but TAB and LF, DEL, every C1 control and
+// a CR not directly before an LF is shown as \u{xxxx}. Only what's shown changes; the data keeps its bytes.
+const CONTROLS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]|\r(?!\n)/g;
+const fenced = (text: string) => text.replace(CONTROLS, (c) => `\\u{${c.charCodeAt(0).toString(16).padStart(4, '0')}}`);
+
 // Publisher text shown outside a fence can't forge the product's own lines (contract §5.2): a one-line field (a
 // description, a message, a developer's name) shows a line break or control character as a space, and flag text (a
 // path, a key's old and new values, the detail) is escaped and cut (skill-tree's flagText, also applied here to
@@ -79,12 +84,12 @@ function renderItem(s: Surface, item: ReadItem, token: string, budget: InlineBud
   if (shown) {
     const skillMd = `---\n${stringify(item.manifest.frontmatter, { lineWidth: 0 })}---\n${body}`;
     const end = s.format(w.fence[1], { token });
-    lines.push(s.format(w.data_note, { publisher, end }), s.format(w.fence[0], { token }), skillMd.trimEnd(), end);
+    lines.push(s.format(w.data_note, { publisher, end }), s.format(w.fence[0], { token }), fenced(skillMd.trimEnd()), end);
   }
   if (item.files) lines.push(s.format(w.files, { files: list(item.files.map((f) => `${quoted(f.path)} (${f.size} B)`)) }));
   for (const f of item.files ?? []) {
     if (f.content !== undefined && f.path !== MANIFEST) {
-      lines.push(s.format(w.file_fence[0], { path: quoted(f.path), token }), f.content.trimEnd(), s.format(w.file_fence[1], { path: quoted(f.path), token }));
+      lines.push(s.format(w.file_fence[0], { path: quoted(f.path), token }), fenced(f.content.trimEnd()), s.format(w.file_fence[1], { path: quoted(f.path), token }));
     }
   }
   // What was left out. A body is read with paths ["SKILL.md"] (one path is read whole, whatever its size); a file
@@ -149,7 +154,7 @@ export function renderDiff(s: Surface, r: DiffResult, ids: Ids): string {
   if (hunks.length) {
     const token = ids.next();
     const end = s.format(w.fence[1], { token });
-    lines.push(w.lines_intro, s.format(w.data_note, { end }), s.format(w.fence[0], { token }), ...hunks.map((u) => u.trimEnd()), end);
+    lines.push(w.lines_intro, s.format(w.data_note, { end }), s.format(w.fence[0], { token }), ...hunks.map((u) => fenced(u.trimEnd())), end);
   }
   return lines.join('\n');
 }
