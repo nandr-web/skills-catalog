@@ -125,28 +125,84 @@ export interface Injection {
 // Lines end at LF, CR, U+2028 or U+2029 (a CRLF is one break); the blanks before a fence and between it and its `!` are
 // spaces, tabs and the invisible set (a no-break space, a zero-width character, a byte-order mark), so no spelling slips
 // past (contract §5.3).
+// A fence is read with a plain loop over code points, never a pattern: the blanks overlap (a tab is also invisible), and
+// a pattern over them would backtrack without end on a line of tabs that isn't a fence.
 const LINE_BREAK = /\r\n|[\n\r\u2028\u2029]/;
-const BLANK = `(?:[ \\t]|${INVISIBLE.source})`;
-const BANG_FENCE = new RegExp(`^${BLANK}*(\`{3,}|~{3,})${BLANK}*!`, 'u');
-const closeFence = (fence: string) => new RegExp(`^${BLANK}*${fence[0] === '`' ? '`' : '~'}{${fence.length},}${BLANK}*$`, 'u');
-const inlineCommand = (line: string) => {
-  const at = line.indexOf('!`');
-  const end = line.indexOf('`', at + 2);
-  return line.slice(at + 2, end < 0 ? undefined : end).trim();
+const ONE_INVISIBLE = new RegExp(`^(?:${INVISIBLE.source})$`, 'u');
+const isBlank = (c: string) => c === ' ' || c === '\t' || ONE_INVISIBLE.test(c);
+function skipBlanks(line: string, i: number): number {
+  while (i < line.length) {
+    const code = line.charCodeAt(i);
+    if (code === 0x20 || code === 0x09) {
+      i++;
+      continue;
+    }
+    if (code < 0x7f && code > 0x20) break;   // a printable ASCII character is never blank
+    const c = String.fromCodePoint(line.codePointAt(i)!);
+    if (!isBlank(c)) break;
+    i += c.length;
+  }
+  return i;
+}
+type Fence = { char: string; length: number };
+// A line that opens a ```! or ~~~! block: blanks, three or more of one fence character, blanks, then `!`.
+function openingFence(line: string): Fence | null {
+  let i = skipBlanks(line, 0);
+  const char = line[i];
+  if (char !== '`' && char !== '~') return null;
+  const start = i;
+  while (line[i] === char) i++;
+  if (i - start < 3) return null;
+  i = skipBlanks(line, i);
+  return line[i] === '!' ? { char, length: i - start > 0 ? countRun(line, start, char) : 0 } : null;
+}
+const countRun = (line: string, from: number, char: string) => {
+  let n = 0;
+  while (line[from + n] === char) n++;
+  return n;
+};
+// A line that closes it, strictly (so an edit after a doubtful close still counts as inside): up to three spaces, at
+// least as many of the same character, then only spaces or tabs to the line's end.
+function closesFence(line: string, fence: Fence): boolean {
+  let i = 0;
+  while (i < 3 && line[i] === ' ') i++;
+  const n = countRun(line, i, fence.char);
+  if (n < fence.length) return false;
+  for (i += n; i < line.length; i++) if (line[i] !== ' ' && line[i] !== '\t') return false;
+  return true;
+}
+// A flag's detail shows the whole command, its lines or commands joined by a visible mark (then flagText cuts it).
+const JOIN = ' ⏎ ';
+const inlineCommands = (line: string) => {
+  const out: string[] = [];
+  for (let at = line.indexOf('!`'); at >= 0; at = line.indexOf('!`', at + 2)) {
+    const end = line.indexOf('`', at + 2);
+    out.push(line.slice(at + 2, end < 0 ? undefined : end).trim());
+    if (end < 0) break;
+    at = end - 1;
+  }
+  return out.filter(Boolean).join(JOIN);
 };
 export function injections(text: string): Injection[] {
   const lines = text.split(LINE_BREAK);
   const out: Injection[] = [];
   for (let i = 0; i < lines.length; i++) {
-    const open = BANG_FENCE.exec(lines[i]!);
+    const open = openingFence(lines[i]!);
     if (open) {
-      const close = closeFence(open[1]!);
       let j = i + 1;
-      while (j < lines.length && !close.test(lines[j]!)) j++;
-      const body = lines.slice(i + 1, j).find((l) => l.trim());
-      out.push({ line: i + 1, text: lines.slice(i, j + 1).join('\n'), command: (body ?? lines[i]!).trim() });
+      while (j < lines.length && !closesFence(lines[j]!, open)) j++;
+      // The detail is cut to FLAG_TEXT_MAX anyway: stop collecting the command once it's longer than that.
+      const body: string[] = [];
+      for (let k = i + 1, n = 0; k < j && n <= FLAG_TEXT_MAX; k++) {
+        const l = lines[k]!.trim().slice(0, FLAG_TEXT_MAX + 1);
+        if (l) {
+          body.push(l);
+          n += l.length + JOIN.length;
+        }
+      }
+      out.push({ line: i + 1, text: lines.slice(i, j + 1).join('\n'), command: body.length ? body.join(JOIN) : lines[i]!.trim().slice(0, FLAG_TEXT_MAX + 1) });
       i = j;
-    } else if (lines[i]!.includes('!`')) out.push({ line: i + 1, text: lines[i]!, command: inlineCommand(lines[i]!) });
+    } else if (lines[i]!.includes('!`')) out.push({ line: i + 1, text: lines[i]!, command: inlineCommands(lines[i]!) });
   }
   return out;
 }
@@ -210,8 +266,15 @@ function keyLine(lines: string[], key: string): number | undefined {
 }
 
 // `configuredSafeKeys` can only narrow the fixed safe list (contract §5.3): a key not on it always counts.
-export function diffTrees(from: DiffSide | null, to: DiffSide, configuredSafeKeys: readonly string[] = DEFAULT_SAFE_FRONTMATTER_KEYS): TreeDiff {
+// `configuredNonGrantingKeys` can only narrow the fixed non-granting list the same way.
+export function diffTrees(
+  from: DiffSide | null,
+  to: DiffSide,
+  configuredSafeKeys: readonly string[] = DEFAULT_SAFE_FRONTMATTER_KEYS,
+  configuredNonGrantingKeys: readonly string[] = DEFAULT_NON_GRANTING_KEYS,
+): TreeDiff {
   const safeKeys = configuredSafeKeys.filter((k) => DEFAULT_SAFE_FRONTMATTER_KEYS.includes(k));
+  const nonGranting = configuredNonGrantingKeys.filter((k) => DEFAULT_NON_GRANTING_KEYS.includes(k));
   const before = new Map((from?.files ?? []).map((f) => [f.path, f]));
   const after = new Map(to.files.map((f) => [f.path, f]));
   const paths = [...new Set([...before.keys(), ...after.keys()])].sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
@@ -242,7 +305,7 @@ export function diffTrees(from: DiffSide | null, to: DiffSide, configuredSafeKey
   // One reason per file, the first that applies (contract §5.3): runnable_file, runs_at_load (one per added or changed
   // injected command, and nothing else for that file), instructions_changed (any file added, changed or removed, and
   // SKILL.md when its body or a safe key changed, while the new version grants anything), then non_markdown.
-  const grants = grantsOf(to.files, fb.fm, safeKeys, DEFAULT_NON_GRANTING_KEYS);
+  const grants = grantsOf(to.files, fb.fm, safeKeys, nonGranting);
   const safeChanged = safeKeys.some((k) => JSON.stringify(fa.fm[k]) !== JSON.stringify(fb.fm[k]));
   for (const { a, b, path } of changed) {
     const own = b ? fileRisk(b) : null;
