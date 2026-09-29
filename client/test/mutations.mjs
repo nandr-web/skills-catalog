@@ -86,6 +86,7 @@ const MUTATIONS = [
   ['web/serve.ts', 'a repeated header is read as its first value', "seen.get(k) === 1 && typeof v === 'string' ? v : undefined", "typeof v === 'string' ? v : undefined"],
   ['web/serve.ts', 'a body cut at its limit destroys the request (no answer)', 'req.iterator({ destroyOnReturn: false })', 'req.iterator({ destroyOnReturn: true })'],
   ['web/serve.ts', 'a cut body\'s connection is closed at once (the answer reset)', 'res.end(r.body, () => lingerThenClose(req));', 'res.end(r.body, () => req.destroy());'],
+  ['web/serve.ts', 'a cut body\'s sender is read for the whole second however much it sends', '    if (discarded >= LINGER.bytes) close();\n', ''],
   ['web/serve.ts', 'a cut body\'s sender is read for as long as it sends', 'const timer = setTimeout(close, LINGER.ms);', 'const timer = setTimeout(() => undefined, LINGER.ms);'],
   ['machine/lock.ts', 'a holder is checked with whatever ps is first on PATH', "spawnSync('/bin/ps', ['-o', 'etime=', '-p', String(pid)], { encoding: 'utf8', env: { PATH: '/usr/bin:/bin', LC_ALL: 'C' }", "spawnSync('ps', ['-o', 'etime=', '-p', String(pid)], { encoding: 'utf8', env: { PATH: process.env['PATH'] ?? '/usr/bin:/bin', LC_ALL: 'C' }"],
   ['web/serve.ts', 'a bug\'s 500 may be stored by a cache', "res.writeHead(500, { ...SECURITY_HEADERS, ...API_HEADERS, connection: 'close' })", 'res.writeHead(500, {})'],

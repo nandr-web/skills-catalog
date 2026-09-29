@@ -61,13 +61,17 @@ describe('the lock file', () => {
     const marker = join(p.dir, 'fake-ps-ran');
     mkdirSync(bin, { recursive: true });
     writeFileSync(join(bin, 'ps'), `#!/bin/sh\ntouch '${marker}'\necho 00:01\n`, { mode: 0o755 });
-    hold(p, process.pid, startedHere - 3_600_000);
+    // A live child named with a start an hour off: the only way to a stale verdict is asking ps about it (this process's
+    // own pid would return early, and its start is cached by then).
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30_000)'], { stdio: 'ignore' });
+    hold(p, child.pid!, Date.now() - 3_600_000);
     const before = process.env['PATH'];
     process.env['PATH'] = `${bin}:${before ?? '/usr/bin:/bin'}`;
     try {
       expect((await install(ctxFor(p), { name: 'alpha' })).outcome).toBe('installed');
     } finally {
       process.env['PATH'] = before;
+      child.kill();
     }
     expect(existsSync(marker), 'a ps on PATH ran').toBe(false);
   });

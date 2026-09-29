@@ -8,6 +8,8 @@ import { request as httpRequest } from 'node:http';
 import { createServer, connect } from 'node:net';
 import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { setFlagsFromString } from 'node:v8';
+import { runInNewContext } from 'node:vm';
 import { actAs, Words } from '@skills-catalog/core';
 import { describe, expect, it, vi } from 'vitest';
 import { cliWords } from '../src/cli/words.ts';
@@ -226,6 +228,12 @@ describe('the server itself (web/serve.ts)', () => {
   });
 });
 
+/** A full garbage collection, for measuring what's held (V8's gc exposed to this test process only). */
+function collect(): void {
+  setFlagsFromString('--expose-gc');
+  (runInNewContext('gc') as () => void)();
+}
+
 type Raw = { status: number; head: string; body: string; closed: boolean };
 /** Writes these exact bytes on a fresh socket; resolves with what came back once the server closes it, or after `ms`
  *  with `closed: false` (the socket then destroyed). The only way to send what node:http won't: a header twice. */
@@ -353,7 +361,14 @@ describe('hostile input over a raw socket (contract §1.1)', () => {
     try {
       const chunk = Buffer.alloc(256 * 1024, 0x20);
       let sent = 0;
-      const heapBefore = process.memoryUsage().heapUsed;
+      // Buffers live outside the JS heap: what's held is the heap plus array buffers and external memory, read after a
+      // collection so garbage (the discarded bytes) isn't counted as held.
+      const held = () => {
+        collect();
+        const m = process.memoryUsage();
+        return m.heapUsed + m.arrayBuffers + m.external;
+      };
+      const heldBefore = held();
       const r = await new Promise<Raw & { ms: number }>((resolve) => {
         const t0 = Date.now();
         const got: Buffer[] = [];
@@ -368,10 +383,12 @@ describe('hostile input over a raw socket (contract §1.1)', () => {
         sock.on('data', (c: Buffer) => got.push(c));
         sock.on('close', () => finish(true));
         sock.on('error', () => undefined);
-        sock.write(bytesOf('/api/v1/search_shared_skills', lines({ length: 10 * POLICY.bodyLimit })));
+        // A Content-Length it never reaches, so the request never completes (a completed one node:http closes itself,
+        // which would hide the bounds); the 40x cap only keeps a broken server from making this test send forever.
+        sock.write(bytesOf('/api/v1/search_shared_skills', lines({ length: 1_000_000_000_000 })));
         // Keeps sending, a chunk at a time (never more than the socket takes), until the server closes.
         const pump = () => {
-          while (!sock.destroyed && sent < 10 * POLICY.bodyLimit) {
+          while (!sock.destroyed && sent < 40 * POLICY.bodyLimit) {
             sent += chunk.length;
             if (!sock.write(chunk)) return void sock.once('drain', pump);
           }
@@ -379,9 +396,15 @@ describe('hostile input over a raw socket (contract §1.1)', () => {
         pump();
       });
       expect([r.status, r.closed], `closed after ${r.ms} ms`).toEqual([200, true]);
-      expect(r.ms).toBeLessThan(2_000);
+      // Twice the limit discarded closes it long before the one-second bound would.
+      expect(r.ms, 'closed by the byte bound').toBeLessThan(600);
       expect(sent, 'it sent past the limit').toBeGreaterThan(POLICY.bodyLimit);
-      expect(process.memoryUsage().heapUsed - heapBefore, 'the server held what it discarded').toBeLessThan(POLICY.bodyLimit);
+      // A buffer's memory is freed a moment after the collection that finds it unused: collect, wait, then measure.
+      await new Promise((r) => setTimeout(r, 100));
+      collect();
+      await new Promise((r) => setImmediate(r));
+      const m = process.memoryUsage();
+      expect(held() - heldBefore, `the server held what it discarded (heap ${m.heapUsed} ab ${m.arrayBuffers} ext ${m.external})`).toBeLessThan(POLICY.bodyLimit);
     } finally {
       await s.stop();
     }
