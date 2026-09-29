@@ -96,6 +96,8 @@ const MUTATIONS = [
   ['safe-delete.ts', 'the tripwire leaves the real Claude cache out', 'realClaudeTmp(), realClaudeCache(), join(canonical(tmpdir()), BASE_NAME)]', 'realClaudeTmp(), join(canonical(tmpdir()), BASE_NAME)]'],
   ['leftovers.ts', 'the cache folder named after the run is left behind', 'm.roots.claudeTmp, m.roots.claudeCache];', 'm.roots.claudeTmp];'],
   ['leftovers.ts', 'a linked log file is copied (the link followed)', 'constants.O_RDONLY | constants.O_NOFOLLOW', 'constants.O_RDONLY'],
+  ['leftovers.ts', 'keeping the logs waits on a pipe (its test runs it in a child with a time limit)', 'constants.O_NOFOLLOW | constants.O_NONBLOCK);', 'constants.O_NOFOLLOW);'],
+  ['leftovers.ts', 'a log is kept whatever its size', 'Math.min(st.size, MCP_LOG_MAX_BYTES)', 'st.size'],
   ['leftovers.ts', 'a log folder that is a link is read', "if (!realDir(logs)) { out.skipped.push({ path: logs, why: 'not a real folder (a link is never followed): its logs not kept' }); continue; }", ''],
   ['leftovers.ts', 'a cache folder from before the run has its logs copied', 'if (preexisting.has(folder) || !realDir(folder)) continue;', 'if (!realDir(folder)) continue;'],
   ['teardown.ts', 'the logs are copied after their folder is removed', 'logs = keepMcpLogs(sb.root, o.machine, o.keepLogsIn, sb.preexisting);', 'removeRunLeftovers(sb.root, o.machine, { preexisting: sb.preexisting }); logs = keepMcpLogs(sb.root, o.machine, o.keepLogsIn, sb.preexisting);'],

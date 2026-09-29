@@ -22,6 +22,7 @@ import { cleanup, machine, scratch, type TestMachine } from './machine.ts';
 afterEach(() => { cleanup(); for (const k of Object.keys(process.env)) if (k.startsWith('QA_FAKE_CLAUDE_')) delete process.env[k]; });
 
 const HOUR = 3600_000;
+const LEFTOVERS = fileURLToPath(new URL('../src/leftovers.ts', import.meta.url));
 const T0 = Date.parse('2026-09-28T10:00:00Z');
 const run = (m: TestMachine, at = T0) => createSandbox({ runId: newRunId(new Date(at)), machine: m, now: () => at });
 /** The cache folder Claude Code makes for an assistant working in the run's work folder. */
@@ -90,15 +91,22 @@ describe('teardown and the servers\' logs', () => {
 
   // The assistant under test can write in that cache folder: whatever it puts there is read without waiting and only
   // up to a size.
-  it('a pipe named like a log never stalls teardown: it isn\'t copied, and the folder still goes', { timeout: 15_000 }, async () => {
+  it('a pipe named like a log never stalls teardown: it isn\'t copied, and the folder still goes', { timeout: 30_000 }, async () => {
     const m = machine();
     const sb = run(m);
     const logs = serverLog(m, sb.root, 'skills-catalog');
     spawnSync('mkfifo', [join(logs, 'stuck.jsonl')]);
     const keep = join(m.dir, 'kept');
-    const r = await teardown(sb, { machine: m, keepLogsIn: keep });
-    expect(readdirSync(join(keep, 'mcp-logs-skills-catalog'))).toEqual(['2026-09-29T01-00-00-000Z.jsonl']);
-    expect(r.skipped.map((s) => s.path)).toContain(join(logs, 'stuck.jsonl'));
+    // Kept in a child process with a time limit: were the open ever to wait on the pipe again, this fails in seconds
+    // instead of hanging the test's own worker (which no test timeout can interrupt).
+    const script = `import { keepMcpLogs } from ${JSON.stringify(LEFTOVERS)}; const [root, machine, dest] = JSON.parse(process.argv[1]); console.log(JSON.stringify(keepMcpLogs(root, machine, dest, new Set())));`;
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e', script, JSON.stringify([sb.root, m, keep])], { encoding: 'utf8', timeout: 10_000, killSignal: 'SIGKILL' });
+    expect(r.signal, 'keeping the logs waited on the pipe and was stopped after 10 s').toBeNull();
+    expect(r.status, r.stderr).toBe(0);
+    const kept = JSON.parse(r.stdout) as { kept: string[]; skipped: { path: string }[] };
+    expect(kept.kept).toEqual([join(keep, 'mcp-logs-skills-catalog', '2026-09-29T01-00-00-000Z.jsonl')]);
+    expect(kept.skipped.map((x) => x.path)).toEqual([join(logs, 'stuck.jsonl')]);
+    await teardown(sb, { machine: m });
     expect(existsSync(cacheOf(m, sb.root))).toBe(false);
   });
 
