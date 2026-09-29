@@ -1,0 +1,238 @@
+// The published schema (contract §1.1): docs/api/openapi.json is generated from the operations' definitions, checked in,
+// and fails here when it's out of date. No OpenAPI tooling is used: the structure is checked by hand below, and real
+// results, wrapped in the envelope, are checked against it with a small JSON Schema reader.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { OPERATIONS, inputSchema } from '../src/api.ts';
+import { COMMON_ERRORS, ERROR_CODES } from '../src/errors.ts';
+import { actAs } from '../src/local/index.ts';
+import { API_VERSION, openapi, openapiJson } from '../src/openapi.ts';
+import { historyVersion, loadGolden } from './golden.ts';
+import { errorOf, openTest, request } from './helpers.ts';
+
+const histories = loadGolden('histories.yaml');
+const FILE = join(import.meta.dirname, '..', '..', 'docs', 'api', 'openapi.json');
+const webRows = Object.values(OPERATIONS).filter((d) => d.faces.includes('web'));
+
+type Json = Record<string, any>;
+const doc = openapi() as Json;
+
+function resolve(ref: string): Json {
+  expect(ref.startsWith('#/')).toBe(true);
+  let node: any = doc;
+  for (const part of ref.slice(2).split('/')) node = node?.[part];
+  expect(node, `${ref} resolves`).toBeTypeOf('object');
+  return node;
+}
+const deref = (s: Json): Json => (s.$ref ? resolve(s.$ref) : s);
+
+describe('the published schema is the definitions\' (contract §1.1)', () => {
+  it('the checked-in file is what `npm run schema` writes now', () => {
+    const onDisk = readFileSync(FILE, 'utf8');
+    expect(onDisk === openapiJson(), 'docs/api/openapi.json is out of date: run `npm run schema` in core/').toBe(true);
+    expect(JSON.parse(onDisk)).toEqual(doc);
+  });
+
+  it('is OpenAPI 3.1, version 1.0.0, with the error list as data', () => {
+    expect(doc.openapi).toBe('3.1.0');
+    expect(API_VERSION).toBe('1.0.0');
+    expect(doc.info.version).toBe(API_VERSION);
+    expect(doc.info.title).toBe('skills-catalog');
+    expect(doc.components.schemas.ErrorCode).toEqual({ type: 'string', enum: [...ERROR_CODES] });
+    expect(doc['x-error-codes']).toEqual([...ERROR_CODES]);
+    expect(doc['x-common-errors']).toEqual([...COMMON_ERRORS]);
+  });
+
+  it('has one POST /api/v1/<name> per web-faced operation, and the files route; nothing else', () => {
+    expect(webRows.map((d) => d.name).sort()).toEqual(['diff_shared_skill_versions', 'fetch_version', 'list_shared_skill_versions', 'publish_version', 'read_shared_skill', 'search_shared_skills']);
+    expect(Object.keys(doc.paths).sort()).toEqual([...webRows.map((d) => `/api/v1/${d.name}`), '/api/v1/files/{sha256}'].sort());
+    for (const d of webRows) expect([d.name, Object.keys(doc.paths[`/api/v1/${d.name}`])]).toEqual([d.name, ['post']]);
+    const ids = Object.values(doc.paths).flatMap((p: any) => Object.values(p).map((o: any) => o.operationId));
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('each operation carries its row: input as the web face sees it, effect, faces, errors, the local security', () => {
+    for (const d of webRows) {
+      const op = doc.paths[`/api/v1/${d.name}`].post;
+      expect([d.name, op.operationId, op['x-effect'], op['x-faces'], op['x-errors']]).toEqual([d.name, d.name, d.effect, [...d.faces], [...d.errors]]);
+      expect(op.security).toEqual([{ localToken: [] }]);
+      expect(op.parameters.map(deref).map((p: Json) => [p.in, p.name, p.required])).toEqual([['header', 'X-Skills-Catalog-As', false]]);
+      expect(op.requestBody.required).toBe(true);
+      expect(Object.keys(op.requestBody.content)).toEqual(['application/json']);
+      const input = deref(op.requestBody.content['application/json'].schema);
+      expect(input).toEqual(strict(inputSchema(d, 'web')));
+      for (const k of d.cliOnly ?? []) expect([d.name, k in input.properties]).toEqual([d.name, false]);
+      expect(Object.keys(op.responses).sort()).toEqual(['200', '401', '403', '404', '415']);
+    }
+    expect(doc.components.securitySchemes.localToken).toMatchObject({ type: 'apiKey', in: 'header', name: 'X-Skills-Catalog-Token' });
+  });
+
+  it('each answer is the envelope: {ok: true, data} with the output schema, or {ok: false, error} with its codes, and words beside', () => {
+    for (const d of webRows) {
+      const env = deref(doc.paths[`/api/v1/${d.name}`].post.responses['200'].content['application/json'].schema);
+      const [ok, err] = env.oneOf.map(deref);
+      expect(ok.properties.ok).toEqual({ const: true });
+      expect(deref(ok.properties.data)).toEqual(d.output);
+      expect(ok.required).toEqual(['ok', 'data']);
+      expect(err.properties.ok).toEqual({ const: false });
+      expect(err.required).toEqual(['ok', 'error']);
+      const codes: string[] = err.properties.error.properties.code.enum;
+      expect(new Set(codes)).toEqual(new Set([...d.errors, ...COMMON_ERRORS]));
+      expect(codes).toEqual(ERROR_CODES.filter((c) => codes.includes(c))); // in §9's order
+      for (const s of [ok, err]) expect(deref(s.properties.words)).toBe(doc.components.schemas.Words);
+    }
+    expect(Object.keys(doc.components.schemas.Words.properties)).toEqual(['error', 'acting_as', 'demo', 'verdict']);
+    expect(doc.components.schemas.Words.additionalProperties).toBe(false);
+  });
+
+  it('the files route: a 64-hex sha256; the bytes, a link, on its way or a 404, behind the same security', () => {
+    const get = doc.paths['/api/v1/files/{sha256}'].get;
+    expect(Object.keys(doc.paths['/api/v1/files/{sha256}'])).toEqual(['get']);
+    expect(get.parameters.map(deref)).toContainEqual({ name: 'sha256', in: 'path', required: true, schema: { type: 'string', pattern: '^[0-9a-f]{64}$' } });
+    expect(Object.keys(get.responses['200'].content)).toEqual(['application/octet-stream']);
+    expect(Object.keys(get.responses).sort()).toEqual(['200', '302', '401', '403', '404', '503']);
+    expect(Object.keys(get.responses['302'].headers).sort()).toEqual(['Cache-Control', 'Location']);
+    expect(Object.keys(get.responses['503'].headers)).toEqual(['Retry-After']);
+    expect(get.security).toEqual([{ localToken: [] }]);
+    expect([get['x-effect'], get['x-faces']]).toEqual(['reads', ['web']]);
+  });
+
+  it('is well formed: every $ref resolves, every component is used, every schema uses known words only and every object says whether it takes other fields', () => {
+    const used = new Set<string>();
+    const problems: string[] = [];
+    const walk = (node: unknown, at: string, inSchema: boolean): void => {
+      if (Array.isArray(node)) return node.forEach((n, i) => walk(n, `${at}[${i}]`, inSchema));
+      if (!node || typeof node !== 'object') return;
+      const n = node as Json;
+      if (typeof n.$ref === 'string') {
+        used.add(n.$ref);
+        resolve(n.$ref);
+        if (Object.keys(n).length !== 1) problems.push(`${at}: $ref with siblings`);
+        return;
+      }
+      if (inSchema) problems.push(...schemaProblems(n, at));
+      for (const [k, v] of Object.entries(n)) {
+        const childIsSchema = inSchema ? SCHEMA_CHILDREN.has(k) : k === 'schema' || at.endsWith('.components.schemas');
+        if (inSchema && k === 'properties') for (const [pk, pv] of Object.entries(v as Json)) walk(pv, `${at}.properties.${pk}`, true);
+        else if (inSchema && (k === 'enum' || k === 'required' || k === 'const')) continue;
+        else walk(v, `${at}.${k}`, childIsSchema);
+      }
+    };
+    walk(doc, '$', false);
+    expect(problems).toEqual([]);
+    // ErrorCode is the whole list (§9) for a client to take as a type; each operation's own codes are narrower.
+    const unused = ['#/components/schemas/ErrorCode'];
+    for (const kind of ['schemas', 'parameters', 'responses'] as const) {
+      for (const key of Object.keys(doc.components[kind] ?? {})) {
+        const at = `#/components/${kind}/${key}`;
+        expect([at, used.has(at)]).toEqual([at, !unused.includes(at)]);
+      }
+    }
+    // and the walker itself finds what it's for
+    expect(schemaProblems({ type: 'object', properties: {}, required: ['x'], additionalProperties: false }, '$')).toEqual(['$: required x is not a property']);
+    expect(schemaProblems({ type: 'object', properties: {} }, '$')).toEqual(['$: an object that doesn\'t say whether it takes other fields']);
+    expect(schemaProblems({ type: 'date' }, '$')).toEqual(['$: unknown type date']);
+    expect(schemaProblems({ type: 'string', maxLen: 3 }, '$')).toEqual(['$: unknown keyword maxLen']);
+  });
+});
+
+describe('real answers fit the published schema (contract §1.1)', () => {
+  it('every web operation\'s real result and a real error, wrapped in the envelope, fit its response; the wrong ones don\'t', async () => {
+    const { catalog } = await openTest();
+    const v = (ref: string) => historyVersion(histories.versions[ref]);
+    const words = { acting_as: 'Acting as dev1.' };
+    const ok = async (op: string, call: () => Promise<unknown>) => [op, { ok: true, data: JSON.parse(JSON.stringify(await call())), words }] as const;
+    const answers = [
+      await ok('publish_version', () => catalog.publish(request('pr-review-checklist', v('prc.v1'), { message: 'first' }), actAs('dev1'))),
+      await ok('publish_version', () => catalog.publish(request('pr-review-checklist', v('prc.v3')), actAs('dev1'))),
+      await ok('search_shared_skills', () => catalog.search({ query: 'review checklist' })),
+      await ok('read_shared_skill', () => catalog.read({ names: ['pr-review-checklist', 'no-such-skill'], include: 'contents' })),
+      await ok('list_shared_skill_versions', () => catalog.versions({ name: 'pr-review-checklist' })),
+      await ok('diff_shared_skill_versions', () => catalog.diff({ name: 'pr-review-checklist', from: 1, to: 2 })),
+      await ok('fetch_version', () => catalog.fetch({ name: 'pr-review-checklist', version: 2 })),
+    ];
+    const notFound = await errorOf(() => catalog.versions({ name: 'no-such-skill' }));
+    const invalid = await errorOf(() => catalog.search({ limit: 999 }));
+    catalog.close();
+    const failed = { ok: false, error: JSON.parse(JSON.stringify(notFound)), words: { error: 'No shared skill is named no-such-skill.' } };
+    const refused = { ok: false, error: JSON.parse(JSON.stringify(invalid)) };
+    const response = (op: string) => doc.paths[`/api/v1/${op}`].post.responses['200'].content['application/json'].schema;
+
+    for (const [op, answer] of answers) expect([op, errorsOf(response(op), answer)]).toEqual([op, []]);
+    expect(new Set(answers.map(([op]) => op))).toEqual(new Set(webRows.map((d) => d.name)));
+    expect(errorsOf(response('list_shared_skill_versions'), failed)).toEqual([]);
+    expect(errorsOf(response('search_shared_skills'), refused)).toEqual([]);
+    // what must not fit: another operation's data, a code the operation can't raise, a word that isn't a sentence, no ok
+    const fetched = answers.find(([op]) => op === 'fetch_version')![1];
+    expect(errorsOf(response('search_shared_skills'), fetched)).not.toEqual([]);
+    expect(errorsOf(response('search_shared_skills'), { ...failed, error: { code: 'lock_busy' } })).not.toEqual([]);
+    expect(errorsOf(response('fetch_version'), { ...fetched, words: { demo: 3 } })).not.toEqual([]);
+    expect(errorsOf(response('fetch_version'), { ...fetched, words: { other: 'x' } })).not.toEqual([]);
+    expect(errorsOf(response('fetch_version'), { ...fetched, data: { ...fetched.data, extra: 1 } })).not.toEqual([]);
+    expect(errorsOf(response('fetch_version'), { data: fetched.data })).not.toEqual([]);
+  });
+});
+
+// An input schema as JSON Schema: the check refuses a field it doesn't list, so every object says so.
+function strict(s: any): any {
+  if (s.type === 'object') {
+    const properties = Object.fromEntries(Object.entries(s.properties).map(([k, v]) => [k, strict(v)]));
+    return { ...s, properties, additionalProperties: false };
+  }
+  if (s.type === 'array') return { ...s, items: strict(s.items) };
+  return s;
+}
+
+const KEYWORDS = new Set(['type', 'properties', 'required', 'additionalProperties', 'items', 'enum', 'const', 'anyOf', 'oneOf', 'maxLength', 'minLength', 'minimum', 'maximum', 'maxItems', 'pattern', 'description']);
+const SCHEMA_CHILDREN = new Set(['items', 'additionalProperties', 'anyOf', 'oneOf']);
+const TYPES = new Set(['object', 'array', 'string', 'integer', 'boolean', 'null']);
+
+function schemaProblems(s: Json, at: string): string[] {
+  const out: string[] = [];
+  for (const k of Object.keys(s)) if (!KEYWORDS.has(k)) out.push(`${at}: unknown keyword ${k}`);
+  if (s.type !== undefined && !TYPES.has(s.type)) out.push(`${at}: unknown type ${s.type}`);
+  for (const r of s.required ?? []) if (!s.properties || !(r in s.properties)) out.push(`${at}: required ${r} is not a property`);
+  // Strict by the standard: JSON Schema leaves an object open unless it says otherwise.
+  if (s.type === 'object' && s.additionalProperties === undefined) out.push(`${at}: an object that doesn't say whether it takes other fields`);
+  return out;
+}
+
+// A small JSON Schema reader for the words the schema uses, by the standard's rules (an object with no
+// additionalProperties is open; the structural test makes every object say).
+function errorsOf(schema: Json, value: unknown, at = '$'): string[] {
+  const s = deref(schema);
+  if (s.oneOf) {
+    const fits = s.oneOf.filter((o: Json) => errorsOf(o, value, at).length === 0).length;
+    return fits === 1 ? [] : [`${at}: fits ${fits} of oneOf`];
+  }
+  if (s.anyOf) return s.anyOf.some((o: Json) => errorsOf(o, value, at).length === 0) ? [] : [`${at}: fits none of anyOf`];
+  if ('const' in s && value !== s.const) return [`${at}: not ${s.const}`];
+  if (s.enum && !s.enum.includes(value)) return [`${at}: ${String(value)} not in the enum`];
+  switch (s.type) {
+    case undefined:
+      return [];
+    case 'null':
+      return value === null ? [] : [`${at}: not null`];
+    case 'string':
+      return typeof value === 'string' ? [] : [`${at}: not a string`];
+    case 'integer':
+      return Number.isInteger(value) ? [] : [`${at}: not an integer`];
+    case 'boolean':
+      return typeof value === 'boolean' ? [] : [`${at}: not a boolean`];
+    case 'array':
+      return Array.isArray(value) ? value.flatMap((v, i) => errorsOf(s.items, v, `${at}[${i}]`)) : [`${at}: not an array`];
+    case 'object': {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return [`${at}: not an object`];
+      const o = value as Json;
+      const errs: string[] = (s.required ?? []).filter((k: string) => !(k in o)).map((k: string) => `${at}.${k}: missing`);
+      for (const [k, v] of Object.entries(o)) {
+        if (s.properties?.[k]) errs.push(...errorsOf(s.properties[k], v, `${at}.${k}`));
+        else if (s.additionalProperties === false) errs.push(`${at}.${k}: not allowed`);
+        else if (s.additionalProperties && s.additionalProperties !== true) errs.push(...errorsOf(s.additionalProperties, v, `${at}.${k}`));
+      }
+      return errs;
+    }
+  }
+  return [`${at}: unknown type ${s.type}`];
+}
