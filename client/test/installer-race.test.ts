@@ -118,7 +118,8 @@ function doubleSwapAt(p: Place, k: number, pl: ReturnType<typeof places>, side: 
   };
 }
 
-// The sweeps run a whole install or update per interleaving (about 3 s together here); room for a loaded machine.
+// The sweeps run a whole install or update per interleaving, up to 64 (install makes 22 lstats, update 30): about 8 s
+// together here at a load of 28; room for a loaded machine.
 const SWEEP_MS = 30_000;
 
 const clearHooks = () => {
@@ -166,7 +167,7 @@ describe('links swapped in while the installer replaces a copy (the security rev
   });
 
   it('a double swap on a first install (in at any check, out at the next move) never deletes or moves the linked folder', async () => {
-    for (const side of ['before', 'after'] as const) for (let k = 0; k < 16; k++) {
+    for (const side of ['before', 'after'] as const) for (let k = 0; k < 64; k++) {
       const p = place();
       await publish(p, 'alpha', 'Body.\n');
       const pl = places(p);
@@ -189,7 +190,7 @@ describe('links swapped in while the installer replaces a copy (the security rev
   // §4.5: a folder moved aside that isn't the recorded copy is moved back, or, when it can't be (the real copy is back in
   // its place), left where it was moved to and named by target_changed's `staging`. Never deleted either way.
   it('a double swap while replacing an installed copy: the linked folder is never deleted, and nothing is stranded unnamed', async () => {
-    for (const side of ['before', 'after'] as const) for (let k = 0; k < 16; k++) {
+    for (const side of ['before', 'after'] as const) for (let k = 0; k < 64; k++) {
       const p = place();
       await publish(p, 'alpha', 'Body.\n');
       const ctx = ctxFor(p);
@@ -223,7 +224,7 @@ describe('links swapped in while the installer replaces a copy (the security rev
     for (const holds of ['none', 'empty'] as const) {
       for (const op of ['install', 'update'] as const) {
         for (const side of ['before', 'after'] as const) {
-          for (let k = 0; k < 16; k++) {
+          for (let k = 0; k < 64; k++) {
             const p = place();
             await publish(p, 'alpha', 'Body.\n');
             const ctx = ctxFor(p);
