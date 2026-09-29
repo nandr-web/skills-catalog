@@ -293,6 +293,22 @@ export function renderError(s: Words, e: CatalogError): string {
     // With no holder to name (another user's file, a link, anything but a regular file), the file is named instead.
     case 'lock_busy':
       return d['pid'] === null && typeof w.lock_busy_unusable === 'string' ? fill(w.lock_busy_unusable, d) : typeof w.lock_busy === 'string' ? fill(w.lock_busy, d) : asData(e.code, d);
+    // An assistant file setup can't use: why in setup's own words, with the key it has wrong where there is one; never
+    // anything of the file's text.
+    case 'assistant_file_unusable': {
+      const why = s.setup.file_why?.[String(data['why'])];
+      if (typeof why !== 'string') return asData(e.code, d);
+      try {
+        return s.format(w.assistant_file_unusable, { ...d, why: s.format(why, d) });
+      } catch {
+        return asData(e.code, d);
+      }
+    }
+    // An install folder that isn't safe to run from: the way on differs by why, so each has its sentence.
+    case 'install_unsafe': {
+      const t = w[`install_unsafe_${String(data['why'])}`];
+      return typeof t === 'string' ? fill(t, d) : asData(e.code, d);
+    }
     default: {
       const t = w[e.code];
       return typeof t === 'string' ? fill(t, d) : asData(e.code, d);

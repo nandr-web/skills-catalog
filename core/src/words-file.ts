@@ -42,6 +42,8 @@ export class Words {
   readonly page: number;
   readonly guided: boolean;
   readonly words: any;
+  /** Guided setup's own words (its questions, plan, summary, file reasons, teardown), filled for this variant. */
+  readonly setup: any;
 
   constructor(doc: any, variant: string = doc.recommended) {
     if (!doc.variants?.[variant]) throw new Error(`the words file has no variant ${variant}; it has ${Object.keys(doc.variants ?? {}).join(', ')}`);
@@ -53,6 +55,7 @@ export class Words {
     this.page = Number(this.v['page']);
     this.guided = this.v['results'] === 'guided';
     this.words = this.fill(doc.results);
+    this.setup = this.fill(doc.setup ?? {});
   }
 
   static load(variant?: string, file = WORDS_FILE): Words {
