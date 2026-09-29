@@ -55,7 +55,7 @@ export function startServer(p: Place, env: Record<string, string> = {}): Server 
     TZ: 'Asia/Kolkata',
     ...env,
   };
-  for (const k of ['HOME', 'SKILLS_HOME', 'SKILLS_ACTIVITY_LOG'] as const) if (full[k] !== undefined) refuseRealPlaces(full[k]);
+  for (const k of ['HOME', 'SKILLS_HOME', 'SKILLS_ACTIVITY_LOG', 'SKILLS_ASSISTANT_HOME'] as const) if (full[k] !== undefined) refuseRealPlaces(full[k]);
   if (full['SKILLS_CATALOG']!.startsWith('file:')) refuseRealPlaces(fileURLToPath(full['SKILLS_CATALOG']!));
 
   const child = spawn(process.execPath, [CLI, 'mcp'], { env: full, cwd: p.dir, stdio: ['pipe', 'pipe', 'pipe'] });
