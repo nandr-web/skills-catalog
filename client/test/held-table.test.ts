@@ -200,7 +200,7 @@ describe('accepting a hold keeps the policy and records the catalog (golden acce
 // On the CLI a hold's words are the CLI's: the command the person runs to take it, never the assistant's tool.
 describe('a hold over an installed copy, at the CLI', () => {
   const words = cliWords(S);
-  const cliCtx = (p: Place): Context => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), words, 'cli').ctx;
+  const cliCtx = (p: Place): Context => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project')), words, 'cli').ctx;
   for (const reason of ['pin', 'notify', 'other_catalog'] as const) {
     it(`held_${reason} names the command to run, not the tool`, async () => {
       const p = place();

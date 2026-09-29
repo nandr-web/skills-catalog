@@ -8,12 +8,11 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { actAs, renderError, CatalogError, Words } from '@skills-catalog/core';
-import { refuseRealPlaces } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
 import { readLock } from '../src/machine/lock.ts';
 import { cli, S } from './cli-io.ts';
 import { open, request, seed, skillMd } from './seed.ts';
-import { place, type Place } from './server.ts';
+import { childEnv, place, type Place } from './server.ts';
 
 const skills = (p: Place) => join(p.osHome, '.claude', 'skills');
 
@@ -267,8 +266,7 @@ describe('the CLI face', () => {
   it('the real command: results on stdout with exit 0, a person-only step with no terminal on stderr with exit 3', async () => {
     const p = place();
     await seed(p);
-    const env = { PATH: process.env['PATH'] ?? '/usr/bin:/bin', HOME: p.osHome, SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_MANAGED_SETTINGS: p.managed };
-    for (const v of [env.HOME, env.SKILLS_HOME]) refuseRealPlaces(v);
+    const env = childEnv(p);
     const bin = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
     // As the installed command starts it: node:sqlite's experimental warning is off, so stderr carries only our words.
     const run = (args: string[]) => spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', bin, ...args], { env, cwd: p.dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });

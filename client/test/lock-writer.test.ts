@@ -47,7 +47,7 @@ type Row = {
 };
 const rows = table.cases as Row[];
 
-const ctxFor = (p: Place): Context => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), S, 'mcp').ctx;
+const ctxFor = (p: Place): Context => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project')), S, 'mcp').ctx;
 const lockPath = (p: Place) => join(p.home, 'lock.json.lock');
 const dest = (p: Place) => join(p.osHome, '.claude', 'skills', NAME);
 const read = (path: string) => (race.fs.existsSync(path) ? race.fs.readFileSync(path, 'utf8') : undefined);

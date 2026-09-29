@@ -2,7 +2,8 @@
 // environment is given here, nothing inherited: SKILLS_HOME, the catalog and HOME are all inside a folder this test run
 // made, and the core's fail-safe refuses any other place before the server starts (contract §8).
 import { spawn } from 'node:child_process';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { refuseRealPlaces, sandbox } from '@skills-catalog/core/testing';
 import { onTestFinished } from 'vitest';
@@ -22,6 +23,41 @@ export function place(): Place {
   const dir = sandbox();
   const catalogDir = join(dir, 'catalog');
   return { dir, home: join(dir, 'skills-home'), catalogDir, catalogUrl: pathToFileURL(catalogDir).href, osHome: join(dir, 'os-home'), managed: join(dir, 'managed-settings') };
+}
+
+/** The tripwire `claude` in a place's own bin folder: it notes each run in `ran` beside it and fails, so a child that
+ *  looks up `claude` finds this, never a real one (the product never starts an assistant). */
+export function tripwireBin(p: Place): string {
+  const bin = join(p.dir, 'tripwire-bin');
+  const claude = join(bin, 'claude');
+  if (!existsSync(claude)) {
+    mkdirSync(bin, { recursive: true });
+    writeFileSync(claude, `#!/bin/sh\necho "claude $*" >> '${join(bin, 'ran')}'\nexit 1\n`, { mode: 0o755 });
+  }
+  return bin;
+}
+
+/** The whole environment of a process a test starts, nothing inherited: the tripwire first on PATH, then the system's
+ *  folders and node's own; HOME and the other home-like places, and every SKILLS_ root, in the place's sandbox, each
+ *  refused by the fail-safe if it's anywhere else. CLAUDE_CONFIG_DIR is the product's input, so it's unset unless given. */
+export function childEnv(p: Place, env: Record<string, string> = {}): Record<string, string> {
+  const tmp = join(p.dir, 'tmp');
+  mkdirSync(tmp, { recursive: true });
+  const full: Record<string, string> = {
+    PATH: [tripwireBin(p), '/usr/bin', '/bin', dirname(process.execPath)].join(':'),
+    HOME: p.osHome,
+    XDG_CONFIG_HOME: join(p.osHome, '.config'),
+    XDG_DATA_HOME: join(p.osHome, '.local', 'share'),
+    TMPDIR: tmp,
+    SKILLS_HOME: p.home,
+    SKILLS_CATALOG: p.catalogUrl,
+    SKILLS_ASSISTANT_HOME: p.osHome,
+    SKILLS_MANAGED_SETTINGS: p.managed,
+    ...env,
+  };
+  for (const k of ['HOME', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'TMPDIR', 'SKILLS_HOME', 'SKILLS_ACTIVITY_LOG', 'SKILLS_ASSISTANT_HOME', 'SKILLS_MANAGED_SETTINGS', 'CLAUDE_CONFIG_DIR'] as const) if (full[k] !== undefined) refuseRealPlaces(full[k]);
+  if (full['SKILLS_CATALOG']!.startsWith('file:')) refuseRealPlaces(fileURLToPath(full['SKILLS_CATALOG']!));
+  return full;
 }
 
 export type ToolResult = { content: { type: string; text: string }[]; isError?: boolean };
@@ -52,18 +88,8 @@ export interface Server {
 }
 
 export function startServer(p: Place, env: Record<string, string> = {}): Server {
-  const full: Record<string, string> = {
-    PATH: process.env['PATH'] ?? '/usr/bin:/bin',
-    HOME: p.osHome,
-    SKILLS_HOME: p.home,
-    SKILLS_CATALOG: p.catalogUrl,
-    SKILLS_MANAGED_SETTINGS: p.managed,
-    // Not UTC, so a local time anywhere (the activity log's clock) differs from UTC even on a machine set to UTC.
-    TZ: 'Asia/Kolkata',
-    ...env,
-  };
-  for (const k of ['HOME', 'SKILLS_HOME', 'SKILLS_ACTIVITY_LOG', 'SKILLS_ASSISTANT_HOME', 'SKILLS_MANAGED_SETTINGS'] as const) if (full[k] !== undefined) refuseRealPlaces(full[k]);
-  if (full['SKILLS_CATALOG']!.startsWith('file:')) refuseRealPlaces(fileURLToPath(full['SKILLS_CATALOG']!));
+  // Not UTC, so a local time anywhere (the activity log's clock) differs from UTC even on a machine set to UTC.
+  const full = childEnv(p, { TZ: 'Asia/Kolkata', ...env });
 
   const child = spawn(process.execPath, [CLI, 'mcp'], { env: full, cwd: p.dir, stdio: ['pipe', 'pipe', 'pipe'] });
   // Never left behind: however the test ends (a timeout, a failure, a server stuck in a system call that can't see its
