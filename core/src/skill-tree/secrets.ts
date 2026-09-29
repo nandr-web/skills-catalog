@@ -12,14 +12,23 @@ export interface SecretHit {
   kind: SecretKind;
 }
 
+// A token's edges are letters and digits only (`(?<![A-Za-z0-9])`, not `\b`): an underscore before a shape, as in a
+// variable's name, must not hide it.
+const START = '(?<![A-Za-z0-9])';
+const END = '(?![A-Za-z0-9])';
+// A setting whose name holds one of these words as a part (DB_PASSWORD, AWS_SECRET_ACCESS_KEY, "password", apiKey),
+// quoted or not, set to a value: a part is joined by _ - or ., so prose ("passwords", "tokenizer") never matches.
+const KEYWORD = '(?:password|passwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token|token)';
+const SETTING = `${START}(?:[A-Za-z0-9]+[_.-])*${KEYWORD}(?:[_.-][A-Za-z0-9]+)*['"]?\\s*[:=]\\s*['"]?[A-Za-z0-9/+_\\-.]{12,}`;
+
 const RULES: readonly [SecretKind, RegExp][] = [
-  ['aws_access_key', /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/],
+  ['aws_access_key', new RegExp(`${START}(?:AKIA|ASIA)[0-9A-Z]{16}${END}`)],
   ['private_key', /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
-  ['github_token', /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})\b/],
-  ['slack_token', /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/],
-  ['anthropic_key', /\bsk-ant-[A-Za-z0-9_-]{20,}\b/],
-  ['openai_key', /\bsk-(?:proj-)?[A-Za-z0-9]{32,}\b/],
-  ['password_or_token', /\b(?:password|passwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token|token)\s*[:=]\s*['"]?[A-Za-z0-9/+_\-.]{12,}/i],
+  ['github_token', new RegExp(`${START}(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})${END}`)],
+  ['slack_token', new RegExp(`${START}xox[abprs]-[A-Za-z0-9-]{10,}${END}`)],
+  ['anthropic_key', new RegExp(`${START}sk-ant-[A-Za-z0-9_-]{20,}${END}`)],
+  ['openai_key', new RegExp(`${START}sk-(?:proj-)?[A-Za-z0-9]{32,}${END}`)],
+  ['password_or_token', new RegExp(SETTING, 'i')],
 ];
 
 // Every kind a hit can have (the faces word each one).

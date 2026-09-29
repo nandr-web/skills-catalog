@@ -13,6 +13,7 @@ import {
   checkTree,
   diffTrees,
   entryOf,
+  scanSecrets,
   fingerprint,
   unifiedDiff,
   type TreeFile,
@@ -457,4 +458,36 @@ describe('diffs (golden/histories.yaml diffs, golden/diffs/)', () => {
     const out = unifiedDiff(long.join(''), changed.join(''), 'f.md');
     expect(out.match(/^@@/gm)).toHaveLength(2);
   });
+});
+
+// The secret scan (contract §2, §5.1 step 1): a secret's shape wherever it sits, including after an underscore in a
+// variable's name or inside JSON's quotes, and never a word in prose.
+describe('the secret scan finds a secret by its shape, in any variable name or quoting', () => {
+  const scan = (line: string) => scanSecrets([{ path: 'config.sh', mode: '0644', bytes: Buffer.from(`# settings\n${line}\n`) }]);
+  const flagged: [string, string][] = [
+    // 40 characters with slashes, like an AWS secret key; joined, since a real-looking key in a public repo trips GitHub's
+    // push protection
+    [['AWS_SECRET_ACCESS_KEY=', 'QAFAKE000/QAFAKE000/', 'QAFAKE0000QAFAKE0000'].join(''), 'password_or_token'],
+    ['export DB_PASSWORD=correct-horse-battery', 'password_or_token'],
+    ['STRIPE_API_KEY=0123456789abcdefghij', 'password_or_token'],
+    ['{"password": "correct-horse-battery"}', 'password_or_token'],
+    ["  'auth_token': 'abcdefghijklmnop',", 'password_or_token'],
+    ['password: correct-horse-battery', 'password_or_token'],
+    ['apiKey=0123456789abcdefghij', 'password_or_token'],
+    ['KEY_ID=prefix_AKIAIOSFODNN7EXAMPLE', 'aws_access_key'],
+  ];
+  for (const [line, kind] of flagged) {
+    it(`flags ${line}`, () => expect(scan(line)).toEqual({ path: 'config.sh', line: 2, kind }));
+  }
+  const passed = [
+    'passwords: must be at least twelve characters long',
+    'tokenizer: sentencepiece-model-v2-large',
+    'secretary=Jane_Doe_the_second_one',
+    'password: ${DB_PASSWORD}',
+    'echo "$API_TOKEN" > /dev/null',
+    'The token comes from the environment, never from this file.',
+  ];
+  for (const line of passed) {
+    it(`leaves alone ${line}`, () => expect(scan(line)).toBeNull());
+  }
 });
