@@ -19,46 +19,56 @@ const guardedFromTheStart = (globalThis as Record<symbol, unknown>)[Symbol.for('
 
 
 describe('the fail-safe (contract §8)', () => {
-  it('refuses reads of Claude Code\'s real managed settings, so a test that forgets SKILLS_MANAGED_SETTINGS fails', async () => {
-    const fs = await import('node:fs');
+  // These show the read guard on stand-ins, never on the machine's own files: were the guard ever broken, a test calling
+  // a read on the real ~/.claude.json would read it (the QA plan-guard). The real places are checked by name only.
+  it('never reads Claude Code\'s managed settings or the person\'s own ~/.claude.json and ~/.claude: the places, by name', async () => {
     const { join } = await import('node:path');
-    // /etc is a link to /private/etc on macOS: the linked-through path is refused as well.
-    for (const dir of ['/Library/Application Support/ClaudeCode', '/etc/claude-code', '/private/etc/claude-code']) {
-      const file = join(dir, 'managed-settings.json');
-      expect(() => fs.readFileSync(file), file).toThrow(/fail-safe/);
-      expect(() => fs.openSync(file, 'r'), file).toThrow(/fail-safe/);
-      expect(() => fs.lstatSync(file), file).toThrow(/fail-safe/);
-      expect(() => fs.statSync(file), file).toThrow(/fail-safe/);
-      expect(() => fs.readdirSync(join(dir, 'managed-settings.d')), dir).toThrow(/fail-safe/);
-      expect(() => fs.existsSync(file), file).toThrow(/fail-safe/);
-      expect(() => fs.createReadStream(file), file).toThrow(/fail-safe/);
-      expect(() => fs.readlinkSync(file), file).toThrow(/fail-safe/);
-      await expect(fs.promises.readFile(file), file).rejects.toThrow(/fail-safe/);
-      expect(() => fs.readFile(file, () => {}), file).toThrow(/fail-safe/);
-    }
-    const standIn = join(sandbox(), 'managed-settings');
-    expect(fs.existsSync(join(standIn, 'managed-settings.json'))).toBe(false);
-    (await import('./fail-safe.ts')).takeRefusals();
+    const { READ_REFUSED } = await import('./fail-safe.ts');
+    const home = userInfo().homedir;
+    // /etc is a link to /private/etc on macOS: both spellings are listed.
+    expect([...READ_REFUSED]).toEqual(['/Library/Application Support/ClaudeCode', '/etc/claude-code', '/private/etc/claude-code', join(home, '.claude.json'), join(home, '.claude')]);
   });
 
-  it('refuses reads of the person\'s own Claude Code files in the real home (~/.claude.json and ~/.claude), by every read call', async () => {
+  it('refuses every read call under a place it never reads, directly and through a link (shown on a sandbox never read for this test)', async () => {
     const fs = await import('node:fs');
     const { join } = await import('node:path');
-    const home = userInfo().homedir;
-    for (const file of [join(home, '.claude.json'), join(home, '.claude', 'settings.json'), join(home, '.claude')]) {
-      expect(() => fs.readFileSync(file), file).toThrow(/fail-safe/);
-      expect(() => fs.lstatSync(file), file).toThrow(/fail-safe/);
-      expect(() => fs.existsSync(file), file).toThrow(/fail-safe/);
-      expect(() => fs.realpathSync(file), file).toThrow(/fail-safe/);
-      expect(() => fs.realpathSync.native(file), file).toThrow(/fail-safe/);
-      expect(() => fs.statfsSync(file), file).toThrow(/fail-safe/);
-      expect(() => fs.watch(file), file).toThrow(/fail-safe/);
-      expect(() => fs.promises.watch(file), file).toThrow(/fail-safe/);
-      expect(() => fs.globSync('*', { cwd: file }), file).toThrow(/fail-safe/);
-      expect(() => fs.copyFileSync(file, join(sandbox(), 'copy')), file).toThrow(/fail-safe/);
-      await expect(fs.openAsBlob(file), file).rejects.toThrow(/fail-safe/);
+    const { alsoNeverRead, takeRefusals } = await import('./fail-safe.ts');
+    const parent = sandbox();
+    const standIn = join(parent, 'never-read');
+    fs.mkdirSync(join(standIn, 'managed-settings.d'), { recursive: true });
+    fs.writeFileSync(join(standIn, 'settings.json'), '{}');
+    fs.symlinkSync(standIn, join(parent, 'link'));
+    const allow = alsoNeverRead(standIn);
+    try {
+      for (const file of [join(standIn, 'settings.json'), join(parent, 'link', 'settings.json'), standIn]) {
+        expect(() => fs.readFileSync(file), file).toThrow(/fail-safe/);
+        expect(() => fs.openSync(file, 'r'), file).toThrow(/fail-safe/);
+        expect(() => fs.lstatSync(file), file).toThrow(/fail-safe/);
+        expect(() => fs.statSync(file), file).toThrow(/fail-safe/);
+        expect(() => fs.existsSync(file), file).toThrow(/fail-safe/);
+        expect(() => fs.accessSync(file), file).toThrow(/fail-safe/);
+        expect(() => fs.createReadStream(file), file).toThrow(/fail-safe/);
+        expect(() => fs.readlinkSync(file), file).toThrow(/fail-safe/);
+        expect(() => fs.realpathSync(file), file).toThrow(/fail-safe/);
+        expect(() => fs.realpathSync.native(file), file).toThrow(/fail-safe/);
+        expect(() => fs.statfsSync(file), file).toThrow(/fail-safe/);
+        expect(() => fs.watch(file), file).toThrow(/fail-safe/);
+        expect(() => fs.watchFile(file, () => {}), file).toThrow(/fail-safe/);
+        expect(() => fs.copyFileSync(file, join(sandbox(), 'copy')), file).toThrow(/fail-safe/);
+        expect(() => fs.readFile(file, () => {}), file).toThrow(/fail-safe/);
+        await expect(fs.promises.readFile(file), file).rejects.toThrow(/fail-safe/);
+        await expect(fs.promises.stat(file), file).rejects.toThrow(/fail-safe/);
+        await expect(fs.openAsBlob(file), file).rejects.toThrow(/fail-safe/);
+      }
+      expect(() => fs.readdirSync(join(standIn, 'managed-settings.d'))).toThrow(/fail-safe/);
+      expect(() => fs.opendirSync(standIn)).toThrow(/fail-safe/);
+      expect(() => fs.globSync('*', { cwd: standIn })).toThrow(/fail-safe/);
+    } finally {
+      allow();
     }
-    (await import('./fail-safe.ts')).takeRefusals();
+    takeRefusals();
+    // Outside it, the same calls read as usual.
+    expect(fs.readFileSync(join(parent, 'link', 'settings.json'), 'utf8')).toBe('{}');
   });
 
   it('checks the reads a path alone doesn\'t show: the promises watch, and glob\'s folder, pattern lists and wildcards (shown on a sandbox never read for this test)', async () => {
@@ -95,14 +105,34 @@ describe('the fail-safe (contract §8)', () => {
     expect(fs.globSync('kept/*.json', { cwd: parent })).toEqual([join('kept', 'settings.json')]);
   });
 
-  it('notes every refusal, so one the code under test catches still fails that test', async () => {
+  // A read refused and caught, as a reader that turns every failure into "unreadable" would (on a stand-in).
+  const caughtRefusal = async () => {
     const fs = await import('node:fs');
-    const { takeRefusals } = await import('./fail-safe.ts');
+    const { join } = await import('node:path');
+    const { alsoNeverRead } = await import('./fail-safe.ts');
+    const standIn = sandbox();
+    fs.writeFileSync(join(standIn, 'settings.json'), '{}');
+    const allow = alsoNeverRead(standIn);
     try {
-      fs.readFileSync('/Library/Application Support/ClaudeCode/managed-settings.json');
+      fs.readFileSync(join(standIn, 'settings.json'));
     } catch {
-      // caught, as a reader that turns every failure into "unreadable" would
+      // caught
+    } finally {
+      allow();
     }
+  };
+
+  it('fails a test that leaves a refusal behind, even one the code caught, and only then', async () => {
+    const { failOnRefusals } = await import('./fail-safe.ts');
+    expect(() => failOnRefusals()).not.toThrow();
+    await caughtRefusal();
+    expect(() => failOnRefusals()).toThrow(/^fail-safe: 1 refusal\(s\) during this test, even where caught .*the first: fail-safe: readFileSync/);
+    expect(() => failOnRefusals()).not.toThrow();
+  });
+
+  it('notes every refusal, so one the code under test catches still fails that test', async () => {
+    const { takeRefusals } = await import('./fail-safe.ts');
+    await caughtRefusal();
     expect(takeRefusals()).toEqual([expect.stringMatching(/^fail-safe: readFileSync/)]);
   });
 

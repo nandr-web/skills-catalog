@@ -21,11 +21,13 @@ function refuse(message: string): never {
 export function takeRefusals(): string[] {
   return refusals.splice(0);
 }
-afterEach(() => {
+/** After each test: fails it when a refusal is left untaken, even one the code caught. */
+export function failOnRefusals(): void {
   const left = takeRefusals();
   // A callback that runs late is refused during whichever test is running then, so the refusal may be an earlier test's.
   if (left.length) throw new Error(`fail-safe: ${left.length} refusal(s) during this test, even where caught (this test's, or an earlier test's leftover callback); the first: ${left[0]}`);
-});
+}
+afterEach(failOnRefusals);
 
 const HOME = userInfo().homedir;
 const roots: string[] = [HOME, join(HOME, '.claude')];

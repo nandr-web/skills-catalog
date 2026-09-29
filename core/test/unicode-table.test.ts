@@ -8,6 +8,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CASE_FOLDING_FILE, INVISIBLE, INVISIBLE_FILE, checkTree } from '../src/skill-tree/index.ts';
 import { CatalogError } from '../src/errors.ts';
+import { onRunnerPath, processEnv } from './process-env.ts';
+import { sandbox } from './sandbox.ts';
 
 const core = join(import.meta.dirname, '..');
 const versionOf = (file: string) => /^# Unicode (\d+\.\d+\.\d+),/m.exec(readFileSync(file, 'utf8'))?.[1];
@@ -46,9 +48,11 @@ describe('the invisible_character table', () => {
   });
 
   // A fresh run needs a Python whose unicodedata is the table's version; with another, the script refuses to run.
-  const python = spawnSync('python3', ['-c', 'import unicodedata; print(unicodedata.unidata_version)'], { encoding: 'utf8' });
+  // The runner's own python3 (the system's is often older), started with a built environment.
+  const python3 = onRunnerPath('python3') ?? 'python3';
+  const python = spawnSync(python3, ['-c', 'import unicodedata; print(unicodedata.unidata_version)'], { env: processEnv(sandbox()), encoding: 'utf8' });
   it.skipIf(python.status !== 0 || python.stdout.trim() !== '16.0.0')('matches a fresh run of scripts/invisible-characters.py', () => {
-    const r = spawnSync('python3', [join(core, 'scripts', 'invisible-characters.py'), '--check'], { encoding: 'utf8' });
+    const r = spawnSync(python3, [join(core, 'scripts', 'invisible-characters.py'), '--check'], { env: processEnv(sandbox()), encoding: 'utf8' });
     expect([r.status, r.stderr]).toEqual([0, '']);
   });
 

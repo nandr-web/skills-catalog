@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest';
 // @ts-expect-error: a plain .mjs script, on purpose (it must run on any Node)
 import { NEED, nodeProblem, problemLine } from '../scripts/node-check.mjs';
 import { Words } from '../src/words-file.ts';
+import { processEnv } from './process-env.ts';
+import { sandbox } from './sandbox.ts';
 
 describe('the Node check (contract §8)', () => {
   it('needs 24.15 or later, and FTS5 in node:sqlite', () => {
@@ -24,7 +26,7 @@ describe('the Node check (contract §8)', () => {
   });
 
   it('passes quietly on this Node: exit 0, nothing printed', () => {
-    const r = spawnSync(process.execPath, [join(import.meta.dirname, '..', 'scripts', 'node-check.mjs')], { encoding: 'utf8' });
+    const r = spawnSync(process.execPath, [join(import.meta.dirname, '..', 'scripts', 'node-check.mjs')], { env: processEnv(sandbox()), encoding: 'utf8' });
     expect([r.status, r.stdout, r.stderr]).toEqual([0, '', '']);
   });
 });
