@@ -2,7 +2,7 @@
 // (contract §2). The body is not searched. Rebuildable from the versions at any time.
 
 import type { SearchCard, SearchFilters, SearchHit, SearchIndex } from '../ports.ts';
-import type { LocalDb } from './db.ts';
+import { LocalDb } from './db.ts';
 
 interface CardRow {
   name: string;
@@ -84,4 +84,10 @@ export class SqliteSearchIndex implements SearchIndex {
         (!updated_since || card.updated_at >= updated_since),
     );
   }
+}
+
+/** The same index on an in-memory database: another adapter keeps its cards elsewhere and ranks them here, so its
+ *  results (the words matched, the stemming, the ranking and its ties) are the local catalog's by construction. */
+export function memorySearchIndex(): SearchIndex {
+  return new SqliteSearchIndex(new LocalDb(':memory:'));
 }
