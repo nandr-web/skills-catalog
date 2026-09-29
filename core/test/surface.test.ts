@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { readFileSync } from 'node:fs';
-import { DEFAULT_SEARCH_LIMIT, MAX_READ_NAMES, MAX_READ_PATHS, MAX_SEARCH_LIMIT, OPERATIONS } from '../src/registry.ts';
+import { DEFAULT_SEARCH_LIMIT, MAX_READ_NAMES, MAX_READ_PATHS, MAX_SEARCH_LIMIT, OPERATIONS, validateInput } from '../src/registry.ts';
 import { MAX_TAGS, SECRET_KINDS, TAG_MAX_LENGTH, checkTree, diffTrees } from '../src/skill-tree/index.ts';
 import { WORD_GAPS, renderDiff, renderError, renderRead, renderSearch, renderVersions } from '../src/render.ts';
 import { SURFACE_FILE, Surface } from '../src/surface.ts';
@@ -122,6 +122,36 @@ describe('the surface (vendored, recommended variant)', () => {
     expect(tools['diff_shared_skill_versions']!.inputSchema.required).toEqual(['name', 'from', 'to']);
     for (const t of Object.values(tools)) {
       for (const [k, p] of Object.entries(t.inputSchema.properties!)) expect(p.description, `${t.name}.${k}`).toBeTruthy();
+    }
+  });
+
+  it('lists the machine operations as tools too, with no CLI-only input in their MCP schemas (contract §3)', async () => {
+    const s = Surface.load();
+    const tools = Object.fromEntries(s.toolDefs().map((t) => [t.op, t]));
+    const props = (op: string) => Object.keys(tools[op]!.inputSchema.properties!);
+    expect(props('publish_skill_to_catalog')).toEqual(['folder', 'message', 'confirm']);
+    expect(tools['publish_skill_to_catalog']!.inputSchema.required).toEqual(['folder']);
+    expect(props('install_shared_skill')).toEqual(['name', 'version', 'target']);
+    expect(tools['install_shared_skill']!.inputSchema.properties!['target']).toMatchObject({ enum: ['user', 'project'] });
+    expect(props('update_installed_skills')).toEqual(['names', 'dry_run']);
+    expect(props('accept_held_update')).toEqual(['name', 'confirm', 'flags']);
+    expect(tools['accept_held_update']!.inputSchema.required).toEqual(['name', 'confirm', 'flags']);
+    expect(props('list_installed_skills')).toEqual([]);
+    expect(props('set_skill_update_policy')).toEqual(['policy', 'name']);
+    expect(tools['set_skill_update_policy']!.inputSchema.properties!['policy']).toMatchObject({ enum: ['auto', 'notify', 'pin'] });
+    for (const [op, t] of Object.entries(tools)) expect(t.name, op).toBe(s.names[OPERATIONS[op]!.surface!]);
+  });
+
+  it('refuses a CLI-only input that comes through the MCP face, and takes it from the CLI', async () => {
+    const cliOnly: [string, Record<string, unknown>][] = [
+      ['publish_skill_to_catalog', { folder: 'x', allow_suspected_secrets: true }],
+      ['install_shared_skill', { name: 'x', target: 'user', policy: 'pin' }],
+      ['update_installed_skills', { names: ['x'], latest: true }],
+    ];
+    for (const [op, input] of cliOnly) {
+      const field = Object.keys(input).at(-1)!;
+      expect((await errorOf(() => validateInput(op, input, 'mcp'))).data, op).toMatchObject({ field, why: 'unknown_field' });
+      expect(validateInput(op, input, 'cli'), op).toMatchObject(input);
     }
   });
 

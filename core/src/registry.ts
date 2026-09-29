@@ -18,7 +18,11 @@ export interface OperationDef {
   mcp: boolean;
   surface?: string; // its key in the agent-facing surface (the tool's words), for operations with an MCP tool
   input: Extract<Schema, { type: 'object' }>;
+  // Inputs only a person at the CLI gives (contract §3): never in the MCP schema, and refused from the MCP face.
+  cliOnly?: readonly string[];
 }
+
+export type Face = 'mcp' | 'cli';
 
 // Request limits are errors that name the field and the limit, never silent clamps (contract §9).
 export const MAX_SEARCH_LIMIT = 50;
@@ -26,6 +30,11 @@ export const DEFAULT_SEARCH_LIMIT = 10;
 export const MAX_READ_NAMES = 20;
 export const VERSIONS_PAGE = 50;
 export const MAX_READ_PATHS = 20;
+
+export const MAX_UPDATE_NAMES = 100;
+// Where a skill installs (contract §3): the person's own skills folder, or the current project's.
+export const TARGETS = ['user', 'project'] as const;
+export const POLICIES = ['auto', 'notify', 'pin'] as const;
 
 const name = { type: 'string', maxLength: 200 } as const;
 const version = { type: 'integer', minimum: 1 } as const;
@@ -121,7 +130,88 @@ export const OPERATIONS: Record<string, OperationDef> = {
     mcp: false,
     input: { type: 'object', properties: { name, version, fingerprint: { type: 'string', maxLength: 80 } } },
   },
+
+  // Machine operations (contract §3): they run in the client, on this machine; the CLI and the MCP server are their faces.
+  publish_skill_to_catalog: {
+    name: 'publish_skill_to_catalog',
+    surface: 'publish',
+    kind: 'machine',
+    phase: 1,
+    mcp: true,
+    input: {
+      type: 'object',
+      properties: {
+        folder: { type: 'string', maxLength: 4096 },
+        message: { type: 'string', maxLength: 1000 },
+        confirm: { type: 'string', maxLength: 2000 },
+        allow_suspected_secrets: { type: 'boolean' },
+      },
+      required: ['folder'],
+    },
+    cliOnly: ['allow_suspected_secrets'],
+  },
+  install_shared_skill: {
+    name: 'install_shared_skill',
+    surface: 'install',
+    kind: 'machine',
+    phase: 1,
+    mcp: true,
+    input: {
+      type: 'object',
+      properties: { name, version, target: { type: 'string', enum: TARGETS }, policy: { type: 'string', enum: POLICIES } },
+      required: ['name'],
+    },
+    cliOnly: ['policy'],
+  },
+  update_installed_skills: {
+    name: 'update_installed_skills',
+    surface: 'update',
+    kind: 'machine',
+    phase: 1,
+    mcp: true,
+    input: {
+      type: 'object',
+      properties: { names: { type: 'array', items: name, maxItems: MAX_UPDATE_NAMES }, dry_run: { type: 'boolean' }, latest: { type: 'boolean' } },
+    },
+    cliOnly: ['latest'],
+  },
+  accept_held_update: {
+    name: 'accept_held_update',
+    surface: 'accept',
+    kind: 'machine',
+    phase: 1,
+    mcp: true,
+    input: {
+      type: 'object',
+      properties: { name, confirm: { type: 'string', maxLength: 2000 }, flags: { type: 'array', items: { type: 'string', maxLength: 40 }, maxItems: 20 } },
+      required: ['name', 'confirm', 'flags'],
+    },
+  },
+  list_installed_skills: {
+    name: 'list_installed_skills',
+    surface: 'status',
+    kind: 'machine',
+    phase: 1,
+    mcp: true,
+    input: { type: 'object', properties: {} },
+  },
+  set_skill_update_policy: {
+    name: 'set_skill_update_policy',
+    surface: 'policy',
+    kind: 'machine',
+    phase: 1,
+    mcp: true,
+    input: { type: 'object', properties: { policy: { type: 'string', enum: POLICIES }, name }, required: ['policy'] },
+  },
 };
+
+// An operation's input schema as one face sees it: the MCP face never gets the CLI-only inputs.
+export function inputSchema(op: string, face: Face = 'cli'): OperationDef['input'] {
+  const def = OPERATIONS[op]!;
+  if (face === 'cli' || !def.cliOnly?.length) return def.input;
+  const properties = Object.fromEntries(Object.entries(def.input.properties).filter(([k]) => !def.cliOnly!.includes(k)));
+  return { ...def.input, properties };
+}
 
 function fail(field: string, why: string, extra: Record<string, unknown> = {}): never {
   throw new CatalogError('invalid_request', { field, why, ...extra });
@@ -183,10 +273,10 @@ function ownCopy(schema: Schema, value: unknown): unknown {
   return value;
 }
 
-// Checks a request against its operation's schema; throws invalid_request naming the field (and the limit, if any).
-// Returns a copy of the request with only its own, known fields.
-export function validateInput<T>(op: keyof typeof OPERATIONS, input: unknown): T {
-  const schema = OPERATIONS[op]!.input;
+// Checks a request against its operation's schema as `face` sees it (the MCP face has no CLI-only input); throws
+// invalid_request naming the field (and the limit, if any). Returns a copy of the request with only its own, known fields.
+export function validateInput<T>(op: keyof typeof OPERATIONS, input: unknown, face: Face = 'cli'): T {
+  const schema = inputSchema(op, face);
   check(schema, input ?? {}, '');
   return ownCopy(schema, input ?? {}) as T;
 }

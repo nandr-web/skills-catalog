@@ -118,7 +118,7 @@ describe('request fields are the operation\'s own (golden request_fields)', () =
       publish_version: (r) => catalog.publish(r, ana),
       fetch_version: (r) => catalog.fetch(r),
     };
-    expect(Object.keys(call).sort()).toEqual(Object.keys(OPERATIONS).sort());
+    expect(Object.keys(call).sort()).toEqual(Object.values(OPERATIONS).filter((o) => o.kind === 'catalog').map((o) => o.name).sort());
     for (const [op, fn] of Object.entries(call)) {
       for (const field of skills.request_fields.refused as string[]) {
         const e = await errorOf(() => fn(JSON.parse(`{${JSON.stringify(field)}: 1}`)));

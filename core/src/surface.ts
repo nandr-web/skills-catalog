@@ -94,17 +94,19 @@ export class Surface {
   }
 
   // The MCP tools: every registry operation that has one. Types, required fields and limits come from the registry
-  // (one schema per operation, contract §1); the surface gives only the names and the words.
+  // (one schema per operation, contract §1), without the inputs only a person at the CLI gives; the surface gives only
+  // the names and the words.
   toolDefs(operations: Record<string, OperationDef> = OPERATIONS): ToolDef[] {
     return Object.values(operations)
       .filter((op) => op.mcp && op.surface && this.doc.tools[op.surface])
       .map((op) => {
         const spec = this.doc.tools[op.surface!];
+        const input = { ...op.input, properties: Object.fromEntries(Object.entries(op.input.properties).filter(([k]) => !op.cliOnly?.includes(k))) };
         return {
           name: this.names[op.surface!]!,
           op: op.name,
           description: this.fill(spec.description[this.v['descriptions']]),
-          inputSchema: this.jsonSchema(op.input, { properties: spec.params ?? {} }) as ToolDef['inputSchema'],
+          inputSchema: this.jsonSchema(input, { properties: spec.params ?? {} }) as ToolDef['inputSchema'],
           annotations: spec.annotations ?? {},
         };
       });
