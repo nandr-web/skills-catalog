@@ -18,14 +18,14 @@
 
 ## A retrieved skill stays the same skill
 
-A retrieved skill is still a copy, so it remembers where it came from. The installer's list records name, version, fingerprint and catalog. On an update it compares versions. Text-only changes apply on their own; anything that could change what runs on your machine stops and shows you first.
+A retrieved skill is still a copy, so it remembers where it came from. The installer's list records name, version, fingerprint and catalog. On an update it compares versions. Text changes to a skill that can't run anything apply on their own. Anything that could change what runs on your machine stops and shows you first, including new instructions in a skill that is allowed to run commands. A first install goes through the same check.
 
 ## How many skills, and what that means for search
 
 | Skills | What works |
 |---|---|
-| up to ~50–70 | The assistant reads the whole list (a card averages ~113 tokens) |
-| ~70 to ~10k | Keyword search narrows first; the assistant picks from a page (a generated 10k catalog: search p95 ≈ 6.5 ms) |
+| up to ~20–30 | The assistant reads the whole list. Claude Code keeps its skill listing to about 1% of the context, and picking the right tool gets worse past 30–50 |
+| ~30 to ~10k | Keyword search narrows first; the assistant picks from a page (a generated 10k catalog: search p95 ≈ 6.5 ms) |
 | 100k+ | Ranking by meaning plus keywords, with a cutoff so "nothing matches" still happens |
 
 The index is rebuilt from the stored versions, so a new search engine needs no data migration. The owner's List (search with no words, plus filters) and Get (read) are kept; optional words were added.
