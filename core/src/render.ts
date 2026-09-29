@@ -236,6 +236,11 @@ export function renderError(s: Surface, e: CatalogError): string {
     }
     case 'internal_error':
       return d['log'] === undefined ? fill(w.internal_error_no_log, d) : fill(w.internal_error, d);
+    case 'invalid_local_file': {
+      // A damaged lock or config file: what removing it would do depends on which file it is.
+      const effect = w.local_file_effect?.[String(d['file'])];
+      return effect === undefined ? asData(e.code, d) : fill(w.invalid_local_file, { ...d, effect });
+    }
     case 'invalid_developer_setting': {
       // A bad developer name from a setting (SKILLS_AS, the MCP server's config, setup's `me`): fix it there.
       const setting = w.developer_setting?.[String(d['setting'])];

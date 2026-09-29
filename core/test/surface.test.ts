@@ -292,6 +292,19 @@ describe('the surface (vendored, recommended variant)', () => {
     expect(renderError(s, new CatalogError('invalid_request', { field: 'confirm', why: 'not_a_confirm' }))).toBe(s.format(w.invalid_confirm));
     expect(renderError(s, new CatalogError('invalid_path', { path: 'a/../b', why: 'dot_segment' }))).toBe(s.format(w.invalid_path, { path: 'a/../b', why: w.why.dot_segment }));
   });
+
+  it('a damaged lock or config file names the file by its path, says why, and what removing it would do', () => {
+    const s = Surface.load();
+    const w = s.word('errors');
+    for (const file of ['lock.json', 'config.json']) {
+      for (const why of ['not_json', 'wrong_shape', 'unknown_policy']) {
+        const path = `/home/ana/.skills-catalog/${file}`;
+        const text = renderError(s, new CatalogError('invalid_local_file', { file, why, path }));
+        expect(text).toBe(s.format(w.invalid_local_file, { path, why: w.why[why], effect: w.local_file_effect[file] }));
+        expect(text).not.toContain(why);
+      }
+    }
+  });
 });
 
 describe('every limit the words quote has one source: the registry or the manifest rules', () => {
