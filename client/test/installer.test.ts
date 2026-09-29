@@ -1,7 +1,7 @@
 // The installer (contract §3, §4.5, §5.3; golden/histories.yaml installer and gate). It installs from bytes it checked,
 // computes every flag itself (a first install is an update from nothing), holds a flagged change until the person's
 // yes, never overwrites or shadows what it didn't install, and records what it did in the lock.
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CatalogError, Surface, actAs, reasons, renderError, type Catalog } from '@skills-catalog/core';
 import { checkTree, diffTrees, fingerprint, sha256Hex, type Mode } from '@skills-catalog/core/skill-tree';
@@ -501,6 +501,84 @@ describe('the folder is checked again before every write (contract §3, §4.5)',
   });
 });
 
+// The security review's case: a project's .claude/skills (or .claude) is replaced by a link, as a pulled commit can carry
+// one, pointing at a folder that holds a same-name skill with a canary file. No call may delete or write anything there.
+describe('a project folder replaced by a link to someone else\'s folder (the security review\'s cases)', () => {
+  type Setup = { p: Place; ctx: Context; victim: string; canary: string; link: string; lockBefore: string };
+  const projectClaude = (p: Place) => join(p.dir, 'project', '.claude');
+
+  // alpha installed into the project; then `at` (.claude/skills, or .claude) is replaced by a link to victim/, which holds
+  // alpha/canary (under skills/ when the link is .claude).
+  async function linkedAfterInstall(at: 'skills' | 'claude', v2: File[]): Promise<Setup> {
+    const p = place();
+    await publish(p, 'alpha', plain('alpha'));
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha', target: 'project' });
+    await publish(p, 'alpha', v2);
+    const victim = join(p.dir, 'victim');
+    const canary = at === 'skills' ? join(victim, 'alpha', 'canary') : join(victim, 'skills', 'alpha', 'canary');
+    mkdirSync(join(canary, '..'), { recursive: true });
+    writeFileSync(canary, 'keep me\n');
+    const link = at === 'skills' ? projectSkills(p) : projectClaude(p);
+    rmSync(link, { recursive: true, force: true });
+    symlinkSync(victim, link);
+    return { p, ctx, victim, canary, link, lockBefore: readFileSync(join(p.home, 'lock.json'), 'utf8') };
+  }
+  const untouched = (s: Setup, victimTree: Record<string, string>) => {
+    expect(readFileSync(s.canary, 'utf8')).toBe('keep me\n');
+    expect(tree(s.victim)).toEqual(victimTree);
+    expect(readFileSync(join(s.p.home, 'lock.json'), 'utf8')).toBe(s.lockBefore);
+    expect(nothingStaged(s.p)).toBe(true);
+  };
+
+  it('update: the canary stays, nothing is written into the linked folder, a refused_target line, the lock unchanged', async () => {
+    for (const at of ['skills', 'claude'] as const) {
+      const s = await linkedAfterInstall(at, plain('alpha', 'Second, markdown only.\n'));
+      const victimTree = tree(s.victim);
+      const r = await update(s.ctx, {});
+      untouched(s, victimTree);
+      const reason = S.format(S.word('update.target_reason.target_symlink'), { path: s.link });
+      expect(r.text.split('\n')).toEqual([S.format(S.word('update.header'), { checked: 1 }), S.format(S.word('update.refused_target'), { name: 'alpha', from: 1, to: 2, path: s.link, reason })]);
+    }
+  });
+
+  it('accept: a held update taken after the link appeared is refused, and nothing changes there', async () => {
+    for (const at of ['skills', 'claude'] as const) {
+      const p = place();
+      await publish(p, 'alpha', plain('alpha'));
+      const ctx = ctxFor(p);
+      await install(ctx, { name: 'alpha', target: 'project' });
+      await publish(p, 'alpha', withScript('alpha'));
+      const confirm = confirmOf((await update(ctx, {})).text.split('\n')[2]!)!;
+      const victim = join(p.dir, 'victim');
+      const canary = at === 'skills' ? join(victim, 'alpha', 'canary') : join(victim, 'skills', 'alpha', 'canary');
+      mkdirSync(join(canary, '..'), { recursive: true });
+      writeFileSync(canary, 'keep me\n');
+      const link = at === 'skills' ? projectSkills(p) : projectClaude(p);
+      rmSync(link, { recursive: true, force: true });
+      symlinkSync(victim, link);
+      const s: Setup = { p, ctx, victim, canary, link, lockBefore: readFileSync(join(p.home, 'lock.json'), 'utf8') };
+      const victimTree = tree(victim);
+      const e = await refusal(() => accept(ctx, { name: 'alpha', confirm, flags: ['runnable_file'] }));
+      expect([e.code, e.data]).toEqual(['target_symlink', { path: link }]);
+      untouched(s, victimTree);
+    }
+  });
+
+  it('install: over the installed copy, or a first install, through the link is refused, and nothing changes there', async () => {
+    for (const at of ['skills', 'claude'] as const) {
+      const s = await linkedAfterInstall(at, plain('alpha', 'Second.\n'));
+      await publish(s.p, 'beta', plain('beta'));
+      const victimTree = tree(s.victim);
+      for (const name of ['alpha', 'beta']) {
+        const e = await refusal(() => install(s.ctx, { name, target: 'project' }));
+        expect([name, e.code, e.data]).toEqual([name, 'target_symlink', { path: s.link }]);
+      }
+      untouched(s, victimTree);
+    }
+  });
+});
+
 describe('update (contract §3 update_installed_skills, §5.3)', () => {
   it('updates a text-only change, holds one that adds a script until the yes, and says what is up to date', async () => {
     const p = place();
@@ -643,6 +721,7 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
   const damages: { file: 'lock.json' | 'config.json'; why: string; bytes: (p: Place) => string }[] = [
     { file: 'lock.json', why: 'not_json', bytes: () => '{"skills": {' },
     { file: 'lock.json', why: 'wrong_shape', bytes: () => '[]' },
+    { file: 'lock.json', why: 'wrong_shape', bytes: () => 'null' },
     { file: 'lock.json', why: 'wrong_shape', bytes: () => '{"skills": []}' },
     { file: 'lock.json', why: 'wrong_shape', bytes: (p) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), version: '1' } } }) },
     { file: 'lock.json', why: 'wrong_shape', bytes: (p) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), accepted: [{ version: 1, flags: 'runnable_file' }] } } }) },
@@ -650,6 +729,8 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
     { file: 'lock.json', why: 'unknown_policy', bytes: (p) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), policy: 'pinn' } } }) },
     { file: 'config.json', why: 'not_json', bytes: () => 'update_policy: pin\n' },
     { file: 'config.json', why: 'wrong_shape', bytes: () => '"pin"' },
+    { file: 'config.json', why: 'wrong_shape', bytes: () => 'null' },
+    { file: 'config.json', why: 'wrong_shape', bytes: () => '{"update_policy": null}' },
     { file: 'config.json', why: 'wrong_shape', bytes: () => '{"update_policy": ["pin"]}' },
     { file: 'config.json', why: 'unknown_policy', bytes: () => '{"update_policy": "Pin"}' },
   ];

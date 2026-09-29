@@ -56,7 +56,7 @@ function checkTarget(ctx: Context, target: Target, name: string, lock: Lock): st
 
 // The skills folder under the target's root, made one folder at a time and never through a link: a link that appeared
 // since checkTarget (or appears while this runs) is refused, not followed. The skill's own folder is checked last.
-function skillsFolderFor(dest: string): void {
+function skillsFolderFor(dest: string): Id {
   const skills = dirname(dest);
   const claude = dirname(skills);
   mkdirSync(dirname(claude), { recursive: true });
@@ -69,10 +69,25 @@ function skillsFolderFor(dest: string): void {
     if (isLink(p)) throw new CatalogError('target_symlink', { path: p });
   }
   if (isLink(dest)) throw new CatalogError('target_symlink', { path: dest });
+  return idOf(skills)!;
 }
 
+// A folder's identity on disk, to tell whether a path still names the folder that was checked.
+type Id = { dev: number; ino: number };
+function idOf(path: string): Id | undefined {
+  try {
+    const s = lstatSync(path);
+    return { dev: s.dev, ino: s.ino };
+  } catch {
+    return undefined;
+  }
+}
+const same = (a: Id | undefined, b: Id | undefined) => a !== undefined && b !== undefined && a.dev === b.dev && a.ino === b.ino;
+
 // The files into a temp folder in SKILLS_HOME, then renamed into place; an installed copy is moved out first and
-// removed once the new one is in (an update replaces local edits: the owner's call).
+// removed once the new one is in (an update replaces local edits: the owner's call). A folder swapped for a link after
+// the checks is never deleted or written through knowingly: the copy moved out is deleted only if it's still the one
+// checked, in the skills folder that was checked; otherwise it's put back and the call refused with target_symlink.
 function writeSkill(ctx: Context, dest: string, files: readonly TreeFile[]): void {
   const staging = join(ctx.settings.home, 'staging');
   mkdirSync(staging, { recursive: true, mode: 0o700 });
@@ -83,14 +98,28 @@ function writeSkill(ctx: Context, dest: string, files: readonly TreeFile[]): voi
       mkdirSync(dirname(full), { recursive: true });
       writeFileSync(full, f.bytes, { mode: f.mode === '0755' ? 0o755 : 0o644 });
     }
-    skillsFolderFor(dest);
-    const old = existsSync(dest) ? `${tmp}-replaced` : undefined;
-    if (old) renameSync(dest, old);
+    const skills = dirname(dest);
+    const checked = skillsFolderFor(dest);
+    const installed = idOf(dest);
+    const changed = () => new CatalogError('target_symlink', { path: skills });
+    const old = installed ? `${tmp}-replaced` : undefined;
+    if (old) {
+      renameSync(dest, old);
+      if (!same(idOf(old), installed) || !same(idOf(skills), checked)) {
+        renameSync(old, dest);
+        throw changed();
+      }
+    }
     try {
       renameSync(tmp, dest);
     } catch (e) {
       if (old) renameSync(old, dest);
       throw e;
+    }
+    // Swapped between the two moves: the new copy went elsewhere, so take it back out; the old one stays in staging.
+    if (!same(idOf(skills), checked)) {
+      renameSync(dest, tmp);
+      throw changed();
     }
     if (old) rmSync(old, { recursive: true, force: true });
   } finally {
