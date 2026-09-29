@@ -161,8 +161,8 @@ describe('the stand-in assistant', () => {
     expect(bob).toContain(`● ${surface.names.diff}  release-note-draft v1 → v2\n`);
     // planned parts: dimmed, with why, and nothing done
     expect(panes.ana).toContain(`\x1b[2m  ● ${surface.cli} setup: not in this demo: it wires each assistant to the catalog itself\x1b[0m`);
-    expect(panes.bob).toContain(`\x1b[2m  ● ${surface.names.install}: comes to this demo next (the installer is built)\x1b[0m`);
-    expect(panes.bob).toContain(`\x1b[2m  ● ${surface.names.update}: comes to this demo next (the update gate is built)\x1b[0m`);
+    expect(panes.bob).toContain(`\x1b[2m  ● ${surface.names.install}: shown with the catalog's server (run without --core)\x1b[0m`);
+    expect(panes.bob).toContain(`\x1b[2m  ● ${surface.names.update}: shown with the catalog's server (run without --core): risky updates are held until you say yes\x1b[0m`);
   });
 
   it('colours alerts orange and tool calls green: the not_owner line and "Can run something new on this machine: yes"', async () => {

@@ -45,9 +45,9 @@ export type Terminal = { pause(): void; resume(): void };
 
 /** What the core in the stand-in's process shows for a command-line op: it runs only on the catalog's server. */
 export const CLI_PLANNED: Record<string, string> = {
-  install: 'comes to this demo next (the installer is built)',
-  update: 'comes to this demo next (the update gate is built)',
-  accept: 'comes to this demo next (the update gate is built)',
+  install: 'shown with the catalog\'s server (run without --core)',
+  update: 'shown with the catalog\'s server (run without --core): risky updates are held until you say yes',
+  accept: 'shown with the catalog\'s server (run without --core): risky updates are held until you say yes',
 };
 
 export type Stage = {
