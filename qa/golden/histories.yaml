@@ -616,8 +616,50 @@ histories:
       - {installed: {version: 1, files: planted.stale-v1, policy: pin}, plant: [{version: 1, files: planted.stale-v1}], install: {unchanged: {version: 1}}, lock_unchanged: true, installed_unchanged: true, note: "the same version again changes nothing"}
       - {installed: {version: 1, files: planted.stale-v1, policy: pin}, damage: {remove: notes.md}, plant: [{version: 1, files: planted.stale-v1}], install: {installed: {version: 1}}, installed_equals: planted.stale-v1, note: "an incomplete copy of the same version is written again, whatever the policy"}
       - {installed: {version: 1, files: planted.stale-v1, catalog: other, lock_planted: true}, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], update: {held: other_catalog, was: "$OTHER_CATALOG", now: "$CATALOG", target: user, version: 2}, lock_unchanged: true, installed_unchanged: true, then_accept: {flags: [], expect: {installed_equals: planted.stale-clean, lock: {version: 2, catalog: "$CATALOG"}}}}
+      # the same version number from another catalog over an installed copy (t8's blocker, fixed in 68a3cff): held as
+      # other_catalog whether its files differ or not; nothing replaced; the yes records the catalog in use
+      - {installed: {version: 1, files: planted.stale-v1, catalog: other, lock_planted: true}, plant: [{version: 1, files: planted.stale-v1}], install: {held: other_catalog, was: "$OTHER_CATALOG", now: "$CATALOG", target: user, version: 1, from: 1}, lock_unchanged: true, installed_unchanged: true, then_accept: {flags: [], expect: {lock: {version: 1, catalog: "$CATALOG"}, installed_equals: planted.stale-v1}}, note: "the same version and the same files, from another catalog: still held"}
+      - {installed: {version: 1, files: planted.stale-v1, catalog: other, lock_planted: true}, plant: [{version: 1, files: planted.stale-clean}], install: {held: other_catalog, was: "$OTHER_CATALOG", now: "$CATALOG", target: user, version: 1, from: 1}, lock_unchanged: true, installed_unchanged: true, then_accept: {flags: [], expect: {lock: {version: 1, catalog: "$CATALOG"}, installed_equals: planted.stale-clean}}, note: "the same version number with other files, from another catalog: held; the yes installs this catalog's files"}
+      - {installed: {version: 1, files: planted.stale-v1, catalog: other, lock_planted: true}, plant: [{version: 1, files: planted.stale-clean}], update: {unchanged: {version: 1}}, lock_unchanged: true, installed_unchanged: true, note: "update finds no newer version: unchanged, as before; the hold comes only from an install"}
       - {installed: {version: 1, files: planted.stale-v1, catalog: other, lock_planted: true, policy: pin}, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], install: {held: other_catalog, was: "$OTHER_CATALOG", now: "$CATALOG", from: 1}, lock_unchanged: true, installed_unchanged: true, note: "other_catalog comes before pin"}
       - {installed: {version: 1, files: planted.stale-v1, policy: pin}, plant: [{version: 1, files: planted.stale-v1}, {version: 2, files: planted.stale-clean}], install: {held: pin, target: user, version: 2}, then_accept: {send: {target: project}, flags: [], expect: {error: conflict, lock_unchanged: true, installed_unchanged: true}}, note: "a hold is taken only for its own target"}
+
+  lock_writer:
+    name: pr-review-checklist
+    note: >-
+      One writer at a time on lock.json (contract §4.5, 4ba222fd, 9ca2541a). Every change (install, update, accept, a
+      policy change) holds $SKILLS_HOME/lock.json.lock (created only if absent, mode 0600, holding the holder's pid and
+      start time), writes to a temporary file, renames it over lock.json, and removes the lock afterwards, whether it
+      succeeded or not. A held lock is retried for up to 5 s, then lock_busy {path: the lock file, pid} (exit 1), changing
+      nothing. Stale, removed, then taken as usual: a holder that's gone, a pid that now belongs to a process started at
+      another time, or a regular file of this user whose holder can't be read once it's over 5 s old by mtime. Never
+      removed: a link, anything but a regular file, another user's file (lock_busy with pid null after 5 s), or a file
+      replaced between the check and the removal (treated as held). Reads take no lock.
+      Each case starts from a real install of prc.v1 (user target) with prc.v2 in the catalog; `call` is the command.
+      `lock_file` is made by the harness before the call: `helper: {release_after_s}` = a child process of the test that
+      creates the lock the product's way (its own pid and start time) and removes it after that many seconds (it's
+      killed in a finally); `dead_pid` = a pid of a process that has exited; `live_pid_other_start` = the helper's pid
+      with another start time; `content` + `age_s` = a regular file of this user with that text and mtime age; `link` to
+      a file under $RUN/outside/; `folder`; `other_user` = owned by another user (runs only as root, in the container).
+      `seam.before_stale_remove: replace_with_helper` = the core's in-process hook replaces the stale file with a live
+      helper's lock just before the removal. `lock_file_after`: absent | kept (byte-identical, same kind).
+      `waited_s`: [min, max] seconds the call took. `pid: helper` = the helper's pid.
+    cases:
+      - {id: held-past-5s, lock_file: {helper: {release_after_s: 8}}, call: update, expect: {error: lock_busy, path: "$SKILLS_HOME/lock.json.lock", pid: helper, exit: 1}, waited_s: [5, 7], lock_unchanged: true, installed_unchanged: true, lock_file_after: kept}
+      - {id: released-within-5s, lock_file: {helper: {release_after_s: 1}}, call: update, expect: {updated: {version: 2}}, waited_s: [1, 5], lock_file_after: absent}
+      - {id: dead-pid, lock_file: {dead_pid: true}, call: update, expect: {updated: {version: 2}}, waited_s: [0, 2], lock_file_after: absent, note: "stale: removed and taken"}
+      - {id: pid-reused, lock_file: {live_pid_other_start: true}, call: update, expect: {updated: {version: 2}}, waited_s: [0, 2], lock_file_after: absent, note: "a live pid started at another time is someone else: stale"}
+      - {id: unreadable-young, lock_file: {content: "", age_s: 1}, call: update, expect: {error: lock_busy, path: "$SKILLS_HOME/lock.json.lock", pid: null, exit: 1}, waited_s: [5, 7], lock_unchanged: true, lock_file_after: kept, note: "an empty lock under 5 s old may be a run that just made it"}
+      - {id: unreadable-old, lock_file: {content: "", age_s: 10}, call: update, expect: {updated: {version: 2}}, lock_file_after: absent, note: "a run that stopped between making and writing it: stale once over 5 s"}
+      - {id: garbage-old, lock_file: {content: "not a lock QA-SENTINEL-$RUN_ID", age_s: 10}, call: update, expect: {updated: {version: 2}}, lock_file_after: absent, output_never_contains: "QA-SENTINEL-$RUN_ID"}
+      - {id: link, lock_file: {link: true}, call: update, expect: {error: lock_busy, path: "$SKILLS_HOME/lock.json.lock", pid: null, exit: 1}, waited_s: [5, 7], lock_unchanged: true, lock_file_after: kept, outside_unchanged: true, note: "a link is never removed or followed"}
+      - {id: folder, lock_file: {folder: true}, call: update, expect: {error: lock_busy, path: "$SKILLS_HOME/lock.json.lock", pid: null, exit: 1}, waited_s: [5, 7], lock_unchanged: true, lock_file_after: kept}
+      - {id: other-user, lock_file: {other_user: true, dead_pid: true}, call: update, expect: {error: lock_busy, path: "$SKILLS_HOME/lock.json.lock", pid: null, exit: 1}, lock_unchanged: true, lock_file_after: kept, root_only: true, note: "another user's lock is never removed, even a stale one"}
+      - {id: replaced-before-removal, lock_file: {dead_pid: true}, seam: {before_stale_remove: {replace_with_helper: {release_after_s: 8}}}, call: update, expect: {error: lock_busy, path: "$SKILLS_HOME/lock.json.lock", pid: helper, exit: 1}, waited_s: [5, 7], lock_unchanged: true, lock_file_after: kept, note: "the file changed after the check: treated as held"}
+      - {id: failed-change-releases, plant_mismatch: true, call: update, expect: {error: fingerprint_mismatch}, lock_unchanged: true, lock_file_after: absent, note: "the lock is removed after a failed change too (the served files don't match the version list)"}
+      - {id: two-writers, call: {parallel: [update, {install: release-note-draft}]}, expect: {both_succeed: true, lock_has: [pr-review-checklist, release-note-draft]}, lock_file_after: absent, note: "two processes at once: neither loses the other's entry"}
+      - {id: read-takes-no-lock, lock_file: {helper: {release_after_s: 8}}, call: list_installed_skills, expect: {installed: [pr-review-checklist]}, waited_s: [0, 1]}
+      - {id: while-held, seam: {after_lock_taken: inspect}, call: update, expect: {updated: {version: 2}, lock_file_while_held: {mode: "0600", holds_pid_of: this_run}}, lock_file_after: absent}
 
   replace_safely:
     name: stale-rules
