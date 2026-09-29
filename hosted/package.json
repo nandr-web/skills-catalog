@@ -15,6 +15,7 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "3.1142.0",
     "@aws-sdk/client-s3": "3.1142.0",
+    "@aws-sdk/client-ssm": "3.1142.0",
     "@aws-sdk/s3-request-presigner": "3.1142.0",
     "@skills-catalog/core": "file:../core"
   },
