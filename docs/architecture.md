@@ -26,6 +26,24 @@ What runs on your machine today, what comes next, and the hosted option designed
 | **Guided setup** | One colourful command (an assistant can run it too), auto-updates on by default, `--yes` or a file for unattended setup, `teardown` to undo it | Next |
 | **Web UI, hosted catalog, bundles, agent reviewers** | Designed; parked until phase 1 is done | Later |
 
+## Each part and its technology (chosen by the owner)
+
+What each part holds, what runs it on your machine today, and what the hosted catalog will use. Hosting is opt-in and not built yet; the hosted column is the chosen design.
+
+| Part | What it holds or does | On your machine (built) | Hosted catalog (chosen, not built) |
+|---|---|---|---|
+| **The API** | Every operation, defined once; the assistant's tools, the CLI, the web page's HTTP routes and a published schema come from it ([api.md](api.md)) | The assistant's tools (MCP) and the CLI | The same operations over HTTP, `POST /api/v1/<operation>` |
+| **Skills: versions + files** | Each skill's versions, owners and files, stored by fingerprint | SQLite + a folder of files | DynamoDB + S3 |
+| **Search** | Finding skills by words, tags, publisher or date | SQLite full-text search | A search file in S3, ranked in the function; OpenSearch Serverless to be re-assessed in phase 3 |
+| **Compute** | What runs the catalog and its API | Your machine | Lambda + HTTP API; files go up and down by short-lived S3 links |
+| **Events** | Telling search and the reviewer that a version was published | An outbox saved with each version | A DynamoDB stream to a queue |
+| **Sign-in** | Who is asking; owners publish, everyone signed in reads | "Acting as" a named developer (a demo label) | Sign in with GitHub; personal tokens for assistants |
+| **The web page** | Browsing, comparing versions, publishing | Served on 127.0.0.1 by `serve` (planned) | CloudFront + S3 |
+| **Where it runs** | The whole hosted shape | — | AWS serverless: nothing to pay or patch while idle |
+| **Language and runtime** | Everything above | TypeScript on Node 24.15+, Node's own SQLite, one YAML parser | The same code |
+| **The assistant's server** | The tools an assistant calls | A small hand-written MCP server (no SDK) | — |
+| **Install and update** | Putting skills in the assistant's folder, and holding risky updates for a yes | The installer checks the files and works out the risk itself; one lock file; one writer at a time | — (always on your machine) |
+
 ## A retrieved skill stays the same skill
 
 ![A new version is checked first: if it could change what runs, or the reviewer flags it, it waits for you with what changed; otherwise it's applied on its own](pictures/risky-updates.svg)

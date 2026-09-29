@@ -211,6 +211,7 @@ Two developers, one catalog, in order:
 - [Architecture](docs/architecture.md): the shape, the parts, and the alternatives we weighed
 - [Decisions](docs/decisions.md): what was chosen, what else was considered, why, and who decided
 - [The contract](docs/contract.md): operations, data, rules and errors
+- [The API](docs/api.md): every operation as the code has it today, with its inputs, output, errors and a real run of each
 - [Requirements](docs/requirements.md): each requirement, where it lives, and the test that checks it
 - [How we test](qa/qa-plan.md): oracles, golden sets, test layers
 - [Agent experience](docs/agent-experience.md): what we measured with real assistants
