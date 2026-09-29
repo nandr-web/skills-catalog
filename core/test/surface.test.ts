@@ -58,6 +58,22 @@ describe('the surface (vendored, recommended variant)', () => {
     for (const op of ['search', 'get', 'versions', 'diff']) expect(Object.keys(OPERATIONS)).toContain(s.names[op]);
   });
 
+  it('builds each MCP tool schema from the registry, with only the words from the surface', async () => {
+    const s = Surface.load();
+    const tools = Object.fromEntries(s.toolDefs().map((t) => [t.op, t]));
+    expect(Object.keys(tools).sort()).toEqual(Object.values(OPERATIONS).filter((o) => o.mcp).map((o) => o.name).sort());
+    const search = tools['search_shared_skills']!.inputSchema;
+    expect(search.additionalProperties).toBe(false);
+    expect(search.properties!['limit']).toMatchObject({ type: 'integer', minimum: 1, maximum: 50 });
+    expect(search.properties!['filters']!.properties!['tags']).toMatchObject({ type: 'array', maxItems: 20, items: { type: 'string' } });
+    expect(search.properties!['filters']!.properties!['tags']!.description).toBeTruthy();
+    expect(tools['read_shared_skill']!.inputSchema.properties!['names']).toMatchObject({ maxItems: 20 });
+    expect(tools['diff_shared_skill_versions']!.inputSchema.required).toEqual(['name', 'from', 'to']);
+    for (const t of Object.values(tools)) {
+      for (const [k, p] of Object.entries(t.inputSchema.properties!)) expect(p.description, `${t.name}.${k}`).toBeTruthy();
+    }
+  });
+
   it.each(VARIANTS)('%s: nothing unfilled in instructions, tools, companion skills, setup text or results', async (variant) => {
     const s = Surface.load(variant);
     const { catalog } = await seeded();
