@@ -56,6 +56,9 @@ export interface OperationDef {
   hostedOutput?: OutputSchema;
   // Called with no Bearer token (hosted): only signing in, which is how one is got.
   token?: 'none';
+  // Its method acts as someone: it takes the acting identity after the input, then the face (a publish, the upload
+  // links, the token operations); every other method takes the face after the input.
+  acts?: true;
 }
 
 // Request limits are errors that name the field and the limit, never silent clamps (contract §9).
@@ -246,6 +249,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     faces: ['web'],
     effect: 'writes_catalog',
     run: 'publish',
+    acts: true,
     output: PUBLISH_OUTPUT,
     errors: ['unauthenticated', 'not_owner', 'conflict', 'invalid_manifest', 'invalid_name', 'invalid_path', 'too_large', 'secret_suspected'],
     input: {
@@ -286,6 +290,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     // It claims every stored file it's asked about (§1.1), so a publish in the next day takes it.
     effect: 'writes_catalog',
     run: 'uploadLinks',
+    acts: true,
     output: UPLOAD_LINKS_OUTPUT,
     errors: ['unauthenticated', 'not_owner', 'invalid_name', 'too_large'],
     input: {
@@ -322,6 +327,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     where: 'hosted',
     effect: 'reads',
     run: 'listTokens',
+    acts: true,
     output: obj({ tokens: list(tokenInfo) }),
     errors: ['unauthenticated'],
     input: { type: 'object', properties: {} },
@@ -334,6 +340,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     where: 'hosted',
     effect: 'writes_catalog',
     run: 'revokeToken',
+    acts: true,
     output: obj({ id: str }),
     errors: ['unauthenticated', 'not_found'],
     input: { type: 'object', properties: { id: { type: 'string', maxLength: 64 } }, required: ['id'] },

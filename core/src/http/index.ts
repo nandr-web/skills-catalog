@@ -83,16 +83,16 @@ export function parseBody(op: string, raw: Uint8Array | 'cut', where: Where, max
 
 type CatalogMethod = (input: unknown, face: Face) => Promise<unknown>;
 
-/** One operation on the Catalog, through the method its row names, with the caller's face in its own slot: publish's
- *  second argument is the identity (the developer acting on this call, so one shared catalog serves every caller), then
- *  the face; every other method's second is the face. */
+/** One operation on the Catalog, through the method its row names, with the caller's face in its own slot: a method
+ *  that acts as someone (its row's `acts`) takes the identity second (the developer acting on this call, so one shared
+ *  catalog serves every caller), then the face; every other method's second is the face. */
 export async function dispatch(op: string, input: unknown, o: { catalog: Catalog; developer: string | undefined; face: Face }): Promise<unknown> {
   const row = Object.hasOwn(OPERATIONS, op) ? OPERATIONS[op]! : undefined;
   const method = row ? (o.catalog as unknown as Record<string, unknown>)[row.run] : undefined;
   if (!row || typeof method !== 'function') throw new Error(`no Catalog method for ${op}`);
-  if (row.run === 'publish') {
+  if (row.acts) {
     const identity: Identity = { actor: async () => o.developer };
-    return o.catalog.publish(input, identity, o.face);
+    return (method as (input: unknown, identity: Identity, face: Face) => Promise<unknown>).call(o.catalog, input, identity, o.face);
   }
   return (method as CatalogMethod).call(o.catalog, input, o.face);
 }
