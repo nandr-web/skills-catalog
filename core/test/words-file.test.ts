@@ -335,11 +335,11 @@ describe('the words file (vendored, recommended variant)', () => {
     expect(w.why.unknown_field_cut).toEqual(expect.any(String));
     expect(renderError(s, new CatalogError('invalid_request', { field: cut, why: 'unknown_field', field_cut: true }))).toBe(s.format(w.invalid_request, { field: cut, why: w.why.unknown_field_cut }));
     expect(renderError(s, new CatalogError('invalid_request', { field: 'k', why: 'unknown_field' }))).toBe(s.format(w.invalid_request, { field: 'k', why: w.why.unknown_field }));
-    for (const why of ['not_uploaded', 'token_only']) {
+    for (const why of ['not_uploaded', 'not_sha256', 'token_only']) {
       expect([why, typeof w.why[why]]).toEqual([why, 'string']);
       expect(renderError(s, new CatalogError('invalid_request', { field: 'f', why }))).toBe(s.format(w.invalid_request, { field: 'f', why: w.why[why] }));
     }
-    expect(WORD_GAPS).toEqual(['errors.why.not_sha256']);
+    expect(WORD_GAPS).toEqual([]);
   });
 
   it('a link in a published folder and a confirm from elsewhere each have their own sentence', () => {
