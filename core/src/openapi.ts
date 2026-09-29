@@ -108,7 +108,7 @@ const PLACE = {
         } } },
       },
       NoToken: { description: 'The bearer token is missing, expired or wrong.' },
-      Refused: { description: 'The request didn\'t come through the catalog\'s own front door.' },
+      Refused: { description: 'Refused before the API.' },
       NotFound: { description: 'No such operation or file.' },
       NotJson: { description: 'The body isn\'t application/json.' },
     },

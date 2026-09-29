@@ -262,6 +262,7 @@ export class Catalog {
 
   // Opens the catalog over its ports and delivers any events a crashed process left pending.
   static async open(ports: CatalogPorts): Promise<Catalog> {
+    if (ports.where !== 'local' && ports.where !== 'hosted') throw new Error(`where the catalog runs must be said: 'local' or 'hosted', not ${String(ports.where)}`);
     if (ports.where === 'hosted' && !ports.links) throw new Error('a hosted catalog needs a links port (its files are served by link)');
     if (ports.where === 'local' && ports.links) throw new Error('a local catalog has no links port (its files are served as bytes)');
     const catalog = new Catalog(ports);

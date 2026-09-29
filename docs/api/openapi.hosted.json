@@ -1862,7 +1862,7 @@
         "description": "The bearer token is missing, expired or wrong."
       },
       "Refused": {
-        "description": "The request didn't come through the catalog's own front door."
+        "description": "Refused before the API."
       },
       "NotFound": {
         "description": "No such operation or file."
