@@ -125,26 +125,27 @@ describe('the routes', () => {
     }
   });
 
-  it('a result is 200 {ok: true, data}: the core\'s typed result, with the acting line as a field', async () => {
+  it('a result is 200 {ok: true, data, words}: the core\'s typed result, the acting line among its words', async () => {
     const { p, h, token } = await served();
     const r = await h.handle(api(token, 'search_shared_skills', { query: 'release notes' }));
     expect(r.status).toBe(200);
     const c = await open(p);
     try {
-      expect(json(r)).toEqual({ ok: true, data: await c.search({ query: 'release notes' }), acting_as: W.format(W.word('acting_as'), { developer: 'dev1' }) });
+      expect(json(r)).toEqual({ ok: true, data: await c.search({ query: 'release notes' }), words: { acting_as: W.format(W.word('acting_as'), { developer: 'dev1' }) } });
     } finally {
       c.close();
     }
   });
 
-  it('an error is 200 {ok: false, error: {code, ...data}} with the sentence every face shows', async () => {
+  it('an error is 200 {ok: false, error: {code, ...data}, words: {error}}: the sentence every face shows', async () => {
     const { h, token } = await served();
     const r = await h.handle(api(token, 'list_shared_skill_versions', { name: 'no-such-skill' }));
     expect(r.status).toBe(200);
     const b = json(r);
     expect(b.ok).toBe(false);
     expect(b.error.code).toBe('not_found');
-    expect(b.sentence).toBe(renderError(W, new CatalogError('not_found', b.error)).trim());
+    const { code: _code, ...data } = b.error;
+    expect(b.words.error).toBe(renderError(W, new CatalogError('not_found', data)));
   });
 });
 
@@ -211,7 +212,7 @@ describe('who is acting (contract §7): setup\'s me or one of its demo developer
 });
 
 describe('publishing from the web', () => {
-  const file = (text: string) => ({ path: 'SKILL.md', mode: 0o644, content_base64: Buffer.from(text).toString('base64') });
+  const file = (text: string) => ({ path: 'SKILL.md', mode: '0644', content_base64: Buffer.from(text).toString('base64') });
   const skill = (name: string, body = 'Body.\n') => ({ name, files: [file(`---\nname: ${name}\ndescription: A web publish.\n---\n${body}`)] });
 
   it('without --publish, a dry run works and a real publish is forbidden (read_only)', async () => {
