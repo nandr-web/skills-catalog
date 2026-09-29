@@ -49,7 +49,7 @@ async function world() {
     if (r.kind !== 'created') throw new Error(`expected created, got ${r.kind}`);
     return r.record;
   }
-  return { ddb, place, clock, names, storage, sha, upload, publish };
+  return { ddb, s3, place, clock, names, storage, sha, upload, publish };
 }
 
 describe('which versions name a file', () => {
@@ -62,6 +62,21 @@ describe('which versions name a file', () => {
     await w.names.record(record);
     expect(await w.storage.fileState(a)).toBe('named');
     expect(await w.storage.fileState(b)).toBe('named');
+  });
+
+  it("the file route's state never reads a file's bytes: named, on its way or unknown, no GetObject is sent", async () => {
+    const w = await world();
+    const a = await w.upload('head only\n');
+    const record = await w.publish('head-only', [a]);
+    const sent: string[] = [];
+    const send = w.s3.send.bind(w.s3);
+    w.s3.send = ((cmd: object, ...rest: unknown[]) => (sent.push(cmd.constructor.name), (send as (...x: unknown[]) => unknown)(cmd, ...rest))) as typeof w.s3.send;
+    expect(await w.storage.fileState(a)).toBe('on_its_way');
+    expect(await w.storage.fileState(w.sha('never uploaded\n'))).toBe('unknown');
+    await w.names.record(record);
+    expect(await w.storage.fileState(a)).toBe('named');
+    expect(sent).not.toContain('GetObjectCommand');
+    expect(sent).toContain('HeadObjectCommand');
   });
 
   it('a named file stays named however old it gets, and recording a version twice changes nothing', async () => {
