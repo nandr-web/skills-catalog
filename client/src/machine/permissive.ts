@@ -5,9 +5,10 @@
 // (`unknown`), and is named, with why, for setup's summary (never its contents). What this can't see, said plainly: a
 // mode given for one session (--permission-mode, --settings), the macOS MDM profile, and Windows.
 
-import { closeSync, constants, fstatSync, lstatSync, openSync, readdirSync, readSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Settings } from '../settings.ts';
+import { readJsonFile } from './json-file.ts';
 
 export type PermissiveMode = 'auto' | 'bypass' | 'sandbox_auto_allow' | 'broad_bash_rule' | 'unknown';
 export type Unusable = { path: string; why: 'unreadable' | 'too_big' | 'not_json' | 'link' } | { path: string; why: 'wrong_type'; key: string };
@@ -47,42 +48,13 @@ function wrongType(v: Record<string, unknown>, managed: boolean): string | undef
 
 /** A settings file as found: absent (undefined), its values, or why it can't be used. */
 function readSettings(path: string, managed: boolean): { values: Read } | { unusable: Unusable } | undefined {
-  const cant = (why: 'unreadable' | 'too_big' | 'not_json' | 'link') => ({ unusable: { path, why } as Unusable });
-  let st;
-  try {
-    st = lstatSync(path);
-  } catch {
-    return undefined;
-  }
-  if (st.isSymbolicLink()) return cant('link');
-  let fd: number;
-  try {
-    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-  } catch (e) {
-    const code = (e as NodeJS.ErrnoException).code;
-    return code === 'ENOENT' ? undefined : cant(code === 'ELOOP' ? 'link' : 'unreadable');
-  }
-  try {
-    if (!fstatSync(fd).isFile()) return cant('unreadable');
-    const buf = Buffer.alloc(MAX_BYTES + 1);
-    let n = 0;
-    for (let got = 1; got > 0 && n <= MAX_BYTES; n += got) got = readSync(fd, buf, n, buf.length - n, null);
-    if (n > MAX_BYTES) return cant('too_big');
-    let v: unknown;
-    try {
-      v = JSON.parse(buf.subarray(0, n).toString('utf8'));
-    } catch {
-      return cant('not_json');
-    }
-    // Valid JSON that isn't an object of settings can't be settings at all.
-    if (!isObject(v)) return cant('not_json');
-    const key = wrongType(v, managed);
-    return key === undefined ? { values: v as Read } : { unusable: { path, why: 'wrong_type', key } };
-  } catch {
-    return cant('unreadable');
-  } finally {
-    closeSync(fd);
-  }
+  // The one reader of the person's settings-shaped files (setup reads them the same way), so a file gives the same why here
+  // and in setup's summary. Read only: the owner and hard-link checks are a writer's, so those whys never come back here.
+  const f = readJsonFile(path, MAX_BYTES, { forWrite: false });
+  if ('absent' in f) return undefined;
+  if ('why' in f) return { unusable: { path, why: f.why === 'other_user' || f.why === 'hard_linked' ? 'unreadable' : f.why } };
+  const key = wrongType(f.value, managed);
+  return key === undefined ? { values: f.value as Read } : { unusable: { path, why: 'wrong_type', key } };
 }
 
 /** Blocks merged key by key, a later single value winning and lists combined (managed-settings.d/). */

@@ -3,7 +3,8 @@
 // settings.json, then the user's; a single value comes from the highest file that sets it, lists merge. The modes, first
 // found wins: auto, bypass (both from user or managed settings only), sandbox_auto_allow, broad_bash_rule, and unknown
 // when a file that's there can't be used. Fixture trees in a sandbox home, project and managed folder, never the real ones.
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { broadBashRule, permissiveMode } from '../src/machine/permissive.ts';
@@ -113,6 +114,15 @@ describe('the permissive mode, from the settings files', () => {
       const t = tree(place(), files);
       expect([which, permissiveMode(t.settings)]).toEqual([which, { mode: 'unknown', unusable: [{ path: t.at[which], ...why }] }]);
     }
+    // Bytes that aren't UTF-8 are not JSON, as for every settings-shaped file (one reader), never read with a stand-in
+    // character; and a file that isn't a regular one (a fifo) is unreadable, looked at before it's opened.
+    const bad = tree(place(), { user: {} });
+    writeFileSync(bad.at.user, Buffer.concat([Buffer.from('{"permissions": {"defaultMode": "default"}, "x": "'), Buffer.from([0xff]), Buffer.from('"}')]));
+    expect(permissiveMode(bad.settings)).toEqual({ mode: 'unknown', unusable: [{ path: bad.at.user, why: 'not_json' }] });
+    const fifo = tree(place(), { user: {} });
+    rmSync(fifo.at.user);
+    execFileSync('mkfifo', [fifo.at.user]);
+    expect(permissiveMode(fifo.settings)).toEqual({ mode: 'unknown', unusable: [{ path: fifo.at.user, why: 'unreadable' }] });
     const p = place();
     const t = tree(p, {});
     mkdirSync(join(p.osHome, '.claude'), { recursive: true });
