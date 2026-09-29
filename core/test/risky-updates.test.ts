@@ -24,9 +24,11 @@ const sorted = <T extends Partial<RiskFlag>>(fs: readonly T[]) => [...fs].sort((
 // rules in §5.3) aren't built yet: these pairs fail until they are, and flag the day they pass.
 const COMMAND_POSITIONS = new Set(['gate.g0-cmdpos', 'gate.g0-bang-target', 'gate.g0-cmdwords', 'gate.g0-outside-dir', 'gate.g0-outside-rel', 'gate.g0-outside-skills']);
 // Neither is command_instruction (an instruction to run something, flagged when the assistant runs commands without
-// asking: `permissive` auto or bypass): its pairs fail the same way until it's built.
+// asking: `permissive` auto or bypass), nor the rules reviewer's prompt_injection: their pairs fail the same way until
+// they're built.
+const NOT_BUILT_KINDS = new Set(['command_instruction', 'prompt_injection']);
 const notBuilt = (p: (typeof pairs)[number]) =>
-  p.risk_flags.filter((f) => (COMMAND_POSITIONS.has(p.to) && f.kind === 'runnable_file') || f.kind === 'command_instruction');
+  p.risk_flags.filter((f) => (COMMAND_POSITIONS.has(p.to) && f.kind === 'runnable_file') || NOT_BUILT_KINDS.has(f.kind!));
 
 describe('the flags an update raises, pair by pair (golden histories.gate)', () => {
   for (const p of pairs) {
