@@ -459,6 +459,13 @@ results:
     held_next_cli: "Tell the person each reason in plain words and ask whether to take it. Do not take it yourself: the person takes it by running ${cli} update {name} --accept in their own terminal. Otherwise {name} stays on v{from}."
     held_notify: '- {name} v{to} is available; its setting is "tell me first", so it stays on v{from}. Ask the person whether to take it.'
     held_pin: "- {name} stays on v{from} (pinned); v{to} is available."
+    held_permissive: "- Waiting for the person: {name} v{from} -> v{to} is not installed yet, because {mode}. While that's on, every update waits for the person's yes, since new instructions could run commands nobody sees. The person can take it now, or turn that setting off."
+    permissive_mode:
+      auto: the assistant's settings put it in auto mode, which approves its own commands
+      bypass: the assistant's settings skip permission prompts
+      sandbox_auto_allow: the assistant's sandbox settings run commands without asking
+      broad_bash_rule: a permission rule in the assistant's settings lets it run commands without asking
+    held_cooldown: "- {name} v{to} waits until {until} before it updates automatically: new versions wait a few days, so a problem someone finds early stops them. It stays on v{from}. If the person wants it now, they can take it (${accept}, their yes) or run ${cli} update {name} --latest in their own terminal."
     refused: "- Not updated: {name} v{to} breaks the catalog's current rules ({reason}), so {name} stays on v{from}. Tell the person; only its publisher can fix it."
     reason:
       runnable_file: it adds or changes {path}, which can run on this machine
@@ -482,6 +489,11 @@ results:
       new_publisher: comes from a different publisher
       prompt_injection: has text that tries to steer the assistant
       context_cost: got much longer
+    reason_short_permissive:
+      auto: waits for a yes while auto mode is on
+      bypass: waits for a yes while permission prompts are off
+      sandbox_auto_allow: waits for a yes while the sandbox runs commands without asking
+      broad_bash_rule: waits for a yes while a permission rule allows commands without asking
     held_hook_person: "{n} skill update(s) waiting for you: {items}. Ask your assistant to explain, or run ${cli} list in a terminal."
     accept_flagged_on_person: "Auto-updates are taking changes that can run something new on this machine without asking you. To stop that: ${cli} setup."
     held_hook_context: "skills-catalog: {n} update(s) waiting for the person: {items}. Mention it in one short line in your first reply, whatever it is about, and offer to explain. Don't take it yourself."
@@ -520,7 +532,7 @@ results:
       empty_segment: has an empty part (//)
       dot_segment: has a . or .. part
       git_folder: is inside a .git folder
-      memory_file: is a CLAUDE.md, CLAUDE.local.md or AGENTS.md, which an assistant would read as a project's own instructions
+      memory_file: is a file an assistant would read as a project's own instructions (a CLAUDE.md, CLAUDE.local.md or AGENTS.md)
       claude_folder: is inside a .claude folder, which holds an assistant's own settings and is never part of a skill
       plugin_folder: is inside a .claude-plugin folder, which would make Claude Code load the skill as a plugin that starts hooks and servers in every session
       segment_too_long: has a folder or file name that is too long
@@ -539,7 +551,8 @@ results:
       too_high: is too high
       not_boolean: isn't true or false
       not_list: isn't a list
-      too_many_items: has too many items
+      too_many: has too many items
+      item_too_long: has an item longer than the limit
       not_object: isn't a set of named fields
       unknown_field: isn't a field this tool takes
       required: is required
@@ -626,7 +639,7 @@ results:
     developer_setting:
       SKILLS_AS: the SKILLS_AS setting
       mcp_config: this assistant's settings for ${cli}
-      me: the name saved by ${cli} setup
+      me: the settings saved by ${cli} setup
     unauthenticated_local: "unauthenticated: no developer name is set for this catalog, so nothing was published. Tell the person; they set theirs by running ${cli} setup in their own terminal. Never choose a name for them."
     forbidden: "forbidden: the catalog doesn't allow this for the person signed in, so nothing was done. Tell them; don't look for another way around it."
     forbidden_hosted: "forbidden: {catalog} is a hosted catalog, and this version runs locally only, so nothing was done. Tell the person; ${cli} setup points it at a local folder."
@@ -665,7 +678,8 @@ setup:
     - updates: {updates}
     - assistant: {assistant}
     Nothing went to the cloud. To undo all of it: ${cli} teardown
-  updates_auto: automatic; an update that could change what runs on this machine waits for you
+  updates_auto: automatic; an update that could change what runs on this machine waits for you, and every update does while your assistant's settings let it run commands without asking
+  updates_permissive_now: Your assistant's settings let it run commands without asking ({mode}), so every skill update (not a first install) will wait for your yes while they do. A mode switched on for one session only isn't seen.
   updates_off: only when you ask (${cli} update)
   handoff_prompt: "Set up our team's Skills Catalog on this machine: run `${cli} setup` and ask me the questions it prints."
   handoff_prompt_fast: "Set up our team's Skills Catalog on this machine with the defaults: run `${cli} setup --yes`."
@@ -772,6 +786,8 @@ log:
       held_flagged: "held: needs an OK"
       held_pin: "held: pinned"
       held_notify: "held: updates only when asked"
+      held_permissive: "held: needs an OK (commands run without asking)"
+      held_cooldown: "held: waiting a few days"
     accept: taken, with an OK
     status: listed
     policy: set
