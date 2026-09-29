@@ -156,7 +156,8 @@ function lstatOr(path: string): Stats | undefined {
  *  ([[dd-]hh:]mm:ss), which has no time zone: a start printed as a local time would be parsed in this run's zone, and a
  *  live holder taken for a stale one. */
 function startOf(pid: number): number | undefined {
-  const r = spawnSync('ps', ['-o', 'etime=', '-p', String(pid)], { encoding: 'utf8', env: { PATH: process.env['PATH'] ?? '/usr/bin:/bin', LC_ALL: 'C' }, timeout: 2000 });
+  // The system's ps by its full path: a `ps` earlier on the person's PATH (a project's node_modules/.bin) never runs.
+  const r = spawnSync('/bin/ps', ['-o', 'etime=', '-p', String(pid)], { encoding: 'utf8', env: { PATH: '/usr/bin:/bin', LC_ALL: 'C' }, timeout: 2000 });
   return startFromEtime(r.stdout ?? '', Date.now());
 }
 

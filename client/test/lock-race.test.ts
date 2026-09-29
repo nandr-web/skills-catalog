@@ -55,6 +55,23 @@ describe('the lock file', () => {
     expect(existsSync(lockPath(p))).toBe(false);
   });
 
+  it('checks a holder with the system\'s own ps, never one found on PATH', async () => {
+    const p = await published('alpha');
+    const bin = join(p.dir, 'bin');
+    const marker = join(p.dir, 'fake-ps-ran');
+    mkdirSync(bin, { recursive: true });
+    writeFileSync(join(bin, 'ps'), `#!/bin/sh\ntouch '${marker}'\necho 00:01\n`, { mode: 0o755 });
+    hold(p, process.pid, startedHere - 3_600_000);
+    const before = process.env['PATH'];
+    process.env['PATH'] = `${bin}:${before ?? '/usr/bin:/bin'}`;
+    try {
+      expect((await install(ctxFor(p), { name: 'alpha' })).outcome).toBe('installed');
+    } finally {
+      process.env['PATH'] = before;
+    }
+    expect(existsSync(marker), 'a ps on PATH ran').toBe(false);
+  });
+
   it('held by a live process: waited for up to 5 seconds, then lock_busy {path, pid}, and nothing changes', async () => {
     const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], { stdio: 'ignore' });
     const started = Date.now();

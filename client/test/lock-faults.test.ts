@@ -17,7 +17,7 @@ const THREE_DAYS_MS = 3 * 24 * 3600 * 1000;
 vi.mock('node:child_process', async (o) => {
   const real = await o<typeof import('node:child_process')>();
   const spawnSync = ((cmd: string, args: readonly string[], opts: object) =>
-    cmd === 'ps' && args.at(-1) === String(process.pid) ? { stdout: '3-00:00:00\n', stderr: '', status: 0 } : real.spawnSync(cmd, args, opts)) as typeof real.spawnSync;
+    cmd === '/bin/ps' && args.at(-1) === String(process.pid) ? { stdout: '3-00:00:00\n', stderr: '', status: 0 } : real.spawnSync(cmd, args, opts)) as typeof real.spawnSync;
   return { ...real, spawnSync, default: { ...real, spawnSync } };
 });
 
