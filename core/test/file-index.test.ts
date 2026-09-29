@@ -9,7 +9,7 @@ import { actAs, openLocalCatalog } from '../src/local/index.ts';
 import type { Storage } from '../src/ports.ts';
 import { sha256Hex } from '../src/skill-tree/index.ts';
 import { historyVersion, loadGolden } from './golden.ts';
-import { errorOf, openTest, request } from './helpers.ts';
+import { contents, errorOf, openTest, request } from './helpers.ts';
 import { sandbox } from './sandbox.ts';
 
 const histories = loadGolden('histories.yaml');
@@ -96,11 +96,13 @@ describe('the table of which versions name a file (local)', () => {
     const { root } = await catalogWithVersions();
     const whole = rows(root);
     withDb(root, (db) => db.exec('DROP TABLE version_files'));
+    const before = contents(root);
     const ro = await openLocalCatalog(root, { readOnly: true });
     for (const f of files('prc.v2')) expect(await storageOf(ro).fileState(sha256Hex(f.bytes))).toBe('named');
     expect(await storageOf(ro).fileState('0'.repeat(64))).toBe('unknown');
     ro.close();
     expect(hasTable(root)).toBe(false);
+    expect(contents(root)).toEqual(before);
     const w = await openLocalCatalog(root);
     w.close();
     expect(rows(root)).toEqual(whole);

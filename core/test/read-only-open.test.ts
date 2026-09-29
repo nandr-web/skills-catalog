@@ -12,7 +12,7 @@ import type { Catalog } from '../src/catalog.ts';
 import { LocalDb, openReadOnly } from '../src/local/db.ts';
 import { DB_FILE, actAs, openLocalCatalog } from '../src/local/index.ts';
 import { openCatalog } from '../src/open.ts';
-import { errorOf, openTest, request } from './helpers.ts';
+import { contents, errorOf, openTest, request } from './helpers.ts';
 import { sandbox } from './sandbox.ts';
 
 const skill = (name: string, body = 'Body.\n') => [{ path: 'SKILL.md', mode: '0644' as const, bytes: Buffer.from(`---\nname: ${name}\ndescription: The ${name} skill.\n---\n${body}`) }];
@@ -22,19 +22,6 @@ async function published(): Promise<string> {
   await catalog.publish(request('alpha', skill('alpha')), actAs('ana'));
   catalog.close();
   return join(dir, 'catalog');
-}
-// Every file under a folder with its bytes, except SQLite's own lock and journal files.
-function contents(dir: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  const walk = (d: string) => {
-    for (const e of readdirSync(d, { withFileTypes: true })) {
-      const p = join(d, e.name);
-      if (e.isDirectory()) walk(p);
-      else if (!/-(shm|wal)$/.test(e.name)) out[p.slice(dir.length)] = readFileSync(p).toString('base64');
-    }
-  };
-  walk(dir);
-  return out;
 }
 const readOnly = (dir: string, named = true) => openLocalCatalog(dir, { readOnly: true, named });
 async function reads(catalog: Catalog) {
@@ -159,6 +146,8 @@ describe('a catalog file made to mislead', () => {
     ['it has another virtual table', 'CREATE VIRTUAL TABLE other USING fts5 (x)'],
     // the file route would read an index by that name as "no table yet" and look through the versions instead
     ['version_files is an index', 'DROP TABLE version_files; CREATE INDEX version_files ON versions (name)'],
+    // the writing open would fail making the table with SQLite's own error instead of naming the catalog
+    ['pending_blobs is an index', 'DROP TABLE pending_blobs; CREATE INDEX pending_blobs ON versions (name)'],
   ];
   for (const [what, sql] of cases) {
     it(`where ${what}, a read-only open refuses with catalog_unreadable and writes nothing`, async () => {

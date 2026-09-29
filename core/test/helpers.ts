@@ -14,6 +14,20 @@ import { sandbox } from './sandbox.ts';
 // machine (Node 24 in a Linux container), so these few get their own budget instead of a global raise.
 export const HEAVY_MS = 30_000;
 
+// Every file under a folder with its bytes, except SQLite's own lock and journal files.
+export function contents(dir: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const walk = (d: string) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (!/-(shm|wal)$/.test(e.name)) out[p.slice(dir.length)] = readFileSync(p).toString('base64');
+    }
+  };
+  walk(dir);
+  return out;
+}
+
 export function fixedClock(start = Date.parse('2026-09-28T12:00:00Z')) {
   let t = start;
   return { now: () => new Date((t += 1000)) };
