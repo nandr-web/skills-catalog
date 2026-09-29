@@ -121,7 +121,16 @@ function prune(dir: string, now: Date): void {
 }
 
 /** The kept events, oldest first; lines that can't be read are skipped. */
-export function readUsage(home: string, now: Date = new Date()): StoredEvent[] {
+export const readUsage = (home: string, now: Date = new Date()): StoredEvent[] => readFrom(home, oldest(now));
+
+/** Whether a hold was recorded in the 24 hours before `now` (a policy change's near_hold). */
+export function holdWithinADay(home: string, now: Date = new Date()): boolean {
+  const since = now.getTime() - DAY_MS;
+  return readFrom(home, dayOf(new Date(since))).some((e) => e.event === 'hold' && Date.parse(e.at) >= since && Date.parse(e.at) <= now.getTime());
+}
+
+// The events in the day files from `fromDay` on, oldest first.
+function readFrom(home: string, fromDay: string): StoredEvent[] {
   const dir = join(home, FOLDER);
   let names: string[];
   try {
@@ -131,11 +140,10 @@ export function readUsage(home: string, now: Date = new Date()): StoredEvent[] {
   } catch {
     return [];
   }
-  const keepFrom = oldest(now);
   const events: StoredEvent[] = [];
   for (const name of names.sort()) {
     const m = DAY_FILE.exec(name);
-    if (!m || m[1]! < keepFrom) continue;
+    if (!m || m[1]! < fromDay) continue;
     let text: string;
     try {
       text = readFileSync(join(dir, name), { encoding: 'utf8', flag: constants.O_RDONLY | constants.O_NOFOLLOW });

@@ -62,6 +62,15 @@ describe('the measures', () => {
     expect(s.turned_off).toEqual({ policy_changes_to_pin_or_notify: 2, within_a_day_of_a_hold: 1 });
   });
 
+  it('a newer version held for the same skill supersedes the older hold: it no longer waits, and counts as superseded', () => {
+    const s = usageStats([hold(ago(20), 'a', 2), hold(ago(10), 'a', 3), hold(ago(9), 'a', 3), hold(ago(5), 'b', 1)], NOW);
+    expect(s.waiting).toEqual({ open_holds: 2, oldest_days: 10 });
+    expect(s.answers.superseded).toBe(1);
+    expect(s.looks.holds_answered).toBe(0);
+    const twice = usageStats([hold(ago(20), 'a', 2), hold(ago(10), 'a', 3), answer(ago(9), 'a', 2, 'superseded'), answer(ago(8), 'a', 3, 'yes'), answer(ago(7), 'a', 3, 'yes')], NOW);
+    expect(twice.answers).toMatchObject({ superseded: 1, yes: 1 });
+  });
+
   it('only the kept days count', () => {
     const s = usageStats([hold(ago(120), 'a', 1), hold(ago(10), 'b', 1)], NOW);
     expect(s.holds.total).toBe(1);

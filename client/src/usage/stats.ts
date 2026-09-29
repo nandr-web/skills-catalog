@@ -48,7 +48,7 @@ const median = (xs: number[]): number | null => {
 };
 
 // One held skill version, however many syncs reported it: its reasons, when first reported, what the person did.
-type Held = { first: number; reasons: Set<Reason>; flaggedFirst?: number; looks: number[]; answer?: { answer: Answer; at: number } };
+type Held = { skill: string; version: number; first: number; reasons: Set<Reason>; flaggedFirst?: number; looks: number[]; answer?: { answer: Answer; at: number } };
 
 export function usageStats(all: readonly StoredEvent[], now: Date = new Date()): UsageStats {
   const end = now.getTime();
@@ -68,7 +68,14 @@ export function usageStats(all: readonly StoredEvent[], now: Date = new Date()):
     switch (e.event) {
       case 'hold': {
         const key = `${e.skill}\u0000${e.version}`;
-        const h = held.get(key) ?? { first: at, reasons: new Set<Reason>(), looks: [] };
+        const h = held.get(key) ?? { skill: e.skill, version: e.version, first: at, reasons: new Set<Reason>(), looks: [] };
+        // A newer version held for the same skill supersedes an older hold the person hasn't answered.
+        for (const older of held.values()) {
+          if (older.skill === e.skill && older.version < e.version && !older.answer) {
+            older.answer = { answer: 'superseded', at };
+            answers.superseded++;
+          }
+        }
         held.set(key, h);
         h.reasons.add(e.reason);
         if (e.reason === 'flagged') h.flaggedFirst ??= at;
@@ -87,9 +94,11 @@ export function usageStats(all: readonly StoredEvent[], now: Date = new Date()):
         break;
       }
       case 'answer': {
-        answers[e.answer]++;
+        // One answer per hold: a later one (or one for a hold already superseded) isn't counted again.
         const h = held.get(`${e.skill}\u0000${e.version}`);
-        if (h && !h.answer) h.answer = { answer: e.answer, at };
+        if (h?.answer) break;
+        answers[e.answer]++;
+        if (h) h.answer = { answer: e.answer, at };
         break;
       }
       case 'mode':

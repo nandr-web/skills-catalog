@@ -6,7 +6,7 @@ import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, 
 import { join } from 'node:path';
 import { sandbox } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
-import { readUsage, recordUsage, USAGE_DAYS } from '../src/usage/record.ts';
+import { holdWithinADay, readUsage, recordUsage, USAGE_DAYS } from '../src/usage/record.ts';
 
 const day = (iso: string) => new Date(`${iso}T12:00:00Z`);
 const home = () => join(sandbox(), 'skills-home');
@@ -91,6 +91,19 @@ describe('recording usage', () => {
     chmodSync(join(locked, 'usage'), 0o500);
     expect(() => recordUsage(locked, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'))).not.toThrow();
     chmodSync(join(locked, 'usage'), 0o700);
+  });
+});
+
+describe('a hold in the last day (a policy change\'s near_hold)', () => {
+  it('is true only when a hold was recorded within the last 24 hours', () => {
+    const h = home();
+    const now = new Date('2026-09-29T12:00:00Z');
+    expect(holdWithinADay(h, now)).toBe(false);
+    recordUsage(h, { event: 'hold', skill: 'a', version: 2, reason: 'flagged', flags: [], behind: 1 }, new Date('2026-09-28T11:59:00Z'));
+    recordUsage(h, { event: 'look', skill: 'a', version: 2, surface: 'cli' }, new Date('2026-09-29T11:00:00Z'));
+    expect(holdWithinADay(h, now)).toBe(false);
+    recordUsage(h, { event: 'hold', skill: 'a', version: 2, reason: 'notify', flags: [], behind: 1 }, new Date('2026-09-28T12:01:00Z'));
+    expect(holdWithinADay(h, now)).toBe(true);
   });
 });
 
