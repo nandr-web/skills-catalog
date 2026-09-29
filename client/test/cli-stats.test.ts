@@ -26,7 +26,7 @@ describe('stats, until its words are vendored', () => {
 
   it.runIf(WORDS_GAP)('prints the summary as its data', async () => {
     const p = place();
-    recordUsage(p.home, { event: 'hold', skill: 'release-notes-kit', version: 2, reason: 'flagged', flags: [], behind: 1 }, new Date(Date.now() - DAY));
+    recordUsage(p.home, { event: 'hold', skill: 'release-notes-kit', version: 2, reason: 'flagged', flags: [], behind: 1 }, new Date(Date.now() - DAY), { createKey: true });
     const r = await runStats(p);
     expect(r.code).toBe(0);
     expect(r.out).toMatch(/^stats: \{"empty":false,/);
@@ -46,11 +46,11 @@ describe.runIf(!WORDS_GAP)('stats', () => {
     const p = place();
     const now = Date.now();
     const at = (days: number, seconds = 0) => new Date(now - days * DAY + seconds * 1000);
-    recordUsage(p.home, { event: 'hold', skill: 'release-notes-kit', version: 2, reason: 'flagged', flags: ['runnable_file'], behind: 1 }, at(20));
-    recordUsage(p.home, { event: 'hold', skill: 'sql-migration-helper', version: 3, reason: 'notify', flags: [], behind: 1 }, at(5));
-    recordUsage(p.home, { event: 'look', skill: 'sql-migration-helper', version: 3, surface: 'cli' }, at(5, 60));
-    recordUsage(p.home, { event: 'answer', skill: 'sql-migration-helper', version: 3, answer: 'yes', together: 1 }, at(5, 90));
-    recordUsage(p.home, { event: 'hold', skill: 'demo-skill-01', version: 4, reason: 'pin', flags: [], behind: 2 }, at(2));
+    recordUsage(p.home, { event: 'hold', skill: 'release-notes-kit', version: 2, reason: 'flagged', flags: ['runnable_file'], behind: 1 }, at(20), { createKey: true });
+    recordUsage(p.home, { event: 'hold', skill: 'sql-migration-helper', version: 3, reason: 'notify', flags: [], behind: 1 }, at(5), { createKey: true });
+    recordUsage(p.home, { event: 'look', skill: 'sql-migration-helper', version: 3, surface: 'cli' }, at(5, 60), { createKey: true });
+    recordUsage(p.home, { event: 'answer', skill: 'sql-migration-helper', version: 3, answer: 'yes', together: 1 }, at(5, 90), { createKey: true });
+    recordUsage(p.home, { event: 'hold', skill: 'demo-skill-01', version: 4, reason: 'pin', flags: [], behind: 2 }, at(2), { createKey: true });
     for (const d of [3, 2, 1]) recordUsage(p.home, { event: 'mode', surface: 'hook' }, at(d));
     recordUsage(p.home, { event: 'notice', surface: 'hook', waiting: 1 }, at(1));
     recordUsage(p.home, { event: 'policy', from: 'auto', to: 'pin', scope: 'skill', near_hold: false }, at(1));
@@ -73,7 +73,7 @@ describe.runIf(!WORDS_GAP)('stats', () => {
   it('a review for a skill pinned soon after a held update names it as avoidance; with no answers the parts that need them are left out', async () => {
     const p = place();
     const now = Date.now();
-    recordUsage(p.home, { event: 'hold', skill: 'a', version: 2, reason: 'flagged', flags: [], behind: 1 }, new Date(now - 2 * DAY));
+    recordUsage(p.home, { event: 'hold', skill: 'a', version: 2, reason: 'flagged', flags: [], behind: 1 }, new Date(now - 2 * DAY), { createKey: true });
     recordUsage(p.home, { event: 'policy', from: 'auto', to: 'pin', scope: 'skill', near_hold: false }, new Date(now - DAY));
     const r = await runStats(p);
     const lines = r.out.trimEnd().split('\n');

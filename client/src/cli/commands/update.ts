@@ -75,12 +75,12 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
   io.stdout(said(s, intro, at) + '\n' + said(s, first ? 'update.accept_look_install' : 'update.accept_look', at) + '\n');
   // Showing the person the reasons is a look (usage metrics); their no is an answer. Their yes is an answer too, for the
   // installer to record where a held update is taken, on every face: not recorded yet (usage-look.test.ts says so).
-  recordUsage(ctx.settings.home, { event: 'look', skill: name, version: hold.version, surface: 'cli' }, ctx.now());
+  recordUsage(ctx.settings.home, { event: 'look', skill: name, version: hold.version, surface: 'cli' }, ctx.now(), { createKey: true });
   const answer = await io.ask(said(s, 'update.accept_ask', {}));
   if (!/^y(es)?$/i.test(answer.trim())) {
     io.stdout(withActing(said(s, first ? 'update.accept_declined_install' : 'update.accept_declined', at)) + '\n');
     logAccept(ctx.settings, s, `${name} v${hold.version}`, logWords(s).result('accept_declined'));
-    recordUsage(ctx.settings.home, { event: 'answer', skill: name, version: hold.version, answer: 'no', together: 1 }, ctx.now());
+    recordUsage(ctx.settings.home, { event: 'answer', skill: name, version: hold.version, answer: 'no', together: 1 }, ctx.now(), { createKey: true });
     used('declined');
     return 0;
   }

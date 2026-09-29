@@ -3,7 +3,7 @@
 // machine keeps, and each event keeps only its own fields, so nothing a person or a publisher typed is ever written.
 // Recording never fails or slows what it records.
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sandbox } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
@@ -27,7 +27,7 @@ describe('recording usage', () => {
   it('stores a skill\'s name only as a keyed hash: the same on this machine, different on another, never the name', () => {
     const h = home();
     const at = day('2026-09-29');
-    recordUsage(h, { event: 'hold', skill: 'release-notes-kit', version: 2, reason: 'flagged', flags: ['runnable_file'], behind: 1 }, at);
+    recordUsage(h, { event: 'hold', skill: 'release-notes-kit', version: 2, reason: 'flagged', flags: ['runnable_file'], behind: 1 }, at, { createKey: true });
     recordUsage(h, { event: 'look', skill: 'release-notes-kit', version: 2, surface: 'cli' }, at);
     recordUsage(h, { event: 'look', skill: 'sql-migration-helper', version: 3, surface: 'assistant' }, at);
     const [hold, look, other] = lines(h, '2026-09-29');
@@ -36,7 +36,7 @@ describe('recording usage', () => {
     expect(other.skill).not.toBe(hold.skill);
     expect(readFileSync(join(h, 'usage', '2026-09-29.jsonl'), 'utf8')).not.toMatch(/release|notes|sql|migration/);
     const elsewhere = home();
-    recordUsage(elsewhere, { event: 'look', skill: 'release-notes-kit', version: 2, surface: 'cli' }, at);
+    recordUsage(elsewhere, { event: 'look', skill: 'release-notes-kit', version: 2, surface: 'cli' }, at, { createKey: true });
     expect(lines(elsewhere, '2026-09-29')[0].skill).not.toBe(hold.skill);
   });
 
@@ -93,7 +93,7 @@ describe('recording usage', () => {
 
   it('a hold may be for a skill from another catalog', () => {
     const h = home();
-    recordUsage(h, { event: 'hold', skill: 'a', version: 1, reason: 'other_catalog', flags: [], behind: 0 }, day('2026-09-29'));
+    recordUsage(h, { event: 'hold', skill: 'a', version: 1, reason: 'other_catalog', flags: [], behind: 0 }, day('2026-09-29'), { createKey: true });
     expect(lines(h, '2026-09-29')[0]).toMatchObject({ event: 'hold', reason: 'other_catalog' });
   });
 
@@ -116,15 +116,61 @@ describe('recording usage', () => {
   });
 });
 
+describe('the machine secret a skill\'s hash is keyed with', () => {
+  const key = (h: string) => join(h, 'confirm.key');
+
+  it('a read (a look from a diff) never creates it: without it, an event naming a skill is dropped; one naming none is kept', () => {
+    const h = home();
+    recordUsage(h, { event: 'look', skill: 'a', version: 2, surface: 'cli' }, day('2026-09-29'));
+    recordUsage(h, { event: 'use', op: 'search_shared_skills', result: 'none' }, day('2026-09-29'));
+    expect(existsSync(key(h))).toBe(false);
+    expect(lines(h, '2026-09-29').map((e) => e.event)).toEqual(['use']);
+  });
+
+  it('what writes anyway (a hold, an answer) may make it; after that a read\'s event is kept', () => {
+    const h = home();
+    recordUsage(h, { event: 'hold', skill: 'a', version: 2, reason: 'flagged', flags: [], behind: 1 }, day('2026-09-29'), { createKey: true });
+    expect(statSync(key(h)).mode & 0o777).toBe(0o600);
+    recordUsage(h, { event: 'look', skill: 'a', version: 2, surface: 'cli' }, day('2026-09-29'));
+    expect(lines(h, '2026-09-29').map((e) => e.event)).toEqual(['hold', 'look']);
+  });
+
+  it('a key that isn\'t safe (a wider mode) is never used or replaced by a read', () => {
+    const h = home();
+    recordUsage(h, { event: 'hold', skill: 'a', version: 2, reason: 'flagged', flags: [], behind: 1 }, day('2026-09-29'), { createKey: true });
+    chmodSync(key(h), 0o644);
+    const before = readFileSync(key(h));
+    recordUsage(h, { event: 'look', skill: 'a', version: 2, surface: 'cli' }, day('2026-09-29'));
+    expect(readFileSync(key(h))).toEqual(before);
+    expect(statSync(key(h)).mode & 0o777).toBe(0o644);
+    expect(lines(h, '2026-09-29').map((e) => e.event)).toEqual(['hold']);
+  });
+});
+
+describe('a day file hard-linked to a file elsewhere', () => {
+  it('is neither written, tightened nor read', () => {
+    const h = home();
+    mkdirSync(join(h, 'usage'), { recursive: true });
+    const outside = join(sandbox(), 'outside.jsonl');
+    writeFileSync(outside, JSON.stringify({ v: 1, at: '2026-09-29T01:00:00.000Z', event: 'notice', surface: 'mcp', waiting: 9 }) + '\n', { mode: 0o644 });
+    chmodSync(outside, 0o644);
+    linkSync(outside, join(h, 'usage', '2026-09-29.jsonl'));
+    recordUsage(h, { event: 'notice', surface: 'hook', waiting: 1 }, day('2026-09-29'));
+    expect(readFileSync(outside, 'utf8').trimEnd().split('\n')).toHaveLength(1);
+    expect(statSync(outside).mode & 0o777).toBe(0o644);
+    expect(readUsage(h, day('2026-09-29'))).toEqual([]);
+  });
+});
+
 describe('a hold in the last day (a policy change\'s near_hold)', () => {
   it('is true only when a hold was recorded within the last 24 hours', () => {
     const h = home();
     const now = new Date('2026-09-29T12:00:00Z');
     expect(holdWithinADay(h, now)).toBe(false);
-    recordUsage(h, { event: 'hold', skill: 'a', version: 2, reason: 'flagged', flags: [], behind: 1 }, new Date('2026-09-28T11:59:00Z'));
+    recordUsage(h, { event: 'hold', skill: 'a', version: 2, reason: 'flagged', flags: [], behind: 1 }, new Date('2026-09-28T11:59:00Z'), { createKey: true });
     recordUsage(h, { event: 'look', skill: 'a', version: 2, surface: 'cli' }, new Date('2026-09-29T11:00:00Z'));
     expect(holdWithinADay(h, now)).toBe(false);
-    recordUsage(h, { event: 'hold', skill: 'a', version: 2, reason: 'notify', flags: [], behind: 1 }, new Date('2026-09-28T12:01:00Z'));
+    recordUsage(h, { event: 'hold', skill: 'a', version: 2, reason: 'notify', flags: [], behind: 1 }, new Date('2026-09-28T12:01:00Z'), { createKey: true });
     expect(holdWithinADay(h, now)).toBe(true);
   });
 });
