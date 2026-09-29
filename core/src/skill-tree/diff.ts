@@ -120,30 +120,51 @@ export function fileRisk(f: TreeFile): RiskFlag | null {
 export interface Injection {
   line: number;
   text: string;
+  command: string;
 }
-const BANG_FENCE = /^[ \t]*(`{3,}|~{3,})[ \t]*!/;
+// Lines end at LF, CR, U+2028 or U+2029 (a CRLF is one break); the blanks before a fence and between it and its `!` are
+// spaces, tabs and the invisible set (a no-break space, a zero-width character, a byte-order mark), so no spelling slips
+// past (contract §5.3).
+const LINE_BREAK = /\r\n|[\n\r\u2028\u2029]/;
+const BLANK = `(?:[ \\t]|${INVISIBLE.source})`;
+const BANG_FENCE = new RegExp(`^${BLANK}*(\`{3,}|~{3,})${BLANK}*!`, 'u');
+const closeFence = (fence: string) => new RegExp(`^${BLANK}*${fence[0] === '`' ? '`' : '~'}{${fence.length},}${BLANK}*$`, 'u');
+const inlineCommand = (line: string) => {
+  const at = line.indexOf('!`');
+  const end = line.indexOf('`', at + 2);
+  return line.slice(at + 2, end < 0 ? undefined : end).trim();
+};
 export function injections(text: string): Injection[] {
-  const lines = text.split('\n');
+  const lines = text.split(LINE_BREAK);
   const out: Injection[] = [];
   for (let i = 0; i < lines.length; i++) {
     const open = BANG_FENCE.exec(lines[i]!);
     if (open) {
-      const close = new RegExp(`^[ \\t]*${open[1]![0] === '`' ? '`' : '~'}{${open[1]!.length},}[ \\t]*\\r?$`);
+      const close = closeFence(open[1]!);
       let j = i + 1;
       while (j < lines.length && !close.test(lines[j]!)) j++;
-      out.push({ line: i + 1, text: lines.slice(i, j + 1).join('\n') });
+      const body = lines.slice(i + 1, j).find((l) => l.trim());
+      out.push({ line: i + 1, text: lines.slice(i, j + 1).join('\n'), command: (body ?? lines[i]!).trim() });
       i = j;
-    } else if (lines[i]!.includes('!`')) out.push({ line: i + 1, text: lines[i]! });
+    } else if (lines[i]!.includes('!`')) out.push({ line: i + 1, text: lines[i]!, command: inlineCommand(lines[i]!) });
   }
   return out;
 }
 
+// A markdown file's injected commands. One that isn't text (not valid UTF-8, or a NUL in it) can't be read for them, so
+// it counts as one, at line 1: the detector errs toward asking.
+const NOT_TEXT = 'not valid UTF-8 text';
+function injectionsIn(f: TreeFile): Injection[] {
+  if (!isMarkdown(f.path)) return [];
+  return isText(f.bytes) ? injections(decodeText(f.bytes)) : [{ line: 1, text: `${NOT_TEXT} ${Buffer.from(f.bytes).toString('base64')}`, command: NOT_TEXT }];
+}
+
 // The injected commands a new version of a markdown file adds or changes: those whose text isn't in the old version.
 function newInjections(a: TreeFile | undefined, b: TreeFile): Injection[] {
-  if (!isMarkdown(b.path) || !isText(b.bytes)) return [];
+  if (!isMarkdown(b.path)) return [];
   const old = new Map<string, number>();
-  for (const x of a && isText(a.bytes) ? injections(decodeText(a.bytes)) : []) old.set(x.text, (old.get(x.text) ?? 0) + 1);
-  return injections(decodeText(b.bytes)).filter((x) => {
+  for (const x of a ? injectionsIn(a) : []) old.set(x.text, (old.get(x.text) ?? 0) + 1);
+  return injectionsIn(b).filter((x) => {
     const n = old.get(x.text) ?? 0;
     if (n > 0) old.set(x.text, n - 1);
     return n === 0;
@@ -157,7 +178,7 @@ function grantsOf(files: readonly TreeFile[], fm: Record<string, unknown>, safeK
     .filter((k) => !safeKeys.includes(k) && !nonGranting.includes(k))
     .sort()
     .map((k) => (k === 'allowed-tools' ? `pre-approves ${show(fm[k])}` : `sets ${k} in its front matter`));
-  if (files.some((f) => isMarkdown(f.path) && isText(f.bytes) && injections(decodeText(f.bytes)).length > 0)) grants.unshift('runs a command as it loads');
+  if (files.some((f) => injectionsIn(f).length > 0)) grants.unshift('runs a command as it loads');
   return grants;
 }
 
@@ -231,7 +252,7 @@ export function diffTrees(from: DiffSide | null, to: DiffSide, configuredSafeKey
     }
     const injected = b ? newInjections(a, b) : [];
     if (injected.length) {
-      for (const x of injected) risk.push({ kind: 'runs_at_load', path, line: x.line, detail: flagText(x.text.split('\n')[0]!.trim()) });
+      for (const x of injected) risk.push({ kind: 'runs_at_load', path, line: x.line, detail: flagText(x.command) });
       continue;
     }
     const instructions = path !== MANIFEST || fa.body !== fb.body || safeChanged;
