@@ -10,7 +10,8 @@
     "./http": "./src/http/index.ts",
     "./testing": "./test/sandbox.ts",
     "./testing/http": "./test/http-cases.ts",
-    "./testing/fail-safe": "./test/fail-safe.ts"
+    "./testing/fail-safe": "./test/fail-safe.ts",
+    "./testing/suites": "./test/shared/index.ts"
   },
   "engines": {
     "node": ">=24.15"

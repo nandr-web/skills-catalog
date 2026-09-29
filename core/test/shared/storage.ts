@@ -34,6 +34,13 @@ function raceBeforeCommit(rival: () => Promise<void>): (s: Storage) => Storage {
     });
 }
 
+// After a refused commit every blob a version references is stored; an adapter that takes back what a refused commit
+// added (local) holds exactly those, and one that can't delete (hosted) leaves the rest unreferenced for its sweep.
+function expectFilesAfterRefusal(a: TestAdapter, stored: Set<string>, referenced: Set<string>): void {
+  for (const s of referenced) expect(stored.has(s), s).toBe(true);
+  if (a.takesBackRefusedFiles) expect(stored).toEqual(referenced);
+}
+
 export function storageSuite(a: TestAdapter): void {
   describe(`fault injection (histories.fault) [${a.name}]`, () => {
     it('the version append fails after the blobs were stored: an error, no version, not searchable; the retry succeeds', async () => {
@@ -47,7 +54,7 @@ export function storageSuite(a: TestAdapter): void {
       expect((await catalog.fetch({ name: 'fault-skill', version: 1 })).files).toHaveLength(2);
     });
 
-    it('a publish that loses the race at its commit point takes back the blobs it added: storage is exactly as it was', async () => {
+    it('a publish that loses the race at its commit point stores no version and leaves every referenced blob; an adapter that takes back takes back exactly what it added', async () => {
       const store = a.store();
       const catalog = await store.open({
         wrapStorage: raceBeforeCommit(async () => {
@@ -60,7 +67,8 @@ export function storageSuite(a: TestAdapter): void {
       expect(e.code).toBe('not_owner');
       expect(e.data['owners']).toEqual(['bo']);
       const referenced = new Set((await catalog.fetch({ name: 'pr-review-checklist', version: 1 })).files.map((f) => sha(Buffer.from(f.content_base64, 'base64'))));
-      expect(await store.blobs()).toEqual(referenced);
+      expect(await store.versionsIn('pr-review-checklist')).toEqual([1]);
+      expectFilesAfterRefusal(a, await store.blobs(), referenced);
     });
 
     it('two publishes with the same expected_latest race: one lands, the other is conflict; the blob they share survives', async () => {
@@ -84,7 +92,8 @@ export function storageSuite(a: TestAdapter): void {
       for (let v = 1; v <= 22; v++) {
         for (const f of (await catalog.fetch({ name: 'pr-review-checklist', version: v })).files) referenced.add(sha(Buffer.from(f.content_base64, 'base64')));
       }
-      expect(await store.blobs()).toEqual(referenced);
+      expect(await store.versionsIn('pr-review-checklist')).toEqual(Array.from({ length: 22 }, (_, i) => i + 1));
+      expectFilesAfterRefusal(a, await store.blobs(), referenced);
     });
 
     it('the search index fails once: the publish still succeeds, and the next search catches up from the outbox', async () => {

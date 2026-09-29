@@ -61,8 +61,8 @@ export interface Storage {
   fileState(sha256: string): Promise<FileState>;
   // Stores the bytes, then compare-and-appends the version with its version_published event, atomically. A file
   // given by its sha256 alone (hosted: already uploaded) is checked inside the commit instead: one not stored is
-  // not_uploaded. Refused (conflict, not_owner, identical, not_uploaded): storage is left exactly as it was. Never: a
-  // version that points at a missing blob.
+  // not_uploaded. Refused (conflict, not_owner, identical, not_uploaded): commit changes nothing; hosted, files uploaded
+  // ahead of it stay unreferenced until the sweep. Never: a version that points at a missing blob.
   commit(
     v: NewVersion,
     files: readonly { sha256: string; bytes?: Uint8Array | undefined }[],
