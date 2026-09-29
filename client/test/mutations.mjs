@@ -25,7 +25,7 @@ const MUTATIONS = [
   // test that calls 20 tools and closes at once stays, for a catalog whose storage waits (the hosted one).
   ['operations.ts', 'a catalog that failed to open is never tried again', '        opened = undefined;\n', ''],
   // the words an assistant reads
-  ['operations.ts', 'a bug\'s traceback reaches the assistant', 'done = { text: renderError(surface, err), target:', "done = { text: err.code === 'internal_error' && e instanceof Error ? String(e.stack) : renderError(surface, err), target:"],
+  ['operations.ts', 'a bug\'s traceback reaches the assistant', ": renderError(surface, err), target: NONE, result: log.error(err.code) };", ": (err.code === 'internal_error' && e instanceof Error ? String(e.stack) : renderError(surface, err)), target: NONE, result: log.error(err.code) };"],
   ['operations.ts', 'errors don\'t say who you act as', 'return { text: settings.developer ?', 'return { text: settings.developer && !isError ?'],
   ['operations.ts', 'the acting line is data, not the surface\'s words', "s.format(s.word('acting_as'), { developer })", '`acting_as: ${developer}`'],
   ['operations.ts', 'a SKILLS_AS that isn\'t a developer name is ignored', 'if (settings.developerInvalid) throw', 'if (false) throw'],
@@ -52,6 +52,12 @@ const MUTATIONS = [
   ['activity.ts', 'the log\'s time is local, not UTC', 'a.at.toISOString().slice(11, 19)', 'a.at.toTimeString().slice(0, 8)'],
   ['activity.ts', 'the target comes before the result (a long one shifts the columns)', '${a.result.padEnd(resultWidth)}  ${a.target}', '${a.target.padEnd(26)}  ${a.result}'],
   ['settings.ts', 'SKILLS_ACTIVITY_LOG is ignored', "resolve(env['SKILLS_ACTIVITY_LOG'] || join(home, 'activity.log'))", "resolve(join(home, 'activity.log'))"],
+  // publishing a folder over MCP (the MCP-level tests in publish.test.ts)
+  ['mcp/server.ts', 'the MCP server asks as the CLI (an input only a person may give gets through)', "contextFor(o.settings, surface, 'mcp', o.now)", "contextFor(o.settings, surface, 'cli', o.now)"],
+  ['operations.ts', 'no developer name on a local catalog says to run login', "const local = err.code === 'unauthenticated' && settings.catalog.startsWith('file:');", 'const local = false;'],
+  ['machine/publish-folder.ts', 'a link in the folder is followed to its target', "import { lstatSync, readdirSync, readFileSync, type Stats } from 'node:fs';", "import { statSync as lstatSync, readdirSync, readFileSync, type Stats } from 'node:fs';"],
+  ['machine/publish-folder.ts', 'the ignore list is sent', 'if (ignoredFile(e.name)) skipped.push(r);', 'if (false) skipped.push(r);'],
+  ['machine/publish-folder.ts', 'the confirm isn\'t tied to the folder and the skill', 'if (t.name !== name || t.fingerprint !== fp) throw', 'if (false) throw'],
 ];
 
 // A mutant is caught by its first failing test, so mutant runs stop there (--bail 1); the baseline runs everything.

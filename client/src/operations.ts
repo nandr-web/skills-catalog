@@ -72,7 +72,9 @@ export async function perform(ctx: Context, op: string, name: string, args: unkn
     done = await run(ctx, args);
   } catch (e) {
     const err = toCatalogError(e, settings.home, ctx.now());
-    done = { text: renderError(surface, err), target: NONE, result: log.error(err.code) };
+    // A local catalog has no sign-in: no developer name is a setup matter, in its own words (not "run login").
+    const local = err.code === 'unauthenticated' && settings.catalog.startsWith('file:');
+    done = { text: local ? surface.word('errors.unauthenticated_local') : renderError(surface, err), target: NONE, result: log.error(err.code) };
     isError = true;
   }
   appendActivity(settings.activityLog, { at: ctx.now(), who: settings.developer, tool: name, target: done.target, result: done.result }, { ownFolder: settings.activityLogInHome, resultWidth: log.width });

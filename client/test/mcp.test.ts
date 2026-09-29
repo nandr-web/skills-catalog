@@ -183,7 +183,11 @@ describe('what Claude Code sends (its frames, recorded with Claude Code 2.1.284)
     expect(r.result.protocolVersion).toBe(init!['params'].protocolVersion);
     expect(r.result.capabilities).toEqual(answer(init!['id'])['result'].capabilities);
     const tools = (await s.frame(list!)).result.tools.map((t: { name: string }) => t.name);
-    expect(tools).toEqual(answer(list!['id'])['result'].tools.map((t: { name: string }) => t.name));
+    // The tools it was recorded with are all still served; any served since is a machine operation that came later.
+    const recorded: string[] = answer(list!['id'])['result'].tools.map((t: { name: string }) => t.name);
+    for (const name of recorded) expect(tools).toContain(name);
+    const opOf = (name: string) => S.toolDefs().find((d) => d.name === name)!.op;
+    for (const name of tools.filter((n: string) => !recorded.includes(n))) expect(OPERATIONS[opOf(name)]!.kind, name).toBe('machine');
   });
 
   it('a tool call carrying Claude Code\'s _meta (its tool-use id, a progress token) is answered as any other', async () => {

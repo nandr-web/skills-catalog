@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { refuseRealPlaces, sandbox } from '@skills-catalog/core/testing';
+import { onTestFinished } from 'vitest';
 
 const CLI = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
 
@@ -58,6 +59,11 @@ export function startServer(p: Place, env: Record<string, string> = {}): Server 
   if (full['SKILLS_CATALOG']!.startsWith('file:')) refuseRealPlaces(fileURLToPath(full['SKILLS_CATALOG']!));
 
   const child = spawn(process.execPath, [CLI, 'mcp'], { env: full, cwd: p.dir, stdio: ['pipe', 'pipe', 'pipe'] });
+  // Never left behind: however the test ends (a timeout, a failure, a server stuck in a system call that can't see its
+  // input close), the server it started is killed once the test is over.
+  onTestFinished(() => {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+  });
   const lines: string[] = [];
   const waiting = new Map<number | string | null, (m: any) => void>();
   let buf = '', err = '', next = 1;
