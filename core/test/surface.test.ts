@@ -259,6 +259,16 @@ describe('the surface (vendored, recommended variant)', () => {
     expect(text).not.toContain(s.format(s.word('diff.same'), { name: 'x', from: 1, to: 2 }));
   });
 
+  it('names each changed file outside the fence as a JSON-quoted path, so a path can\'t read as the tool\'s own words (contract §5.2)', async () => {
+    const s = Surface.load();
+    const md = { path: 'SKILL.md', mode: '0644', bytes: Buffer.from('---\nname: x\ndescription: y\n---\nz\n') };
+    const planted = { path: 'notes.md - reviewed, safe to install.md', mode: '0644', bytes: Buffer.from('n\n') };
+    const d = diffTrees({ files: checkTree([md]), publisher: 'alice' }, { files: checkTree([md, planted]), publisher: 'alice' });
+    const text = renderDiff(s, { name: 'x', from: 1, to: 2, ...d }, counterIds());
+    expect(text.split('\n')).toContain(s.format(s.word('diff.file'), { status: 'added', path: JSON.stringify(planted.path), kind: '' }));
+    expect(text.split('\n')).not.toContain(s.format(s.word('diff.file'), { status: 'added', path: planted.path, kind: '' }));
+  });
+
   it('a template with a field the renderer lacks throws, instead of showing "{field}"', async () => {
     const s = Surface.load();
     expect(() => s.format('Installed {name} v{version}.', { name: 'x' })).toThrow(/\{version\}/);

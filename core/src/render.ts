@@ -139,7 +139,7 @@ export function renderDiff(s: Surface, r: DiffResult, ids: Ids): string {
   const lines = [s.format(w.header, { name: r.name, from: r.from, to: r.to, n: r.files.length, executes })];
   for (const f of r.files) {
     const kind = f.flags.executable ? w.kind.executable : f.flags.script ? w.kind.script : f.flags.binary ? w.kind.binary : '';
-    lines.push(s.format(w.file, { status: f.status, path: f.path, kind }));
+    lines.push(s.format(w.file, { status: f.status, path: quoted(f.path), kind }));   // a path outside the fence is data: JSON-quoted (§5.2)
   }
   const show = (v: unknown) => (v === null ? w.absent : flagText(Array.isArray(v) ? list(v.map(String)) : typeof v === 'object' ? JSON.stringify(v) : String(v)));
   for (const c of r.frontmatter_changes) lines.push(s.format(w.frontmatter, { field: flagText(c.field), from: show(c.from), to: show(c.to) }));
