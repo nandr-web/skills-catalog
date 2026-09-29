@@ -123,10 +123,11 @@ describe('the read commands never write (contract §6)', () => {
   // Nothing published on this machine yet: the same answers an empty catalog gives, and no catalog is made for them.
   it('with no catalog at the default place yet, they answer as an empty catalog, and create nothing', async () => {
     const p = place(), empty = place();
+    (await open(empty)).close();   // a catalog that exists and holds nothing
     const byDefault = { env: { SKILLS_CATALOG: '' } };
     for (const argv of READS) {
       const r = await cli(p, argv, byDefault);
-      const same = await cli(empty, argv);   // a catalog that exists and holds nothing
+      const same = await cli(empty, argv);
       expect([r.code, r.out, r.err], argv[0]).toEqual([same.code, same.out, same.err]);
     }
     expect(existsSync(join(p.home, 'catalog'))).toBe(false);
