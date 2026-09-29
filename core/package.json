@@ -26,6 +26,7 @@
     "typecheck": "tsc --noEmit",
     "check": "node scripts/node-check.mjs && npm run typecheck && npm test",
     "vendor-words": "node scripts/vendor-words.ts",
+    "schema": "node scripts/schema.ts",
     "perf": "node scripts/node-check.mjs && node --disable-warning=ExperimentalWarning scripts/perf-search.ts",
     "try-it": "node scripts/node-check.mjs && node --disable-warning=ExperimentalWarning scripts/try-it.ts"
   },

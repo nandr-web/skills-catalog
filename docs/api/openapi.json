@@ -1,0 +1,1865 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "skills-catalog",
+    "version": "1.0.0",
+    "description": "The catalog's operations over HTTP, generated from the same definitions as the assistant's tools and the CLI."
+  },
+  "x-error-codes": [
+    "internal_error",
+    "invalid_request",
+    "invalid_manifest",
+    "invalid_name",
+    "invalid_path",
+    "too_large",
+    "not_found",
+    "not_owner",
+    "conflict",
+    "forbidden",
+    "unauthenticated",
+    "exists_untracked",
+    "name_in_use",
+    "target_symlink",
+    "secret_suspected",
+    "invalid_developer_setting",
+    "fingerprint_mismatch",
+    "lock_busy",
+    "not_installed",
+    "invalid_local_file",
+    "target_changed",
+    "target_not_private",
+    "target_unavailable",
+    "assistant_file_unusable",
+    "assistant_file_changed",
+    "name_taken",
+    "install_unsafe",
+    "assistant_config_elsewhere"
+  ],
+  "x-common-errors": [
+    "invalid_request",
+    "invalid_developer_setting",
+    "internal_error",
+    "forbidden"
+  ],
+  "paths": {
+    "/api/v1/search_shared_skills": {
+      "post": {
+        "operationId": "search_shared_skills",
+        "x-effect": "reads",
+        "x-faces": [
+          "mcp",
+          "cli",
+          "web"
+        ],
+        "x-errors": [],
+        "security": [
+          {
+            "localToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActingAs"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/search_shared_skills_input"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The operation's answer, error or not.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/search_shared_skills_envelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoToken"
+          },
+          "403": {
+            "$ref": "#/components/responses/Refused"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "415": {
+            "$ref": "#/components/responses/NotJson"
+          }
+        }
+      }
+    },
+    "/api/v1/read_shared_skill": {
+      "post": {
+        "operationId": "read_shared_skill",
+        "x-effect": "reads",
+        "x-faces": [
+          "mcp",
+          "cli",
+          "web"
+        ],
+        "x-errors": [
+          "invalid_name",
+          "not_found"
+        ],
+        "security": [
+          {
+            "localToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActingAs"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/read_shared_skill_input"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The operation's answer, error or not.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/read_shared_skill_envelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoToken"
+          },
+          "403": {
+            "$ref": "#/components/responses/Refused"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "415": {
+            "$ref": "#/components/responses/NotJson"
+          }
+        }
+      }
+    },
+    "/api/v1/list_shared_skill_versions": {
+      "post": {
+        "operationId": "list_shared_skill_versions",
+        "x-effect": "reads",
+        "x-faces": [
+          "mcp",
+          "cli",
+          "web"
+        ],
+        "x-errors": [
+          "invalid_name",
+          "not_found"
+        ],
+        "security": [
+          {
+            "localToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActingAs"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/list_shared_skill_versions_input"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The operation's answer, error or not.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/list_shared_skill_versions_envelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoToken"
+          },
+          "403": {
+            "$ref": "#/components/responses/Refused"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "415": {
+            "$ref": "#/components/responses/NotJson"
+          }
+        }
+      }
+    },
+    "/api/v1/diff_shared_skill_versions": {
+      "post": {
+        "operationId": "diff_shared_skill_versions",
+        "x-effect": "reads",
+        "x-faces": [
+          "mcp",
+          "cli",
+          "web"
+        ],
+        "x-errors": [
+          "invalid_name",
+          "not_found"
+        ],
+        "security": [
+          {
+            "localToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActingAs"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/diff_shared_skill_versions_input"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The operation's answer, error or not.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/diff_shared_skill_versions_envelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoToken"
+          },
+          "403": {
+            "$ref": "#/components/responses/Refused"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "415": {
+            "$ref": "#/components/responses/NotJson"
+          }
+        }
+      }
+    },
+    "/api/v1/publish_version": {
+      "post": {
+        "operationId": "publish_version",
+        "x-effect": "writes_catalog",
+        "x-faces": [
+          "web"
+        ],
+        "x-errors": [
+          "unauthenticated",
+          "not_owner",
+          "conflict",
+          "invalid_manifest",
+          "invalid_name",
+          "invalid_path",
+          "too_large",
+          "secret_suspected"
+        ],
+        "security": [
+          {
+            "localToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActingAs"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/publish_version_input"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The operation's answer, error or not.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/publish_version_envelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoToken"
+          },
+          "403": {
+            "$ref": "#/components/responses/Refused"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "415": {
+            "$ref": "#/components/responses/NotJson"
+          }
+        }
+      }
+    },
+    "/api/v1/fetch_version": {
+      "post": {
+        "operationId": "fetch_version",
+        "x-effect": "reads",
+        "x-faces": [
+          "web"
+        ],
+        "x-errors": [
+          "invalid_name",
+          "not_found"
+        ],
+        "security": [
+          {
+            "localToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActingAs"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/fetch_version_input"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The operation's answer, error or not.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/fetch_version_envelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoToken"
+          },
+          "403": {
+            "$ref": "#/components/responses/Refused"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "415": {
+            "$ref": "#/components/responses/NotJson"
+          }
+        }
+      }
+    },
+    "/api/v1/files/{sha256}": {
+      "get": {
+        "operationId": "fetch_file",
+        "description": "One file of a stored version, by its sha256; a version's files never change.",
+        "x-effect": "reads",
+        "x-faces": [
+          "web"
+        ],
+        "security": [
+          {
+            "localToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sha256",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file's bytes (a local catalog).",
+            "content": {
+              "application/octet-stream": {}
+            }
+          },
+          "302": {
+            "description": "A short-lived link to the file's bytes, issued after the caller's check (a hosted catalog).",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoToken"
+          },
+          "403": {
+            "$ref": "#/components/responses/Refused"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "description": "Uploaded for a publish that hasn't finished: try again shortly.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ErrorCode": {
+        "type": "string",
+        "enum": [
+          "internal_error",
+          "invalid_request",
+          "invalid_manifest",
+          "invalid_name",
+          "invalid_path",
+          "too_large",
+          "not_found",
+          "not_owner",
+          "conflict",
+          "forbidden",
+          "unauthenticated",
+          "exists_untracked",
+          "name_in_use",
+          "target_symlink",
+          "secret_suspected",
+          "invalid_developer_setting",
+          "fingerprint_mismatch",
+          "lock_busy",
+          "not_installed",
+          "invalid_local_file",
+          "target_changed",
+          "target_not_private",
+          "target_unavailable",
+          "assistant_file_unusable",
+          "assistant_file_changed",
+          "name_taken",
+          "install_unsafe",
+          "assistant_config_elsewhere"
+        ]
+      },
+      "Words": {
+        "type": "object",
+        "description": "The sentences the other faces show for the same answer, beside the data or the error.",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "acting_as": {
+            "type": "string"
+          },
+          "demo": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "search_shared_skills_input": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "filters": {
+            "type": "object",
+            "properties": {
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                "maxItems": 10
+              },
+              "publisher": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "updated_since": {
+                "type": "string",
+                "maxLength": 40
+              }
+            },
+            "additionalProperties": false
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "cursor": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "additionalProperties": false
+      },
+      "search_shared_skills_output": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "latest_version": {
+                  "type": "integer"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "publisher": {
+                  "type": "string"
+                },
+                "matched_words": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "description",
+                "latest_version",
+                "tags",
+                "publisher",
+                "matched_words"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "match": {
+            "type": "string",
+            "enum": [
+              "all",
+              "partial",
+              "none"
+            ]
+          },
+          "ranking": {
+            "type": "string",
+            "enum": [
+              "none",
+              "lexical"
+            ]
+          },
+          "next_cursor": {
+            "type": "string"
+          },
+          "total_matches": {
+            "type": "integer"
+          },
+          "catalog_size": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "results",
+          "match",
+          "ranking",
+          "total_matches",
+          "catalog_size"
+        ],
+        "additionalProperties": false
+      },
+      "search_shared_skills_envelope": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": true
+              },
+              "data": {
+                "$ref": "#/components/schemas/search_shared_skills_output"
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": false
+              },
+              "error": {
+                "type": "object",
+                "description": "The error's code and its data (contract §9).",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "enum": [
+                      "internal_error",
+                      "invalid_request",
+                      "forbidden",
+                      "invalid_developer_setting"
+                    ]
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "additionalProperties": true
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "read_shared_skill_input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "maxItems": 20
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "include": {
+            "type": "string",
+            "enum": [
+              "manifest",
+              "files",
+              "contents"
+            ]
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 4096
+            },
+            "maxItems": 20
+          }
+        },
+        "additionalProperties": false
+      },
+      "read_shared_skill_output": {
+        "type": "object",
+        "properties": {
+          "skills": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "integer"
+                    },
+                    "latest_version": {
+                      "type": "integer"
+                    },
+                    "fingerprint": {
+                      "type": "string"
+                    },
+                    "published_at": {
+                      "type": "string"
+                    },
+                    "publisher": {
+                      "type": "string"
+                    },
+                    "manifest": {
+                      "type": "object",
+                      "properties": {
+                        "frontmatter": {
+                          "type": "object",
+                          "properties": {},
+                          "required": [],
+                          "additionalProperties": true
+                        },
+                        "body": {
+                          "type": "string"
+                        },
+                        "body_omitted": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "frontmatter"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "reviews": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "files": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "0644",
+                              "0755"
+                            ]
+                          },
+                          "size": {
+                            "type": "integer"
+                          },
+                          "sha256": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "binary"
+                            ]
+                          },
+                          "content": {
+                            "type": "string"
+                          },
+                          "content_omitted": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "mode",
+                          "size",
+                          "sha256",
+                          "type"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "version",
+                    "latest_version",
+                    "fingerprint",
+                    "published_at",
+                    "publisher",
+                    "manifest",
+                    "reviews"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "internal_error",
+                            "invalid_request",
+                            "invalid_manifest",
+                            "invalid_name",
+                            "invalid_path",
+                            "too_large",
+                            "not_found",
+                            "not_owner",
+                            "conflict",
+                            "forbidden",
+                            "unauthenticated",
+                            "exists_untracked",
+                            "name_in_use",
+                            "target_symlink",
+                            "secret_suspected",
+                            "invalid_developer_setting",
+                            "fingerprint_mismatch",
+                            "lock_busy",
+                            "not_installed",
+                            "invalid_local_file",
+                            "target_changed",
+                            "target_not_private",
+                            "target_unavailable",
+                            "assistant_file_unusable",
+                            "assistant_file_changed",
+                            "name_taken",
+                            "install_unsafe",
+                            "assistant_config_elsewhere"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code"
+                      ],
+                      "additionalProperties": true
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "inline_budget": {
+            "type": "object",
+            "properties": {
+              "limit": {
+                "type": "integer"
+              },
+              "used": {
+                "type": "integer"
+              },
+              "omitted": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "limit",
+              "used",
+              "omitted"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "skills",
+          "inline_budget"
+        ],
+        "additionalProperties": false
+      },
+      "read_shared_skill_envelope": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": true
+              },
+              "data": {
+                "$ref": "#/components/schemas/read_shared_skill_output"
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": false
+              },
+              "error": {
+                "type": "object",
+                "description": "The error's code and its data (contract §9).",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "enum": [
+                      "internal_error",
+                      "invalid_request",
+                      "invalid_name",
+                      "not_found",
+                      "forbidden",
+                      "invalid_developer_setting"
+                    ]
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "additionalProperties": true
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "list_shared_skill_versions_input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "cursor": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "list_shared_skill_versions_output": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "latest": {
+            "type": "integer"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "version": {
+                  "type": "integer"
+                },
+                "fingerprint": {
+                  "type": "string"
+                },
+                "published_at": {
+                  "type": "string"
+                },
+                "publisher": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "flags": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "runnable_file",
+                          "runs_at_load",
+                          "command_instruction",
+                          "capability_frontmatter",
+                          "instructions_changed",
+                          "non_markdown",
+                          "new_publisher",
+                          "prompt_injection",
+                          "context_cost"
+                        ]
+                      },
+                      "path": {
+                        "type": "string"
+                      },
+                      "line": {
+                        "type": "integer"
+                      },
+                      "field": {
+                        "type": "string"
+                      },
+                      "from": {},
+                      "to": {},
+                      "detail": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "detail"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "version",
+                "fingerprint",
+                "published_at",
+                "publisher",
+                "message",
+                "flags"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "latest",
+          "versions"
+        ],
+        "additionalProperties": false
+      },
+      "list_shared_skill_versions_envelope": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": true
+              },
+              "data": {
+                "$ref": "#/components/schemas/list_shared_skill_versions_output"
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": false
+              },
+              "error": {
+                "type": "object",
+                "description": "The error's code and its data (contract §9).",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "enum": [
+                      "internal_error",
+                      "invalid_request",
+                      "invalid_name",
+                      "not_found",
+                      "forbidden",
+                      "invalid_developer_setting"
+                    ]
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "additionalProperties": true
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "diff_shared_skill_versions_input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "from": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "to": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "name",
+          "from",
+          "to"
+        ],
+        "additionalProperties": false
+      },
+      "diff_shared_skill_versions_output": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "from": {
+            "type": "integer"
+          },
+          "to": {
+            "type": "integer"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "added",
+                    "changed",
+                    "removed"
+                  ]
+                },
+                "flags": {
+                  "type": "object",
+                  "properties": {
+                    "binary": {
+                      "type": "boolean"
+                    },
+                    "executable": {
+                      "type": "boolean"
+                    },
+                    "script": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "binary",
+                    "executable",
+                    "script"
+                  ],
+                  "additionalProperties": false
+                },
+                "unified": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "status",
+                "flags"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "frontmatter_changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string"
+                },
+                "from": {},
+                "to": {}
+              },
+              "required": [
+                "field",
+                "from",
+                "to"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "publisher_changed": {
+            "type": "boolean"
+          },
+          "risk_flags": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "runnable_file",
+                    "runs_at_load",
+                    "command_instruction",
+                    "capability_frontmatter",
+                    "instructions_changed",
+                    "non_markdown",
+                    "new_publisher",
+                    "prompt_injection",
+                    "context_cost"
+                  ]
+                },
+                "path": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "integer"
+                },
+                "field": {
+                  "type": "string"
+                },
+                "from": {},
+                "to": {},
+                "detail": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "detail"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "name",
+          "from",
+          "to",
+          "files",
+          "frontmatter_changes",
+          "publisher_changed",
+          "risk_flags"
+        ],
+        "additionalProperties": false
+      },
+      "diff_shared_skill_versions_envelope": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": true
+              },
+              "data": {
+                "$ref": "#/components/schemas/diff_shared_skill_versions_output"
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": false
+              },
+              "error": {
+                "type": "object",
+                "description": "The error's code and its data (contract §9).",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "enum": [
+                      "internal_error",
+                      "invalid_request",
+                      "invalid_name",
+                      "not_found",
+                      "forbidden",
+                      "invalid_developer_setting"
+                    ]
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "additionalProperties": true
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "publish_version_input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "maxLength": 4096
+                },
+                "mode": {
+                  "type": "string",
+                  "maxLength": 8
+                },
+                "content_base64": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "mode",
+                "content_base64"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 10000
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "expected_latest": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "dry_run": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "files"
+        ],
+        "additionalProperties": false
+      },
+      "publish_version_output": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "created": {
+            "type": "boolean"
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "publisher": {
+            "type": "string"
+          },
+          "diff_from_latest": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "added",
+                            "changed",
+                            "removed"
+                          ]
+                        },
+                        "flags": {
+                          "type": "object",
+                          "properties": {
+                            "binary": {
+                              "type": "boolean"
+                            },
+                            "executable": {
+                              "type": "boolean"
+                            },
+                            "script": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "binary",
+                            "executable",
+                            "script"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "unified": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "path",
+                        "status",
+                        "flags"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "frontmatter_changes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "field": {
+                          "type": "string"
+                        },
+                        "from": {},
+                        "to": {}
+                      },
+                      "required": [
+                        "field",
+                        "from",
+                        "to"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "publisher_changed": {
+                    "type": "boolean"
+                  },
+                  "risk_flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "runnable_file",
+                            "runs_at_load",
+                            "command_instruction",
+                            "capability_frontmatter",
+                            "instructions_changed",
+                            "non_markdown",
+                            "new_publisher",
+                            "prompt_injection",
+                            "context_cost"
+                          ]
+                        },
+                        "path": {
+                          "type": "string"
+                        },
+                        "line": {
+                          "type": "integer"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "from": {},
+                        "to": {},
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "detail"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "files",
+                  "frontmatter_changes",
+                  "publisher_changed",
+                  "risk_flags"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "risk_flags": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "runnable_file",
+                    "runs_at_load",
+                    "command_instruction",
+                    "capability_frontmatter",
+                    "instructions_changed",
+                    "non_markdown",
+                    "new_publisher",
+                    "prompt_injection",
+                    "context_cost"
+                  ]
+                },
+                "path": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "integer"
+                },
+                "field": {
+                  "type": "string"
+                },
+                "from": {},
+                "to": {},
+                "detail": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "detail"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "fingerprint",
+          "created",
+          "dry_run",
+          "publisher",
+          "diff_from_latest",
+          "risk_flags"
+        ],
+        "additionalProperties": false
+      },
+      "publish_version_envelope": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": true
+              },
+              "data": {
+                "$ref": "#/components/schemas/publish_version_output"
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": false
+              },
+              "error": {
+                "type": "object",
+                "description": "The error's code and its data (contract §9).",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "enum": [
+                      "internal_error",
+                      "invalid_request",
+                      "invalid_manifest",
+                      "invalid_name",
+                      "invalid_path",
+                      "too_large",
+                      "not_owner",
+                      "conflict",
+                      "forbidden",
+                      "unauthenticated",
+                      "secret_suspected",
+                      "invalid_developer_setting"
+                    ]
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "additionalProperties": true
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "fetch_version_input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "fingerprint": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "additionalProperties": false
+      },
+      "fetch_version_output": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "0644",
+                    "0755"
+                  ]
+                },
+                "content_base64": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "mode",
+                "content_base64"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "fingerprint",
+          "files"
+        ],
+        "additionalProperties": false
+      },
+      "fetch_version_envelope": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": true
+              },
+              "data": {
+                "$ref": "#/components/schemas/fetch_version_output"
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": false
+              },
+              "error": {
+                "type": "object",
+                "description": "The error's code and its data (contract §9).",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "enum": [
+                      "internal_error",
+                      "invalid_request",
+                      "invalid_name",
+                      "not_found",
+                      "forbidden",
+                      "invalid_developer_setting"
+                    ]
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "additionalProperties": true
+              },
+              "words": {
+                "$ref": "#/components/schemas/Words"
+              }
+            },
+            "required": [
+              "ok",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "parameters": {
+      "ActingAs": {
+        "name": "X-Skills-Catalog-As",
+        "in": "header",
+        "required": false,
+        "description": "The developer to act as, on a local catalog only (a body field would be refused); a hosted catalog refuses it and takes who is asking from the sign-in.",
+        "schema": {
+          "type": "string",
+          "maxLength": 200
+        }
+      }
+    },
+    "responses": {
+      "NoToken": {
+        "description": "The session token is missing or wrong."
+      },
+      "Refused": {
+        "description": "The Host or Origin isn't this server's own."
+      },
+      "NotFound": {
+        "description": "No such operation or file."
+      },
+      "NotJson": {
+        "description": "The body isn't application/json."
+      }
+    },
+    "securitySchemes": {
+      "localToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Skills-Catalog-Token",
+        "description": "The local server's session token, from pairing; compared in constant time."
+      }
+    }
+  }
+}
