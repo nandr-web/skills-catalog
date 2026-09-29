@@ -217,6 +217,16 @@ describe('request_upload_links, hosted only', () => {
     expect(s.linkCalls).toEqual([[{ sha256: a, size: 100 }, { sha256: sha256Of('once'), size: 40 }]]);
   });
 
+  it('a sha256 named twice with two sizes is invalid_request {field: the later size, why: size_mismatch}, before any lookup or link', async () => {
+    const s = await standIn();
+    const a = sha256Of('twice');
+    s.lookups.length = 0;
+    const e = await errorOf(() => s.catalog.uploadLinks(ask([{ sha256: a, size: 5 }, { sha256: sha256Of('once'), size: 4 }, { sha256: a, size: 6 }])));
+    expect([e.code, e.data]).toEqual(['invalid_request', { field: 'files[2].size', why: 'size_mismatch' }]);
+    expect(s.lookups).toEqual([]);
+    expect(s.linkCalls).toEqual([]);
+  });
+
   it('a new name, or one the asker owns, gets its links', async () => {
     const s = await standIn();
     await s.catalog.publish(uploaded(s, 'owned', [{ path: 'SKILL.md', text: skillMd('owned') }]));

@@ -11,7 +11,7 @@ import { openapi } from '../src/openapi.ts';
 import { renderError } from '../src/render.ts';
 import { Words } from '../src/words-file.ts';
 import { errorOf, openTest } from './helpers.ts';
-import { openHostedStandIn, type StandIn } from './hosted-stand-in.ts';
+import { holding, openHostedStandIn, type StandIn } from './hosted-stand-in.ts';
 
 // GitHub's token formats: an OAuth app's user token (gho_) and the older 40 hex characters.
 const OURS = `gho_${'a'.repeat(36)}`;
@@ -79,13 +79,33 @@ describe('sign_in_with_github', () => {
     }
   });
 
-  it('a malformed GitHub token is refused before GitHub is asked', async () => {
+  it('a GitHub token the schema takes but of no GitHub shape is unauthenticated, saying nothing more, before GitHub is asked', async () => {
     const s = await standIn();
-    for (const bad of ['', 'x', 'gho_short', `gho_${'a'.repeat(36)}\n`, `ghp_${'!'.repeat(36)}`, 'a'.repeat(300)]) {
+    for (const bad of ['', 'x', 'gho_short', `gho_${'a'.repeat(36)}\n`, `ghp_${'!'.repeat(36)}`, 'a'.repeat(255)]) {
       const e = await errorOf(() => s.catalog.signIn({ github_token: bad, scope: 'read' }));
-      expect([JSON.stringify(bad).slice(0, 30), e.code === 'unauthenticated' || e.code === 'invalid_request']).toEqual([JSON.stringify(bad).slice(0, 30), true]);
+      expect([JSON.stringify(bad).slice(0, 30), e.code, e.data]).toEqual([JSON.stringify(bad).slice(0, 30), 'unauthenticated', {}]);
     }
     expect(s.githubCalls).toEqual([]);
+  });
+
+  it("a GitHub token over the schema's 255 characters is the schema's invalid_request, before GitHub is asked", async () => {
+    const s = await standIn();
+    const e = await errorOf(() => s.catalog.signIn({ github_token: 'a'.repeat(256), scope: 'read' }));
+    expect([e.code, (e.data as { field?: string }).field]).toEqual(['invalid_request', 'github_token']);
+    expect(s.githubCalls).toEqual([]);
+  });
+
+  it("with nobody on the sign-in list, GitHub isn't asked at all", async () => {
+    const s = await standIn({ config: { signInLogins: [] } });
+    const e = await errorOf(() => s.catalog.signIn({ github_token: OURS, scope: 'read' }));
+    expect([e.code, e.data]).toEqual(['unauthenticated', {}]);
+    expect(s.githubCalls).toEqual([]);
+  });
+
+  it("a session lasts the catalog's sessionDays", async () => {
+    const s = await standIn({ config: { signInLogins: ['ana-dev'], sessionDays: 2 } });
+    const r = await s.catalog.signIn({ github_token: OURS, scope: 'read' });
+    expect(Date.parse(r.expires_at) - Date.parse(s.tokens.byToken.get(r.token)!.created_at)).toBe(2 * DAY);
   });
 
   it('GitHub unreachable is the catalog\'s failure (a bug-level error, never unauthenticated), and issues nothing', async () => {
@@ -108,31 +128,166 @@ describe('sign_in_with_github', () => {
   });
 });
 
-describe('list_tokens and revoke_token: the caller\'s own tokens only', () => {
-  it('lists the caller\'s tokens by id, never the token; revokes one of theirs; another\'s id or none at all is not_found {id}', async () => {
+describe("a login is bound to GitHub's numeric id", () => {
+  it('the first sign-in records the id; a later one for the login with another id (a renamed or re-registered account) is refused, the record unchanged', async () => {
+    let id = 11;
+    const s = await standIn({ github: (t) => (t === OURS ? { login: 'Ana-Dev', id } : undefined) });
+    await s.catalog.signIn({ github_token: OURS, scope: 'read' });
+    expect([...s.tokens.bindings]).toEqual([['ana-dev', 11]]);
+    id = 12;
+    const e = await errorOf(() => s.catalog.signIn({ github_token: OURS, scope: 'read' }));
+    expect([e.code, e.data]).toEqual(['unauthenticated', {}]);
+    expect([...s.tokens.bindings]).toEqual([['ana-dev', 11]]);
+    expect(s.tokens.byToken.size).toBe(1);
+    id = 11;
+    await s.catalog.signIn({ github_token: OURS, scope: 'read' });
+    expect(s.tokens.byToken.size).toBe(2);
+  });
+
+  it('the login binds by its lowercase, so ANA-DEV and ana-dev share one record', async () => {
+    let login = 'ANA-DEV';
+    const s = await standIn({ github: () => ({ login, id: 11 }) });
+    await s.catalog.signIn({ github_token: OURS, scope: 'read' });
+    login = 'ana-dev';
+    await s.catalog.signIn({ github_token: OURS, scope: 'read' });
+    expect([...s.tokens.bindings]).toEqual([['ana-dev', 11]]);
+    expect(s.tokens.calls.filter((c) => c.startsWith('bindLogin'))).toEqual(['bindLogin ana-dev 11', 'bindLogin ana-dev 11']);
+  });
+
+  it('login:id on the list pins the id from the start: another id is refused, and nothing is recorded either way', async () => {
+    let id = 8;
+    const s = await standIn({ github: () => ({ login: 'ana-dev', id }), config: { signInLogins: ['Ana-Dev:7'] } });
+    const e = await errorOf(() => s.catalog.signIn({ github_token: OURS, scope: 'read' }));
+    expect([e.code, e.data]).toEqual(['unauthenticated', {}]);
+    id = 7;
+    await s.catalog.signIn({ github_token: OURS, scope: 'read' });
+    expect(s.tokens.calls.filter((c) => c.startsWith('bindLogin'))).toEqual([]);
+    expect(s.tokens.byToken.size).toBe(1);
+  });
+
+  it.each([':', 'bob:', 'bob:x', 'bob:1:2', ':7', 'bob:-1', 'bob:1.5'])('a sign-in list entry %j fails the catalog at open', async (entry) => {
+    await expect(openHostedStandIn({ config: { signInLogins: ['ana-dev', entry] } })).rejects.toThrow(/sign-in list/);
+  });
+});
+
+describe('at most so many live tokens a person (contract §1.1)', () => {
+  it('50 by default', async () => {
     const s = await standIn();
-    const mine = await s.tokens.issue({ owner: 'dana', scope: 'publish', kind: 'personal', expiresAt: new Date(Date.parse('2026-10-28T00:00:00Z')) });
-    const theirs = await s.tokens.issue({ owner: 'erin', scope: 'read', kind: 'session', expiresAt: new Date(Date.parse('2026-10-28T00:00:00Z')) });
-    const listed = await s.catalog.listTokens({}, actAs('dana'));
+    expect(s.catalog.config.maxLiveTokens).toBe(50);
+  });
+
+  it("at the limit a sign-in issues nothing and answers forbidden {why: too_many_tokens, limit}; revoked and expired tokens don't count", async () => {
+    const s = await standIn({ config: { signInLogins: ['ana-dev'], maxLiveTokens: 2 } });
+    const first = await s.catalog.signIn({ github_token: OURS, scope: 'read' });
+    await s.catalog.signIn({ github_token: OURS, scope: 'read' });
+    const e = await errorOf(() => s.catalog.signIn({ github_token: OURS, scope: 'read' }));
+    expect([e.code, e.data]).toEqual(['forbidden', { why: 'too_many_tokens', limit: 2 }]);
+    expect(s.tokens.calls.filter((c) => c.startsWith('issue'))).toHaveLength(2);
+    // One revoked, and one already expired (its expiry a second before now): neither counts, so one more fits.
+    await s.catalog.revokeToken({ id: first.id }, holding('ana-dev', 'read'));
+    await s.tokens.issue({ owner: 'ana-dev', scope: 'read', kind: 'personal', expiresAt: new Date(Date.parse(s.tokens.byToken.get(first.token)!.created_at) - 1000) });
+    expect(await s.tokens.liveCount('ana-dev')).toBe(1);
+    await s.catalog.signIn({ github_token: OURS, scope: 'read' });
+    expect(await s.tokens.liveCount('ana-dev')).toBe(2);
+    expect((await errorOf(() => s.catalog.signIn({ github_token: OURS, scope: 'read' }))).code).toBe('forbidden');
+  });
+
+  it('checked only after every other check: a login not on the list, at its limit, is unauthenticated, not forbidden', async () => {
+    const s = await standIn({ config: { signInLogins: ['someone-else'], maxLiveTokens: 0 } });
+    const e = await errorOf(() => s.catalog.signIn({ github_token: OURS, scope: 'read' }));
+    expect([e.code, e.data]).toEqual(['unauthenticated', {}]);
+  });
+
+  it("the refusal's sentence is the words file's, with the limit in it", () => {
+    const w = Words.load();
+    const text = renderError(w, new CatalogError('forbidden', { why: 'too_many_tokens', limit: 50 }));
+    expect(text).toBe(w.format(w.word('errors').forbidden_too_many_tokens, { limit: 50 }));
+    expect(text).toContain('50');
+  });
+});
+
+describe('the token rows', () => {
+  it('signing in is the only operation without a Bearer token, and the hosted OpenAPI says so (security: [])', () => {
+    expect(Object.values(OPERATIONS).filter((o) => o.token === 'none').map((o) => o.name)).toEqual(['sign_in_with_github']);
+    const paths = (openapi('hosted') as any).paths;
+    expect(paths['/api/v1/sign_in_with_github'].post.security).toEqual([]);
+    expect(paths['/api/v1/list_tokens'].post.security).toEqual([{ bearer: [] }]);
+  });
+
+  it("revoke_token checks the caller's scope itself; no other row does", () => {
+    expect(Object.values(OPERATIONS).filter((o) => o.checksScope).map((o) => o.name)).toEqual(['revoke_token']);
+  });
+});
+
+describe("list_tokens and revoke_token: the caller's own tokens only", () => {
+  const LATER = new Date(Date.parse('2026-10-28T00:00:00Z'));
+
+  it("lists the caller's tokens by id, never the token; revokes one of theirs; another's id or none at all is not_found {id}", async () => {
+    const s = await standIn();
+    const mine = await s.tokens.issue({ owner: 'dana', scope: 'publish', kind: 'personal', expiresAt: LATER });
+    const theirs = await s.tokens.issue({ owner: 'erin', scope: 'read', kind: 'session', expiresAt: LATER });
+    const listed = await s.catalog.listTokens({}, holding('dana', 'publish'));
     expect(listed.tokens.map((t) => t.id)).toEqual([mine.id]);
     expect(JSON.stringify(listed)).not.toContain(mine.token);
     expect(Object.keys(listed.tokens[0]!).sort()).toEqual(['created_at', 'expires_at', 'id', 'kind', 'scope']);
 
-    for (const id of [theirs.id, 'no-such-id']) {
-      const e = await errorOf(() => s.catalog.revokeToken({ id }, actAs('dana')));
+    for (const id of [theirs.id, 'nosuchid00000000']) {
+      const e = await errorOf(() => s.catalog.revokeToken({ id }, holding('dana', 'publish')));
       expect([e.code, e.data]).toEqual(['not_found', { id }]);
     }
     expect(await s.tokens.verify(theirs.token)).toMatchObject({ owner: 'erin' });
-    expect(await s.catalog.revokeToken({ id: mine.id }, actAs('dana'))).toEqual({ id: mine.id });
-    expect(await s.catalog.revokeToken({ id: mine.id }, actAs('dana'))).toEqual({ id: mine.id });
+    expect(await s.catalog.revokeToken({ id: mine.id }, holding('dana', 'publish'))).toEqual({ id: mine.id });
+    expect(await s.catalog.revokeToken({ id: mine.id }, holding('dana', 'publish'))).toEqual({ id: mine.id });
     expect(await s.tokens.verify(mine.token)).toBeUndefined();
-    expect((await s.catalog.listTokens({}, actAs('dana'))).tokens[0]!.revoked_at).toEqual(expect.any(String));
+    expect((await s.catalog.listTokens({}, holding('dana', 'publish'))).tokens[0]!.revoked_at).toEqual(expect.any(String));
+  });
+
+  it("an id that isn't a token id's shape is invalid_request {field: id, why: not_a_token_id}, never repeating it, before anything is looked up", async () => {
+    const s = await standIn();
+    const pasted = `tok-${'x'.repeat(40)}`;
+    for (const id of ['', 'no-such-id', pasted, 'a'.repeat(15), 'a'.repeat(17), 'aaaaaaaaaaaaaaa/', 'a'.repeat(5000)]) {
+      const e = await errorOf(() => s.catalog.revokeToken({ id }, holding('dana', 'publish')));
+      expect([id.slice(0, 20), e.code, e.data]).toEqual([id.slice(0, 20), 'invalid_request', { field: 'id', why: 'not_a_token_id' }]);
+      if (id) expect(JSON.stringify(e.data)).not.toContain(id);
+    }
+    expect(s.tokens.calls).toEqual([]);
+  });
+
+  it('a read token revokes read tokens of its own; revoking a publish token needs the publish scope (forbidden {why: read_scope}), and it stays good', async () => {
+    const s = await standIn();
+    const read = await s.tokens.issue({ owner: 'dana', scope: 'read', kind: 'session', expiresAt: LATER });
+    const publish = await s.tokens.issue({ owner: 'dana', scope: 'publish', kind: 'personal', expiresAt: LATER });
+    const e = await errorOf(() => s.catalog.revokeToken({ id: publish.id }, holding('dana', 'read')));
+    expect([e.code, e.data]).toEqual(['forbidden', { why: 'read_scope' }]);
+    expect(await s.tokens.verify(publish.token)).toMatchObject({ scope: 'publish' });
+    expect(await s.catalog.revokeToken({ id: read.id }, holding('dana', 'read'))).toEqual({ id: read.id });
+    expect(await s.catalog.revokeToken({ id: publish.id }, holding('dana', 'publish'))).toEqual({ id: publish.id });
+    expect(await s.tokens.verify(publish.token)).toBeUndefined();
+  });
+
+  it("a read token asking about another's publish token is not_found, the same as none, so no other owner's ids or scopes leak", async () => {
+    const s = await standIn();
+    const theirs = await s.tokens.issue({ owner: 'erin', scope: 'publish', kind: 'personal', expiresAt: LATER });
+    const e = await errorOf(() => s.catalog.revokeToken({ id: theirs.id }, holding('dana', 'read')));
+    expect([e.code, e.data]).toEqual(['not_found', { id: theirs.id }]);
+  });
+
+  it('a hosted caller always has a scope: one without is a bug (thrown, never read as no limit)', async () => {
+    const s = await standIn();
+    const mine = await s.tokens.issue({ owner: 'dana', scope: 'publish', kind: 'personal', expiresAt: LATER });
+    const e = await s.catalog.revokeToken({ id: mine.id }, actAs('dana')).then(
+      () => undefined,
+      (x: unknown) => x,
+    );
+    expect(e).toBeInstanceOf(Error);
+    expect(e).not.toBeInstanceOf(CatalogError);
+    expect(await s.tokens.verify(mine.token)).toMatchObject({ owner: 'dana' });
   });
 
   it('nobody acting is unauthenticated', async () => {
     const s = await standIn();
     expect((await errorOf(() => s.catalog.listTokens({}, actAs(undefined)))).code).toBe('unauthenticated');
-    expect((await errorOf(() => s.catalog.revokeToken({ id: 'x' }, actAs(undefined)))).code).toBe('unauthenticated');
+    expect((await errorOf(() => s.catalog.revokeToken({ id: 'nosuchid00000000' }, actAs(undefined)))).code).toBe('unauthenticated');
   });
 
   it('not_found for a token says so without saying whose it is', () => {

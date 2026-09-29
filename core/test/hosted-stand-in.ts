@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { Catalog, type CatalogConfig } from '../src/catalog.ts';
 import { actAs, openLocalCatalog } from '../src/local/index.ts';
 import { memorySearchIndex } from '../src/local/search-index.ts';
-import type { BlobLinks, GitHubSignIn, Identity, Storage, TokenHolder, TokenInfo, TokenStore, UploadAnswer } from '../src/ports.ts';
+import type { BlobLinks, GitHubSignIn, Identity, Storage, TokenHolder, TokenInfo, TokenScope, TokenStore, UploadAnswer } from '../src/ports.ts';
 import { counterIds, fixedClock } from './helpers.ts';
 import { sandbox } from './sandbox.ts';
 
@@ -17,12 +17,17 @@ export const sha256Of = (bytes: Uint8Array | string) => createHash('sha256').upd
 /** Tokens in memory, as the hosted store keeps them (hashed there; here the test reads them back). */
 export class MemoryTokens implements TokenStore {
   readonly byToken = new Map<string, TokenInfo>();
+  /** GitHub's id recorded for each login at its first sign-in. */
+  readonly bindings = new Map<string, number>();
+  /** Every call that could write: issue, bindLogin, revoke, in order. */
+  readonly calls: string[] = [];
   private n = 0;
   private readonly clock: { now(): Date };
   constructor(clock: { now(): Date }) {
     this.clock = clock;
   }
   async issue(t: TokenHolder & { expiresAt: Date }) {
+    this.calls.push(`issue ${t.owner}`);
     const id = `id${String(++this.n).padStart(14, '0')}`;
     const token = `tok-${id}`;
     this.byToken.set(token, { id, owner: t.owner, scope: t.scope, kind: t.kind, created_at: this.clock.now().toISOString(), expires_at: t.expiresAt.toISOString() });
@@ -36,13 +41,28 @@ export class MemoryTokens implements TokenStore {
   async list(owner: string) {
     return [...this.byToken.values()].filter((t) => t.owner === owner).map((t) => ({ ...t }));
   }
-  async revoke(owner: string, id: string) {
+  async liveCount(owner: string) {
+    const now = this.clock.now().getTime();
+    return [...this.byToken.values()].filter((t) => t.owner === owner && !t.revoked_at && Date.parse(t.expires_at) > now).length;
+  }
+  async bindLogin(login: string, githubId: number) {
+    this.calls.push(`bindLogin ${login} ${githubId}`);
+    const bound = this.bindings.get(login);
+    if (bound === undefined) this.bindings.set(login, githubId);
+    return bound === undefined || bound === githubId;
+  }
+  async revoke(owner: string, id: string, upTo: TokenScope) {
+    this.calls.push(`revoke ${owner} ${id} ${upTo}`);
     const t = [...this.byToken.values()].find((x) => x.owner === owner && x.id === id);
-    if (!t) return false;
+    if (!t) return 'none' as const;
+    if (t.scope === 'publish' && upTo === 'read') return 'above' as const;
     t.revoked_at ??= this.clock.now().toISOString();
-    return true;
+    return 'revoked' as const;
   }
 }
+
+/** Acting as a holder of a hosted token of this scope. */
+export const holding = (owner: string, scope: TokenScope): Identity => ({ actor: async () => owner, scope: async () => scope });
 
 export interface StandIn {
   catalog: Catalog;
@@ -75,8 +95,9 @@ export interface StandInOptions {
   altered?: Record<string, string>;
   /** Uploads the sweep takes away after the publish reads them and before its commit looks. */
   sweptBeforeCommit?: string[];
-  /** What GitHub says of a token: our app's for this login, another app's or revoked (undefined), or unreachable. */
-  github?: (githubToken: string) => string | undefined | 'down';
+  /** What GitHub says of a token: our app's for this login (GitHub's id 1 unless given), another app's or revoked
+   *  (undefined), or unreachable. */
+  github?: (githubToken: string) => string | { login: string; id: number } | undefined | 'down';
 }
 
 export async function openHostedStandIn(opts: StandInOptions = {}): Promise<StandIn> {
@@ -141,7 +162,7 @@ export async function openHostedStandIn(opts: StandInOptions = {}): Promise<Stan
       githubCalls.push(githubToken);
       const said = opts.github?.(githubToken);
       if (said === 'down') throw new Error('GitHub answered 502');
-      return said;
+      return typeof said === 'string' ? { login: said, id: 1 } : said;
     },
   };
   const catalog = await Catalog.open({
