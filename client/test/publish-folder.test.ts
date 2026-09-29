@@ -2,13 +2,14 @@
 // published before it is. Step 1 lists what it would send and skip, stores nothing and gives a confirm tied to the
 // folder's fingerprint; step 2 with that confirm publishes, unless the folder or the catalog changed in between. The
 // folder is read as regular files only (golden/skills.yaml hostile), and the ignore list is skipped and reported.
-import { chmodSync, linkSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, linkSync, mkdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { CatalogError, Surface, actAs } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
 import { contextFor, type Context } from '../src/operations.ts';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
+import { readFolder } from '../src/machine/publish-folder.ts';
 import { settingsFrom } from '../src/settings.ts';
 import { open, request, skillMd } from './seed.ts';
 import { place, type Place } from './server.ts';
@@ -156,5 +157,54 @@ describe('publish a folder, in two steps (contract §3)', () => {
     const empty = folder(p, 'empty', { 'notes.md': 'no skill here\n' });
     const e = await refusal(() => publish(ctxFor(p, 'ana'), { folder: empty }));
     expect(e.toJSON()).toMatchObject({ code: 'invalid_manifest', problem: 'missing', folder: empty });
+  });
+});
+
+// Contract §4.2, "its target is never read": what is read is the file that was checked. A file or folder swapped between
+// its check and its read (by the person's other programs, or anyone who can write there) is refused, never followed.
+describe('the folder is read as it was checked (a swap in between is refused)', () => {
+  const outsideSecret = (p: Place) => {
+    const f = join(p.dir, 'outside', 'id_fake');
+    mkdirSync(dirname(f), { recursive: true });
+    writeFileSync(f, `${SENTINEL}\n`);
+    return f;
+  };
+  const refusedRead = (fn: () => unknown): CatalogError => {
+    try {
+      fn();
+    } catch (e) {
+      if (e instanceof CatalogError) return e;
+      throw e;
+    }
+    throw new Error('expected a CatalogError');
+  };
+
+  const swaps: [string, (full: string, p: Place) => void][] = [
+    ['a link out', (full, p) => { rmSync(full); symlinkSync(outsideSecret(p), full); }],
+    ['another regular file', (full) => { writeFileSync(`${full}.new`, 'swapped in\n'); renameSync(`${full}.new`, full); }],   // both exist at once: a new inode
+    ['a hard link to a file outside', (full, p) => { rmSync(full); linkSync(outsideSecret(p), full); }],
+    ['a fifo (the read never blocks)', (full) => { rmSync(full); execFileSync('mkfifo', [full]); }],
+  ];
+  for (const [what, swap] of swaps) {
+    it(`a file swapped for ${what} after its check is invalid_path {why: not_regular_file}, and nothing of it leaks`, () => {
+      const p = place();
+      const dir = folder(p, 'swapped', { 'SKILL.md': skillMd('swapped', 'A file changes under the reader.'), 'notes.md': 'checked\n' });
+      const e = refusedRead(() => readFolder(dir, { beforeRead: (full) => { if (full.endsWith('notes.md')) swap(full, p); } }));
+      expect(e.toJSON()).toEqual({ code: 'invalid_path', path: 'notes.md', why: 'not_regular_file' });
+      expect(JSON.stringify(e.toJSON())).not.toContain(SENTINEL);
+    });
+  }
+
+  it('a folder swapped for a link after its check is refused, and nothing under the link is listed or read', () => {
+    const p = place();
+    const elsewhere = join(p.dir, 'outside', 'folder');
+    mkdirSync(elsewhere, { recursive: true });
+    writeFileSync(join(elsewhere, 'id_fake.md'), `${SENTINEL}\n`);
+    const dir = folder(p, 'swapped-folder', { 'SKILL.md': skillMd('swapped-folder', 'A folder changes under the reader.'), 'docs/a.md': 'a\n' });
+    const e = refusedRead(() => readFolder(dir, {
+      beforeList: (d) => { if (d.endsWith('docs')) { renameSync(d, `${d}.old`); symlinkSync(elsewhere, d); } },
+    }));
+    expect(e.toJSON()).toEqual({ code: 'invalid_path', path: 'docs', why: 'not_regular_file' });
+    expect(JSON.stringify(e.toJSON())).not.toContain(SENTINEL);
   });
 });

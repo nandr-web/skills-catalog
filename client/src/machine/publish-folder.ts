@@ -8,7 +8,7 @@
 // The folder is read as regular files only: a link (in or out), a hard link or a special file is invalid_path, and its
 // target is never read. The ignore list (.git, .env*, *.pem, id_*, .DS_Store) is skipped and reported, never read.
 
-import { lstatSync, readdirSync, readFileSync, type Stats } from 'node:fs';
+import { closeSync, constants, fstatSync, lstatSync, openSync, readdirSync, readSync, type Stats } from 'node:fs';
 import { join } from 'node:path';
 import { CatalogError, validateInput, type PublishResult } from '@skills-catalog/core';
 import { DEFAULT_LIMITS, checkManifest, checkTree, fingerprint, sha256Hex, type Mode, type RiskFlag } from '@skills-catalog/core/skill-tree';
@@ -38,8 +38,36 @@ function namesUnder(dir: string, rel: string, out: string[]): void {
   }
 }
 
+/** Test hooks, to swap something between a check and what it guards. */
+export type ReadHooks = { beforeRead?: (full: string) => void; beforeList?: (dir: string) => void };
+
+const same = (a: Stats, b: Stats) => a.dev === b.dev && a.ino === b.ino;
+
+// One checked file's bytes, only from the file that was checked (contract §4.2, "its target is never read"): opened
+// without following a link or waiting on a fifo, then the handle must be a regular file with one link and the same
+// device and inode as the check, within the size limit. What is read is what the handle holds.
+function readChecked(full: string, rel: string, checked: Stats, maxBytes: number): Buffer {
+  let fd: number;
+  try {
+    fd = openSync(full, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch {
+    notRegular(rel);
+  }
+  try {
+    const st = fstatSync(fd);
+    if (!st.isFile() || st.nlink !== 1 || !same(st, checked)) notRegular(rel);
+    if (st.size > maxBytes) throw new CatalogError('too_large', { limit: 'file_bytes', max: maxBytes, value: st.size, path: rel });
+    const bytes = Buffer.alloc(st.size);
+    let n = 0;
+    for (let got = 1; n < st.size && got > 0; n += got) got = readSync(fd, bytes, n, st.size - n, n);
+    return bytes.subarray(0, n);
+  } finally {
+    closeSync(fd);
+  }
+}
+
 // The folder's files, with a size check before any byte is read (the core's limits refuse the rest).
-export function readFolder(root: string): Folder {
+export function readFolder(root: string, hooks: ReadHooks = {}): Folder {
   let top: Stats;
   try {
     top = lstatSync(root);
@@ -49,15 +77,21 @@ export function readFolder(root: string): Folder {
   if (!top.isDirectory()) throw new CatalogError('invalid_manifest', { problem: 'missing', fields: ['SKILL.md'] });
   const found: { path: string; full: string; st: Stats }[] = [];
   const skipped: string[] = [];
-  const walk = (dir: string, rel: string) => {
-    for (const e of readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+  // A folder is listed only if it is still the folder that was checked once listed: a link swapped in is refused
+  // before anything it listed is used.
+  const walk = (dir: string, rel: string, checked: Stats) => {
+    hooks.beforeList?.(dir);
+    const entries = readdirSync(dir, { withFileTypes: true });
+    const now = lstatSync(dir);
+    if (!now.isDirectory() || !same(now, checked)) notRegular(rel || '.');
+    for (const e of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
       const r = rel ? `${rel}/${e.name}` : e.name;
       const full = join(dir, e.name);
       const st = lstatSync(full);
       if (st.isSymbolicLink()) notRegular(r);
       if (st.isDirectory()) {
         if (ignoredFolder(e.name)) namesUnder(full, r, skipped);
-        else walk(full, r);
+        else walk(full, r, st);
       } else if (st.isFile()) {
         if (ignoredFile(e.name)) skipped.push(r);
         else if (st.nlink > 1) notRegular(r); // a hard link may be another file's bytes, outside this folder
@@ -65,7 +99,7 @@ export function readFolder(root: string): Folder {
       } else notRegular(r);
     }
   };
-  walk(root, '');
+  walk(root, '', top);
   const limits = DEFAULT_LIMITS;
   if (found.length > limits.files) throw new CatalogError('too_large', { limit: 'files', max: limits.files, value: found.length });
   let total = 0;
@@ -74,7 +108,10 @@ export function readFolder(root: string): Folder {
     total += f.st.size;
   }
   if (total > limits.skill_bytes) throw new CatalogError('too_large', { limit: 'skill_bytes', max: limits.skill_bytes, value: total });
-  const files = found.map((f) => ({ path: f.path, mode: (f.st.mode & 0o111 ? '0755' : '0644') as Mode, bytes: readFileSync(f.full) }));
+  const files = found.map((f) => {
+    hooks.beforeRead?.(f.full);
+    return { path: f.path, mode: (f.st.mode & 0o111 ? '0755' : '0644') as Mode, bytes: readChecked(f.full, f.path, f.st, limits.file_bytes) };
+  });
   return { files, skipped: skipped.sort() };
 }
 
