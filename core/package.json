@@ -6,7 +6,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./skill-tree": "./src/skill-tree/index.ts"
+    "./skill-tree": "./src/skill-tree/index.ts",
+    "./testing": "./test/sandbox.ts",
+    "./testing/fail-safe": "./test/fail-safe.ts"
   },
   "engines": {
     "node": ">=24.15"

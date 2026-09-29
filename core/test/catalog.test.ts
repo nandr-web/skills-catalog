@@ -64,6 +64,12 @@ describe('the fail-safe (contract §8)', () => {
     expect(readdirSync(standIn)).toEqual([]);
   });
 
+  it('is there for other packages\' tests: the sandbox helpers and the setup file, by name', async () => {
+    const { exports } = JSON.parse((await import('node:fs')).readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    expect(Object.keys(await import(new URL(`.${exports['./testing'].slice(1)}`, new URL('../', import.meta.url)).href))).toEqual(expect.arrayContaining(['sandbox', 'refuseRealPlaces']));
+    expect(Object.keys(await import(new URL(`.${exports['./testing/fail-safe'].slice(1)}`, new URL('../', import.meta.url)).href))).toEqual(expect.arrayContaining(['refusedPlace', 'REFUSED_ROOTS']));
+  });
+
   it('with the temp folder at /tmp (Linux): allows only its own test folders there, and never the home', async () => {
     const { mkdirSync } = await import('node:fs');
     const { join } = await import('node:path');
