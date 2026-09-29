@@ -113,7 +113,7 @@ describe('a revoked token, from the real token store', () => {
     try {
       await createStores(ddb, s3, place);
       const store = new HostedTokenStore({ ddb, place, clock: { now: () => new Date() } });
-      const token = await store.issue({ owner: HTTP_DEVELOPER, scope: 'publish', kind: 'personal', expiresAt: new Date(Date.now() + 3_600_000) });
+      const { token, id } = await store.issue({ owner: HTTP_DEVELOPER, scope: 'publish', kind: 'personal', expiresAt: new Date(Date.now() + 3_600_000) });
       const touched: string[] = [];
       const handler = createHostedHandler({
         catalog: new Proxy({}, { get: (_, k) => (touched.push(String(k)), () => Promise.resolve({ results: [] })) }) as never,
@@ -125,7 +125,7 @@ describe('a revoked token, from the real token store', () => {
       const search = req({ method: 'POST', path: '/api/v1/search_shared_skills', body: '{"query":"x"}' }, { authorization: `Bearer ${token}` });
       const file = req({ method: 'GET', path: `/api/v1/files/${'a'.repeat(64)}` }, { authorization: `Bearer ${token}` });
       expect((await handler.handle(search)).status).toBe(200);
-      await store.revoke(token);
+      expect(await store.revoke(HTTP_DEVELOPER, id)).toBe(true);
       touched.length = 0;
       expect((await handler.handle(search)).status).toBe(401);
       expect((await handler.handle(file)).status).toBe(401);
