@@ -231,8 +231,10 @@ export function renderError(s: Words, e: CatalogError): string {
       // A command file (.claude/commands/<name>.md) has its own sentence; a skill's folder name never ends in .md.
       return fill(String(d['path']).endsWith('.md') ? w.name_in_use_command : w.name_in_use, d);
     case 'forbidden':
-      // A hosted catalog asked of this local-only version is a setup matter, not a permission.
-      return e.data['why'] === 'hosted_not_available' ? fill(w.forbidden_hosted, d) : fill(w.forbidden, d);
+      // A hosted catalog asked of this local-only version is a setup matter, and a publish on a local page's server
+      // started without --publish is the person's choice; neither is a permission.
+      if (e.data['why'] === 'hosted_not_available') return fill(w.forbidden_hosted, d);
+      return e.data['why'] === 'read_only' ? fill(w.forbidden_read_only, d) : fill(w.forbidden, d);
     case 'secret_suspected': {
       const kind = w.secret_kind?.[String(d['kind'])];
       // Its words hold the command that allows the secret for one publish: the folder goes in it shell-quoted.
