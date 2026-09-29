@@ -278,43 +278,103 @@ function newInjections(a: TreeFile | undefined, b: TreeFile): Injection[] {
   });
 }
 
-// The lines that shape blocks: those whose first non-blanks are three or more backticks or tildes, with or without a
-// `!` (an opening fence, a close, or a doubtful one), in order; and whether any opens a ```! block.
+// A line that shapes blocks: its first non-blanks are three or more backticks or tildes, with or without a `!` (an
+// opening fence, a close, or a doubtful one).
+function isFenceLine(l: string): boolean {
+  if (!l.includes('`') && !l.includes('~')) return false;
+  const at = skipBlanks(l, 0);
+  const char = l[at];
+  return (char === '`' || char === '~') && countRun(l, at, char) >= 3;
+}
+// A text's fence lines, in order, and whether any opens a ```! block.
 function fenceLines(text: string): { lines: string[]; fences: { line: number; text: string }[]; opener: boolean } {
   const lines = text.split(LINE_BREAK);
   const fences: { line: number; text: string }[] = [];
   let opener = false;
   lines.forEach((l, i) => {
-    if (!l.includes('`') && !l.includes('~')) return;
-    const at = skipBlanks(l, 0);
-    const char = l[at];
-    if ((char !== '`' && char !== '~') || countRun(l, at, char) < 3) return;
+    if (!isFenceLine(l)) return;
     fences.push({ line: i + 1, text: l });
     opener ||= openingFence(l) !== null;
   });
   return { lines, fences, opener };
 }
-// An update that adds, removes or changes a fence line in a markdown file whose new version has a ```! block can re-nest
-// what the blocks hold, so more may run as the skill loads with no command's own text changed: it counts as
-// runs_at_load, at the first fence line that differs (the detector errs toward asking). With the fence lines the same,
-// every block spans the same lines, and an edit inside one changes that command's text. A new version with no ```! block
-// runs nothing as it loads, so removing a skill's last one raises nothing.
-function fenceChange(a: TreeFile, b: TreeFile): { line: number; text: string } | null {
-  if (!isMarkdown(b.path) || !isText(a.bytes) || !isText(b.bytes)) return null;
-  const now = fenceLines(decodeText(b.bytes));
-  if (!now.opener) return null;
-  const was = fenceLines(decodeText(a.bytes));
-  const n = Math.max(was.fences.length, now.fences.length);
-  for (let i = 0; i < n; i++) {
-    if (was.fences[i]?.text === now.fences[i]?.text) continue;
-    const removed = now.fences[i] === undefined || (was.fences.length > now.fences.length && was.fences[i + 1]?.text === now.fences[i]!.text);
-    if (!removed) return { line: now.fences[i]!.line, text: now.fences[i]!.text.trim() };
-    // Where it was: the first line where the two versions differ.
-    let k = 0;
-    while (k < was.lines.length && k < now.lines.length && was.lines[k] === now.lines[k]) k++;
-    return { line: Math.min(k + 1, now.lines.length), text: `fence removed: ${was.fences[i]!.text.trim()}` };
+// Each closing line's openers (line numbers from 1), with blocks read as the injected commands are: a ```! line opens a
+// block anywhere, any other fence line opens a plain one when none is open, and a strict close ends every open block of
+// its character that's no longer than it. Past MAX_OPEN blocks at once it stops reading, so a later close is matched to
+// nothing and its flag stays (the detector errs toward asking).
+function closersOf(lines: readonly string[]): Map<number, number[]> {
+  const out = new Map<number, number[]>();
+  let open: { fence: Fence; line: number }[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i]!;
+    if (!isFenceLine(l)) continue;
+    const shut = open.length ? closingFence(l) : null;
+    if (shut) {
+      const ends = open.filter((b) => b.fence.char === shut.char && b.fence.length <= shut.length);
+      out.set(i + 1, ends.map((b) => b.line));
+      open = open.filter((b) => !ends.includes(b));
+      continue;
+    }
+    const bang = openingFence(l);
+    if (!bang && open.length) continue; // content of the open block
+    if (open.length === MAX_OPEN) return out;
+    const at = skipBlanks(l, 0);
+    open.push({ fence: bang ?? { char: l[at]!, length: countRun(l, at, l[at]!) }, line: i + 1 });
   }
-  return null;
+  return out;
+}
+// The last line an editor shows: a text that ends in a line break has no line after it.
+const lastShown = (lines: readonly string[]) => (lines.length > 1 && lines[lines.length - 1] === '' ? lines.length - 1 : lines.length);
+// An update that adds, removes or changes fence lines in a markdown file whose new version has a ```! block can re-nest
+// what the blocks hold, so more may run as the skill loads with no command's own text changed: each such line counts as
+// runs_at_load (contract §5.3). Added and changed ones come from the order of the fence lines: every new one between the
+// first and the last difference (a common start and end, so a move or a swap counts too), at its line. Removed ones come
+// from the version's line diff, each at the new line now standing where it was (the last shown line if it was at the
+// end). A line is flagged at most once, and a close adds nothing when a block it ends has its opening line flagged: a new
+// plain block is one flag. A new version with no ```! block runs nothing as it loads, so removing a skill's last one
+// raises nothing.
+function fenceChanges(a: TreeFile, b: TreeFile, flagged: ReadonlySet<number>): { line: number; text: string }[] {
+  if (!isMarkdown(b.path) || !isText(a.bytes) || !isText(b.bytes)) return [];
+  const now = fenceLines(decodeText(b.bytes));
+  if (!now.opener) return [];
+  const was = fenceLines(decodeText(a.bytes));
+  const found = new Map<number, string>();
+  let x = was.fences;
+  const y = now.fences;
+  // The new fence lines between the first and the last difference from the old ones: [start, y.length - end).
+  const middle = () => {
+    let start = 0;
+    while (start < x.length && start < y.length && x[start]!.text === y[start]!.text) start++;
+    let end = 0;
+    while (end < x.length - start && end < y.length - start && x[x.length - 1 - end]!.text === y[y.length - 1 - end]!.text) end++;
+    return { start, end, removedAny: start < x.length - end };
+  };
+  let m = middle();
+  // Removed fence lines (only possible when an old one lies between the differences), then the order of what's left.
+  // When the edit script gives up (past MAX_EDIT) it removes every old line, so every new fence line counts as changed.
+  const removed: { line: number; text: string }[] = [];
+  if (m.removedAny) {
+    const last = lastShown(now.lines);
+    const gone = new Set<number>();
+    for (const op of editScript(was.lines, now.lines)) {
+      if (op.kind !== '-' || !isFenceLine(op.line)) continue;
+      gone.add(op.ai + 1);
+      removed.push({ line: Math.max(1, Math.min(op.bi + 1, last)), text: `fence removed: ${op.line.trim()}` });
+    }
+    x = x.filter((f) => !gone.has(f.line));
+    m = middle();
+  }
+  for (let i = m.start; i < y.length - m.end; i++) found.set(y[i]!.line, y[i]!.text.trim());
+  for (const r of removed) if (!found.has(r.line)) found.set(r.line, r.text);
+  const closers = closersOf(now.lines);
+  const taken = new Set(flagged);
+  const out: { line: number; text: string }[] = [];
+  for (const [line, text] of [...found].sort((p, q) => p[0] - q[0])) {
+    if (taken.has(line) || closers.get(line)?.some((o) => taken.has(o))) continue;
+    taken.add(line);
+    out.push({ line, text });
+  }
+  return out;
 }
 
 // What a version grants, so a changed instruction could act without asking (contract §5.3): an injected command, or a
@@ -393,7 +453,7 @@ export function diffTrees(
   const fa = frontmatterOf(from?.files ?? []);
   const fb = frontmatterOf(to.files);
   // One reason per file, the first that applies (contract §5.3): runnable_file, runs_at_load (one per added or changed
-  // injected command, and nothing else for that file), instructions_changed (any file added, changed or removed, and
+  // injected command and per changed fence line, in line order, and nothing else for that file), instructions_changed (any file added, changed or removed, and
   // SKILL.md when its body or a safe key changed, while the new version grants anything), then non_markdown.
   const grants = grantsOf(to.files, fb.fm, safeKeys, nonGranting);
   const safeChanged = safeKeys.some((k) => JSON.stringify(fa.fm[k]) !== JSON.stringify(fb.fm[k]));
@@ -404,13 +464,10 @@ export function diffTrees(
       continue;
     }
     const injected = b ? newInjections(a, b) : [];
-    if (injected.length) {
-      for (const x of injected) risk.push({ kind: 'runs_at_load', path, line: x.line, detail: flagText(x.command) });
-      continue;
-    }
-    const fence = a && b ? fenceChange(a, b) : null;
-    if (fence) {
-      risk.push({ kind: 'runs_at_load', path, line: fence.line, detail: flagText(fence.text) });
+    const fences = a && b ? fenceChanges(a, b, new Set(injected.map((x) => x.line))) : [];
+    if (injected.length || fences.length) {
+      const loads = [...injected.map((x) => ({ line: x.line, detail: x.command })), ...fences.map((f) => ({ line: f.line, detail: f.text }))];
+      for (const x of loads.sort((p, q) => p.line - q.line)) risk.push({ kind: 'runs_at_load', path, line: x.line, detail: flagText(x.detail) });
       continue;
     }
     const instructions = path !== MANIFEST || fa.body !== fb.body || safeChanged;

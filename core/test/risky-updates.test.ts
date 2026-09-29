@@ -204,6 +204,31 @@ describe('a changed fence line in a file with a ```! block counts as running a c
     const body = (scale: number, last: string) => `\`\`\`!\necho a\n\`\`\`\n${times('```\n', 200_000)(scale)}${last}\n`;
     expectLinear('a megabyte of plain fences after a closed ```! block, the last one changed', (scale) => scale, (scale) => loads(body(scale, '```'), body(scale, '~~~')));
   }, 120_000);
+  it('a ```! block that pulls in the line after it is flagged at its opener, though no line\'s text and no fence changed', () => {
+    expect(loads('```!\nls\n```\necho x\n', '```!\nls\necho x\n```\n').map((f) => [f.line, f.detail])).toEqual([[1, 'ls ⏎ echo x']]);
+  });
+  it('a close whose block has its opener flagged adds nothing, and neither does a removal standing on it', () => {
+    // a new plain block: its opener is flagged, its close isn't
+    expect(loads('```!\necho a\n```\nEnd.\n', '```!\necho a\n```\n```\ncode\n```\nEnd.\n').map((f) => f.line)).toEqual([4]);
+    // a plain fence removed from just before a ```! block's close: the block's text changed (flagged at its opener), and
+    // the removal stands on the close
+    expect(loads('```!\necho a\n~~~\n```\n', '```!\necho a\n```\n').map((f) => f.line)).toEqual([1]);
+  });
+  it('when the line diff gives up (too many edits), every fence line of the new version counts, deduped as usual', () => {
+    const text = (word: string, tail: string) => `\`\`\`!\necho a\n\`\`\`\n${Array.from({ length: 4100 }, (_, i) => `${word}${i}`).join('\n')}\n\`\`\`\ncode\n\`\`\`\n${tail}`;
+    // every middle line changed, and a plain pair removed from the end
+    const got = loads(text('x', '~~~\n~~~\n'), text('y', '')).map((f) => [f.line, f.detail]);
+    expect(got).toEqual([[1, '```!'], [4104, '```']]);
+  }, 60_000);
+  it('fence lines removed in a megabyte of them, each where it was, in linear time', () => {
+    const lines = (scale: number) => Array.from({ length: Math.round(100_000 * scale) }, (_, i) => (i % 2 ? 'text' : '```'));
+    const body = (l: string[]) => `\`\`\`!\necho a\n\`\`\`\n${l.join('\n')}\n`;
+    expectLinear('one fence removed from the middle', (scale) => lines(scale), (l) => {
+      const cut = [...l];
+      cut.splice(l.length >> 1, 1);
+      return loads(body(l), body(cut));
+    });
+  }, 120_000);
 
   // Differential, against the detector as reviewed at 15f3e65 (test/fixtures/injections-15f3e65.ts): over random edits
   // of files made of fence-heavy lines, whatever it flags, today's diff flags too.
