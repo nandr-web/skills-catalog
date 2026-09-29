@@ -5,7 +5,7 @@
 // operation's answer, from the operation's own row.
 
 import { describe, expect, it } from 'vitest';
-import { OPERATIONS, isCatalogError } from '@skills-catalog/core';
+import { OPERATIONS, isCatalogError, webRow } from '@skills-catalog/core';
 import { mayRun, whoIsAsking } from '../src/api/who.ts';
 import type { TokenHolder } from '../src/index.ts';
 
@@ -57,7 +57,8 @@ describe("who's asking", () => {
 });
 
 describe('what a holder may run', () => {
-  const webRows = Object.values(OPERATIONS).filter((o) => o.faces.includes('web'));
+  // The operations a hosted catalog's web face serves, by the API's one rule.
+  const webRows = Object.values(OPERATIONS).filter((o) => webRow(o, 'hosted'));
 
   it('every operation the web face serves either reads or changes the catalog, never this machine', () => {
     expect(webRows.length).toBeGreaterThan(0);
@@ -82,5 +83,8 @@ describe('what a holder may run', () => {
   it('an operation that is not a row is refused, never allowed by default', () => {
     expect(() => mayRun(ANA, 'constructor')).toThrow();
     expect(() => mayRun(BO, 'no_such_operation')).toThrow();
+    // A row the hosted web face doesn't serve (it changes this machine) is never reached here either.
+    expect(OPERATIONS['install_shared_skill']!.effect).toBe('writes_machine');
+    expect(() => mayRun(ANA, 'install_shared_skill')).toThrow();
   });
 });
