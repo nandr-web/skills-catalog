@@ -46,7 +46,7 @@ async function fts5() {
 }
 
 // The line to print, in the surface's words when they exist; otherwise the problem as data (never hand-typed prose).
-async function line(p) {
+export async function problemLine(p) {
   try {
     const { parse } = await import('yaml');
     const words = parse(readFileSync(new URL('../surface/surface.yaml', import.meta.url), 'utf8'))?.results?.[`node_${p.problem}`];
@@ -61,7 +61,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const have = process.versions.node;
   const p = nodeProblem(have, nodeProblem(have, true) === null ? await fts5() : true);
   if (p) {
-    process.stderr.write(`${await line(p)}\n`);
+    process.stderr.write(`${await problemLine(p)}\n`);
     process.exit(3);
   }
 }
