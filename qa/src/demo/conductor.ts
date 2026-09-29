@@ -13,10 +13,12 @@ import type { RunState } from './steps-view.ts';
 export type Turn = { who: string; say: string; step: number | string | null; ok: boolean; at: string };
 export type StepState = 'pending' | 'now' | 'seen' | 'missed' | 'planned';
 export type StepView = { id: number | string; title: string; see: string; state: StepState; missing?: string[] };
-/** steps.json, which the steps view draws. `state`: starting, playing, pausing, paused (`pausedIn` a step or between
- *  steps), waiting for Enter, or done; `keys`: whether anyone can press them (attached), so the keys line shows. */
+/** steps.json, which the steps view draws. `state`: starting, playing, pausing (`pausingAfter` this answer, or this step
+ *  once an Enter lets it through), paused (`pausedIn` a step or between steps), waiting for Enter, or done; `keys`:
+ *  whether anyone can press them (attached), so the keys line shows. */
 export type StepsFile = {
-  title: string; mode: 'auto' | 'step'; paused: boolean; state: RunState; pausedIn?: 'step' | 'between'; keys: boolean; message: string; steps: StepView[];
+  title: string; mode: 'auto' | 'step'; paused: boolean; state: RunState; pausedIn?: 'step' | 'between'; pausingAfter?: 'answer' | 'step';
+  keys: boolean; message: string; steps: StepView[];
 };
 export type Counts = { seen: number; planned: number; missed: number };
 
@@ -85,6 +87,7 @@ export async function conduct(scenes: Scenes, io: ConductorIo, o: ConductorOptio
     const held = holding || !ready;
     view.state = done ? 'done' : view.paused ? (held ? 'paused' : 'pausing') : !ready ? 'starting' : waiting === 'enter' ? 'waiting' : 'playing';
     if (view.state === 'paused') view.pausedIn = ready ? where : 'between'; else delete view.pausedIn;
+    if (view.state === 'pausing') view.pausingAfter = pass ? 'step' : 'answer'; else delete view.pausingAfter;
     io.writeSteps(view);
   };
   const poll = () => {
@@ -189,7 +192,6 @@ export async function conduct(scenes: Scenes, io: ConductorIo, o: ConductorOptio
     v.state = 'now';
     render();
     const missing = await play(step, fast || o.pace === 0);
-    pass = false;   // an Enter's pass never carries into the next step
     if (quit) { v.state = 'pending'; break; }
     // Planned: a planned call, or, without the server, a command-line op (it shows as planned there).
     const planned = step.asks.some((a) => a.calls.some((c) => 'planned' in c || (!o.server && CLI_OPS.includes(c.op))));
@@ -197,7 +199,8 @@ export async function conduct(scenes: Scenes, io: ConductorIo, o: ConductorOptio
     v.state = missing.length ? 'missed' : planned && !expected ? 'planned' : 'seen';
     if (missing.length) v.missing = missing;
     o.onMark?.(`step ${step.id}`);
-    render();
+    render();   // an Enter's pass still says "pausing after this step" as the step ends
+    pass = false;   // and never carries into the next step
     if (o.mode === 'auto' && !fast && i < last) await wait(o.pace, false);
   }
   const counts = count(view.steps);

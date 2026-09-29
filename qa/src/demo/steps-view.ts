@@ -13,10 +13,12 @@ export type StepView = { id: number; title: string; see: string; state: 'pending
  *  answers: it holds after that), paused (holding), waiting (for Enter, step by step) or done (its Done line says so).
  *  Optional, as are the others after it: a steps.json written before they existed still draws. */
 export type RunState = 'starting' | 'playing' | 'pausing' | 'paused' | 'waiting' | 'done';
-/** `pausedIn`: where it holds, in a step or between steps (the default); `keys`: false when nobody can press them
- *  (a headless run), so no keys line is drawn. */
+/** `pausedIn`: where it holds, in a step or between steps (the default); `pausingAfter`: what it finishes first, the
+ *  answer under way (the default) or, after an Enter, the step; `keys`: false when nobody can press them (a headless
+ *  run), so no keys line is drawn. */
 export type StepsState = {
-  title: string; mode: 'auto' | 'step'; paused: boolean; state?: RunState; pausedIn?: 'step' | 'between'; keys?: boolean; message: string; steps: StepView[];
+  title: string; mode: 'auto' | 'step'; paused: boolean; state?: RunState; pausedIn?: 'step' | 'between'; pausingAfter?: 'answer' | 'step';
+  keys?: boolean; message: string; steps: StepView[];
 };
 export type Command = 'next' | 'pause' | 'quit';
 
@@ -37,6 +39,7 @@ const STATE_LINE = {
   starting: { parts: ['starting: waiting for the assistants'], base: DIM },
   playing: { parts: ['playing: p to pause'], base: DIM },
   pausing: { parts: ['‖ pausing after this answer', 'p to carry on'], rest: '  ' },
+  pausingStep: { parts: ['‖ pausing after this step', 'p to carry on'], rest: '  ' },
   between: { parts: ['‖ paused: Enter for the next step', 'p to carry on'], rest: '  ' },
   step: { parts: ['‖ paused: Enter to finish this step', 'p to carry on'], rest: '  ' },
   waiting: { parts: ['step by step: Enter for the next step'] },
@@ -121,7 +124,8 @@ export function renderSteps(state: StepsState | null, o: { width?: number } = {}
   out.push('', ...block(`${MARK.seen} = the demo checked it too`, DIM, '', ''));
   if (state.message) out.push(...block(state.message, undefined, '', ''));
   const run = state.state ?? (state.paused ? 'paused' : undefined);   // an older steps.json: only paused is known
-  if (run && run !== 'done') out.push(...drawLine(STATE_LINE[run === 'paused' ? (state.pausedIn ?? 'between') : run], width));
+  const line = run === 'paused' ? (state.pausedIn ?? 'between') : run === 'pausing' && state.pausingAfter === 'step' ? 'pausingStep' : run;
+  if (line && line !== 'done') out.push(...drawLine(STATE_LINE[line], width));
   if (state.keys !== false) out.push(...drawLine(run === 'paused' || run === 'pausing' ? KEYS.paused : run === 'done' ? KEYS.done : KEYS.usual, width));
   return out.join('\n');
 }

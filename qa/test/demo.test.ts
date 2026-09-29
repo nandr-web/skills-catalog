@@ -864,7 +864,8 @@ describe('the conductor', () => {
     if (who === 'ana' && say === 'set me up') { w().queue('pause'); return { print: 'Take it? (y/N)', turn: null }; }
     return { print: say === 'y' ? 'Took it' : ANSWERS[say] };
   };
-  const where = (w: World) => w.writes.map((s) => (s.state === 'paused' ? `paused ${s.pausedIn}` : s.state)).filter((s, i, a) => s !== a[i - 1]);
+  const where = (w: World) => w.writes.map((s) => (s.state === 'paused' ? `paused ${s.pausedIn}` : s.state === 'pausing' ? `pausing after ${s.pausingAfter}` : s.state))
+    .filter((s, i, a) => s !== a[i - 1]);
 
   it('a then answer is held while paused; Enter mid-step finishes the step (every ask and answer left), then it holds; Enter between steps plays one whole step', async () => {
     let phase = 0, heldAt = -1;
@@ -888,7 +889,12 @@ describe('the conductor', () => {
       ['set me up', 'y', 'set me up'],                         // Enter: the rest of step 1, then 10 s held
       ['set me up', 'y', 'set me up', 'publish my skill, hello', 'find a skill that says hello'],   // Enter: all of step 2
     ]);
-    expect(where(w)).toEqual(['starting', 'playing', 'pausing', 'paused step', 'pausing', 'paused between', 'pausing', 'paused between', 'playing', 'done']);
+    // p mid-answer: pausing after this answer; each Enter: pausing after this step, until the step ends and it holds
+    expect(where(w)).toEqual([
+      'starting', 'playing', 'pausing after answer', 'paused step', 'pausing after step', 'paused between', 'pausing after step', 'paused between', 'playing', 'done',
+    ]);
+    const endOf1 = w.writes.find((s) => s.steps[0].state === 'planned')!, endOf2 = w.writes.find((s) => s.steps[1].state === 'seen')!;
+    expect([endOf1, endOf2].map((s) => [s.state, s.pausingAfter])).toEqual([['pausing', 'step'], ['pausing', 'step']]);   // as each step ends
     expect(w.typed).toHaveLength(6);
     expect(r.counts).toEqual({ seen: 2, planned: 1, missed: 0 });
   });

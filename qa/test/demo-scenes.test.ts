@@ -601,6 +601,8 @@ describe('the steps view', () => {
       [{ state: 'starting' }, [`${D}starting: waiting for the assistants${R}`]],
       [{ state: 'playing' }, [`${D}playing:${R} ${G}p${R} ${D}to pause${R}`]],
       [{ state: 'pausing', paused: true }, [`${O}‖ pausing${R} after this answer · ${G}p${R} to carry on`]],
+      [{ state: 'pausing', paused: true, pausingAfter: 'answer' }, [`${O}‖ pausing${R} after this answer · ${G}p${R} to carry on`]],
+      [{ state: 'pausing', paused: true, pausingAfter: 'step' }, [`${O}‖ pausing${R} after this step · ${G}p${R} to carry on`]],   // Enter let the step through
       // 49 and 51 columns whole: both split at " · ", the second half under "paused"
       [{ state: 'paused', paused: true, pausedIn: 'between' }, PAUSED_BETWEEN],
       [{ state: 'paused', paused: true, pausedIn: 'step' }, PAUSED_IN_STEP],
@@ -619,6 +621,7 @@ describe('the steps view', () => {
     const words = /\b(starting|playing|pausing|paused|step by step)\b|one step at a time|Press Enter|Paused:/g;
     const cases: [Partial<StepsState>, string][] = [
       [{ state: 'starting' }, 'starting'], [{ state: 'playing' }, 'playing'], [{ state: 'pausing', paused: true }, 'pausing'],
+      [{ state: 'pausing', paused: true, pausingAfter: 'step' }, 'pausing'],
       [{ state: 'paused', paused: true, pausedIn: 'between' }, 'paused'], [{ state: 'paused', paused: true, pausedIn: 'step' }, 'paused'],
       [{ state: 'waiting', mode: 'step' }, 'step by step'],
     ];
@@ -631,6 +634,8 @@ describe('the steps view', () => {
   it('the pausing line fits 48 on one line; at 40 the pausing and paused lines split at " · ", the second half under the word', () => {
     const at40 = (s: Partial<StepsState>) => renderSteps({ ...state, ...s }, { width: 40 }).split('\n');
     expect(at40({ state: 'pausing', paused: true }).slice(-3)).toEqual([`${O}‖ pausing${R} after this answer`, `  ${G}p${R} to carry on`, KEYS_PAUSED]);
+    // 41 columns whole: split at " · " too
+    expect(at40({ state: 'pausing', paused: true, pausingAfter: 'step' }).slice(-3)).toEqual([`${O}‖ pausing${R} after this step`, `  ${G}p${R} to carry on`, KEYS_PAUSED]);
     expect(at40({ state: 'paused', paused: true, pausedIn: 'between' }).slice(-3)).toEqual([...PAUSED_BETWEEN, KEYS_PAUSED]);
     expect(at40({ state: 'paused', paused: true, pausedIn: 'step' }).slice(-3)).toEqual([...PAUSED_IN_STEP, KEYS_PAUSED]);
   });
@@ -659,8 +664,9 @@ describe('the steps view', () => {
   it('every line fits the pane at 40 and 48 columns, in every state, each glyph one character', () => {
     const long: StepsState = { ...state, message: 'Stopped after step 5; 3 not played. Everything is removed.' };
     for (const width of [40, 48]) {
-      for (const [s, pausedIn] of [['starting'], ['playing'], ['pausing'], ['paused', 'between'], ['paused', 'step'], ['waiting'], ['done']] as const) {
-        const out = plain(renderSteps({ ...long, state: s, paused: s === 'paused' || s === 'pausing', ...(pausedIn ? { pausedIn } : {}) }, { width }));
+      for (const [s, where] of [['starting'], ['playing'], ['pausing', 'answer'], ['pausing', 'step'], ['paused', 'between'], ['paused', 'step'], ['waiting'], ['done']] as const) {
+        const at = where ? (s === 'paused' ? { pausedIn: where } : { pausingAfter: where }) : {};
+        const out = plain(renderSteps({ ...long, state: s, paused: s === 'paused' || s === 'pausing', ...at } as StepsState, { width }));
         for (const l of out.split('\n')) expect([...l].length, `${width} ${s}: ${l}`).toBeLessThanOrEqual(width);
       }
     }
