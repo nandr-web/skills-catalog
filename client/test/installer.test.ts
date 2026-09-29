@@ -1006,6 +1006,12 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
     // mean auto), or a key added to safe_frontmatter_keys (config can only remove), is wrong_shape naming that key.
     { file: 'config.json', why: 'wrong_shape', key: 'update_polcy', bytes: () => '{"update_polcy": "pin"}' },
     { file: 'config.json', why: 'wrong_shape', key: 'hooks', bytes: () => '{"safe_frontmatter_keys": ["name", "hooks"]}' },
+    // The keys known to grant nothing can only be narrowed too: a key added names itself, compared case-sensitively.
+    { file: 'config.json', why: 'wrong_shape', key: 'hooks', bytes: () => '{"non_granting_keys": ["model", "hooks"]}' },
+    { file: 'config.json', why: 'wrong_shape', key: 'Model', bytes: () => '{"non_granting_keys": ["Model"]}' },
+    // aws goes only with hosting: aws (local is the default).
+    { file: 'config.json', why: 'wrong_shape', key: 'aws', bytes: () => '{"aws": {}}' },
+    { file: 'config.json', why: 'wrong_shape', key: 'aws', bytes: () => '{"hosting": "local", "aws": {"region": "us-east-1"}}' },
     // The first unknown key in JSON.parse's order, which puts integer-like keys first (a stated limit).
     { file: 'config.json', why: 'wrong_shape', key: '10', bytes: () => '{"zeta": 1, "10": 2}' },
     // Each known key has its shape.
@@ -1032,8 +1038,10 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
 
   it('the setup keys, well formed, are read as they are (a whole budget written as 5000.0, the largest safe one, empty lists)', async () => {
     // Every key of §6, well formed, as setup writes them.
-    const all = JSON.stringify({ hosting: 'local', catalog: '/somewhere/catalog', update_policy: 'notify', overrides: { runner: 'pin' }, cooldown: 31536000, accept_flagged_updates: false, safe_frontmatter_keys: ['name', 'description'], non_granting_keys: ['model'], context_cost_budget: 5000, command_instruction_patterns: [], targets: ['claude-code'], session_start_hook: true, claude_config_dir: '/somewhere/claude', me: 'ana', demo_developers: ['dev1', 'dev2'], aws: {} });
-    for (const bytes of [all, '{"context_cost_budget": 5000.0, "accept_flagged_updates": false}', '{"context_cost_budget": 9007199254740991, "safe_frontmatter_keys": [], "non_granting_keys": ["model"]}']) {
+    const all = JSON.stringify({ hosting: 'local', catalog: '/somewhere/catalog', update_policy: 'notify', overrides: { runner: 'pin' }, cooldown: 31536000, accept_flagged_updates: false, safe_frontmatter_keys: ['name', 'description'], non_granting_keys: ['model'], context_cost_budget: 5000, command_instruction_patterns: [], targets: ['claude-code'], session_start_hook: true, claude_config_dir: '/somewhere/claude', me: 'ana', demo_developers: ['dev1', 'dev2'] });
+    // aws is set only with hosting: aws.
+    const allAws = JSON.stringify({ hosting: 'aws', catalog: 'https://catalog.example/', update_policy: 'notify', overrides: { runner: 'pin' }, cooldown: 31536000, accept_flagged_updates: false, safe_frontmatter_keys: ['name', 'description'], non_granting_keys: ['model'], context_cost_budget: 5000, command_instruction_patterns: [], targets: ['claude-code'], session_start_hook: true, claude_config_dir: '/somewhere/claude', me: 'ana', demo_developers: ['dev1', 'dev2'], aws: {} });
+    for (const bytes of [all, allAws, '{"context_cost_budget": 5000.0, "accept_flagged_updates": false}', '{"context_cost_budget": 9007199254740991, "safe_frontmatter_keys": [], "non_granting_keys": ["model"]}', '{"command_instruction_patterns": []}']) {
       const p = place();
       await publish(p, 'runner', plain('runner'));
       mkdirSync(p.home, { recursive: true, mode: 0o700 });

@@ -7,7 +7,7 @@ import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, openS
 import { isAbsolute, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { ACTOR, CatalogError } from '@skills-catalog/core';
-import { DEFAULT_SAFE_FRONTMATTER_KEYS } from '@skills-catalog/core/skill-tree';
+import { DEFAULT_NON_GRANTING_KEYS, DEFAULT_SAFE_FRONTMATTER_KEYS } from '@skills-catalog/core/skill-tree';
 
 export type Policy = 'auto' | 'notify' | 'pin';
 export type Target = 'user' | 'project';
@@ -86,7 +86,13 @@ const MAX_COOLDOWN_S = 365 * 24 * 3600;
 // The assistants setup writes for in this phase.
 const SETUP_TARGETS: readonly string[] = ['claude-code'];
 const isName = (x: unknown) => typeof x === 'string' && ACTOR.test(x);
-const CONFIG_KEYS: Record<string, (x: unknown) => Refusal | undefined> = {
+// A key list config can only narrow: a key the code doesn't hold is named (compared case-sensitively, so it fails closed).
+const narrowed = (x: unknown, held: readonly string[]): Refusal | undefined => {
+  if (!isStrings(x)) return 'wrong_shape';
+  const added = (x as string[]).find((k) => !held.includes(k));
+  return added === undefined ? undefined : { why: 'wrong_shape', key: added };
+};
+const CONFIG_KEYS: Record<string, (x: unknown, config: Record<string, unknown>) => Refusal | undefined> = {
   hosting: (x) => (typeof x === 'string' && HOSTING.includes(x) ? undefined : 'wrong_shape'),
   catalog: (x) => (typeof x === 'string' && x !== '' ? undefined : 'wrong_shape'),
   update_policy: policyWhy,
@@ -102,12 +108,8 @@ const CONFIG_KEYS: Record<string, (x: unknown) => Refusal | undefined> = {
   // A wait in whole seconds, up to a year (§5.3's cooldown; built with shared and hosted catalogs).
   cooldown: (x) => (Number.isSafeInteger(x) && (x as number) >= 0 && (x as number) <= MAX_COOLDOWN_S ? undefined : 'wrong_shape'),
   accept_flagged_updates: (x) => (typeof x === 'boolean' ? undefined : 'wrong_shape'),
-  safe_frontmatter_keys: (x) => {
-    if (!isStrings(x)) return 'wrong_shape';
-    const added = (x as string[]).find((k) => !DEFAULT_SAFE_FRONTMATTER_KEYS.includes(k));
-    return added === undefined ? undefined : { why: 'wrong_shape', key: added };
-  },
-  non_granting_keys: (x) => (isStrings(x) ? undefined : 'wrong_shape'),
+  safe_frontmatter_keys: (x) => narrowed(x, DEFAULT_SAFE_FRONTMATTER_KEYS),
+  non_granting_keys: (x) => narrowed(x, DEFAULT_NON_GRANTING_KEYS),
   // A number that isn't a positive whole one below 2^53 isn't a budget; 5000.0 is 5000 once parsed.
   context_cost_budget: (x) => (typeof x !== 'number' ? 'wrong_shape' : Number.isSafeInteger(x) && x >= 1 ? undefined : 'not_a_budget'),
   command_instruction_patterns: (x) => (Array.isArray(x) ? undefined : 'wrong_shape'),
@@ -116,7 +118,8 @@ const CONFIG_KEYS: Record<string, (x: unknown) => Refusal | undefined> = {
   claude_config_dir: (x) => (typeof x === 'string' && isAbsolute(x) ? undefined : 'wrong_shape'),
   me: (x) => (isName(x) ? undefined : 'wrong_shape'),
   demo_developers: (x) => (Array.isArray(x) && x.every(isName) ? undefined : 'wrong_shape'),
-  aws: (x) => (isObject(x) ? undefined : 'wrong_shape'),
+  // Only with hosting: aws; local is the default.
+  aws: (x, config) => (isObject(x) && config['hosting'] === 'aws' ? undefined : 'wrong_shape'),
 };
 
 /** Why config.json is refused, if it is, naming the key (§9) so the person knows which line to fix: the first unknown
@@ -127,7 +130,7 @@ function configWhy(x: unknown): Refusal | undefined {
   const unknown = Object.keys(x).find((k) => !Object.hasOwn(CONFIG_KEYS, k));
   if (unknown !== undefined) return { why: 'wrong_shape', key: unknown };
   const whys = Object.entries(x).flatMap(([k, v]) => {
-    const w = CONFIG_KEYS[k]!(v);
+    const w = CONFIG_KEYS[k]!(v, x);
     return w === undefined ? [] : [typeof w === 'string' ? { why: w, key: k } : w];
   });
   return whys.find((w) => w.why === 'wrong_shape') ?? whys[0];
