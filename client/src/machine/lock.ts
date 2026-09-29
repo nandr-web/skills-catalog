@@ -137,7 +137,11 @@ const LOCK_RETRY_MS = 50;
 const SAME_START_MS = 2000;
 
 type Holder = { pid: number; started: number };
-const startedHere = () => Date.now() - Math.round(process.uptime() * 1000);
+let myStart: number | undefined;
+/** This process's start as another run reads it: from `ps`, the same clock it's compared on (on Linux, process.uptime()
+ *  doesn't count time asleep and `ps` does, so a server running since before a suspend would look stale). Read once;
+ *  process.uptime() only when `ps` can't tell. */
+const startedHere = () => (myStart ??= startOf(process.pid) ?? Date.now() - Math.round(process.uptime() * 1000));
 // Waits without blocking: the MCP server answers other calls meanwhile.
 const wait = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
 function lstatOr(path: string): Stats | undefined {
@@ -153,10 +157,15 @@ function lstatOr(path: string): Stats | undefined {
  *  live holder taken for a stale one. */
 function startOf(pid: number): number | undefined {
   const r = spawnSync('ps', ['-o', 'etime=', '-p', String(pid)], { encoding: 'utf8', env: { PATH: process.env['PATH'] ?? '/usr/bin:/bin', LC_ALL: 'C' }, timeout: 2000 });
-  const m = /^(?:(?:(\d+)-)?(\d+):)?(\d+):(\d+)$/.exec((r.stdout ?? '').trim());
+  return startFromEtime(r.stdout ?? '', Date.now());
+}
+
+/** A start from `ps`'s etime output ([[dd-]hh:]mm:ss) at `now`, or undefined when it isn't one. */
+export function startFromEtime(etime: string, now: number): number | undefined {
+  const m = /^(?:(?:(\d+)-)?(\d+):)?(\d+):(\d+)$/.exec(etime.trim());
   if (!m) return undefined;
   const [days, hours, minutes, seconds] = [m[1], m[2], m[3], m[4]].map((x) => Number(x ?? 0)) as [number, number, number, number];
-  return Date.now() - (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
+  return now - (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
 }
 
 /** A file's text, read without following a link, or undefined when it can't be read. */
