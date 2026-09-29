@@ -60,15 +60,16 @@ function checkTarget(ctx: Context, target: Target, name: string, lock: Lock): st
 
 // .claude and .claude/skills under the target's root, made one folder at a time. Each is checked and its identity taken
 // from the same lstat, so the identity is always a real folder's, never a link's own: a link that appeared since
-// checkTarget is refused, not followed. writeSkill checks these identities again after every move.
+// checkTarget is refused, not followed. writeSkill checks these identities again after every move. The folders it makes
+// are 0755 whatever the umask, so they pass the privacy check (a umask of 002 would make them group-writable).
 type Anchor = { path: string; id: Id };
 function skillsFolderFor(dest: string): Anchor[] {
   const skills = dirname(dest);
   const claude = dirname(skills);
-  mkdirSync(dirname(claude), { recursive: true });
+  mkdirSync(dirname(claude), { recursive: true, mode: 0o755 });
   return [claude, skills].map((path) => {
     try {
-      mkdirSync(path);
+      mkdirSync(path, { mode: 0o755 });
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
     }

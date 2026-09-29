@@ -1,7 +1,7 @@
 // The installer (contract §3, §4.5, §5.3; golden/histories.yaml installer and gate). It installs from bytes it checked,
 // computes every flag itself (a first install is an update from nothing), holds a flagged change until the person's
 // yes, never overwrites or shadows what it didn't install, and records what it did in the lock.
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CatalogError, Surface, actAs, reasons, renderError, type Catalog } from '@skills-catalog/core';
 import { checkTree, diffTrees, fingerprint, sha256Hex, type Mode } from '@skills-catalog/core/skill-tree';
@@ -126,6 +126,41 @@ describe('install (contract §3 install_shared_skill)', () => {
     expect(e.fingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(nothingStaged(p)).toBe(true);
     expect((statSync(join(p.home, 'lock.json')).mode & 0o777).toString(8)).toBe('600');
+  });
+
+  it('under a umask of 002 the folders it makes are private to the person, so it installs into them (both targets)', async () => {
+    const p = place();
+    await publish(p, 'notes-helper', plain('notes-helper'));
+    const was = process.umask(0o002);
+    try {
+      for (const target of ['user', 'project'] as const) {
+        const r = await install(ctxFor(p), { name: 'notes-helper', target });
+        expect(r.result).toBe(S.doc.log.result.install.installed);
+        const skills = target === 'user' ? userSkills(p) : projectSkills(p);
+        for (const dir of [join(skills, '..'), skills]) expect((statSync(dir).mode & 0o777).toString(8)).toBe('755');
+        expect(existsSync(join(skills, 'notes-helper', 'SKILL.md'))).toBe(true);
+      }
+    } finally {
+      process.umask(was);
+    }
+  });
+
+  it('under a umask of 002 in a shared, setgid project folder, the .claude it makes takes the shared group but is not group-writable, so it installs', async () => {
+    const p = place();
+    await publish(p, 'notes-helper', plain('notes-helper'));
+    const project = join(p.dir, 'project');
+    mkdirSync(project, { recursive: true });
+    chmodSync(project, 0o2775);
+    const was = process.umask(0o002);
+    try {
+      const r = await install(ctxFor(p), { name: 'notes-helper', target: 'project' });
+      expect(r.result).toBe(S.doc.log.result.install.installed);
+      const claude = join(project, '.claude');
+      expect(statSync(claude).gid).toBe(statSync(project).gid);
+      for (const dir of [claude, projectSkills(p)]) expect((statSync(dir).mode & 0o777).toString(8)).toBe('755');
+    } finally {
+      process.umask(was);
+    }
   });
 
   it('a project install goes into the project; a version can be named', async () => {
