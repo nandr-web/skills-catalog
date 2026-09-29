@@ -1,9 +1,9 @@
 // BlobStore, local adapter: a folder of files named by their sha256. Each is written to a temp file and renamed into
 // place (contract §7), so a reader never sees half a file, and two processes writing the same blob both succeed.
 
-import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeSync } from 'node:fs';
+import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
-import type { BlobStore, Ids } from '../ports.ts';
+import type { BlobStore, Clock, Ids } from '../ports.ts';
 
 const HEX = /^[0-9a-f]{64}$/;
 
@@ -11,11 +11,13 @@ export class FolderBlobStore implements BlobStore {
   private readonly dir: string;
   private readonly tmp: string;
   private readonly ids: Ids;
+  private readonly clock: Clock;
 
-  constructor(root: string, ids: Ids) {
+  constructor(root: string, ids: Ids, clock: Clock = { now: () => new Date() }) {
     this.dir = join(root, 'blobs');
     this.tmp = join(root, 'tmp');
     this.ids = ids;
+    this.clock = clock;
     mkdirSync(this.dir, { recursive: true, mode: 0o700 });
     mkdirSync(this.tmp, { recursive: true, mode: 0o700 });
   }
@@ -37,9 +39,46 @@ export class FolderBlobStore implements BlobStore {
     rmSync(this.path(sha256), { force: true });
   }
 
+  *list(): Iterable<string> {
+    if (!existsSync(this.dir)) return;
+    for (const prefix of readdirSync(this.dir)) {
+      if (!/^[0-9a-f]{2}$/.test(prefix)) continue;
+      for (const rest of readdirSync(join(this.dir, prefix))) if (HEX.test(prefix + rest)) yield prefix + rest;
+    }
+  }
+
+  storedAt(sha256: string): Date | undefined {
+    try {
+      return statSync(this.path(sha256)).mtime;
+    } catch {
+      return undefined;
+    }
+  }
+
+  sweepTemp(before: Date): void {
+    for (const name of readdirSync(this.tmp)) {
+      const p = join(this.tmp, name);
+      try {
+        if (statSync(p).mtime < before) rmSync(p, { force: true });
+      } catch {
+        // gone already
+      }
+    }
+  }
+
+  // Put-if-absent. A blob that already exists gets its modified time refreshed, so the orphan cleanup (which goes
+  // by age) never takes a blob that a publish in flight is about to reference.
   put(sha256: string, bytes: Uint8Array): boolean {
     const final = this.path(sha256);
-    if (this.has(sha256)) return false;
+    const now = this.clock.now();
+    if (this.has(sha256)) {
+      try {
+        utimesSync(final, now, now);
+        return false;
+      } catch {
+        // removed between the check and the touch: write it again below
+      }
+    }
     mkdirSync(join(this.dir, sha256.slice(0, 2)), { recursive: true, mode: 0o700 });
     const temp = join(this.tmp, `${sha256}.${process.pid}.${this.ids.next()}`);
     const fd = openSync(temp, 'wx', 0o600);
@@ -49,6 +88,7 @@ export class FolderBlobStore implements BlobStore {
     } finally {
       closeSync(fd);
     }
+    utimesSync(temp, now, now);
     try {
       renameSync(temp, final);
     } catch (e) {

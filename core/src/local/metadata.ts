@@ -84,6 +84,11 @@ export class SqliteMetadataStore implements MetadataStore {
     );
   }
 
+  referencedBlobs(): Set<string> {
+    const rows = this.db.prepare("SELECT DISTINCT json_extract(f.value, '$.sha256') AS sha FROM versions, json_each(versions.files) AS f").all() as { sha: string }[];
+    return new Set(rows.map((r) => r.sha));
+  }
+
   withWriteLock<T>(fn: () => T): T {
     return this.local.immediate(fn);
   }

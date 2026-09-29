@@ -26,7 +26,7 @@ function p95(ms: number[]): number {
 }
 
 const dir = mkdtempSync(join(tmpdir(), 'skills-catalog-perf-'));
-const catalog = openLocalCatalog(join(dir, 'catalog'));
+let catalog = openLocalCatalog(join(dir, 'catalog'));
 try {
   const corpus = scaleCorpus(SKILLS);
   const publishMs: number[] = [];
@@ -37,6 +37,14 @@ try {
     publishMs.push(performance.now() - t);
   }
   const buildS = (performance.now() - t0) / 1000;
+  // Every CLI call opens the catalog (schema check, outbox delivery, the orphan-blob sweep).
+  const openMs: number[] = [];
+  for (let i = 0; i < 20; i++) {
+    catalog.close();
+    const t = performance.now();
+    catalog = openLocalCatalog(join(dir, 'catalog'));
+    openMs.push(performance.now() - t);
+  }
 
   const q = loadGolden('queries.yaml');
   const terms: string[] = q.queries.flatMap((x: any) => x.keywords);
@@ -59,6 +67,7 @@ try {
     readMs.push(performance.now() - t);
   }
   const rows = [
+    ['open (a CLI call pays this once)', p95(openMs), BUDGET.search],
     ['publish', p95(publishMs), BUDGET.publish],
     ['search (words)', p95(searchMs), BUDGET.search],
     ['search (no words, whole catalog)', p95(listMs), BUDGET.search],

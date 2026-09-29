@@ -48,6 +48,7 @@ export interface MetadataStore {
   names(): string[];
   count(): number;
   referencesBlob(sha256: string): boolean;
+  referencedBlobs(): Set<string>;
   // Runs fn while no other writer can append (locally: one BEGIN IMMEDIATE; nested calls join it).
   withWriteLock<T>(fn: () => T): T;
   append(
@@ -64,6 +65,9 @@ export interface BlobStore {
   get(sha256: string): Uint8Array | undefined;
   has(sha256: string): boolean;
   delete(sha256: string): void;
+  list(): Iterable<string>; // every stored sha256
+  storedAt(sha256: string): Date | undefined;
+  sweepTemp(before: Date): void; // half-written files a crashed put left behind
 }
 
 export interface SearchCard {

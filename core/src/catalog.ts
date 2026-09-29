@@ -151,6 +151,7 @@ export interface FetchResult {
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 const ACTOR = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const APPEND_TRIES = 5;
+export const ORPHAN_AGE_MS = 60 * 60 * 1000;
 
 function encodeCursor(offset: number): string {
   return Buffer.from(JSON.stringify({ o: offset })).toString('base64url');
@@ -190,6 +191,28 @@ export class Catalog {
     // than trusting the event's order, so a repeated or late delivery can't put an old card back.
     ports.events.subscribe((e) => this.indexSkill(e.name));
     ports.events.deliver();
+    this.sweepBlobs();
+  }
+
+  // After a publish that failed part-way (a crash, a full disk), blobs no version references may remain (§5.1).
+  // Opening the catalog removes those older than an hour by the clock, so another process's publish in flight is
+  // never touched; a blob any version references is never removed.
+  sweepBlobs(maxAgeMs = ORPHAN_AGE_MS): number {
+    const before = new Date(this.p.clock.now().getTime() - maxAgeMs);
+    let removed = 0;
+    this.p.meta.withWriteLock(() => {
+      const referenced = this.p.meta.referencedBlobs();
+      for (const sha of this.p.blobs.list()) {
+        if (referenced.has(sha)) continue;
+        const at = this.p.blobs.storedAt(sha);
+        if (at && at < before) {
+          this.p.blobs.delete(sha);
+          removed++;
+        }
+      }
+    });
+    this.p.blobs.sweepTemp(before);
+    return removed;
   }
 
   close(): void {
@@ -393,21 +416,21 @@ export class Catalog {
     for (let attempt = 1; ; attempt++) {
       let r;
       try {
-        // Every blob must still be there at the commit point: a racing publish may have taken back one this
-        // publish found already stored. If so, put them again and retry.
-        r = this.p.meta.withWriteLock(() =>
-          entries.every((e) => this.p.blobs.has(e.sha256)) ? this.p.meta.append(record, { expectedLatest: req.expected_latest }, event) : null,
-        );
+        // No version ever points at a missing blob (§5.1): under the same lock as the cleanup, every blob this
+        // version references must exist; one that was cleaned away (a stalled publish, a raced take-back) is put
+        // again from the bytes held here before the append. If that put fails, the publish fails, retryable.
+        r = this.p.meta.withWriteLock(() => {
+          for (const f of tree) {
+            const sha = sha256Hex(f.bytes);
+            if (!this.p.blobs.has(sha) && this.p.blobs.put(sha, f.bytes)) added.add(sha);
+          }
+          return this.p.meta.append(record, { expectedLatest: req.expected_latest }, event);
+        });
       } catch (e) {
         // A clash on the version number or a busy lock: try again.
         if (attempt < APPEND_TRIES && /UNIQUE|constraint|busy|locked/i.test(String((e as Error).message))) continue;
         takeBack();
         throw e;
-      }
-      if (r === null) {
-        if (attempt >= APPEND_TRIES) throw new Error('storage: blobs kept disappearing before the commit');
-        putAll();
-        continue;
       }
       switch (r.kind) {
         case 'not_owner':

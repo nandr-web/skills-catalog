@@ -34,7 +34,7 @@ export function openLocalCatalog(dir: string, opts: LocalOptions = {}): Catalog 
   const ids = opts.ids ?? randomIds;
   const db = new LocalDb(join(dir, DB_FILE));
   const meta = new SqliteMetadataStore(db);
-  const blobs = new FolderBlobStore(dir, ids);
+  const blobs = new FolderBlobStore(dir, ids, clock);
   return new Catalog({
     meta: opts.wrapMeta ? opts.wrapMeta(meta) : meta,
     blobs: opts.wrapBlobs ? opts.wrapBlobs(blobs) : blobs,
