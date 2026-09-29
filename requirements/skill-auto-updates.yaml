@@ -4,6 +4,6 @@ phase: "1"
 source: "the owner's notes on the PRD"
 quote: "auto-updates should be a user option (it can be global and overridable per skill)"
 want: "As Developer 2, I want auto-updates as a user option, global and overridable per skill, as part of the initial delivery, so that my installed skills stay the same as the catalog."
-accept: "A global update policy with per-skill overrides; the update gate table (contract.md §5.3) passes the QA plan's policy goldens; an update replaces the installed copy (the owner's stance for now: local edits not shared upstream may be lost, as with other installed tools; handling them is an open question)."
+accept: "A global update policy with per-skill overrides; the update hold's table (contract.md §5.3) passes the QA plan's policy goldens; an update replaces the installed copy (the owner's stance for now: local edits not shared upstream may be lost, as with other installed tools; handling them is an open question); with auto-updates on, every surface (session start, the assistant, the CLI) asks the person only when an update carries a flag, and while the assistant runs commands without asking (auto mode, bypass, the sandbox's auto-allow or a broad Bash rule), text that tells it to run commands, fetch and run, install packages or read secrets is flagged (the owner's decisions)."
 confirmed: true
 relates: [skill-setup-welcome, skill-review-flags]

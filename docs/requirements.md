@@ -18,7 +18,14 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Checked by:**
   - storage: publish_version then fetch_version equals the fixture
   - interface: publish_skill_to_catalog through CLI and MCP gives the same fingerprint (being built)
-  - interface: step 1 (no confirm) lists files, skipped files, diff and risk_flags and stores nothing; step 2 with the token publishes; a folder changed in between gives conflict and stores nothing (being built)
+  - interface: preview_skill_publish lists files, skipped files, diff and risk_flags, runs every check a publish runs (not_owner, invalid_manifest, secret_suspected) and stores nothing, or says nothing would change; publish_skill_to_catalog with its values publishes; a folder changed in between gives conflict and stores nothing (being built)
+  - interface: the preview returns the publish's inputs (confirm of 43 base64url characters, name, version, files, flags); the publish sent them as given publishes; a changed name, version, file count, flag set, message or folder content gives conflict {name, folder} with the real path and changes nothing; flags compare as a set
+  - interface: the publish checks in order: the confirm's form (not_a_confirm), then the HMAC (conflict {name, folder}: a hand-made or another machine's confirm, a replaced key), then the latest (conflict {name, latest}); step-2 inputs without confirm are {field: confirm, why: required}
+  - unit: confirm.key: 32 bytes, 0600, made on first use; a link or a wider mode is replaced (never followed), so earlier confirms stop verifying; a confirm survives a restart
+  - interface: publish_skill_to_catalog requires every input: {folder} alone is {field: confirm, why: required}; the preview refuses a confirm field
+  - setup: the CLI: skills-catalog preview <folder> prints the preview and the publish command with its values; skills-catalog publish <folder> with no terminal and no --confirm exits 3 pointing to preview; at a terminal it previews and asks 'Publish? (y/N)' in the same process, and no stores nothing (being built)
+  - interface: the skipped list: an ignored folder at any depth is one entry with a slash and is never read (a link, fifo or hard link inside doesn't refuse); code-point order; at most 50, then skipped_more
+  - interface: a path in a command the person is told to run is shell-quoted (bare only for letters, digits and @%+=:,./_-): a real /bin/sh prints the quoted path back as exactly one word, the planted marker never created; skill names stay bare in the update sentence
   - agent: A6 one turn: preview, show the files and what's skipped, ask; no confirm; the .env sentinel never leaks (being built)
   - agent: A6c publish after the person agreed (step 2 with confirm; the permission prompt) (being built)
   - interface: every publish result echoes dry_run and names the acting identity as publisher
@@ -36,11 +43,15 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - storage: a .claude or .claude-plugin folder at any depth, compared by NFKC and case (.Claude, .CLAUDE-PLUGIN, a fullwidth full stop), is invalid_path {path, why: claude_folder or plugin_folder} and storage is unchanged; .claude-x and claude are allowed
   - unit: one-line fields: a description with a line break (\r, \n, U+2028, U+2029) or a control character (a tab, DEL, C1) is invalid_manifest {problem: control_character, fields: [description]}, checked after too long and before angle brackets; a message with one is invalid_request {field: message, why: control_character}; storage unchanged
   - interface: one-line fields stay one line when shown: a description stored before the rule shows its line feed as a space on a search card, so no face prints a forged 'Next:' line; a diff's changed lines sit inside the fence under the data note
+  - storage: publishing a folder refuses a symbolic link (in or out), a file with more than one hard link, and a fifo, socket or device as invalid_path {why: not_regular_file}, found while reading, before the path rules, the target never read
   - storage: a memory file (CLAUDE.md, CLAUDE.local.md, AGENTS.md) as any segment, after the same fold, is invalid_path {why: memory_file} and storage is unchanged; CLAUDE.md.bak and my-CLAUDE.md are allowed; a trailing dot is not_portable
   - unit: a reserved name (a bundled skill, a built-in command, shared-skills the companion skill, skills-catalog the command) is invalid_name {why: reserved}; a near name is allowed; the list the core uses is the repo's dated file of 136 names, not a copy (a name added to a test copy of the file is refused, one removed is allowed)
   - interface: secret_suspected with path and line; the ignore list skipped and reported; the MCP schema has no override (being built)
   - interface: secret_suspected's text never repeats the secret's value (nor the sentinel) (being built)
   - agent: A7s no tool call carries the override (being built)
+  - unit: the scan's shapes (a71b627, 24ba09b): each secret_scan line gives its kind (tried in the pinned order) or nothing; a match stands alone on its kind's alphabet; placeholders, bare prefixes and a URL with no password aren't flagged; the \b misses after _ or a quote are caught; password_or_token keys per 9fa56a6 (a whole part, excluded next parts, :=, =>, --flags) and values that refer to a secret (env reads, calls, dotted names) not flagged
+  - unit: UTF-16 with a BOM and Latin-1 files are decoded and scanned, lines counted in the decoded text; UTF-16 without a BOM and any file with a NUL aren't
+  - unit: every joined planted value (join) is asserted to be what the scan flags, so a broken join can't pass
   - storage: the core's publish_version runs the same secret scan: a planted secret gives secret_suspected {path, line, kind} and stores nothing, its value never echoed; allow_suspected_secrets: true publishes; no MCP schema carries that field
 
 ### Version a skill
@@ -90,6 +101,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - unit: metadata.tags parsing: trimmed, deduplicated in order, ≤10 of 1-32 [a-z0-9-]; each bad form is invalid_manifest {fields: [metadata.tags]}
   - interface: read_shared_skill with 20 names works; 21 gives invalid_request {field: names, limit: 20}; search limit 51 gives invalid_request {field: limit, limit: 50}; each with a why
   - interface: search's tags filter: 11 tags gives invalid_request {field: filters.tags, why: too_many, limit: 10}; a 33-character tag gives {why: item_too_long, limit: 32}; 10 tags with one of 32 characters is accepted; never clamped
+  - interface: read_shared_skill's inputs: name and names both is {field: names, why: name_and_names}; neither is {field: name, why: required}; paths with names is {field: paths, why: paths_need_one_name}
   - interface: cursor paging returns every skill once while publishes happen (being built)
 
 ### Only a skill's owners can publish it
@@ -103,7 +115,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - storage: publish as dev2 of dev1's skill gives not_owner {owners}, preview included; the snapshot (rows and blobs) is unchanged
   - interface: every version's publisher equals the acting identity, never a field in the request
 
-## Phase 1: designed, being built (the CLI and installer, the MCP server, the update gate, setup)
+## Phase 1: designed, being built (the CLI and installer, the MCP server, the update hold, setup)
 
 ### Publish once, reuse through an assistant, end to end
 
@@ -123,8 +135,8 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Done when:** From FR-02 and UC-02: through an AI assistant, in natural language, a developer can find published skills that match a described need; each result identifies the skill (at least name and description); when nothing matches, the assistant clearly says so.
 - **Where it lives:** the core, the MCP server; contract §2
 - **Checked by:**
-  - interface: search recall@5 = 1.0 on the gate set for the adapter's mode (keyword-gate-any for any-word, the contract's) and on each semantic-gap reformulation
-  - interface: semantic-gap misses reported (not gated) so a later semantic search shows its gain
+  - interface: search recall@5 = 1.0 on the must-pass set for the adapter's mode (keyword-gate-any for any-word, the contract's) and on each semantic-gap reformulation
+  - interface: semantic-gap misses reported (not pass/fail) so a later semantic search shows its gain
   - interface: every card lists matched_words; the common-words list equals the adapter's
   - interface: every page says catalog_size 64 on the corpus; total_matches equals the distinct cards across all pages, and is 0 exactly when match is none
   - agent: A1, A2 discover by keyword and by paraphrase
@@ -144,8 +156,10 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Checked by:**
   - interface: read_shared_skill include: contents equals the fixture's text files
   - interface: include: files types each file by its bytes (only logo.png is binary); include: contents gives content for every text file, SKILL.md included, encoding back to the exact bytes; never for a binary
-  - interface: a read inlines at most the 24,576-byte budget in every mode: every named skill's body first, then with contents each skill's files (SKILL.md first, then by path); each body or file whole or left out (body_omitted, content_omitted), a later smaller one still fits, inline_budget {limit, used, omitted}; a file over the whole budget is named in the too_big sentence, which points to reading it alone; 20 median-sized names in manifest mode stay under 8,000 tokens; paths[] reads just those files in the order asked, the body just before SKILL.md's content when SKILL.md is asked, both counted; one path is inlined whatever its size (limit stays 24,576, used exceeds it); a missing one is not_found {path}, 21 paths or paths with names is invalid_request
+  - interface: a read inlines at most the 24,576-byte budget in every mode: every named skill's front matter first (measured as compact JSON; left out as frontmatter_omitted with its grant_keys on manifest, at most 10 then grant_keys_more, counted in used), then every body, then with contents each skill's files (SKILL.md first, then by path); each body or file whole or left out (body_omitted, content_omitted), a later smaller one still fits, inline_budget {limit, used, omitted}; a file over the whole budget is named in the too_big sentence, which points to reading it alone; 20 median-sized names in manifest mode stay under 8,000 tokens; paths[] reads just those files in the order asked, the body just before SKILL.md's content when SKILL.md is asked, both counted; one path is inlined whatever its size (limit stays 24,576, used exceeds it); a missing one is not_found {path}, 21 paths or paths with names is invalid_request
   - interface: install_shared_skill writes the same tree and a lock entry
+  - interface: rendered text escapes controls: in a read and a diff's changed lines, C0 except TAB and LF, DEL, C1 and a lone CR show as \u{xxxx}; JSON content, stored bytes and fingerprints stay exact
+  - interface: versions stored under older rules: read as stored with stored_under_older_rules {error}, front matter read leniently (null if unreadable); a diff from one is from nothing, a diff to one compares leniently or gives one capability_frontmatter {field: null}; publishing a fix over one succeeds; the installer compares with nothing when the installed version fails today's rules
   - interface: the fence: a read's skill text sits between one start and one end marker carrying the injected token; markers planted in SKILL.md in any spelling never close it; paths and names outside it are JSON-quoted
   - interface: install refuses to overwrite: a hand-made folder of that name in the target gives exists_untracked {path}, untouched; an untracked same-named skill in the other target gives name_in_use {path}, and so does a command file .claude/commands/<name>.md in either target; a tampered lock path never redirects an update (the path is target + name)
   - agent: A4 installs the skill intact
@@ -231,16 +245,20 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 > As Developer 2, I want auto-updates as a user option, global and overridable per skill, as part of the initial delivery, so that my installed skills stay the same as the catalog.
 
 - **Source:** the owner's notes on the PRD
-- **Done when:** A global update policy with per-skill overrides; the update gate table (contract.md §5.3) passes the QA plan's policy goldens; an update replaces the installed copy (the owner's stance for now: local edits not shared upstream may be lost, as with other installed tools; handling them is an open question); with auto-updates on, every surface (session start, the assistant, the CLI) asks the person only when an update carries a flag, and while the assistant runs commands without asking (auto mode, bypass, the sandbox's auto-allow or a broad Bash rule), text that tells it to run commands, fetch and run, install packages or read secrets is flagged (the owner's decisions).
+- **Done when:** A global update policy with per-skill overrides; the update hold's table (contract.md §5.3) passes the QA plan's policy goldens; an update replaces the installed copy (the owner's stance for now: local edits not shared upstream may be lost, as with other installed tools; handling them is an open question); with auto-updates on, every surface (session start, the assistant, the CLI) asks the person only when an update carries a flag, and while the assistant runs commands without asking (auto mode, bypass, the sandbox's auto-allow or a broad Bash rule), text that tells it to run commands, fetch and run, install packages or read secrets is flagged (the owner's decisions).
 - **Where it lives:** the installer; contract §3, §5.3
 - **Checked by:**
-  - unit: update gate table
-  - unit: the diff's risk_flags for each gate pair: runs_at_load by the wide detector (any ! right before a backtick, anywhere: a tab, a no-break space, KEY=, an HTML comment, a code block, the frontmatter; a fence of 3+ backticks or tildes then !; one per block at its opening line, an edit inside an unchanged block included), capability_frontmatter per key off the safe list (hooks, context, agent, allowed-tools widened, disable-model-invocation removed, an unknown key), instructions_changed only when the new version grants (a key neither safe nor non-granting, or an injected command) for a file added, changed (bytes or mode) or removed and for SKILL.md when its body or any safe key changed, runnable_file for an executable, a script or a command position (python, uv run, bun, deno, '. x', ${CLAUDE_SKILL_DIR}/x, an injected command's target), and {path: SKILL.md, line, to, detail: runs a file outside the skill} for a target outside it, with or without a grant; one reason per file, field/from/to/line carried; the safe list raises nothing without a grant
-  - unit: the review matrix: six changes × a skill that grants something or nothing × update or first install; every cell held, except new body steps without a grant (applied or installed: Claude Code's own prompts stay the gate)
+  - unit: held-update table
+  - interface: a damaged lock.json or config.json (not JSON, a wrong type anywhere, a policy outside auto/notify/pin) makes install, update, accept, list, set policy and setup refuse with invalid_local_file {file, why, path}; the file stays byte-identical and its contents never show; a mistyped pin never updates; teardown still runs and the session-start hook prints one fixed line (policy.yaml local_files)
+  - unit: the diff's risk_flags for each version pair (installed, new): runs_at_load by the wide detector (any ! right before a backtick, anywhere: a tab, a no-break space, KEY=, an HTML comment, a code block, the frontmatter; a fence of 3+ backticks or tildes then !; one per block at its opening line, an edit inside an unchanged block included), capability_frontmatter per key off the safe list (hooks, context, agent, allowed-tools widened, disable-model-invocation removed, an unknown key), instructions_changed only when the new version grants (a key neither safe nor non-granting, or an injected command) for a file added, changed (bytes or mode) or removed and for SKILL.md when its body or any safe key changed, runnable_file for an executable, a script or a command position (python, uv run, bun, deno, '. x', ${CLAUDE_SKILL_DIR}/x, an injected command's target), and {path: SKILL.md, line, to, detail: runs a file outside the skill} for a target outside it, with or without a grant; one reason per file, field/from/to/line carried; the safe list raises nothing without a grant
+  - unit: the review matrix: six changes × a skill that grants something or nothing × update or first install; every cell held, except new body steps without a grant (applied or installed: Claude Code's own prompts stay the person's say)
   - unit: flag text (path, from, to, detail) is plain text: invisible characters escaped as \u{XXXX}, then cut to 200 code points ending in …; never rendered as markdown on any face
-  - interface: the installer decides from bytes it checked: each fetched version re-validated with today's rules; the newest failing one is refused {version, error} with the lock and installed copy unchanged and no fallback to an older version; an unparseable SKILL.md is refused, never diffed as empty; a name reserved since is invalid_name at install and every sync; a catalog row that claims no flags still gives the installer's own flags
+  - interface: the installer decides from bytes it checked: each fetched version re-validated with today's rules; the newest failing one is refused {version, error} with the lock and installed copy unchanged and no fallback to an older version; fetched bytes that don't match the fingerprint give fingerprint_mismatch {name, version, expected, got} (install: the error; update: refused), the fetched copy deleted and nothing written; an unparseable SKILL.md is refused, never diffed as empty; a name reserved since is invalid_name at install and every sync; a catalog row that claims no flags still gives the installer's own flags
+  - interface: install and update refuse a link anywhere below the target's root (.claude, .claude/skills, the skill's own folder; user or project) with target_symlink {path: the first link}, never writing through it and leaving the lock unchanged; the assistant home itself may be a link
+  - interface: the expected fingerprint is the version list's (the lock's for the installed side), never the fetch's own claim: a fetch serving other bytes and claiming their fingerprint gives fingerprint_mismatch
+  - interface: new_publisher compares the lock's recorded publisher (the catalog's for an older entry) with the new version's, also when the installed version fails today's rules; a first install never has it
   - unit: safe_frontmatter_keys and non_granting_keys are fixed in code: a config can remove keys, and a config that adds one is refused by setup (invalid_request {field}, nothing written, exit 1)
-  - interface: a first install goes through the gate whatever the policy: a flagged skill gives held: flagged with a confirm, accept_held_update installs it; an unflagged one installs
+  - interface: a first install is held like an update whatever the policy: a flagged skill gives held: flagged with a confirm, accept_held_update installs it; an unflagged one installs
   - interface: update_installed_skills replaces a hand-edited copy and records version and fingerprint in the lock (phase 1: the owner's decision)
   - agent: A10 update my skills
   - agent: A10u an unattended update holds a flagged change
@@ -254,13 +272,14 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - interface: accept_held_update with the held result's confirm installs that version, and the lock records the flags it let through
   - interface: accept_held_update's flags[] is compared with the held flags as a set (order and repeats ignored); a missing or extra kind is conflict and changes nothing (the accept_cases)
   - interface: MCP schemas: install_shared_skill has no policy input (the CLI's --policy only), update_installed_skills has no latest, accept_held_update requires flags
+  - interface: a skill not installed here is not_installed {name}: set_skill_update_policy, and update_installed_skills names (the first such name in order, before any fetch); nothing changes
   - unit: accept_flagged_updates never applies to a first install (the first-install row with accept: true stays held: flagged)
-  - unit: the permissive-mode hold: while auto mode, bypass, the sandbox's auto-allow or a broad Bash rule is in the assistant's settings, every update is held {reason: permissive_mode, mode}, flags or not (flags kept in risk_flags); order pin, notify, permissive_mode, flags; accept_flagged_updates never releases it; a first install isn't held by it (permissive_cases)
+  - unit: while a permissive mode is detected, each added or changed line that tells the assistant to run a shell command, fetch and run, install packages or read secrets gets command_instruction {path, line, instruction, mode} (after runnable_file and runs_at_load, before instructions_changed); none in the default mode; harmless prose gets none; a first install is checked too; the flag holds like any other, and accept_flagged_updates lets it through (command_instruction_cases); pinned and cooldown skills ask nothing and give no notice
   - unit: settings to mode as Claude Code reads them (permissive_settings): managed, the project's settings.local and settings, then the user's; one value from the highest file, allow lists merged; auto and bypass only from user or managed settings; the sandbox's auto-allow on by default; Bash, Bash(*), PowerShell(*) and a rule with a * whose first word holds the * or is a runner (interpreters, wrappers like env and sudo) count, Bash(git *) and one exact command don't; several modes give the first in order; fake home, project and managed root only
-  - interface: a hold with no risk flags (permissive_mode, notify) is taken with flags: [] and refused with any kind named
+  - interface: a hold with no risk flags (notify, a cooldown) is taken with flags: [] and refused with any kind named
   - setup: setup reads the assistant's permission settings, and its summary says when a permissive mode will hold every update, naming the mode; the session-start notice names it as the reason
   - interface: a newer version published between hold and accept gives conflict and changes nothing; a confirm for another name or version is refused
-  - setup: setup's allowed tools never include accept_held_update, publish_skill_to_catalog or set_skill_update_policy; update_installed_skills is pre-allowed for MCP only (the CLI's update still asks)
+  - setup: setup's allowed tools never include accept_held_update, preview_skill_publish, publish_skill_to_catalog or set_skill_update_policy, nor the CLI's preview or publish commands (24ba09b); update_installed_skills is pre-allowed through MCP, and through the CLI only Bash(skills-catalog update) exactly: update <name>, --accept and --latest still ask
   - setup: accept_flagged_updates is set only by the terminal wizard: true from --config, --yes or the no-terminal mode is refused (invalid_request {field: accept_flagged_updates}, nothing written, exit 1); while it's on, the session-start notice says so
 
 ### Contracts not coupled to a backend
@@ -286,7 +305,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - interface: --as, SKILLS_AS and the MCP server's config each set acting_as; every result carries it
   - interface: the CLI prints exactly one line '(Acting as <developer>, for demo purposes.)', last, after every result and every error, and none in --json output
   - interface: locally with no acting identity, a publish is unauthenticated and its sentence points to setup's me or --as
-  - interface: a developer name follows the skill-name rule: --as with a space or a line feed is invalid_request {field: as, why: not_a_developer_name}; a bad SKILLS_AS, MCP config name or setup me is invalid_developer_setting {setting}, saying to fix the setting; nothing runs
+  - interface: a developer name follows the skill-name rule: --as with a space or a line feed is invalid_request {field: --as, why: not_a_developer_name} (a request field names itself); a bad SKILLS_AS, MCP config name or setup me is invalid_developer_setting {setting}, saying to fix the setting; nothing runs
 
 ### Everything local by default; AWS is an option, off
 
@@ -309,6 +328,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Checked by:**
   - cleanup: before/after check (folders and files) equal after every run
   - cleanup: leaky canary makes the check fail
+  - cleanup: the before/after check fails closed: a ps that rejects its option, a missing ps or lsof, or an unreadable /proc makes the run fail with 'can't check processes on this machine', never report no leak (fakes of each); on Linux a process escaping the run is found through /proc/<pid>/environ, and the leaky canary fails the run on Linux too
   - cleanup: assistant-run leftovers (projects, session-env, tmp, and the MCP-log cache ~/Library/Caches/claude-cli-nodejs/<working-folder slug>/) removed by session id and sandbox path; each server's log is first kept with the run's transcripts
   - cleanup: pre-flight starts the catalog's MCP server with exactly the runs' settings (environment, paths, MCP config), and a server that dies at start stops the round
   - agent: no_read_outside_sandbox holds in every run: reads are allowed only under the sandbox, and the MCP setups have no Bash
@@ -355,7 +375,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 > As Developer 2, I want reviewer-based metrics or flags, such as the risk of prompt injection, considered alongside auto-updates, so that a risky skill or update is flagged before it reaches my assistant.
 
 - **Source:** the owner's decision (`docs/decisions.md`)
-- **Done when:** Phase 1: a built-in rules reviewer flags scripts and executables, tool-granting frontmatter, a publisher change, prompt-injection patterns (instructions to ignore prior guidance, exfiltration or curl-to-shell, hidden unicode or HTML comments) and context cost, each finding grounded; a clean skill gets an empty list; the update gate stops on any risk flag; search cards show the flags.
+- **Done when:** Phase 1: a built-in rules reviewer flags scripts and executables, tool-granting frontmatter, a publisher change, prompt-injection patterns (instructions to ignore prior guidance, exfiltration or curl-to-shell, hidden unicode or HTML comments) and context cost, each finding grounded; a clean skill gets an empty list; the update hold stops any update with a risk flag; search cards show the flags.
 - **Where it lives:** the core, the installer; contract §10, §5.3
 - **Checked by:**
   - unit: every flagged fixture gets exactly its expected findings, each grounded (path, line, evidence on that line)
@@ -400,8 +420,8 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 - **Done when:** Every run records recall of the labelled discovery queries, tokens per successful discovery and first-query time, and keeps them per run so trends show.
 - **Where it lives:** the test suite
 - **Checked by:**
-  - interface: search recall@5 = 1.0 on the gate set for the adapter's mode (keyword-gate-any for any-word, the contract's) and on each semantic-gap reformulation
-  - interface: semantic-gap misses reported (not gated) so a later semantic search shows its gain
+  - interface: search recall@5 = 1.0 on the must-pass set for the adapter's mode (keyword-gate-any for any-word, the contract's) and on each semantic-gap reformulation
+  - interface: semantic-gap misses reported (not pass/fail) so a later semantic search shows its gain
   - interface: every card lists matched_words; the common-words list equals the adapter's
   - interface: every page says catalog_size 64 on the corpus; total_matches equals the distinct cards across all pages, and is 0 exactly when match is none
   - agent: A1, A2 discover by keyword and by paraphrase
@@ -426,7 +446,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - setup: setup's result leads with the remaining step and 'N skills to search; none installed yet'
   - setup: the written settings allow exactly the contract §6 MCP tools and shell prefixes, no more, and the CLI allow list equals the registry's read-only commands (search, read, versions, diff, list); the hook and the MCP entry start node by process.execPath, never a shim, npx or a bare name
   - setup: the pre-allowed read-only commands never write: pointed with --catalog and --home at an empty folder they fail or read, and the folder stays empty (no catalog created, no sweep, no index rebuilt)
-  - setup: --accept or --allow-suspected-secrets with no terminal exits 3 and changes nothing
+  - setup: --accept (and --allow-suspected-secrets, once the CLI has a publish: 3e56b3e) with no terminal exits 3 and changes nothing
   - setup: the session-start notice never contains a publisher-chosen string: a sentinel planted in a skill's path and description is absent from it
   - manual: the owner watches a recording of the wizard (manual)
 
@@ -463,7 +483,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
   - setup: setup's result leads with the remaining step and 'N skills to search; none installed yet'
   - setup: the written settings allow exactly the contract §6 MCP tools and shell prefixes, no more, and the CLI allow list equals the registry's read-only commands (search, read, versions, diff, list); the hook and the MCP entry start node by process.execPath, never a shim, npx or a bare name
   - setup: the pre-allowed read-only commands never write: pointed with --catalog and --home at an empty folder they fail or read, and the folder stays empty (no catalog created, no sweep, no index rebuilt)
-  - setup: --accept or --allow-suspected-secrets with no terminal exits 3 and changes nothing
+  - setup: --accept (and --allow-suspected-secrets, once the CLI has a publish: 3e56b3e) with no terminal exits 3 and changes nothing
   - setup: the session-start notice never contains a publisher-chosen string: a sentinel planted in a skill's path and description is absent from it
   - manual: the owner watches a recording of the wizard (manual)
 
@@ -531,7 +551,7 @@ Contract sections (§) are in [contract.md](contract.md); the test layers are in
 
 - **Status:** this wording awaits the owner's confirmation
 - **Source:** the owner's decision (`docs/decisions.md`)
-- **Done when:** On a shared or hosted catalog a new version waits (about 3 days by default) before auto-update applies it, and a first install of a version that new is held the same way; a watcher policy or a one-off request gets the latest at once, through the person's permission prompt and still through the update gate; a version flagged by a review or withdrawn during the wait is never auto-applied; a local catalog doesn't wait.
+- **Done when:** On a shared or hosted catalog a new version waits (about 3 days by default) before auto-update applies it, and a first install of a version that new is held the same way; a watcher policy or a one-off request gets the latest at once, through the person's permission prompt and still through the update hold; a version flagged by a review or withdrawn during the wait is never auto-applied; a local catalog doesn't wait.
 - **Where it lives:** the installer, the core, the AWS stack; contract §10, §3, §5.3, §7
 - **Checked by:**
   - unit: with an injected clock: a version younger than the cooldown gives held: cooldown with its until and applies at until; a first install of a version that young is held the same way unless the person names the version; the default is 0 for a local catalog (never held: cooldown) and about 3 days for a shared or hosted one

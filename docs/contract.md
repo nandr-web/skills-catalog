@@ -7,7 +7,7 @@ assistants see (the agent-experience notes) all follow it, and a change to any s
 default), not built; **later**. The owner's direction: "Focus on phase 1 / local work. Bring back up AWS topics only after the
 rest is finished and approved". Everything not marked phase 1 is here so phase 1 doesn't close doors; it isn't built.
 
-**Why the rules are the way they are.** The owner's decisions (in decisions.md) set the scope, the update gate and who may publish.
+**Why the rules are the way they are.** The owner's decisions (in decisions.md) set the scope, the update hold (§5.3) and who may publish.
 Many smaller rules come from measured trials with real assistants (the agent-experience notes) or from test runs (the QA plan);
 where they do, the numbers are given, because they are the reason for the rule.
 
@@ -27,7 +27,15 @@ For phase 1: MCP and CLI bindings; the HTTP binding plugs in with the web UI (ph
 
 **Names:** the CLI command, the npm package and the MCP server are all `skills-catalog`, the product's name (e.g.
 `skills-catalog setup`). Not `skills`: that's the public skills.sh CLI (`npx skills add`), which models already know
-(the agent-experience trials; `skills-catalog` is free on npm). CLI exit codes: 0 done, 1 an error, 3 "needs answers" (§6).
+(the agent-experience trials; `skills-catalog` is free on npm). CLI exit codes: 0 done, 1 an error, 3 "needs answers" (§6); a read of several names exits 1 when none is found and 0 when
+at least one is (each missing name is still its own `not_found` in the result).
+The CLI takes each input as `--<field>`, with `_` written `-` and a nested field by its own name (`--dry-run`; search's
+filters as `--tags`, `--publisher`, `--updated-since`). A list whose items can't hold a comma (tags, flag kinds) is one
+comma-separated value, and an empty one is written `none` (`--flags runnable_file,new_publisher`, or `--flags none`); file
+paths can hold a comma or be named `none`, so `paths` is a repeated `--path <p>`, one path each. Either way every input
+stays a visible token in a permission prompt.
+Shorthands: `install --project` for `--target project`, and `read --files` or `--contents` for `--include`; two that
+contradict are `invalid_request` {field} (exit 1).
 
 **The MCP server carries `instructions`** (~260 tokens; wording in the agent-experience notes). Claude Code
 puts server instructions in the system prompt while deferred tools show only their names. In the agent-experience trials, without
@@ -53,7 +61,7 @@ written by hand too, and a lint checks that every tool the instructions or the s
   ("graphql schema" finds a SQL migration skill by "schema"; one of the QA plan's no-match queries, on real FTS5). So each card says which content words it
   matched, and the page says `partial` when no card matched them all. The server instructions and the tool description (wording in the agent-experience notes) say: if `match` is `partial`,
   tell the user nothing matched exactly, then offer the closest, saying what they share ("these only share the word
-  'schema'"), never presenting one as a fit. The agent-level no-match scenarios are the gate. A semantic or hybrid search
+  'schema'"), never presenting one as a fit. The agent-level no-match scenarios decide it. A semantic or hybrid search
   applies a relevance cutoff, and reports `partial` the same way.
 - **`matched_words` and `match` use the index's own matching** (the same tokenizer and stemming, FTS5 `porter unicode61`):
   `matched_words` lists the query's words, as typed, that matched after stemming. On exact tokens, `partial` fired for
@@ -103,10 +111,34 @@ written by hand too, and a lint checks that every tool the instructions or the s
   text can be read before it's installed. Measured on 51 real
   skills: SKILL.md has a median of 9 KB and a 90th percentile of 20 KB, and 49 of the 51 are under 24 KB (two are larger);
   whole folders have a median of 20 KB and a 90th percentile of 154 KB.
-- **The secret scan runs in the core's publish too**, the same function the client's step 1 uses (the shared `skill-tree`
+- **The secret scan runs in the core's publish too**, the same function the client's preview uses (the shared `skill-tree`
   module), so no face can skip it: a hit is `secret_suspected` {path, line, kind}, whose sentence names the file and line and
   never repeats the value. `allow_suspected_secrets` lets it through for that one publish; only a person sets it (the CLI
   flag at a terminal, §3; later a checkbox in the web editor).
+- **What the scan looks for** (a secret's shape, no allow-list; the patterns are in the shared `skill-tree` module). The
+  kinds, in the order they're tried, the first that matches a line naming the hit: `aws_access_key`, `private_key`,
+  `github_token`, `slack_token`, `anthropic_key`, `openai_key`, `stripe_key` (`sk_` or `rk_`, then `live_` or `test_`,
+  then 16 or more letters and digits), `google_api_key` (`AIza` and 35 more of letters, digits, `_` and `-`), `jwt` (three
+  dot-separated base64url parts whose first two start `eyJ`), `url_credentials` (`scheme://user:password@host` with a
+  non-empty password, any scheme), `password_or_token` (a key, a run of letters, digits, `_`, `-`, `.` and spaces, holding password, passwd,
+  secret, secret key, private key, api key, access key, access token, auth token or token as a whole part of it, in any
+  case, with `_`, `-`, a space or nothing inside the words, and not followed by a part that names something else about it
+  (`hint`, `length`, `len`, `min`, `max`, `policy`, `prompt`, `label`, `field`, `name`, `file`, `path`, `type`, `count`,
+  `expiry`, `expires`, `ttl`, `url`): so `MYPASSWORD=`, `client_secret:`, `AWS_SECRET_ACCESS_KEY=`, `SECRET_KEY_BASE=`,
+  `DB_PASSWORD_PROD=`, `"api key": "…"` and `--password …` count, and `TOKENS=`, `password_hint=` and `DB_PASSWORD_FILE=`
+  don't; then an optional closing quote, `:`, `=`, `:=` or `=>` with spaces around it (or, for a `--flag`, a space or `=`),
+  an optional opening quote, and a value of 12 or more characters that aren't spaces or quotes).
+  A match must stand alone: not preceded or followed by another character of its own alphabet. Not flagged: a prefix alone
+  in prose (`sk_live_`, `AIza`, `eyJ`), a URL with a user and no password, and a URL password that is a placeholder
+  (`<password>`, `${DB_PASS}`, `$DB_PASS`); the word `password` as a URL's password is flagged, since it could be real.
+  Nor is a `password_or_token` value that refers to a secret instead of holding one: a placeholder (`<…>`, `${…}`, `$X`,
+  `$env:X`), a read of the environment (`process.env.X`, `process.env["X"]`, `os.environ[…]`, `os.environ.get(…)`,
+  `os.getenv(…)`, `ENV["X"]`, `System.getenv(…)`), a call (a name followed by `(`), or a dotted name
+  (`self.tokenizer.encode`, `config.api_key`).
+  The first hit in path order is reported. Every file is scanned as text when it decodes: UTF-8, UTF-16 with a byte-order
+  mark, or, for bytes that are neither and hold no NUL, Latin-1; lines are counted in the decoded text (a CRLF counts once,
+  and a byte-order mark isn't part of line 1). (Whether a read
+  inlines a file, §2's text-or-binary rule, is unchanged.)
 - Search results are pages of cards only: no fingerprint or timestamps (they add ~45% tokens and aren't needed to choose).
   A card averages ~113 tokens (measured on 52 real skills; p90 240), so a default page of 10 is ~1.1k tokens (20 would be ~2.3k), well under the QA plan's 8,000-token cap on
   one tool result (Claude Code warns at 10,000 and saves anything over 25,000 to a file). The default is 10 because in every agent-experience trial
@@ -121,10 +153,11 @@ signed-in person only, not an agent"); `list_reviews`, `submit_review` (phase 2,
 
 | Operation | Phase | In | Out | Notes |
 |---|---|---|---|---|
-| `publish_skill_to_catalog` | 1 | `folder`, `message?`; step 2 also `confirm`, `name`, `version`, `files`, `flags[]`, copied from step 1's result | step 1 (no `confirm`): the files to send, the files skipped, the diff against the latest, `risk_flags[]`, and the step-2 inputs: `confirm`, `name`, `version` (the number it would become), `files` (how many it would send) and `flags[]` (the risk flags' kinds); step 2: as `publish_version` | Two steps, so the person sees what will be published before it is. **Step 2's permission prompt is the consent, so it shows what's agreed to:** `name`, `version`, `files` and `flags` are in its input for that reason (as `accept_held_update` carries its flags). `confirm` is an HMAC-SHA-256 (base64url, 43 characters, short enough for an assistant to copy) over the folder's real path, its fingerprint, the name, the latest version step 1 started from (`version` − 1), the message, `files` and the flags' kinds, keyed with a secret only this machine's skills-catalog holds. Step 2 recomputes it from the folder as it is now and its own inputs, so it verifies only for a step 1 that ran on the same folder with the same values: otherwise `conflict` {name, folder}, changing nothing, whether the folder's files, the message or an input changed, or the value never came from a step 1 (the remedy is the same: preview again). A value that isn't 43 base64url characters is `invalid_request` {field: `confirm`, why: `not_a_confirm`}. A version published by someone else in between is `conflict` {name, latest}. The details are pinned below the table. **Later, step 1 becomes its own tool,** `preview_skill_publish` {folder, message?}, which sends nothing: with both steps in one tool, a person answering step 1's prompt with "don't ask again" would pre-allow every later publish too. The skipped list names an ignored folder once, as `".git/"`, and never walks into it, and lists at most 50 entries, then how many more. Reads the folder: regular files only (a link, a file with more than one hard link or a special file is `invalid_path` {why: `not_regular_file`}, §4.2), never follows a link out, skips and reports the ignore list (`.git`, `.env*`, `*.pem`, `id_*`, `.DS_Store`). A secret-scan hit anywhere, the body included, **rejects** with `secret_suspected` {path, line, kind}; only the person can override it, per publish, with the CLI flag `--allow-suspected-secrets`, which is **not in the MCP schema** (the CLI's publish comes later; until then the person removes the secret and publishes again). An assistant running the CLI meets the permission prompt, since setup never pre-allows a publish command (§6): that prompt is the gate. The flag also refuses with no terminal (exit 3), a backstop only, since a command can fake a terminal. Setup never adds this tool to the assistant's allowed tools, so its permission prompt is the person's consent |
-| `install_shared_skill` | 1 | `name`, `version?`, `target?`: `user` (the default, §6) \| `project`; CLI only: `--policy` (not in the MCP schema: install is pre-allowed and setting a policy isn't) | `installed` {`path`, `version`, `fingerprint`, `advisories[]`} \| `held` {reason: `flagged`, `risk_flags[]`, `confirm`} | A first install goes through the update gate as an update from nothing (§5.3): no flags, it installs; flags, it's held and shown, and `accept_held_update` takes it once the person says yes. `fetch_version` → a temp folder outside every skills folder (Claude Code watches those for changes) → the checks of §5.3 ("The installer decides") → rename into `<skills dir>/<name>`, the path computed from the target and the name; records the lock. The name is checked against the installer's own copy of the reserved list, at install and at every sync. Never overwrites or shadows what it didn't install: `exists_untracked` {path} when that folder is already in the target and the lock doesn't own it (e.g. a hand-made skill), and `name_in_use` {path} when the other target holds an untracked skill of that name for the current project (in Claude Code a personal skill replaces a project one of the same name), or either target has a command file `.claude/commands/<name>.md` (a skill replaces a command of the same name). Refuses a symlinked target |
-| `update_installed_skills` | 1 | `names?`, `dry_run?` | per skill: `updated` {from, to, changes} \| `unchanged` \| `held` {reason: `notify` \| `pin` \| `flagged` \| `cooldown` (§5.3; shared and hosted catalogs) {until}, `risk_flags[]`, diff, `confirm`} \| `refused` {version, error} (the new version breaks today's rules or doesn't match its fingerprint, §5.3; nothing changes) | One batched status call; skipped if the last sync was under a few minutes ago. A name in `names` that isn't installed is `not_installed` {name} (the first such, in the order given), checked before anything is fetched, and nothing changes; the action is §5.3's table. Where a skill is replaced is computed from its target and name, never read from the lock's `path`. CLI only: `skills-catalog update <name> --latest` takes the newest version now, skipping a cooldown (§5.3); the gate still applies, and setup never pre-allows it; the MCP schema has no `latest` |
-| `accept_held_update` | 1 | `name`, `confirm` (from the held result), `flags[]` (the held flags' kinds, e.g. `["runs_at_load", "new_publisher"]`; `[]` for a hold with no risk flags, such as `notify`) | as `updated` (or `installed`) | Takes one held update, or a held first install, once the person says yes. `flags` is in the input so the permission prompt shows the person what they're agreeing to, not only what the assistant said; the server compares it as a set of kinds (order and repeats ignored) and refuses with `conflict`, changing nothing, when a kind is missing or extra. `confirm` is tied to the name and the new version's fingerprint: `conflict` if a newer version arrived since. Setup never adds this tool to the assistant's allowed tools, so its permission prompt is the person's consent (the same pattern as publish). The lock records which flags each acceptance let through. CLI: `skills-catalog update <name> --accept` shows the reasons and asks; setup never pre-allows it, so an assistant running it meets the permission prompt (the gate), and with no terminal it refuses (exit 3, a backstop) |
+| `preview_skill_publish` | 1 | `folder`, `message?` | the files to send, the files skipped, the diff against the latest, `risk_flags[]`, and the inputs for publishing: `confirm`, `name`, `version` (the number it would become), `files` (how many it would send), `flags[]` (the risk flags' kinds) and, when one was given, `message`; or, when the folder matches the latest, that nothing would change | The first of two steps, so the person sees what would be published before it is. It runs every check a publish runs (the owner, the manifest, the files, the secret scan) as a dry run: nothing is stored, and nothing leaves this machine (against a hosted catalog it diffs with the latest's files fetched by fingerprint). Never pre-allowed by setup (§6): its `folder` chooses what's read, and its result shows the files' text. It's a tool of its own so that a person who answers its prompt with "don't ask again" pre-allows previews only, never a publish. Reads the folder: regular files only (a link, a file with more than one hard link or a special file is `invalid_path` {why: `not_regular_file`}, §4.2), never follows a link out, skips and reports the ignore list (`.git`, `.env*`, `*.pem`, `id_*`, `.DS_Store`). A secret-scan hit anywhere, the body included, **rejects** with `secret_suspected` {path, line, kind} |
+| `publish_skill_to_catalog` | 1 | `folder`, `message?`, `confirm`, `name`, `version`, `files`, `flags[]`, all but `folder` copied from `preview_skill_publish`'s result (`message` exactly as the preview gave it back, and only when it had one) | as `publish_version` | The second step. **Its permission prompt is the consent, so it shows what's agreed to:** `name`, `version`, `files` and `flags` are in its input for that reason (as `accept_held_update` carries its flags). `confirm` is an HMAC-SHA-256 (base64url, 43 characters, short enough for an assistant to copy) over the folder's real path, its fingerprint, the name, the latest version the preview started from (`version` − 1), the message, `files` and the flags' kinds, keyed with a secret only this machine's skills-catalog holds. The publish recomputes it from the folder as it is now and its own inputs, so it verifies only after a preview of the same folder with the same values: otherwise `conflict` {name, folder}, changing nothing, whether the folder's files, the message or an input changed, or the value never came from a preview (the remedy is the same: preview again). A value that isn't 43 base64url characters is `invalid_request` {field: `confirm`, why: `not_a_confirm`}; a missing one is {field: `confirm`, why: `required`}, whose sentence points to the preview. A version published by someone else in between is `conflict` {name, latest}. The details are pinned below the table. A secret-scan hit **rejects** as in the preview; only the person can override it, per publish, with the CLI's `--allow-suspected-secrets`, which is **not in the MCP schema**. Setup never adds this tool to the assistant's allowed tools, so its permission prompt is the person's consent |
+| `install_shared_skill` | 1 | `name`, `version?`, `target?`: `user` (the default, §6) \| `project`; CLI only: `--policy` (not in the MCP schema: install is pre-allowed and setting a policy isn't) | `installed` {`path`, `version`, `fingerprint`, `advisories[]`} \| `held` {reason: `flagged`, `risk_flags[]`, `confirm`} | A first install goes through the update hold as an update from nothing (§5.3): no flags, it installs; flags, it's held and shown, and `accept_held_update` takes it once the person says yes. `fetch_version` → a temp folder outside every skills folder (Claude Code watches those for changes) → the checks of §5.3 ("The installer decides") → rename into `<skills dir>/<name>`, the path computed from the target and the name; records the lock. The name is checked against the installer's own copy of the reserved list, at install and at every sync. Never overwrites or shadows what it didn't install: `exists_untracked` {path} when that folder is already in the target and the lock doesn't own it (e.g. a hand-made skill), and `name_in_use` {path} when the other target holds an untracked skill of that name for the current project (in Claude Code a personal skill replaces a project one of the same name), or either target has a command file `.claude/commands/<name>.md` (a skill replaces a command of the same name). Refuses a link anywhere on the way in: before it writes, every folder from below the assistant's home (`user`: `.claude`, `.claude/skills`, `.claude/skills/<name>` under `$SKILLS_ASSISTANT_HOME`, which may itself be a link) or below the project (`project`: the same three) must be a real directory, and the first link found is `target_symlink` {path: that link}; nothing is written through it, and the link, what it points at and the lock stay as they were. `update_installed_skills` checks the same, so an installed copy replaced by a link since is refused, never reported as up to date |
+| `update_installed_skills` | 1 | `names?`, `dry_run?` | per skill: `updated` {from, to, changes} \| `unchanged` \| `held` {reason: `notify` \| `pin` \| `flagged` \| `cooldown` (§5.3; shared and hosted catalogs) {until}, `risk_flags[]`, diff, `confirm`} \| `refused` {version, error} (the new version breaks today's rules or doesn't match its fingerprint, §5.3; nothing changes) | One batched status call; skipped if the last sync was under a few minutes ago. A name in `names` that isn't installed is `not_installed` {name} (the first such, in the order given), checked before anything is fetched, and nothing changes; the action is §5.3's table. Where a skill is replaced is computed from its target and name, never read from the lock's `path`. CLI only: `skills-catalog update <name> --latest` takes the newest version now, skipping a cooldown (§5.3); the update hold still applies, and setup never pre-allows it; the MCP schema has no `latest` |
+| `accept_held_update` | 1 | `name`, `confirm` (from the held result), `flags[]` (the held flags' kinds, e.g. `["runs_at_load", "new_publisher"]`; `[]` for a hold with no risk flags, such as `notify`) | as `updated` (or `installed`) | Takes one held update, or a held first install, once the person says yes. `flags` is in the input so the permission prompt shows the person what they're agreeing to, not only what the assistant said; the server compares it as a set of kinds (order and repeats ignored) and refuses with `conflict`, changing nothing, when a kind is missing or extra. `confirm` is tied to the name and the new version's fingerprint: `conflict` if a newer version arrived since. Setup never adds this tool to the assistant's allowed tools, so its permission prompt is the person's consent (the same pattern as publish). The lock records which flags each acceptance let through. CLI: `skills-catalog update <name> --accept` shows the reasons and asks; setup never pre-allows it, so an assistant running it meets the permission prompt (the person's yes), and with no terminal it refuses (exit 3, a backstop) |
 | `list_installed_skills` | 1 | | per installed skill: `version`, `latest`, `policy`, `state`: `same` \| `behind` | Reads the lock; no local-change check in phase 1 (§5.4) |
 | `set_skill_update_policy` | 1 | `policy`, `cooldown?` (§5.3; later, with shared and hosted catalogs: not in the schema until then), `name?` (none = the global default) | the effective policy | `auto` \| `notify` \| `pin`. A `name` that isn't installed on this machine is `not_installed` {name}, and nothing changes: not `not_found`, whose sentence says the catalog has no such skill, when it may well have one |
 | `setup` | 1 | the setup config (§6) | first, the person's one remaining step ("start a new Claude Code session; this one can't use the tools yet"); then what was written, and "N skills to search; none installed yet" | The colourful wizard, `--yes`, `--config <file>`, the setup skill and the setup doc all produce this config; with no terminal, the no-terminal mode (§6); never asks for a token in chat |
@@ -133,14 +166,20 @@ signed-in person only, not an agent"); `list_reviews`, `submit_review` (phase 2,
 | `login` (CLI only) | AWS | `scope`: `read` \| `publish` | who you're signed in as, the scope, the expiry | The person completes a browser sign-in (a device code, so it works on a remote machine too) and approves the token; stored in `$SKILLS_HOME/credentials` (mode 0600), never in a project file, an MCP config, a URL or the chat. AWS `setup` calls it; when an agent runs setup, the person finishes the sign-in |
 | `logout` (CLI only) | AWS | | done | Revokes the token and deletes the file |
 
-**Publishing a folder, pinned** (`publish_skill_to_catalog`):
-- **Step 2's inputs** are in the schema, so the usual request checks apply: `version` a whole number from 1, `files` a whole
-  number from 0, `flags` a list of flag kinds (§5.3), `name` text. With `confirm` all four are required; any of them without
-  `confirm` is `invalid_request` {field: `confirm`, why: `required`}.
-- **Step 2 checks, in order:** the confirm's form (`not_a_confirm`); then the folder, read again, and the HMAC over it and
-  step 2's inputs (`conflict` {name, folder}; `flags` enter the HMAC as a set of kinds, sorted, repeats ignored); then the
-  catalog's latest against `version` − 1 (`conflict` {name, latest}); then the publish's own checks as usual (`not_owner`,
-  validation, the secret scan).
+**Publishing a folder, pinned** (`preview_skill_publish`, then `publish_skill_to_catalog`):
+- **The publish's inputs** are in the schema, so the usual request checks apply: `version` a whole number from 1, `files` a
+  whole number from 0, `flags` a list of flag kinds (§5.3), `name` text; all are required.
+- **The publish checks, in order:** the confirm's form (`not_a_confirm`); then the folder, read again, and the HMAC over it
+  and the publish's inputs (`conflict` {name, folder}; `flags` enter the HMAC as a set of kinds, sorted, repeats ignored);
+  then the catalog's latest against `version` − 1 (`conflict` {name, latest}); then the publish's own checks as usual
+  (`not_owner`, validation, the secret scan).
+- **The CLI's two commands** match the two tools, so a shell rule for one never allows the other: `skills-catalog preview
+  <folder> [--message …]` prints the preview and the publish command with its values; `skills-catalog publish <folder>
+  --confirm … --name … --version … --files … --flags …` publishes, and the assistant's permission prompt shows that command
+  (setup pre-allows neither, §6). A person at a terminal can run `skills-catalog publish <folder>` alone: it shows the
+  preview and asks "Publish? (y/N)" in the same process. With no terminal and no `--confirm`, it refuses (exit 3) and
+  points to `preview`. `--allow-suspected-secrets` works only at a terminal (exit 3 with none, a backstop, since a command
+  can fake one).
 - **`folder`** in the confirm and in `conflict` {name, folder} is the folder's real path (links in the path resolved).
 - **The secret** is `$SKILLS_HOME/confirm.key`: 32 random bytes, made on first use with mode 0600. If it isn't a regular
   file with mode 0600 owned by this user (a link, a wider mode), it's replaced with a new secret before use, so earlier
@@ -150,8 +189,8 @@ signed-in person only, not an agent"); `list_reviews`, `submit_review` (phase 2,
   more; absent when there are none). A folder whose name is on the ignore list, at any depth (`.git`, `sub/.git`, a
   `.env.d` folder), is one entry with a trailing slash (`".git/"`, `"sub/.git/"`) and is never walked: nothing in it is
   read, so a link, a special file or a hard-linked file inside it isn't `not_regular_file`, and the publish goes on.
-  The HMAC binds what's sent, not the skipped list: an ignored file or folder added or removed between the steps changes
-  nothing that's published, so the confirm still verifies.
+  The HMAC binds what's sent, not the skipped list: an ignored file or folder added or removed between the preview and
+  the publish changes nothing that's published, so the confirm still verifies.
 
 When sync runs: from Claude Code's session-start hook, which setup adds by default for Claude Code; when the MCP server starts
 (it answers `initialize` first, then syncs in the background; for other MCP clients); and from `update_installed_skills`. The
@@ -182,20 +221,29 @@ person or a publisher typed goes in, so the log is safe to show; the demo's lowe
 instrumentation if not already - it can be phase 2." Designed from research into the friction of update holds (Microsoft's
 telemetry on Windows' permission prompts, Anthropic's figures for Claude Code's permission prompts, studies of browser
 warnings and of Dependabot): a hold costs attention every time and pays only when it changes an answer, so both are counted.
-Six events, one JSON line each in `$SKILLS_HOME`, kept 90 days and never sent anywhere. A skill's name is stored as a keyed
-hash (HMAC) with a secret kept only on this machine, so a copied log still counts per skill but names none; there's no diff,
-path, notice text, query or session id.
-- `hold` {reason, the kinds of risk flag, versions behind};
+Seven events, one JSON line each (`{v: 1, at, event, …}`), appended to a file per day, `$SKILLS_HOME/usage/YYYY-MM-DD.jsonl`
+(mode 0600, in a 0700 folder); a day's file is deleted once it's 90 days old, so nothing is rewritten and two processes can't
+race, and nothing is sent anywhere. A skill's name is stored as `skill`, a keyed hash (HMAC-SHA-256 with a
+key derived from `confirm.key`'s secret, §3's publish, as HMAC-SHA-256(secret, "skills-catalog usage metrics v1"); base64url,
+the first 16 characters), so a copied log still counts per skill but names none, and one machine secret serves both uses,
+each under its own label (a replaced secret restarts the per-skill hashes, which only affects counts across the change); there's no diff, path, notice text, query or session id.
+- `hold` {skill, version (the held one), reason, the kinds of risk flag, versions behind}: a hold is reported again at each
+  sync, so the measures count distinct (skill, version, reason);
 - `notice` {surface: `hook` \| `mcp`, how many were waiting};
-- `look` {surface: `cli` \| `assistant` \| `web`}: a held update's changes were opened: `diff_shared_skill_versions` for the
+- `look` {skill, version, surface: `cli` \| `assistant` \| `web`}: a held update's changes were opened: `diff_shared_skill_versions` for the
   held version, the CLI showing the diff or `update <name> --accept` showing the reasons, or the web compare screen. The
   held result's own diff doesn't count, since it reaches the assistant whether or not anyone looks;
-- `answer` {`yes` \| `no` \| `pin` \| `superseded`, seconds since the notice, seconds since the look, how many answered
-  together};
+- `answer` {skill, version, `yes` \| `no` \| `pin` \| `superseded`, seconds since the notice, seconds since the look, how
+  many answered together};
 - `policy` {from, to, scope: the catalog or one skill, whether within a day of a hold};
-- `mode` {`default` \| `auto` \| `bypass` \| `sandbox_auto_allow` \| `broad_bash_rule`, at each sync}.
+- `mode` {mode: `default` \| `auto` \| `bypass` \| `sandbox_auto_allow` \| `broad_bash_rule`, surface: `hook` \| `mcp` \|
+  `update`}, at each sync, so it also counts syncs (a hook's sync counts as a session); `mode` is left out until the
+  permissive-mode detection (§5.3) is built;
+- `use` {op: search, read, install, update, publish, …, result: the result or error code}: one per operation, so the
+  measures can say how often a search finds nothing, and how many installs and updates were applied; no query, name or
+  path.
 
-`skills-catalog stats` turns them into six measures: holds a week, sessions that open with a notice, whether and how long the
+`skills-catalog stats` turns the hold events into six measures: holds a week, sessions that open with a notice, whether and how long the
 person looked, the yes-rate, noes and pins (the only direct sign a hold earned its cost), and holds left waiting or updates
 turned off. With a few people, single events matter more than rates. The review of the flag-only approvals (§5.3) reads them.
 
@@ -284,11 +332,21 @@ got -32601, and fell back to `initialize` (protocol 2025-11-25). A replay test o
   same on every machine. Which code points are assigned otherwise depends on the runtime (Node on one system knows Unicode
   17's new letters, on another it doesn't), so a new letter would be `invisible_character` (unassigned) on one and a
   letter on the other, and two paths differing only in its case would both pass where the table doesn't fold it. So a
-  code point unassigned in the table's version is `invisible_character` on every runtime, whatever the runtime knows (the
-  table's generator writes that version's assigned ranges beside it). The normalisation and the fold then only meet
-  characters assigned in that version, whose normalisation Unicode keeps stable. A newer version is a deliberate change of
-  the table. Built later; until then a path using a code point assigned after 16.0 can be judged differently on runtimes
-  on different Unicode versions.
+  code point unassigned in the table's version is `invisible_character` on every runtime, whatever the runtime knows. The
+  normalisation and the fold then only meet characters assigned in that version, whose normalisation Unicode keeps stable.
+  A newer version is a deliberate change of both tables.
+  - **The table:** `core/config/invisible-characters.txt`, the whole `invisible_character` set above for that version as
+    code-point ranges (one `XXXX..YYYY` or `XXXX` in hex per line, sorted), under a header naming the version, as
+    `case-folding.txt` has. The path rule reads only this table, never the runtime's `\p{…}`, so no category comes from
+    the runtime. It's made by a script in the repo from the same version's data (the general categories from Python's
+    `unicodedata`, as the case-folding table is, and default-ignorable code points from an extract of that version's
+    `DerivedCoreProperties.txt` kept beside the script: its `Default_Ignorable_Code_Point` lines as published, under the Unicode
+    license notice and the original file's SHA-256), so it regenerates offline; the script's verify mode fetches the
+    original, checks its SHA-256 and that the extract matches it. The table is committed.
+  - **Its tests:** the two tables' version headers are equal; U+200B, U+2800, U+3164 and U+A7CE (a Unicode 17 letter) are
+    refused and U+00E9 and U+4E00 aren't, on every runtime; and the table matches a fresh run of the script.
+  Until it's built, a path using a code point assigned after 16.0 can be judged differently on runtimes on different
+  Unicode versions.
 - Regular files only (no links, devices, hardlink tricks); mode `0644` or `0755`. Reading a folder to publish it (§3), a
   symbolic link (pointing in or out), a file with more than one hard link (it may be another file's bytes, from outside the
   folder) or a fifo, socket or device is `invalid_path` {path, why: `not_regular_file`}, found while reading, before the
@@ -341,11 +399,20 @@ Reproducible with coreutils, so tests compute it independently and never trust t
   (the SQLite file and the files by digest), shared by every developer acting on this machine; installed skills go to the
   assistant's own folder, `~/.claude/skills/<name>/` for Claude Code (under `$SKILLS_ASSISTANT_HOME`). XDG folders are not used.
 - **Config** (`$SKILLS_HOME/config.json`, mode 0600): §6's setup config.
-- **Lock file** (`$SKILLS_HOME/lock.json`): per installed skill and target: `version`, `fingerprint`, `policy?`, `target`,
+- **Lock file** (`$SKILLS_HOME/lock.json`): per installed skill and target: `version`, `fingerprint`, `publisher`, `policy?`, `target`,
   `path` (for people to read; the installer always computes where a skill goes from its target and name), `installed_at`,
   `catalog`, and the flags each accepted install or update let through. This installer's list is where an installed skill's origin is kept, keyed by where it's
   installed; nothing is written into the skill itself (the owner's decision).
 - Installed files are never edited by the client except by an install or update of that skill.
+- **A damaged lock or config file is the person's to look at, never repaired.** When `lock.json` or `config.json` isn't
+  valid JSON, doesn't have the shape above (a field of the wrong type anywhere, a lock entry's included), or holds a policy
+  other than `auto`, `notify` or `pin` (the global one or a skill's own), every command that reads it refuses with
+  `invalid_local_file` {file: `lock.json` \| `config.json`, why: `not_json` \| `wrong_shape` \| `unknown_policy`, path: the
+  file's full path, so the person can find it} and changes nothing: install, update, accepting a held update, listing installed skills, setting a policy and setup (which
+  would overwrite it). The file is never rewritten or replaced; the sentence names the file, never shows its contents, and
+  says to fix or remove it. `teardown` still runs, so there's always a way out, and the session-start hook still exits 0,
+  printing one line of fixed words naming the file. An unknown policy never falls back to `auto`: a mistyped `pin` must
+  never apply an update.
 
 ## 5. Rules
 
@@ -363,7 +430,7 @@ Reproducible with coreutils, so tests compute it independently and never trust t
 On AWS: S3 puts, then one conditional DynamoDB write.
 
 **Publishing over a latest stored under older rules** (§4.4) isn't refused, so the skill's owner can always publish a fix
-(unless the name itself has since become reserved: then a new name). Step 1's preview and `publish_version`'s
+(unless the name itself has since become reserved: then a new name). The preview and `publish_version`'s
 `diff_from_latest` and `risk_flags` fail closed: they treat that latest as no version at all, so `diff_from_latest` is the
 all-added diff (never `null`), every grant in the new version is flagged, and only `new_publisher` compares the real
 publishers; the result carries `stored_under_older_rules` {from: {error}} for the latest.
@@ -411,22 +478,26 @@ deletes only pending blobs older than 7 days, and the append re-checking its blo
   an LF is kept, as part of a CRLF line ending; any other CR is escaped. Only the rendering changes: stored bytes, the
   fingerprint and JSON fields (`content`, `unified`) stay exact.
 
-### 5.3 The update gate (the owner's decision)
+### 5.3 Risky updates wait for a yes (the owner's decision)
+
+Risky updates are held until you say yes. Risky means the new version could change what runs on this machine (a
+script, a tool grant, a new publisher…). This section calls that the update hold, and an update it stops a held update.
 
 The owner's decision: asked "Keep auto-updates on by default, but stop and show you any update that could change what runs on
 your machine?", the owner answered "Completely agreed", and asked to "also consider other reviewer-based metrics or flags". So
-the gate holds **anything that could make something run without a prompt**. In Claude Code a skill does that in these ways (its
+the update hold stops **anything that could make something run without a prompt**. In Claude Code a skill does that in these ways (its
 skills page): `allowed-tools` ("Tools Claude can use without asking permission during the turn that invokes this skill"),
 `hooks` ("registers when the skill is invoked and keeps running for the rest of the session"), `` !`command` `` lines and
 ```` ```! ```` blocks ("Injected commands never prompt for permission while the skill renders"; they run when a permission rule
 allows them, such as the skill's own `allowed-tools`), `context: fork` with an `agent` (the skill runs as that subagent), and
 scripts that a grant lets Claude run. With any of those in the skill, its instructions steer what runs unprompted too.
-Everything else a skill does goes through Claude Code's own permission prompts, which stay the person's gate in its default
-permission mode (for other modes, see "What the gate doesn't cover" below).
+Everything else a skill does goes through Claude Code's own permission prompts, which stay the person's say in its default
+permission mode (for other modes, see "What the update hold doesn't cover" below).
 
 **The installer decides, from bytes it checked.** It never trusts the catalog's verdict: the catalog's `risk_flags` are for
-showing (the web UI, a publish preview), and the gate never reads them. For each version it fetches, the installer:
-1. checks the bytes against the fingerprint. A mismatch (a damaged file in the catalog, or a catalog serving other bytes
+showing (the web UI, a publish preview), and the update hold never reads them. For each version it fetches, the installer:
+1. checks the bytes against the fingerprint the version list names (`list_shared_skill_versions`; the lock's, for the
+   installed version), never the fetch result's own claim. A mismatch (a damaged file in the catalog, or a catalog serving other bytes
    than the version it names) is `fingerprint_mismatch` {name, version, expected, got}: the error itself on install, and
    `refused` {version, error} in an update's result. Nothing is installed: the fetched copy is deleted, and the lock and any
    installed copy stay as they are. `expected` and `got` are shown only in the fingerprint's form (`sha256:` and 64 hex
@@ -441,7 +512,9 @@ showing (the web UI, a publish preview), and the gate never reads them. For each
    be parsed is refused, never diffed as if it had no frontmatter;
 3. computes every flag itself, from the verified bytes on both sides. When the installed version fails today's rules (it
    was stored under older ones, §4.4), the flags are computed as for a first install, from nothing, so every grant in the
-   new version is flagged and held; only `new_publisher` compares the real publishers.
+   new version is flagged and held; only `new_publisher` compares the real publishers: the lock's recorded publisher of the
+   installed version (the catalog's, for an entry recorded before the lock kept it) against the new version's. A first
+   install never has `new_publisher`.
 
 `risk_flags` for an update, and for a first install (an update from nothing, §3), are:
 - from its diff:
@@ -460,7 +533,7 @@ showing (the web UI, a publish preview), and the gate never reads them. For each
   - `capability_frontmatter`: a frontmatter key added, changed or removed that isn't on the safe list {field, from, to}. The
     safe list (`safe_frontmatter_keys`, fixed in code; config can only remove keys from it, never add): `name`, `description`, `when_to_use`, `argument-hint`, `arguments`,
     `license`, `compatibility`, `metadata`, `version`, `tags`. Every other key counts (`allowed-tools`, `hooks`, `context`,
-    `agent`, `shell`, `model`, `disable-model-invocation` …, and any key Claude Code adds later), so the gate fails closed;
+    `agent`, `shell`, `model`, `disable-model-invocation` …, and any key Claude Code adds later), so the update hold fails closed;
   - `instructions_changed`: any other file added, changed or removed (bytes, mode or presence), markdown included, and
     SKILL.md when its body or any safe key changed (`arguments` feeds commands, `description` and `when_to_use` decide when a
     grant is used; a change to only other keys is their `capability_frontmatter` flag), when the new version grants anything: an injected command, or any frontmatter key on neither the safe list
@@ -470,7 +543,7 @@ showing (the web UI, a publish preview), and the gate never reads them. For each
     safe list. The detail names the grant ("the skill pre-approves Bash(python3 *); its instructions changed");
   - `non_markdown`: any other non-markdown file added or changed;
   - `new_publisher`: a different publisher {from, to};
-- from the rules reviewer (§10), run by the installer on the fetched version, so the gate never waits for the catalog:
+- from the rules reviewer (§10), run by the installer on the fetched version, so the update hold never waits for the catalog:
   prompt-injection patterns (instructions to ignore prior guidance, exfiltration or curl-to-shell, hidden unicode, HTML
   comments), and context cost over the configured budget;
 - from agent reviewers (phase 2), when their reviews exist; a missing agent review never holds an update.
@@ -480,7 +553,7 @@ block, and no other reason for that file), then `command_instruction` (one per l
 `instructions_changed`, then `non_markdown`; so a new script is one reason, not
 two. `capability_frontmatter` is one flag per key, beside the file's own reason.
 
-Each flag says what fired, in one shape everywhere (the diff, a publish's step 1, a held update or install, a card's
+Each flag says what fired, in one shape everywhere (the diff, a publish's preview, a held update or install, a card's
 `quality`), so the web UI, the CLI and an agent show one verdict (the web UI's compare screen shows the same):
 `{kind: runnable_file | runs_at_load | command_instruction | capability_frontmatter | instructions_changed | non_markdown |
 new_publisher |
@@ -494,7 +567,7 @@ then cut to 200 code points, ending in "…" within the 200.
 **The prompt-injection word list is advice.** Its flag holds an auto-update like any other, as the owner asked for reviewer
 flags, but the flags from the diff are what make the rule true: a reworded instruction passes any word list.
 
-**When Claude Code runs without prompts, one more check** (the owner's decisions; built with the gate). In auto mode (a
+**When Claude Code runs without prompts, one more flag** (the owner's decisions; built with the update hold). In auto mode (a
 classifier stands in for the person), bypass mode, with the sandbox's auto-allow, or with a broad Bash allow rule in the
 person's settings, an instruction-only update can change what runs with nobody saying yes. Asked "When your assistant runs
 commands without asking (auto mode, bypass, or a broad Bash rule), should every skill update wait for your yes?", the owner
@@ -503,15 +576,37 @@ it: "let's also reduce need for human approval - by only surfacing manual approv
 / flagged. This should be true across all surfaces including CLI and Agentic as long as auto-updates is enabled." So with
 auto-updates on, every surface (the session-start hook, the assistant's tools, the CLI) asks the person only when an update
 carries a flag, and there's no blanket hold. What the blanket hold covered is covered by a flag instead: while a permissive
-mode is detected, added or changed text gets one more check.
+mode is detected, added or changed text can get one more flag.
 - **`command_instruction`** {path, line, instruction: `shell` \| `fetch_and_run` \| `install` \| `secrets`, mode, detail}: a line that tells the assistant to run a shell command, fetch something and
   run it, install packages, or read credentials or secret paths (`curl … | sh`, "run `…`", `pip install`, `npm install -g`,
-  `cat ~/.aws/credentials`, `~/.ssh`, `.env`, "paste your token"). The patterns are `command_instruction_patterns`, fixed in
-  code; config can only add. One flag per line, whose `instruction` and `mode` (the permissive mode's code) are data, and
+  `cat ~/.aws/credentials`, `~/.ssh`, `.env`). The patterns are `command_instruction_patterns`, fixed in code; config can
+  only add. One flag per line, whose `instruction` and `mode` (the permissive mode's code) are data, and
   whose detail is worded from them ("tells the assistant to run a shell command; it runs commands without asking: auto
   mode"). It's flagged only while a permissive mode is
   detected: in the default mode, Claude Code's own prompt still asks before any command runs. It applies to a first install
-  too, as an update from nothing. It's a heuristic, and "What the gate doesn't cover" says so.
+  too, as an update from nothing. It's a heuristic, and "What the update hold doesn't cover" says so. The patterns, matched as whole
+  words without regard to case on each added or changed line of a markdown file (the front matter included), the first kind that
+  matches naming the flag:
+  - `fetch_and_run`: a download piped into something that runs it (`curl`, `wget`, `iwr`, `irm`, `Invoke-WebRequest` or
+    `Invoke-RestMethod`, then later on the line `|` and, after an optional `sudo`, `sh`, `bash`, `zsh`, `dash`, `ksh`,
+    `fish`, `python`, `python3`, `node`, `perl`, `ruby`, `php`, `pwsh`, `powershell`, `iex` or `Invoke-Expression`); a
+    download run through a substitution (`<(curl`, `<(wget`, `$(curl`, `$(wget`); or a package run straight from the
+    registry (`npx`, `bunx`, `pnpm dlx`, `uvx`, `pipx run`, each followed by a name);
+  - `install`: a package manager's install (`pip`, `pip3` or `python -m pip` `install`; `uv pip install`, `uv add`, `uv
+    tool install`; `pipx install`; `npm install`, `npm i`, `npm add`; `pnpm add`, `pnpm install`, `pnpm i`; `yarn add`,
+    `yarn global add`; `bun add`, `bun install`, `bun i`; `brew install`; `apt install`, `apt-get install`, `dnf install`,
+    `yum install`, `apk add`, `pacman -S`; `cargo install`; `go install`; `gem install`; `conda install`, `mamba install`;
+    `choco install`, `winget install`);
+  - `secrets`: a place credentials live (`~/.ssh`, `id_rsa`, `id_ed25519`, `id_ecdsa`, `.aws/credentials`, `.aws/config`,
+    `.config/gcloud`, `application_default_credentials.json`, `.kube/config`, `.docker/config.json`, `.netrc`, `.npmrc`,
+    `.pypirc`, `.git-credentials`, `.gnupg`, a file named `.env` or `.env.` and more), or a command that prints them
+    (`printenv`, `security find-generic-password`, `security find-internet-password`);
+  - `shell`: a fenced code block tagged `sh`, `bash`, `shell`, `zsh`, `fish`, `console`, `shell-session`, `terminal`,
+    `powershell`, `pwsh`, `ps1`, `cmd` or `bat`, added or changed, whose changed lines matched none of the kinds above: one
+    flag per block, at its opening line (an edit inside an unchanged block counts, as for `runs_at_load`); and, outside such
+    a block, a line where `run`, `execute` or `invoke`, in any form, comes before an inline code span.
+  A skill asking the person to paste a key isn't a command the assistant runs, so it isn't flagged (see "What the update hold
+  doesn't cover").
 - **How the installer tells** (setup reads the same, and its summary says so). It reads Claude Code's settings files as Claude
   Code does: managed, then the project's `.claude/settings.local.json` and `.claude/settings.json`, then the user's
   `~/.claude/settings.json`. A single value comes from the highest file that sets it; lists (`permissions.allow`) merge across
@@ -533,10 +628,10 @@ mode is detected, added or changed text gets one more check.
 - **Order**: `pin`, then `notify`, then the flags. `command_instruction` is a flag like any other (`held: flagged`), and
   `accept_flagged_updates` lets it through like any flag. A pinned skill and a version still in its cooldown ask nothing and
   produce no notice (§3).
-- **A first install** goes through the gate as usual, `command_instruction` included: flagged, it's held; otherwise it
+- **A first install** goes through the update hold as usual, `command_instruction` included: flagged, it's held; otherwise it
   installs.
 - **What it can't see**: a mode given for one session (`--permission-mode`, `--settings`) or switched during a session. The
-  check reads the files at each sync, so it's a best effort; "What the gate doesn't cover" lists it.
+  check reads the files at each sync, so it's a best effort; "What the update hold doesn't cover" lists it.
 - **When the approvals are reviewed** (with the usage metrics, §3; starting thresholds from the friction research, to be tuned). Any one
   flags the rule for review, with its numbers:
   - avoidance, once: updates turned off, `accept_flagged_updates` turned on, everything pinned, or setup torn down within 7
@@ -549,7 +644,7 @@ mode is detected, added or changed text gets one more check.
   If holds do change answers, keep them and make each cheaper: one notice for all that wait, the changed lines and any
   command in them marked, and a notice that changes its wording when something new appears.
 
-**What the gate doesn't cover** (setup's explanation of auto-updates says so). It covers what a skill itself grants, in Claude
+**What the update hold doesn't cover** (setup's explanation of auto-updates says so). It covers what a skill itself grants, in Claude
 Code's default permission mode. It doesn't cover:
 - the person's own rules and modes: with `Bash(git *)` allowed, a plain-markdown update that says "run git push --force" runs
   unprompted, as any instruction would (a narrow rule like this isn't a permissive mode); in accept-edits mode an update
@@ -561,13 +656,13 @@ Code's default permission mode. It doesn't cover:
 - what never prompts: reading files in the working directory, Claude Code's read-only commands, `@path` attachments;
 - a skill simply asking the person for something (for example, to paste a key);
 - files outside the skill that a broad grant reaches: `Bash(python3 *)` lets the skill's turn run any Python file, which the
-  gate watches only inside each skill;
+  update hold watches only inside each skill;
 - hooks a skill already registered: they keep running for the rest of the session after an update, a hold or an uninstall;
 - provenance: the fingerprint proves which bytes you got, not who wrote them; until sign-in and signing, `new_publisher`
   isn't evidence of who published;
 - other assistants: the ways a skill runs things listed above are Claude Code's; new frontmatter keys fail closed, new body
   syntax doesn't;
-- `accept_flagged_updates`, which turns the gate off for updates when the person chooses it.
+- `accept_flagged_updates`, which turns the update hold off for updates when the person chooses it.
 
 | Policy | `risk_flags` | Action |
 |---|---|---|
@@ -596,8 +691,8 @@ checkers to monitor latest; so that there's benefit in waiting)". So:
   never the catalog's: the catalog serves the newest version to anyone who asks. A person gets it at once with a watcher
   policy (`cooldown` 0, globally or per skill), with a one-off `skills-catalog update <name> --latest`, or by taking a
   `held: cooldown` update with `accept_held_update`. All three go through the permission prompt (none is pre-allowed, and the
-  pre-allowed `update_installed_skills` has no `latest` input), so an assistant can't skip the wait on its own. The gate
-  still applies: flags still stop.
+  pre-allowed `update_installed_skills` has no `latest` input), so an assistant can't skip the wait on its own. The update
+  hold still applies: flags still stop.
 - **Why waiting helps: a report holds the version for everyone.** Watchers who take the latest early can report a bad
   version during the wait, through reviews (§10: an agent or security reviewer's flags on that version's fingerprint) or by
   its owner withdrawing it (`yank`, §7: the version stays in the history, marked, and is never installed or applied). At the
@@ -606,7 +701,7 @@ checkers to monitor latest; so that there's benefit in waiting)". So:
   Built with shared catalogs, with agent reviewers and yank.
 
 An update replaces the installed copy (§5.4). A setup option, `accept_flagged_updates` (default false), lets a person opt out of
-the gate for updates on unattended machines. Only the terminal wizard sets it (never `--yes`, `--config` or the no-terminal
+the update hold for updates on unattended machines. Only the terminal wizard sets it (never `--yes`, `--config` or the no-terminal
 mode, since a permission prompt doesn't show a file's contents); it never applies to a first install; the session-start notice
 says it's on; and the lock records each update it let through.
 
@@ -646,16 +741,16 @@ first (§5.3).
 person's yes:
 - MCP tools: `search_shared_skills`, `read_shared_skill`, `list_shared_skill_versions`, `diff_shared_skill_versions`,
   `list_installed_skills`, `install_shared_skill` and `update_installed_skills` (their inputs can't choose where bytes come
-  from or go, and the gate holds anything flagged). Never pre-allowed (and, once it exists, neither is `preview_skill_publish`: its folder input chooses what's read, and the preview shows the files' text): `publish_skill_to_catalog` (it sends the person's
+  from or go, and anything flagged is held). Never pre-allowed: `preview_skill_publish` (its folder input chooses what's read, and the preview shows the files' text), `publish_skill_to_catalog` (it sends the person's
   files), `accept_held_update`, `set_skill_update_policy` (it can unpin a skill the person pinned, or, with the proposed
   cooldown, turn the wait off), `setup`, `teardown`. Their permission prompts are the person's consent.
 - The CLI through the assistant's shell tool: `skills-catalog search`, `read`, `versions`, `diff` and `list` (installed
-  skills), and `skills-catalog update` with no arguments (an exact rule, no `*`: it applies what the gate lets through under
+  skills), and `skills-catalog update` with no arguments (an exact rule, no `*`: it applies only what the update hold lets through under
   the person's own policy and config, so an unflagged update asks nothing on this surface either); nothing else, since `--catalog` and `--home` would let a command choose where bytes come from and go. The read commands open storage
   read-only: they never create a catalog, sweep leftovers or rebuild an index, so pointed at another folder they read or fail,
   and never write. The allow list is generated from the registry, so it can't drift from the commands. Every other command,
   and so every use of the person-only flags (`--accept`, `--allow-suspected-secrets`), meets the permission prompt, which is
-  the gate. Those flags also refuse with no terminal (exit 3), a backstop only: a command can fake a terminal.
+  the person's yes. Those flags also refuse with no terminal (exit 3), a backstop only: a command can fake a terminal.
 
 **Absolute paths.** The session-start hook and the MCP server entry start node by its absolute path (`process.execPath`, never
 a version manager's shim), with the installed
@@ -735,10 +830,10 @@ a log file in `$SKILLS_HOME`, named in the message.
 `internal_error` {log}, `invalid_request` {field, why, limit?}, `invalid_manifest` {problem, fields} (the problems: §4.1),
 `invalid_name` {name, why} (§4.1), `invalid_path` {path, why} (the whys: §4.2), `too_large` {limit, max, value},
 `not_found` {suggestions} or {path}, `not_owner` {name, owners}, `conflict` {name, latest} (also when a held update's version
-was overtaken, with its own sentence) or {name, folder} (a publish's step 2 whose confirm doesn't verify for the folder as
-it is now and its inputs, §3), `forbidden`, `unauthenticated` (locally: no acting identity set, so its sentence points to setup's `me` or `--as`; hosted: sign in), `exists_untracked` {path}, `name_in_use` {path},
+was overtaken, with its own sentence) or {name, folder} (a publish whose confirm doesn't verify for the folder as it is
+now and its inputs, §3), `forbidden`, `unauthenticated` (locally: no acting identity set, so its sentence points to setup's `me` or `--as`; hosted: sign in), `exists_untracked` {path}, `name_in_use` {path},
 `target_symlink` {path}, `secret_suspected` {path, line, kind}, `invalid_developer_setting` {setting} (§4.1),
-`fingerprint_mismatch` {name, version, expected, got} (§5.3), `not_installed` {name} (§3). Each error carries the code and one plain sentence, and `why`
+`fingerprint_mismatch` {name, version, expected, got} (§5.3), `not_installed` {name} (§3), `invalid_local_file` {file, why, path} (§4.5). Each error carries the code and one plain sentence, and `why`
 and `problem` are codes with a sentence each (wording in the agent-experience notes).
 
 **An error's sentence is an instruction to the agent** (the agent-experience trials): one that asks for a change to the person's files
@@ -778,7 +873,7 @@ phase 1 or phase 2) (e.g. risk of prompt injection, etc.)".
 - **Where measurements show:** search cards carry `quality` {flags} only when something is flagged (nothing when clean; ~10
   tokens, shown right after the name: in the agent-experience trials, 2 of 2 runs relayed it there, 1 of 2 at the card's end, and
   with it 2 of 2 warned the person about a planted instruction, while without it one run recommended that skill unwarned); `read_shared_skill` returns the
-  reviews; `install_shared_skill` and `update_installed_skills` return `advisories[]`; the update gate holds on risk flags.
+  reviews; `install_shared_skill` and `update_installed_skills` return `advisories[]`; a risk flag holds an update.
   Ranking search by the measurements: later.
 
 ## 11. After the first publish: what changed, and where it's built
@@ -791,13 +886,15 @@ revised design) and reviews of the core's code and its architecture changed thes
 | Written down to match the core: the path checks (invisible characters, a `.git` folder, long segments), `hooks` as a capability, flags carrying `field`, `from` and `to`, `invalid_manifest` {problem, fields}, unknown request fields refused | §2, §4.1, §4.2, §5.3, §9 | in the core now |
 | `.claude`, `.claude-plugin` folders and memory files refused; reserved names; inherited request field names tested; frontmatter as a safe YAML subset with plain keys; the wider invisible-character set, full case folding and portable segments; the read's 24 KiB budget in every mode (`body_omitted`, `paths[]`, one path up to the file limit) and its fence token; search filter limits; the safe list of frontmatter keys in the core's diff (config can only remove keys); the secret scan in the core's publish, with `allow_suspected_secrets`; error sentences chosen by `problem` or `why`; flag text shown as escaped plain text; one-line fields (description, message, developer names) refuse line breaks and control characters, and faces replace them with a space; a diff's changed lines inside the fence | §2, §4.1, §4.2, §5.2, §5.3, §9 | in the core now |
 | Versions stored under older rules read as stored, marked `stored_under_older_rules`, and a diff from one fails closed (the skill's owner can always publish a fix); front matter counted in the read's budget, first, and left out as `frontmatter_omitted` with its `grant_keys`; control characters inside the fence shown escaped, and the data note naming the end marker | §2, §4.4, §5.1, §5.2, §5.3 | later |
-| The gate's other flags: `runs_at_load` (the wide detector), `instructions_changed` (removals and safe keys too, `non_granting_keys`), files in a command position and outside the skill | §4.1, §5.3, §6, §10 | later |
-| The installer decides from bytes it checked (a fingerprint mismatch is `fingerprint_mismatch`; full validation of every fetched version, `refused`, its own flags); a first install through the gate; never overwriting or shadowing what it didn't install (command files too); the install path computed; `accept_held_update` names the flags it accepts; install's policy CLI-only | §3, §4.5, §5.3 | with the installer |
-| What setup pre-allows (generated from the registry; read-only commands never write); absolute paths from `process.execPath`; the prompt as the gate for person-only flags; `accept_flagged_updates` only from the terminal wizard; notices with fixed words; the MCP server's activity log | §3, §6, §8 | the activity log with the MCP server, the prompt as the gate for person-only flags with the CLI; the rest with setup and the session-start hook, later |
+| The update hold's other flags: `runs_at_load` (the wide detector), `instructions_changed` (removals and safe keys too, `non_granting_keys`), files in a command position and outside the skill | §4.1, §5.3, §6, §10 | with the update hold, in the shared `skill-tree` module |
+| The installer decides from bytes it checked (a fingerprint mismatch is `fingerprint_mismatch`; full validation of every fetched version, `refused`, its own flags); a first install through the update hold; never overwriting or shadowing what it didn't install (command files too); the install path computed; `accept_held_update` names the flags it accepts; install's policy CLI-only | §3, §4.5, §5.3 | with the installer |
+| What setup pre-allows (generated from the registry; read-only commands never write); absolute paths from `process.execPath`; the prompt as the person's yes for person-only flags; `accept_flagged_updates` only from the terminal wizard; notices with fixed words; the MCP server's activity log | §3, §6, §8 | the activity log with the MCP server, the prompt as the person's yes for person-only flags with the CLI; the rest with setup and the session-start hook, later |
 | A cooldown before auto-update applies a new version (0 locally, about 3 days for a shared or hosted catalog); the latest on request (watcher policy, `--latest`, accepting a held one), through the prompt; a report or withdrawal during the wait holds that version for everyone | §3, §5.3, §6, §7, §10 | decided by the owner; designed now, built with shared and hosted catalogs (a local catalog waits 0, so nothing changes in phase 1) |
-| The two-step publish as consent: step 2 repeats the name, version, file count and flags so its prompt shows them, and its `confirm` is a MAC only this machine's skills-catalog can make (`not_a_confirm` otherwise); an ignored folder skipped once, unwalked; paths in commands shell-quoted | §3, §5.2, §9 | with the MCP server and the CLI |
-| Step 1 of a publish as its own tool, `preview_skill_publish`, so step 2's prompt can't be pre-allowed by answering a preview | §3, §6 | later |
-| One Unicode version for the path rules, the case-folding table's: code points it doesn't assign are refused on every runtime | §4.2 | later |
+| The two-step publish as consent: the publish repeats the name, version, file count and flags so its prompt shows them, and its `confirm` is a MAC only this machine's skills-catalog can make (`not_a_confirm` otherwise); an ignored folder skipped once, unwalked; paths in commands shell-quoted | §3, §5.2, §9 | with the MCP server and the CLI |
+| A damaged lock or config file refused with `invalid_local_file`, never repaired, an unknown policy never taken as `auto`; teardown still runs | §4.5, §9 | with the installer |
+| The secret scan's new shapes (`stripe_key`, `google_api_key`, `jwt`, `url_credentials`), a key ending in a secret word after `_` or a quote, matches that stand alone, UTF-16 and Latin-1 files scanned | §2 | the core's next update |
+| The preview as its own tool, `preview_skill_publish`, and CLI command, `preview`, so the publish's prompt can't be pre-allowed by answering a preview | §3, §6 | with the MCP server and the CLI |
+| One Unicode version for the path rules, the case-folding table's: code points it doesn't assign are refused on every runtime | §4.2 | the core's next update |
 | Stored versions re-checked when the core's rules change, and those that fail reported | §5.3 | later |
-| With auto-updates on, every surface asks only when an update is flagged; in a permissive mode (auto, bypass, the sandbox's auto-allow, a broad Bash rule) text that tells the assistant to run commands is flagged (`command_instruction`); plain `skills-catalog update` pre-allowed | §3, §5.3, §6 | decided by the owner; later |
-| Usage metrics: six local events (hold, notice, look, answer, policy, mode), skill names hashed, 90 days, never sent; `skills-catalog stats`; the four review triggers for the flag-only approvals | §3, §5.3 | phase 2 |
+| With auto-updates on, every surface asks only when an update is flagged; in a permissive mode (auto, bypass, the sandbox's auto-allow, a broad Bash rule) text that tells the assistant to run commands is flagged (`command_instruction`); plain `skills-catalog update` pre-allowed | §3, §5.3, §6 | decided by the owner; with the update hold (the mode detection) and setup (the pre-allowed update) |
+| Usage metrics: seven local events (hold, notice, look, answer, policy, mode, use), skill names hashed, 90 days, never sent; `skills-catalog stats`; the four review triggers for the flag-only approvals | §3, §5.3 | phase 2 |

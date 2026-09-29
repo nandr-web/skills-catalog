@@ -1,0 +1,9 @@
+id: skill-usage-metrics
+title: "Phase 2: Usage metrics, kept on the machine"
+phase: "2"
+source: "the owner"
+quote: "Let's add instrumentation if not already - it can be phase 2."
+want: "As the owner, I want the catalog to count how it's used (searches that find nothing, installs, updates held and how long each waits for a yes, updates declined), kept on the machine and summarised on request, so that friction and gaps show as numbers and decisions like holding updates can be reviewed."
+accept: "The client counts searches that find nothing, installs, updates applied, updates held by reason with the time each waits for a yes, and held updates declined or never taken; the counts stay on the machine under the activity log's privacy rules (no query, skill text or anything a person or publisher typed); skills-catalog stats summarises them; the flag-only approvals can be reviewed from them."
+confirmed: false
+relates: [skill-auto-updates, skill-search-measure]

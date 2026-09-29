@@ -6,7 +6,7 @@ What runs on your machine today, what comes next, and the hosted option designed
 
 ![Your machine today: a developer's commands reach the CLI and an AI assistant's tool calls reach the assistant tools (MCP); both install through the installer, which writes the skills folder and holds risky updates; the assistant tools search, read and publish in the core catalog, which keeps a local store (SQLite and files). Only the guided setup is planned, not built yet](pictures/today.svg)
 
-**Built today, and next.** The core catalog, the assistant's tools (MCP), the installer with its update gate, and a small CLI (`install`, `list`, `update`) are built and tested, all on the same contract ([contract.md](contract.md)). The guided setup comes next.
+**Built today, and next.** The core catalog, the assistant's tools (MCP), the installer (which holds risky updates until the person says yes), and a small CLI (`install`, `list`, `update`) are built and tested, all on the same contract ([contract.md](contract.md)). The guided setup comes next.
 
 ## Later: a hosted catalog (one contract, two homes)
 
@@ -28,7 +28,7 @@ What runs on your machine today, what comes next, and the hosted option designed
 
 ## A retrieved skill stays the same skill
 
-![A new version is checked first: if it could change what runs, or the reviewer flags it, it waits for you with what changed; otherwise it's applied on its own](pictures/update-gate.svg)
+![A new version is checked first: if it could change what runs, or the reviewer flags it, it waits for you with what changed; otherwise it's applied on its own](pictures/risky-updates.svg)
 
 A retrieved skill is still a copy, so it remembers where it came from. The installer's list records name, version, fingerprint and catalog. On an update it compares versions. Text changes to a skill that can't run anything apply on their own. Anything that could change what runs on your machine stops and shows you first, including new instructions in a skill that is allowed to run commands. A first install goes through the same check.
 

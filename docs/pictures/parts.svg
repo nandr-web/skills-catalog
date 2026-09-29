@@ -95,9 +95,9 @@
 <path class="d-edge" d="M464.5 220 L465 310 Q465 315 465 320 L465 412" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
 <path class="d-edge" d="M429.5 112 L429.5 159 Q429.5 164 424.5 164 L398 164 Q393 164 393 169 L393 328 Q393 333 388 333 L227 333 Q222 333 221.9 338 L221.6 346 Q221.5 351 221.5 356 L221.5 427" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
 <path class="d-edge" d="M492.5 465 L492.5 658" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
-<path class="d-edge" d="M437.5 465 L437.5 512 Q437.5 517 432.5 517 L260.5 517 Q255.5 517 255.5 522 L255.5 535" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
+<path class="d-edge" d="M437.5 465 L437.5 512 Q437.5 517 432.5 517 L277.2 517 Q272.2 517 272.2 522 L272.2 535" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
 <path class="d-edge" d="M221.5 480 L221.5 535" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
-<path class="d-edge" d="M255.5 588 L255.5 635 Q255.5 640 260.5 640 L428.5 640 Q433.5 640 433.5 645 L433.5 658" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
+<path class="d-edge" d="M272.2 588 L272.2 635 Q272.2 640 277.2 640 L428.5 640 Q433.5 640 433.5 645 L433.5 658" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
 <path class="d-edge" d="M463 711 L463 789" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
 <path class="d-edge" d="M221.5 588 L222 748 Q222 753 222 758 L222 789" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
 <rect class="d-node" x="394.5" y="74" width="105" height="38" rx="19"/>
@@ -113,9 +113,9 @@
 <rect class="d-node d-node--focus" x="374.5" y="658" width="177" height="53" rx="3"/>
 <text class="d-label d-label--strong" x="463" y="677.5">core</text>
 <text class="d-note d-note--focus" x="463" y="693.5">checks, versions, diffs</text>
-<rect class="d-node" x="187.5" y="535" width="102" height="53" rx="3"/>
-<text class="d-label" x="238.5" y="554.5">installer</text>
-<text class="d-note" x="238.5" y="570.5">update gate</text>
+<rect class="d-node" x="170.8" y="535" width="152" height="53" rx="3"/>
+<text class="d-label" x="246.8" y="554.5">installer</text>
+<text class="d-note" x="246.8" y="570.5">holds risky updates</text>
 <path class="d-node" d="M402 795 A60.5 6 0 0 1 523 795 V842 A60.5 6 0 0 1 402 842 Z"/>
 <path class="d-node-detail" d="M402 795 A60.5 6 0 0 0 523 795"/>
 <text class="d-label" x="462.5" y="814.5">Catalog</text>
@@ -127,9 +127,9 @@
 <text class="d-edge-label" x="503.3" y="267.5">tool calls</text>
 <text class="d-edge-label" x="398.5" y="153.5">commands</text>
 <text class="d-edge-label" x="585" y="561.5">publish, discover, retrieve</text>
-<text class="d-edge-label" x="346.5" y="506.5">install, update</text>
+<text class="d-edge-label" x="354.8" y="506.5">install, update</text>
 <text class="d-edge-label" x="285.5" y="490.5">accept held change</text>
-<text class="d-edge-label" x="307" y="614">fetch versions</text>
+<text class="d-edge-label" x="323.7" y="614">fetch versions</text>
 <text class="d-edge-label" x="511" y="734.4">reads, writes</text>
 <text class="d-edge-label" x="291.8" y="670.5">writes checked files</text>
 </svg>

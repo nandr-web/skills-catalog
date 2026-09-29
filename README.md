@@ -162,19 +162,19 @@ Nothing to clean up: every step deletes its temporary folders. To remove everyth
 
 | | |
 |---|---|
-| **Built** | The core catalog: publish (all-or-nothing, owner-only), versions with fingerprints, keyword search that says when nothing matches exactly, reading a skill, history, diffs with risk flags, a local SQLite + file store behind replaceable parts. The assistant's tools (MCP): find, read, compare and publish skills (a preview first, then the person's yes), and install, update and list them. The installer, with the update gate: an update that adds a script, a file that isn't Markdown, new tool permissions or a new publisher waits for the person's yes. A CLI for the person: `install`, `list` and `update` (with `--accept` for a held update). |
-| **Next** | One guided `setup` command, more kinds of risky change for the update gate, and the rest of the CLI. Designed in [docs/contract.md](docs/contract.md). |
+| **Built** | The core catalog: publish (all-or-nothing, owner-only), versions with fingerprints, keyword search that says when nothing matches exactly, reading a skill, history, diffs with risk flags, a local SQLite + file store behind replaceable parts. The assistant's tools (MCP): find, read, compare and publish skills (a preview first, then the person's yes), and install, update and list them. The installer holds risky updates until the person says yes: an update is risky when it adds a script, a file that isn't Markdown, new tool permissions or a new publisher. A CLI for the person: `install`, `list` and `update` (with `--accept` for a held update). |
+| **Next** | One guided `setup` command, more kinds of risky change to hold, and the rest of the CLI. Designed in [docs/contract.md](docs/contract.md). |
 | **Later** | A web UI with a delta view, a hosted catalog in AWS, bundles, agent reviewers. |
 
 ## How it works
 
 The parts on the developer's machine:
 
-![The parts on the developer's machine: the Developer asks the Assistant, which calls the MCP server's tools; the Developer runs the CLI; both reach the installer (with its update gate) and the core, which reads and writes the Catalog (SQLite and files); the installer writes checked files into the skills folder](docs/pictures/parts.svg)
+![The parts on the developer's machine: the Developer asks the Assistant, which calls the MCP server's tools; the Developer runs the CLI; both reach the installer, which holds risky updates, and the core, which reads and writes the Catalog (SQLite and files); the installer writes checked files into the skills folder](docs/pictures/parts.svg)
 
 Two developers, one catalog, in order:
 
-![Developer 1 publishes v1; Developer 2 asks their Assistant for a release-notes skill; it discovers and retrieves it through the update gate; Developer 1 publishes v2 with a script; on update, a text-only change applies on its own, but one that can run something is held and shown until Developer 2 accepts it in a terminal](docs/pictures/two-developers.svg)
+![Developer 1 publishes v1; Developer 2 asks their Assistant for a release-notes skill; it discovers it and the installer retrieves it; Developer 1 publishes v2 with a script; on update, a text-only change applies on its own, but one that can run something is held and shown until Developer 2 accepts it in a terminal](docs/pictures/two-developers.svg)
 
 ## Read more
 

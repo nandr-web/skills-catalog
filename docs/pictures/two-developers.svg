@@ -120,8 +120,8 @@
 <path class="d-node" d="M239.6 26 A44 6 0 0 1 327.6 26 V58 A44 6 0 0 1 239.6 58 Z"/>
 <path class="d-node-detail" d="M239.6 26 A44 6 0 0 0 327.6 26"/>
 <text class="d-label" x="283.6" y="45">Catalog</text>
-<rect class="d-node" x="382.8" y="20" width="112" height="38" rx="3"/>
-<text class="d-label" x="438.8" y="39">update gate</text>
+<rect class="d-node" x="390.3" y="20" width="97" height="38" rx="3"/>
+<text class="d-label" x="438.8" y="39">installer</text>
 <rect class="d-node" x="584.7" y="20" width="97" height="38" rx="3"/>
 <text class="d-label" x="633.2" y="39">Assistant</text>
 <rect class="d-node" x="784.8" y="20" width="112" height="38" rx="3"/>
