@@ -152,30 +152,43 @@ function startOf(pid: number): number | undefined {
   return Date.now() - (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
 }
 
-/** The lock file as found: its stat (never through a link) and who holds it, when that can be read. */
-function heldBy(path: string): { st: Stats; holder?: Holder } | undefined {
-  const st = lstatOr(path);
-  if (!st) return undefined;
-  if (!st.isFile()) return { st };
+/** A file's text, read without following a link, or undefined when it can't be read. */
+function textOf(path: string): string | undefined {
   try {
     const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
     try {
-      const h = JSON.parse(readFileSync(fd, 'utf8'));
-      return Number.isSafeInteger(h?.pid) && h.pid > 0 && Number.isFinite(h?.started) ? { st, holder: { pid: h.pid, started: h.started } } : { st };
+      return readFileSync(fd, 'utf8');
     } finally {
       closeSync(fd);
     }
   } catch {
-    return { st };
+    return undefined;
+  }
+}
+
+/** The lock file as found: its stat (never through a link), its text, and who holds it, when that can be read. */
+function heldBy(path: string): { st: Stats; text?: string; holder?: Holder } | undefined {
+  const st = lstatOr(path);
+  if (!st) return undefined;
+  if (!st.isFile()) return { st };
+  const text = textOf(path);
+  try {
+    const h = JSON.parse(text ?? '');
+    return Number.isSafeInteger(h?.pid) && h.pid > 0 && Number.isFinite(h?.started) ? { st, text, holder: { pid: h.pid, started: h.started } } : { st, text };
+  } catch {
+    return { st, text };
   }
 }
 
 /** A lock whose holder is gone, or whose process id now belongs to a process started at another time; one whose holder
- *  can't be read (a run stopped between making it and writing it) once it's older than the wait. */
+ *  can't be read (a run stopped between making it and writing it) once it's older than the wait; and one naming this
+ *  very process, which it left behind (a pid reused after a crash): once taken, a change is made in one synchronous step,
+ *  so no call of this process holds the lock while another waits. */
 function isStale(found: { st: Stats; holder?: Holder }): boolean {
   if (!found.st.isFile()) return false;
   const h = found.holder;
   if (!h) return Date.now() - found.st.mtimeMs > LOCK_WAIT_MS;
+  if (h.pid === process.pid) return true;
   try {
     process.kill(h.pid, 0);
   } catch (e) {
@@ -185,10 +198,14 @@ function isStale(found: { st: Stats; holder?: Holder }): boolean {
   return started !== undefined && Math.abs(started - h.started) > SAME_START_MS;
 }
 
-/** Removes the lock file only while it's the same file, a regular one owned by this user. */
-function removeIfSame(path: string, was: Stats): boolean {
+/** Removes the lock file only while it's the same file, a regular one owned by this user, unchanged since it was looked at:
+ *  the same inode, change and birth times, and (when it was read) the same text. A file replaced or written over in
+ *  between, even on a reused inode, is someone else's lock now. */
+function removeIfSame(path: string, was: Stats, text?: string): boolean {
   const st = lstatOr(path);
   if (!st || !st.isFile() || st.dev !== was.dev || st.ino !== was.ino || st.uid !== process.getuid?.()) return false;
+  if (st.ctimeMs !== was.ctimeMs || st.birthtimeMs !== was.birthtimeMs) return false;
+  if (text !== undefined && textOf(path) !== text) return false;
   unlinkSync(path);
   return true;
 }
@@ -218,7 +235,7 @@ export async function withLock<T>(home: string, now: () => number, change: (lock
     }
     const found = heldBy(path);
     if (!found) continue;
-    if (isStale(found) && removeIfSame(path, found.st)) continue;
+    if (isStale(found) && removeIfSame(path, found.st, found.text)) continue;
     if (now() >= deadline) throw new CatalogError('lock_busy', { path, pid: found.holder?.pid ?? null });
     await wait(LOCK_RETRY_MS);
   }

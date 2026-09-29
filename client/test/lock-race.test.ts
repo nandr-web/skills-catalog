@@ -55,15 +55,30 @@ describe('the lock file', () => {
   });
 
   it('held by a live process: waited for up to 5 seconds, then lock_busy {path, pid}, and nothing changes', async () => {
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], { stdio: 'ignore' });
+    const started = Date.now();
+    try {
+      const p = await published('alpha');
+      hold(p, child.pid!, started);
+      // A clock that moves a second each time it's read, so the wait ends at once.
+      let t = Date.parse('2026-09-29T12:00:00Z');
+      const e = await install(ctxFor(p, () => new Date((t += 1000))), { name: 'alpha' }).catch((x: unknown) => x);
+      expect([(e as CatalogError).code, (e as CatalogError).data]).toEqual(['lock_busy', { path: lockPath(p), pid: child.pid }]);
+      expect(existsSync(join(p.osHome, '.claude', 'skills', 'alpha'))).toBe(false);
+      expect(existsSync(join(p.home, 'lock.json'))).toBe(false);
+      expect(JSON.parse(readFileSync(lockPath(p), 'utf8'))).toEqual({ pid: child.pid, started });
+    } finally {
+      child.kill();
+    }
+  });
+
+  // Every change is made in one synchronous step once the lock is taken, so no call of this process can be holding it
+  // while another waits: a lock naming this process is one it left behind (a pid reused after a crash), and stale.
+  it('naming this very process, started when it was: left behind, taken', async () => {
     const p = await published('alpha');
     hold(p, process.pid, startedHere);
-    // A clock that moves a second each time it's read, so the wait ends at once.
-    let t = Date.parse('2026-09-29T12:00:00Z');
-    const e = await install(ctxFor(p, () => new Date((t += 1000))), { name: 'alpha' }).catch((x: unknown) => x);
-    expect([(e as CatalogError).code, (e as CatalogError).data]).toEqual(['lock_busy', { path: lockPath(p), pid: process.pid }]);
-    expect(existsSync(join(p.osHome, '.claude', 'skills', 'alpha'))).toBe(false);
-    expect(existsSync(join(p.home, 'lock.json'))).toBe(false);
-    expect(JSON.parse(readFileSync(lockPath(p), 'utf8'))).toEqual({ pid: process.pid, started: startedHere });
+    expect((await install(ctxFor(p), { name: 'alpha' })).outcome).toBe('installed');
+    expect(existsSync(lockPath(p))).toBe(false);
   });
 
   // A holder this user can't signal (another user's process, here root's pid 1) is alive all the same: waited for, never

@@ -3,7 +3,7 @@
   "files": [
     {
       "file": "test/installer-race-sweep.test.ts",
-      "covers": "links swapped in and out at every check an install or an update makes (up to the 64th; installer-race.test.ts runs the same sweeps to the 16th in the fast group)",
+      "covers": "links swapped in and out at every check an install or an update makes (up to the 64th; installer-race.test.ts runs the same sweeps to the 18th in the fast group)",
       "seconds": {
         "alone": 5.2,
         "full_run": 11.9
@@ -19,6 +19,15 @@
         "full_run": 13.3
       },
       "load": 38,
+      "measured": "2026-09-29"
+    },
+    {
+      "file": "test/lock-writer.test.ts",
+      "covers": "one writer at a time on the installed-skills lock (golden histories.lock_writer), with real waits: a lock held past the 5 s wait or released within it, stale, unreadable, a link, a folder, replaced or written over before its removal, two writers, reads take no lock",
+      "seconds": {
+        "alone": 22.8
+      },
+      "load": 4,
       "measured": "2026-09-29"
     }
   ]
