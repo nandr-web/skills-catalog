@@ -26,6 +26,7 @@ import { logAccept, update } from './commands/update.ts';
 import { versions } from './commands/versions.ts';
 import { recordUsage } from '../usage/record.ts';
 import { readOnlyContext } from './read-only.ts';
+import { PROCESS_COMMANDS } from './process.ts';
 import { cliWords } from './words.ts';
 
 export type { Io } from './command.ts';
@@ -33,13 +34,18 @@ export type { Io } from './command.ts';
 /** The commands, keyed by the word after the command's name (as the words file's CLI names write it). */
 export const COMMANDS: Record<string, Command> = { search, read, versions, diff, install, list, update, policy, stats };
 
-/** Every flag a command takes (no leading --), --as included. */
-export const flagsFor = (word: string): string[] => [...Object.keys(COMMANDS[word]?.flags ?? {}), 'as'];
+/** Every command word served: the operation commands and the process commands (process.ts). */
+export const SERVED: readonly string[] = [...Object.keys(COMMANDS), ...Object.keys(PROCESS_COMMANDS)];
 
-/** The commands this CLI serves, as the words file names them, and the MCP server. */
+/** Every flag a command takes (no leading --): an operation command's with --as; a process command's own. */
+export const flagsFor = (word: string): string[] =>
+  Object.hasOwn(PROCESS_COMMANDS, word) ? [...PROCESS_COMMANDS[word]!.flags] : [...Object.keys(COMMANDS[word]?.flags ?? {}), 'as'];
+
+/** The commands this CLI serves, as the words file names them, and the process commands (the MCP server, the page). */
 export function usage(s: Words): string {
   const served = Object.values(s.names).filter((n) => Object.keys(COMMANDS).includes(n.split(' ')[1] ?? ''));
-  return `${s.cli}\n${served.map((n) => `  ${n}`).join('\n')}\n  ${s.cli} mcp\n`;
+  const processes = Object.entries(PROCESS_COMMANDS).map(([word, p]) => [s.cli, word, ...p.flags.map((f) => (f === 'port' ? '[--port N]' : `[--${f}]`))].join(' '));
+  return `${s.cli}\n${served.map((n) => `  ${n}`).join('\n')}\n${processes.map((n) => `  ${n}`).join('\n')}\n`;
 }
 
 // The command line as the person would type it, without the developer to act as (they are that developer).
