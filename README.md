@@ -192,9 +192,9 @@ Nothing to clean up: every step deletes its temporary folders. To remove everyth
 
 | | |
 |---|---|
-| **Built** | The core catalog: publish (all-or-nothing, owner-only), versions with fingerprints, keyword search that says when nothing matches exactly, reading a skill, history, diffs with risk flags, a local SQLite + file store behind replaceable parts. The assistant's tools (MCP): find, read, compare and publish skills (a preview first, then the person's yes), and install, update and list them. The installer holds risky updates until the person says yes: an update is risky when it adds a script, a file that isn't Markdown, new tool permissions or a new publisher. A CLI for the person: `install`, `list` and `update` (with `--accept` for a held update). |
-| **Next** | One guided `setup` command, more kinds of risky change to hold, and the rest of the CLI. Designed in [docs/contract.md](docs/contract.md). |
-| **Later** | A web UI with a delta view, a hosted catalog in AWS, bundles, agent reviewers. |
+| **Built** | The core catalog: publish (all-or-nothing, owner-only), versions with fingerprints, keyword search that says when nothing matches exactly, reading a skill, history, diffs with risk flags, a local SQLite + file store behind replaceable parts. The assistant's tools (MCP): find, read, compare and publish skills (a preview first, then the person's yes), and install, update and list them. The installer holds risky updates until the person says yes: an update is risky when it adds a script, a file that isn't Markdown, new tool permissions or a new publisher. A CLI for the person: `install`, `list` and `update` (with `--accept` for a held update). A hosted catalog: the API on Lambda with DynamoDB and S3, its AWS stack in CDK (synthesized and checked by cdk-nag, not deployed yet), and the client for it (`SKILLS_CATALOG=https://…`, `skills-catalog login` with GitHub). |
+| **Next** | The first deploy to AWS (the stack is built and checked offline; `npm run deploy-plan` in `infra/` prints every step, and nothing is deployed without the owner's go), one guided `setup` command, more kinds of risky change to hold. Designed in [docs/contract.md](docs/contract.md). |
+| **Later** | A web UI with a delta view, bundles, agent reviewers. |
 
 ## How it works
 

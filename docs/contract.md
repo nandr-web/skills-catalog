@@ -1339,6 +1339,11 @@ with a seamless/discreet label saying for demo purposes)."
 
 - `SKILLS_CATALOG` (or `--catalog`): `file:///…` selects the local adapter, `https://…` the hosted one.
 - `SKILLS_HOME` (or `--home`): the client's config, lock file and credentials.
+- `SKILLS_TOKEN`: a hosted catalog's Bearer token; without it, the one `skills-catalog login` saved in
+  `$SKILLS_HOME/token` (0600). `skills-catalog login` signs in with GitHub's device flow (the app's client id from
+  `--client-id` or `SKILLS_GITHUB_CLIENT_ID`), trades GitHub's token for the catalog's with `sign_in_with_github`, and
+  saves only the catalog's; `login --with-token` saves one read from stdin; `logout` deletes it. Without a token every
+  call to a hosted catalog is `unauthenticated`.
 - `SKILLS_INSTALL_DIR`: overrides where the user target's skills land (tests point it into the sandbox); the project
   target is unaffected. It must be an absolute path (a relative one is `invalid_request` {field: `SKILLS_INSTALL_DIR`,
   why: `not_absolute`}). It stands in for `<root>/.claude/skills`: §4.5's checks run on it and its parent, and the folder
@@ -1403,8 +1408,9 @@ fingerprint and a name or version too: one or the other), `not_uploaded` (a host
 hasn't been uploaded, §1.1), `not_sha256` (a file named by something that isn't a sha256, 64 lowercase hex characters, in
 a request for upload links or a hosted publish; checked before anything is looked up), `token_only` (the local `X-Skills-Catalog-As` header sent to a hosted catalog, where
 who's asking comes only from the token, §1.1), and `not_a_catalog_url` (a catalog location that is neither a local
-folder nor a catalog address). A hosted catalog address, where only a local one is built, is `forbidden` {catalog, why:
-`hosted_not_available`}.
+folder nor a catalog address). A hosted catalog address given to `serve` (the local web page serves a local catalog
+only) is `forbidden` {catalog, why: `hosted_not_available`}; the CLI and the MCP server reach a hosted catalog over its
+web API (§1.1) with the person's token (§8).
 
 **`person_only`** (CLI, exit 3): a step only the person may take, asked for with no terminal: `update <name> --accept`,
 `--allow-suspected-secrets`, `clear-kept`, and `publish <folder>` given none of the preview's values (at a terminal it shows the preview and asks "Publish? (y/N)", taking y or yes in any case). A publish given some of the preview's values but not all is an incomplete request: `invalid_request` {field, why: `required`}, exit 1. Nothing is done; the output gives the exact command
