@@ -2,10 +2,10 @@
 // every ending (pass, fail, timeout, SIGINT), after snapshot, and any difference fails the run (qa-plan §6; brief §1).
 // Everything runs on a fake machine (test/machine.ts); the check on the real machine is a script run by hand
 // (test/live/qa-run-real.ts), never a test.
-import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { qaRun } from '../src/run.ts';
 import { compare, snapshot, watchOn } from '../src/check.ts';
 import { sandboxBase } from '../src/sandbox.ts';
@@ -90,11 +90,21 @@ describe('qa run', () => {
 
   it('[6] a process that escapes the run\'s process group fails the run, and is stopped', async () => {
     const m = machine();
+    // The test stops its own fixture, never through the code under test: if the check it tests fails to see the listener
+    // (a sandbox that hides environments), stopEscaped can't either. By its exact pid, and only while that pid is still
+    // this listener; the listener also ends itself after a minute.
+    onTestFinished(() => {
+      const file = join(m.tmp, 'escaped.pid');
+      if (!existsSync(file)) return;
+      const pid = Number(readFileSync(file, 'utf8'));
+      const command = spawnSync('/bin/ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' }).stdout ?? '';
+      if (pid > 0 && command.includes('QA-ESCAPED-LISTENER')) try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ }
+    });
     // the command starts a listener in a process group of its own, then exits 0 once it listens (it says so on stdout),
     // so the after snapshot sees the port however long the listener took to start
     const r = await qaRun({
       machine: m,
-      command: node(`const c = require('child_process').spawn(process.execPath, ['-e', "require('net').createServer().listen(0, '127.0.0.1', () => console.log('listening'))"], { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
+      command: node(`const c = require('child_process').spawn(process.execPath, ['-e', "require('net').createServer().listen(0, '127.0.0.1', () => console.log('listening')); setTimeout(() => process.exit(0), 60000) /* QA-ESCAPED-LISTENER */"], { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
         require('fs').writeFileSync(require('path').join(process.env.QA_SANDBOX, '..', '..', 'escaped.pid'), String(c.pid)); c.stdout.once('data', () => process.exit(0));`),
     });
     expect(r.status).toBe('leak');
