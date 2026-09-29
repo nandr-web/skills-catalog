@@ -5,7 +5,7 @@
 // process a run starts carries its QA_RUN_ID). Any difference fails the run. It only reads.
 import { spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { slug } from './leftovers.ts';
 import { pidFrom } from './pids.ts';
@@ -25,11 +25,12 @@ export type Watch = Roots & {
 };
 
 /** ps and lsof by their full paths, never whichever copy PATH finds first, and found when a run's PATH has none (macOS
- *  and Linux keep them in different places). A path that isn't there makes the check blind, and a run is refused. */
-export type Tools = { ps: string; lsof: string };
+ *  and Linux keep them in different places). A path that isn't there makes the check blind, and a run is refused. On
+ *  Linux, a run's processes are listed from /proc (`proc`) instead of ps, whose -E (the environment) is BSD's. */
+export type Tools = { ps: string; lsof: string; proc?: string };
 const system = (...paths: string[]) => paths.find((p) => existsSync(p)) ?? paths[0]!;
 export const PS = system('/bin/ps', '/usr/bin/ps');
-export const DEFAULT_TOOLS: Tools = { ps: PS, lsof: system('/usr/sbin/lsof', '/usr/bin/lsof', '/sbin/lsof') };
+export const DEFAULT_TOOLS: Tools = { ps: PS, lsof: system('/usr/sbin/lsof', '/usr/bin/lsof', '/sbin/lsof'), ...(process.platform === 'linux' ? { proc: '/proc' } : {}) };
 
 /** The check can't see this machine's processes or ports: a run is refused, never passed blind. */
 export class CheckBlind extends Error {
@@ -102,6 +103,7 @@ function readJson(path: string): Record<string, unknown> {
  *  command line (shown to its owner); the command line without -E is taken off the front, so a mention in the
  *  arguments doesn't count. */
 export function runProcesses(runId: string, tools: Tools = DEFAULT_TOOLS): { pid: number; command: string }[] {
+  if (tools.proc) return procProcesses(runId, tools.proc);
   const lines = (withEnv: boolean) => {
     const r = run(tools.ps, [...(withEnv ? ['-E'] : []), '-x', '-o', 'pid=,command='], (status) => status === 0);
     return new Map((r.stdout ?? '').split('\n').flatMap((line) => { const m = line.match(/^\s*(\d+) (.*)$/); const pid = m ? pidFrom(m[1]) : undefined; return pid ? [[pid, m![2]] as [number, string]] : []; }));
@@ -112,6 +114,32 @@ export function runProcesses(runId: string, tools: Tools = DEFAULT_TOOLS): { pid
     const command = plain.get(pid);
     if (pid === process.pid || command === undefined || !line.startsWith(command)) return [];
     return mark.test(line.slice(command.length)) ? [{ pid, command: command.slice(0, 80) }] : [];
+  });
+}
+
+/** Linux: this user's processes whose environment holds exactly QA_RUN_ID=<runId>, read from /proc/<pid>/environ (one
+ *  NUL-ended entry per variable, readable only for a process of this user's), with the command line from
+ *  /proc/<pid>/cmdline. A /proc that can't be listed makes the check blind; a process that ends meanwhile, or can't be
+ *  read, isn't listed. */
+export function procProcesses(runId: string, proc = '/proc', uid = process.getuid?.()): { pid: number; command: string }[] {
+  let names: string[];
+  try {
+    names = readdirSync(proc);
+  } catch (e) {
+    throw new CheckBlind(`the before/after check can't list ${proc} (${(e as NodeJS.ErrnoException).code ?? 'error'}), so it can't see what a run leaves behind; nothing was run`);
+  }
+  const mark = `QA_RUN_ID=${runId}`;
+  return names.flatMap((name) => {
+    const pid = Number(name);
+    if (!/^[0-9]+$/.test(name) || pid === process.pid) return [];
+    try {
+      if (statSync(join(proc, name)).uid !== uid) return [];
+      if (!readFileSync(join(proc, name, 'environ'), 'utf8').split('\0').includes(mark)) return [];
+      const command = readFileSync(join(proc, name, 'cmdline'), 'utf8').split('\0').filter(Boolean).join(' ');
+      return [{ pid, command: command.slice(0, 80) }];
+    } catch {
+      return [];   // ended meanwhile, or not readable
+    }
   });
 }
 
@@ -144,7 +172,7 @@ export async function checkSees(runId: string, tools: Tools = DEFAULT_TOOLS): Pr
       marker.stdout!.once('data', (b) => (clearTimeout(t), ok(String(b).trim())));
     });
     if (!runProcesses(runId, tools).some((p) => p.pid === marker.pid)) {
-      throw new CheckBlind(`the before/after check can't see this run's own marker process with ${tools.ps}, so it would miss a process a run leaves behind; nothing was run`);
+      throw new CheckBlind(`the before/after check can't see this run's own marker process with ${tools.proc ?? tools.ps}, so it would miss a process a run leaves behind; nothing was run`);
     }
     if (!listening([marker.pid!], tools).some((l) => l.addr === `127.0.0.1:${port}`)) {
       throw new CheckBlind(`the before/after check can't see the port this run's own marker process listens on with ${tools.lsof}, so it would miss a port a run leaves open; nothing was run`);
