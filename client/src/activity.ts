@@ -40,11 +40,6 @@ export function activityLine(a: Activity, resultWidth: number): string {
   return `${a.at.toISOString().slice(11, 19)}  ${(a.who ?? '-').padEnd(4)}  ${a.tool.padEnd(27)}  ${a.result.padEnd(resultWidth)}  ${a.target}\n`;
 }
 
-/** Appends one line. The folder is made 0700 if it's missing, and tightened to 0700 when it's the client's own
- *  (`ownFolder`, SKILLS_HOME: a folder the person named with SKILLS_ACTIVITY_LOG is theirs, e.g. /tmp, and left alone);
- *  the file is 0600, tightened if it was looser. Only a regular file of this user's with no other name is written: a link in the log's place is never
- *  followed (O_NOFOLLOW), and a FIFO or other special file never blocks the server (O_NONBLOCK, then fstat); the line
- *  is dropped instead. One write per line, with O_APPEND, so two servers appending at once never tear a line. */
 // The client's own folder tightened to 0700 when looser: checked and changed through a handle opened without following
 // a link (a link in its place is left alone, and so is its target), and only when this user owns it. Never by path, so
 // nothing swapped in between a check and the change is ever changed.
@@ -64,6 +59,12 @@ function tightenOwnFolder(dir: string): void {
 // A log file this user owns, with no other name (a hard link would put the line, and the mode change, somewhere else).
 const ours = (st: Stats) => st.isFile() && st.nlink === 1 && st.uid === process.getuid?.();
 
+/** Appends one line. The folder is made 0700 if it's missing, and tightened to 0700 when it's the client's own
+ *  (`ownFolder`, SKILLS_HOME: a folder the person named with SKILLS_ACTIVITY_LOG is theirs, e.g. /tmp, and left alone);
+ *  the file is 0600, tightened if it was looser. Only a regular file of this user's with no other name is written: a
+ *  link in the log's place is never followed (O_NOFOLLOW), and a FIFO or other special file never blocks the server
+ *  (O_NONBLOCK, then fstat); the line is dropped instead. One write per line, with O_APPEND, so two servers appending
+ *  at once never tear a line. */
 export function appendActivity(path: string, a: Activity, o: { ownFolder?: boolean; resultWidth: number }): void {
   try {
     const dir = dirname(path);
