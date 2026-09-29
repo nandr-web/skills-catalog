@@ -1,11 +1,12 @@
 // The lock file around every change to lock.json (contract §4.5, "One writer at a time"): a stale one is taken, a live one
 // waited for, then lock_busy. Two real processes at once: lock-race-processes.test.ts (slow).
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CatalogError, Surface, actAs } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
+import { holdLock, withLock } from '../src/machine/lock.ts';
 import { contextFor, type Context } from '../src/operations.ts';
 import { settingsFrom } from '../src/settings.ts';
 import { open, request, skillMd } from './seed.ts';
@@ -72,8 +73,8 @@ describe('the lock file', () => {
     }
   });
 
-  // Every change is made in one synchronous step once the lock is taken, so no call of this process can be holding it
-  // while another waits: a lock naming this process is one it left behind (a pid reused after a crash), and stale.
+  // A lock naming this process that no hold of this process has is one it left behind (a pid reused after a crash), and
+  // stale.
   it('naming this very process, started when it was: left behind, taken', async () => {
     const p = await published('alpha');
     hold(p, process.pid, startedHere);
@@ -135,5 +136,67 @@ describe('the lock file', () => {
       else process.env['TZ'] = tz;
       child.kill();
     }
+  });
+});
+
+// Two calls of one process (an install while an update holds the lock, in one MCP server) take turns like two runs: the
+// second waits for the first's release, then takes the lock itself, and the file stays while either holds it.
+describe('the lock file, between calls of one process', () => {
+  const home = () => {
+    const p = place();
+    mkdirSync(p.home, { recursive: true, mode: 0o700 });
+    return p.home;
+  };
+  const lockPath = (h: string) => join(h, 'lock.json.lock');
+  const holder = (h: string) => JSON.parse(readFileSync(lockPath(h), 'utf8')) as { pid: number };
+  const settle = () => new Promise((done) => setTimeout(done, 150));
+
+  it('a second call starting while the first is taking the lock waits for it, and never takes the first\'s file for a leftover', async () => {
+    const h = home();
+    const first = holdLock(h, Date.now);
+    const second = holdLock(h, Date.now);
+    const one = first.change(() => 1);
+    let secondDone = false;
+    const two = second.change(() => 2).then((x) => ((secondDone = true), x));
+    await one;
+    const firstFile = statSync(lockPath(h)).ino;
+    await settle();
+    expect(secondDone).toBe(false);
+    expect(statSync(lockPath(h)).ino).toBe(firstFile);
+    first.release();
+    expect(await two).toBe(2);
+    expect(holder(h).pid).toBe(process.pid);
+    second.release();
+    expect(existsSync(lockPath(h))).toBe(false);
+  });
+
+  it('a call that starts while another holds the lock waits for its release, so the file stays until the last hold ends', async () => {
+    const h = home();
+    const update = holdLock(h, Date.now);
+    await update.change(() => undefined);
+    const install = holdLock(h, Date.now);
+    let installed = false;
+    const done = install.change(() => (installed = true));
+    await settle();
+    expect(installed).toBe(false);
+    update.release();
+    await done;
+    expect(installed).toBe(true);
+    expect(existsSync(lockPath(h))).toBe(true);
+    install.release();
+    expect(existsSync(lockPath(h))).toBe(false);
+  });
+
+  it('a call still waiting when the 5 seconds are up refuses with lock_busy naming this process, and the holder keeps the lock', async () => {
+    const h = home();
+    const update = holdLock(h, Date.now);
+    await update.change(() => undefined);
+    // A clock that moves a second each time it's read, so the wait ends at once.
+    let t = Date.parse('2026-09-29T12:00:00Z');
+    const e = await withLock(h, () => (t += 1000), () => undefined).catch((x: unknown) => x);
+    expect([(e as CatalogError).code, (e as CatalogError).data]).toEqual(['lock_busy', { path: lockPath(h), pid: process.pid }]);
+    expect(holder(h).pid).toBe(process.pid);
+    update.release();
+    expect(existsSync(lockPath(h))).toBe(false);
   });
 });

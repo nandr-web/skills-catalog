@@ -216,31 +216,54 @@ function removeIfSame(path: string, was: Stats, text?: string): boolean {
   return true;
 }
 
-// Lock files this process holds across awaits (an update of several skills). Another call of this process changes the
-// lock under that hold without waiting: each change is one synchronous step, so none can come between another's read
-// and write. Only a lock file of this process that isn't held here is one it left behind.
+// Lock files a hold of this process has (an update holds one across awaits). One hold at a time: another call of this
+// process waits for its release like another run would. A file is marked here in the same synchronous step that makes
+// it, so no call can find the file and not the mark; only a lock file of this process that isn't held here is one it
+// left behind.
 const heldHere = new Set<string>();
 
-/** Takes $SKILLS_HOME/lock.json.lock: made only if absent, holding this process's id and start. A lock held by another run
+/** Makes the lock file, holding this process's id and start, and marks it held here, all in one synchronous step; undefined
+ *  when a lock file is already there. A file whose holder couldn't be written is removed again, never left empty. */
+function create(path: string): Stats | undefined {
+  let fd: number;
+  try {
+    fd = openSync(path, 'wx', 0o600);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'EEXIST') return undefined;
+    throw e;
+  }
+  try {
+    try {
+      writeSync(fd, JSON.stringify({ pid: process.pid, started: startedHere() }));
+    } catch (e) {
+      const made = fstatSync(fd);
+      const there = lstatOr(path);
+      if (there && there.dev === made.dev && there.ino === made.ino) unlinkSync(path);
+      throw e;
+    }
+    const mine = fstatSync(fd);
+    heldHere.add(path);
+    return mine;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** Takes $SKILLS_HOME/lock.json.lock: made only if absent. A lock held by another run, or by another call of this process,
  *  is waited for up to 5 seconds, then lock_busy {path, pid}; a stale one is removed and taken. */
 async function take(path: string, now: () => number): Promise<Stats> {
   const deadline = now() + LOCK_WAIT_MS;
   for (;;) {
-    try {
-      const fd = openSync(path, 'wx', 0o600);
-      try {
-        writeSync(fd, JSON.stringify({ pid: process.pid, started: startedHere() }));
-        return fstatSync(fd);
-      } finally {
-        closeSync(fd);
-      }
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+    let pid: number | null = process.pid;
+    if (!heldHere.has(path)) {
+      const mine = create(path);
+      if (mine) return mine;
+      const found = heldBy(path);
+      if (!found) continue;
+      if (isStale(found) && removeIfSame(path, found.st, found.text)) continue;
+      pid = found.holder?.pid ?? null;
     }
-    const found = heldBy(path);
-    if (!found) continue;
-    if (!heldHere.has(path) && isStale(found) && removeIfSame(path, found.st, found.text)) continue;
-    if (now() >= deadline) throw new CatalogError('lock_busy', { path, pid: found.holder?.pid ?? null });
+    if (now() >= deadline) throw new CatalogError('lock_busy', { path, pid });
     await wait(LOCK_RETRY_MS);
   }
 }
@@ -255,10 +278,7 @@ export function holdLock(home: string, now: () => number): { change<T>(fn: (lock
   return {
     async change<T>(fn: (lock: Lock) => T): Promise<T> {
       mkdirSync(home, { recursive: true, mode: 0o700 });
-      if (!mine && !heldHere.has(path)) {
-        mine = await take(path, now);
-        heldHere.add(path);
-      }
+      mine ??= await take(path, now);
       const lock = readLock(home);
       const out = fn(lock);
       writeLock(home, lock);
