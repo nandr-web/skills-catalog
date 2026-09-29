@@ -41,6 +41,9 @@ export function skillsDir(ctx: Context, t: Target): string {
   return dir;
 }
 const destOf = (ctx: Context, t: Target, name: string) => join(skillsDir(ctx, t), name);
+/** Each call on the installed skills checks the user folder's setting first, before the lock, the config or the catalog
+ *  is read: every one of them needs that folder (a project install to check the name there too). */
+const userFolderChecked = (ctx: Context) => void skillsDir(ctx, 'user');
 
 function isLink(path: string): boolean {
   try {
@@ -511,6 +514,7 @@ export type Pending = {
 };
 
 export async function pendingHold(ctx: Context, name: string, target: Target = 'user'): Promise<Pending | { installed: number } | null> {
+  userFolderChecked(ctx);
   const { lock, config } = readRecords(ctx.settings.home);
   const e = installedHere(ctx, lock).find((x) => x.name === name);
   const catalog = await ctx.catalog();
@@ -553,6 +557,7 @@ type InstallInput = { name: string; version?: number; target?: Target; policy?: 
 
 export async function install(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<InstallInput>('install_shared_skill', args, ctx.face, 'local');
+  userFolderChecked(ctx);
   const s = ctx.words;
   const log = logWords(s);
   const target = req.target ?? 'user';
@@ -732,6 +737,7 @@ type AcceptInput = { name: string; target: Target; version: number; confirm: str
 
 export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<AcceptInput>('accept_held_update', args, ctx.face, 'local');
+  userFolderChecked(ctx);
   const s = ctx.words;
   const { lock, config } = readRecords(ctx.settings.home);
   const t = decode(req.confirm);
@@ -774,6 +780,7 @@ type UpdateInput = { names?: string[]; dry_run?: boolean; latest?: boolean };
 
 export async function update(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<UpdateInput>('update_installed_skills', args, ctx.face, 'local');
+  userFolderChecked(ctx);
   const s = ctx.words;
   const w = s.word('update');
   const log = logWords(s);
@@ -966,6 +973,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
 }
 
 export async function list(ctx: Context): Promise<Done> {
+  userFolderChecked(ctx);
   const s = ctx.words;
   const { lock, config } = readRecords(ctx.settings.home);
   const here = installedHere(ctx, lock);
@@ -992,6 +1000,7 @@ type PolicyInput = { policy: Policy; name?: string };
 
 export async function setPolicy(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<PolicyInput>('set_skill_update_policy', args, ctx.face, 'local');
+  userFolderChecked(ctx);
   const s = ctx.words;
   const home = ctx.settings.home;
   const w = s.word('policy_set');
