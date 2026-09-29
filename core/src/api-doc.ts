@@ -3,7 +3,7 @@
 // date. The rest of the page (its narrative, examples and picture) is written by hand and never touched here.
 
 import { OPERATIONS, inputSchema, type Face, type OperationDef, type OutputSchema, type Schema } from './api.ts';
-import { COMMON_ERRORS } from './errors.ts';
+import { COMMON_ERRORS, ERROR_CODES } from './errors.ts';
 
 export const API_DOC_START = '<!-- The reference below is written by `npm run api-doc` in core/, from the operations\' definitions. Don\'t edit it by hand. -->';
 export const API_DOC_END = '<!-- End of the written reference. -->';
@@ -56,12 +56,16 @@ function inputLines(schema: Extract<Schema, { type: 'object' }>, depth: number, 
   return lines;
 }
 
+// A field that takes any error code: the error list says them all, so the reference doesn't repeat it.
+const isErrorCodes = (values: readonly string[]) => values.length === ERROR_CODES.length && ERROR_CODES.every((c) => values.includes(c));
+
 // An output's shape in words; an object's fields and a choice's forms go on the lines below it.
 function outputType(s: OutputSchema): string {
   if ('anyOf' in s) return 'one of these';
   if (!('type' in s)) return 'any value';
   switch (s.type) {
     case 'string':
+      if (s.enum && isErrorCodes(s.enum)) return 'an error code (every code: [the error list](contract.md#9-error-codes))';
       return s.enum ? `one of ${s.enum.map(code).join(', ')}` : 'text';
     case 'integer':
       return 'a whole number';

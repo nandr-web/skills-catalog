@@ -78,6 +78,8 @@ describe('the API page\'s reference section (docs/api.md)', () => {
     const read = partOf(ref, 'read_shared_skill');
     expect(read).toMatch(/`code`: an error code[^\n]*\(contract\.md#9-error-codes\)/);
     expect(read).not.toContain('`fingerprint_mismatch`');
+    // Any other field's values are said, one by one.
+    expect(partOf(ref, 'search_shared_skills')).toMatch(/`match`: one of `all`, `partial`, `none`/);
     // Limits are said: a string's length, a list's size, a number's range, the values a field takes.
     const search = partOf(ref, 'search_shared_skills');
     expect(search).toMatch(/`limit`[^\n]*1[^\n]*50/);

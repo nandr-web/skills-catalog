@@ -803,7 +803,7 @@ Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`)
     - an object with
       - `name`: text
       - `error`: an object with
-        - `code`: one of `internal_error`, `invalid_request`, `invalid_manifest`, `invalid_name`, `invalid_path`, `too_large`, `not_found`, `not_owner`, `conflict`, `forbidden`, `unauthenticated`, `exists_untracked`, `name_in_use`, `target_symlink`, `secret_suspected`, `invalid_developer_setting`, `fingerprint_mismatch`, `lock_busy`, `not_installed`, `invalid_local_file`, `target_changed`, `target_not_private`, `target_unavailable`, `assistant_file_unusable`, `assistant_file_changed`, `name_taken`, `install_unsafe`, `assistant_config_elsewhere`
+        - `code`: an error code (every code: [the error list](contract.md#9-error-codes))
   - `inline_budget`: an object with
     - `limit`: a whole number
     - `used`: a whole number
