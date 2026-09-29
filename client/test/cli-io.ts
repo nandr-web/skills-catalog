@@ -1,0 +1,41 @@
+// Runs the CLI face in-process against a sandboxed place, the way the real command would (test/cli.test.ts shows the
+// real command matches): the environment points only into the sandbox, answers stand in for the person at a terminal.
+import { join } from 'node:path';
+import { Surface } from '@skills-catalog/core';
+import { runCli, type Io } from '../src/cli/run.ts';
+import { cliSurface } from '../src/cli/words.ts';
+import type { Place } from './server.ts';
+
+export const S = cliSurface(Surface.load());
+
+export type Ran = { code: number; out: string; err: string; asked: string[] };
+
+export async function cli(p: Place, argv: string[], o: { tty?: boolean; answers?: string[]; env?: Record<string, string>; cwd?: string } = {}): Promise<Ran> {
+  const out: string[] = [];
+  const err: string[] = [];
+  const asked: string[] = [];
+  const answers = [...(o.answers ?? [])];
+  const io: Io = {
+    env: { SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, ...o.env },
+    cwd: o.cwd ?? join(p.dir, 'project'),
+    tty: o.tty ?? false,
+    ask: async (q) => {
+      asked.push(q);
+      return answers.shift() ?? '';
+    },
+    stdout: (t) => out.push(t),
+    stderr: (t) => err.push(t),
+  };
+  const code = await runCli(argv, io);
+  return { code, out: out.join(''), err: err.join(''), asked };
+}
+
+/** The activity log's last line, as its columns after the time: who, tool, result, target. */
+export async function lastLogLine(p: Place): Promise<string[]> {
+  const { readFileSync } = await import('node:fs');
+  return readFileSync(join(p.home, 'activity.log'), 'utf8').trimEnd().split('\n').at(-1)!.split(/\s{2,}/).slice(1);
+}
+
+/** A read's or a diff's fence token is made per call: the same text with every token as T. */
+export const TOKEN = { next: () => 'T' };
+export const fixedTokens = (text: string) => text.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, 'T');

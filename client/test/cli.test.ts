@@ -1,44 +1,19 @@
 // The CLI face (contract §1, §3): the registry's operations as commands, named as the surface's CLI names them. Skill
-// names and the publish folder are positional; every other input is --field-name, and a list repeats its singular flag.
-// Results go to stdout and errors to stderr, with "(Acting as …)" last on both while a developer is set; exit 0 done, 1 an
-// error, 3 needs the person. The person-only steps (update <name> --accept, --allow-suspected-secrets) ask in the person's
-// own terminal and refuse without one.
+// names are positional; every other input is --field-name (a list one comma-separated value). Results go to stdout and
+// errors to stderr, with "(Acting as …)" last on both while a developer is set; exit 0 done, 1 an error, 3 needs the
+// person. The person-only step (update <name> --accept) asks in the person's own terminal and refuses without one.
+// Each command's own behaviour: cli-commands.test.ts.
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Surface, actAs, renderError, CatalogError } from '@skills-catalog/core';
+import { actAs, renderError, CatalogError } from '@skills-catalog/core';
 import { refuseRealPlaces } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
-import { runCli, type Io } from '../src/cli/run.ts';
-import { cliSurface } from '../src/cli/words.ts';
 import { readLock } from '../src/machine/lock.ts';
+import { cli, S } from './cli-io.ts';
 import { open, request, seed, skillMd } from './seed.ts';
 import { place, type Place } from './server.ts';
-
-const S = cliSurface(Surface.load());
-
-type Ran = { code: number; out: string; err: string; asked: string[] };
-
-async function cli(p: Place, argv: string[], o: { tty?: boolean; answers?: string[]; env?: Record<string, string> } = {}): Promise<Ran> {
-  const out: string[] = [];
-  const err: string[] = [];
-  const asked: string[] = [];
-  const answers = [...(o.answers ?? [])];
-  const io: Io = {
-    env: { SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, ...o.env },
-    cwd: join(p.dir, 'project'),
-    tty: o.tty ?? false,
-    ask: async (q) => {
-      asked.push(q);
-      return answers.shift() ?? '';
-    },
-    stdout: (t) => out.push(t),
-    stderr: (t) => err.push(t),
-  };
-  const code = await runCli(argv, io);
-  return { code, out: out.join(''), err: err.join(''), asked };
-}
 
 const skills = (p: Place) => join(p.osHome, '.claude', 'skills');
 
@@ -52,24 +27,23 @@ describe('the CLI face', () => {
     expect(held).not.toMatch(/accept_held_update/);
   });
 
-  it('serves only the installer\'s commands for now: install, list, update', async () => {
+  it('serves the catalog\'s and the installer\'s commands; preview, publish and setup are still to come', async () => {
     const p = place();
-    for (const word of ['search', 'read', 'versions', 'diff', 'policy', 'publish', 'setup']) {
+    for (const word of ['preview', 'publish', 'setup', 'constructor', '__proto__']) {
       const r = await cli(p, [word, 'x']);
       expect(r.code, word).toBe(1);
     }
     const u = await cli(p, ['frobnicate']);
-    expect(u.err.split('\n').filter((l) => l.startsWith('  ')).map((l) => l.trim().split(' ')[1])).toEqual(['install', 'update', 'list', 'update', 'mcp']);
+    expect(u.err.split('\n').filter((l) => l.startsWith('  ')).map((l) => l.trim().split(' ')[1])).toEqual(['search', 'read', 'versions', 'diff', 'install', 'update', 'list', 'policy', 'update', 'mcp']);
   });
 
-  it('list with nothing installed says how to add one, naming only commands the CLI serves', async () => {
+  it('list with nothing installed says how to add one', async () => {
     const p = place();
     await seed(p);
     const r = await cli(p, ['list']);
     expect(r.code).toBe(0);
     expect(r.out.trimEnd()).toBe(S.format(S.word('status.empty')));
     expect(r.out).toContain('skills-catalog install <name>');
-    expect(r.out).not.toMatch(/skills-catalog (search|read|versions|diff|publish|policy)/);
   });
 
   it('install takes a version and a target as flags', async () => {
