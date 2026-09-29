@@ -117,11 +117,13 @@ export class LocalDb {
 // it (SQLITE_READONLY); closed cleanly, with no -wal beside it (checked again right before, since a writer may open it in
 // between), no writer of this user's can change it, so it's read as unchanging (immutable=1). Anything else that can't
 // be read throws, for the caller to name. `beforeImmutable` is a test seam that runs just before that last check.
+// Every table a read queries is checked here, so a file that lacks one fails now rather than on the first read.
 const SQLITE_READONLY = 8;
+const READ_TABLES = ['skills', 'versions', 'search_cards', 'search_fts'];
 export function openReadOnly(file: string, beforeImmutable?: () => void): DatabaseSync {
   const readable = (db: DatabaseSync) => {
     try {
-      db.prepare('SELECT count(*) FROM skills').get();
+      for (const table of READ_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
       return db;
     } catch (e) {
       db.close();
