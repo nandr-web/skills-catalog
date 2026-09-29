@@ -725,3 +725,346 @@ Commands a person runs. None is an Assistant's tool today, and none has an HTTP 
 | skills-catalog mcp | BUILT | Starts the Assistant's tools (the MCP server, over stdio) | nothing |
 
 Also planned, for later: login and logout (a hosted catalog only) and clear-kept (delete copies kept aside).
+
+## Reference: every operation, from its definition
+
+What the code takes and gives for each operation, written from its definition, so it is always current. The examples above show them in use.
+
+<!-- The reference below is written by `npm run api-doc` in core/, from the operations' definitions. Don't edit it by hand. -->
+
+### `search_shared_skills`
+
+Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`), the CLI (`cli`), HTTP (`web`). It changes nothing (`reads`).
+
+**Input**
+
+- `query`: text, at most 500 characters (optional)
+- `filters`: an object with (optional)
+  - `tags`: a list of at most 10, each text, at most 32 characters (optional)
+  - `publisher`: text, at most 200 characters (optional)
+  - `updated_since`: text, at most 40 characters (optional)
+- `limit`: a whole number from 1 to 50 (optional)
+- `cursor`: text, at most 200 characters (optional)
+
+**Output**
+
+- an object with
+  - `results`: a list, each an object with
+    - `name`: text
+    - `description`: text
+    - `latest_version`: a whole number
+    - `tags`: a list, each text
+    - `publisher`: text
+    - `matched_words`: a list, each text
+  - `match`: one of `all`, `partial`, `none`
+  - `ranking`: one of `none`, `lexical`
+  - `next_cursor`: text (not always there)
+  - `total_matches`: a whole number
+  - `catalog_size`: a whole number
+
+**Errors:** only those every call can return: `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
+
+### `read_shared_skill`
+
+Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`), the CLI (`cli`), HTTP (`web`). It changes nothing (`reads`).
+
+**Input**
+
+- `name`: text, at most 200 characters (optional)
+- `names`: a list of at most 20, each text, at most 200 characters (optional)
+- `version`: a whole number, at least 1 (optional)
+- `include`: one of `manifest`, `files`, `contents` (optional)
+- `paths`: a list of at most 20, each text, at most 4,096 characters (optional)
+
+**Output**
+
+- an object with
+  - `skills`: a list, each one of these
+    - an object with
+      - `name`: text
+      - `version`: a whole number
+      - `latest_version`: a whole number
+      - `fingerprint`: text
+      - `published_at`: text
+      - `publisher`: text
+      - `manifest`: an object with
+        - `frontmatter`: an object
+        - `body`: text (not always there)
+        - `body_omitted`: true or false (not always there)
+      - `reviews`: a list, each any value
+      - `files`: a list, each an object with (not always there)
+        - `path`: text
+        - `mode`: one of `0644`, `0755`
+        - `size`: a whole number
+        - `sha256`: text
+        - `type`: one of `text`, `binary`
+        - `content`: text (not always there)
+        - `content_omitted`: true or false (not always there)
+    - an object with
+      - `name`: text
+      - `error`: an object with
+        - `code`: one of `internal_error`, `invalid_request`, `invalid_manifest`, `invalid_name`, `invalid_path`, `too_large`, `not_found`, `not_owner`, `conflict`, `forbidden`, `unauthenticated`, `exists_untracked`, `name_in_use`, `target_symlink`, `secret_suspected`, `invalid_developer_setting`, `fingerprint_mismatch`, `lock_busy`, `not_installed`, `invalid_local_file`, `target_changed`, `target_not_private`, `target_unavailable`, `assistant_file_unusable`, `assistant_file_changed`, `name_taken`, `install_unsafe`, `assistant_config_elsewhere`
+  - `inline_budget`: an object with
+    - `limit`: a whole number
+    - `used`: a whole number
+    - `omitted`: a whole number
+
+**Errors:** `invalid_name`, `not_found`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
+
+### `list_shared_skill_versions`
+
+Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`), the CLI (`cli`), HTTP (`web`). It changes nothing (`reads`).
+
+**Input**
+
+- `name`: text, at most 200 characters (required)
+- `cursor`: text, at most 200 characters (optional)
+
+**Output**
+
+- an object with
+  - `name`: text
+  - `latest`: a whole number
+  - `versions`: a list, each an object with
+    - `version`: a whole number
+    - `fingerprint`: text
+    - `published_at`: text
+    - `publisher`: text
+    - `message`: text
+    - `flags`: a list, each an object with
+      - `kind`: one of `runnable_file`, `runs_at_load`, `command_instruction`, `capability_frontmatter`, `instructions_changed`, `non_markdown`, `new_publisher`, `prompt_injection`, `context_cost`
+      - `path`: text (not always there)
+      - `line`: a whole number (not always there)
+      - `field`: text (not always there)
+      - `from`: any value (not always there)
+      - `to`: any value (not always there)
+      - `detail`: text
+  - `next_cursor`: text (not always there)
+
+**Errors:** `invalid_name`, `not_found`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
+
+### `diff_shared_skill_versions`
+
+Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`), the CLI (`cli`), HTTP (`web`). It changes nothing (`reads`).
+
+**Input**
+
+- `name`: text, at most 200 characters (required)
+- `from`: a whole number, at least 1 (required)
+- `to`: a whole number, at least 1 (required)
+
+**Output**
+
+- an object with
+  - `name`: text
+  - `from`: a whole number
+  - `to`: a whole number
+  - `files`: a list, each an object with
+    - `path`: text
+    - `status`: one of `added`, `changed`, `removed`
+    - `flags`: an object with
+      - `binary`: true or false
+      - `executable`: true or false
+      - `script`: true or false
+    - `unified`: text (not always there)
+  - `frontmatter_changes`: a list, each an object with
+    - `field`: text
+    - `from`: any value
+    - `to`: any value
+  - `publisher_changed`: true or false
+  - `risk_flags`: a list, each an object with
+    - `kind`: one of `runnable_file`, `runs_at_load`, `command_instruction`, `capability_frontmatter`, `instructions_changed`, `non_markdown`, `new_publisher`, `prompt_injection`, `context_cost`
+    - `path`: text (not always there)
+    - `line`: a whole number (not always there)
+    - `field`: text (not always there)
+    - `from`: any value (not always there)
+    - `to`: any value (not always there)
+    - `detail`: text
+
+**Errors:** `invalid_name`, `not_found`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
+
+### `publish_version`
+
+Served by local and hosted catalogs. Called through HTTP (`web`). It changes the catalog (`writes_catalog`).
+
+**Input**
+
+- `name`: text, at most 200 characters (required)
+- `files`: a list of at most 10,000, each with (required)
+  - `path`: text, at most 4,096 characters (required)
+  - `mode`: text, at most 8 characters (required)
+  - `content_base64`: text (required)
+- `message`: text, at most 1,000 characters (optional)
+- `expected_latest`: a whole number, at least 0 (optional)
+- `dry_run`: true or false (optional)
+- `allow_suspected_secrets`: true or false (optional; CLI only: a person's own choice, never taken from the Assistant's tool or HTTP)
+
+**Output**
+
+- an object with
+  - `name`: text
+  - `version`: a whole number
+  - `fingerprint`: text
+  - `created`: true or false
+  - `dry_run`: true or false
+  - `publisher`: text
+  - `diff_from_latest`: one of these
+    - an object with
+      - `files`: a list, each an object with
+        - `path`: text
+        - `status`: one of `added`, `changed`, `removed`
+        - `flags`: an object with
+          - `binary`: true or false
+          - `executable`: true or false
+          - `script`: true or false
+        - `unified`: text (not always there)
+      - `frontmatter_changes`: a list, each an object with
+        - `field`: text
+        - `from`: any value
+        - `to`: any value
+      - `publisher_changed`: true or false
+      - `risk_flags`: a list, each an object with
+        - `kind`: one of `runnable_file`, `runs_at_load`, `command_instruction`, `capability_frontmatter`, `instructions_changed`, `non_markdown`, `new_publisher`, `prompt_injection`, `context_cost`
+        - `path`: text (not always there)
+        - `line`: a whole number (not always there)
+        - `field`: text (not always there)
+        - `from`: any value (not always there)
+        - `to`: any value (not always there)
+        - `detail`: text
+    - `null`
+  - `risk_flags`: a list, each an object with
+    - `kind`: one of `runnable_file`, `runs_at_load`, `command_instruction`, `capability_frontmatter`, `instructions_changed`, `non_markdown`, `new_publisher`, `prompt_injection`, `context_cost`
+    - `path`: text (not always there)
+    - `line`: a whole number (not always there)
+    - `field`: text (not always there)
+    - `from`: any value (not always there)
+    - `to`: any value (not always there)
+    - `detail`: text
+
+**Errors:** `unauthenticated`, `not_owner`, `conflict`, `invalid_manifest`, `invalid_name`, `invalid_path`, `too_large`, `secret_suspected`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
+
+### `fetch_version`
+
+Served by local and hosted catalogs. Called through HTTP (`web`). It changes nothing (`reads`).
+
+**Input**
+
+- `name`: text, at most 200 characters (optional)
+- `version`: a whole number, at least 1 (optional)
+- `fingerprint`: text, at most 80 characters (optional)
+
+**Output**
+
+- an object with
+  - `name`: text
+  - `version`: a whole number
+  - `fingerprint`: text
+  - `files`: a list, each an object with
+    - `path`: text
+    - `mode`: one of `0644`, `0755`
+    - `content_base64`: text
+
+**Errors:** `invalid_name`, `not_found`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
+
+### `publish_skill_to_catalog`
+
+Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`). It changes the catalog (`writes_catalog`).
+
+**Input**
+
+- `folder`: text, at most 4,096 characters (required)
+- `message`: text, at most 1,000 characters (optional)
+- `confirm`: text, at most 2,000 characters (optional)
+- `name`: text, at most 200 characters (optional)
+- `version`: a whole number, at least 1 (optional)
+- `files`: a whole number, at least 0 (optional)
+- `flags`: a list of at most 20, each one of `runnable_file`, `runs_at_load`, `command_instruction`, `capability_frontmatter`, `instructions_changed`, `non_markdown`, `new_publisher`, `prompt_injection`, `context_cost` (optional)
+- `allow_suspected_secrets`: true or false (optional; CLI only: a person's own choice, never taken from the Assistant's tool or HTTP)
+
+**Output**
+
+- text, for the person to read
+
+**Errors:** `conflict`, `unauthenticated`, `not_owner`, `invalid_manifest`, `invalid_name`, `invalid_path`, `too_large`, `secret_suspected`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
+
+### `install_shared_skill`
+
+Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`), the CLI (`cli`). It changes this machine's installed skills (`writes_machine`).
+
+**Input**
+
+- `name`: text, at most 200 characters (required)
+- `version`: a whole number, at least 1 (optional)
+- `target`: one of `user`, `project` (optional)
+- `policy`: one of `auto`, `notify`, `pin` (optional; CLI only: a person's own choice, never taken from the Assistant's tool or HTTP)
+
+**Output**
+
+- text, for the person to read
+
+**Errors:** `not_found`, `invalid_manifest`, `invalid_name`, `invalid_path`, `too_large`, `fingerprint_mismatch`, `exists_untracked`, `name_in_use`, `target_symlink`, `target_changed`, `target_not_private`, `target_unavailable`, `lock_busy`, `invalid_local_file`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
+
+### `update_installed_skills`
+
+Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`), the CLI (`cli`). It changes this machine's installed skills (`writes_machine`).
+
+**Input**
+
+- `names`: a list of at most 100, each text, at most 200 characters (optional)
+- `dry_run`: true or false (optional)
+- `latest`: true or false (optional; CLI only: a person's own choice, never taken from the Assistant's tool or HTTP)
+
+**Output**
+
+- text, for the person to read
+
+**Errors:** `not_installed`, `not_found`, `lock_busy`, `invalid_local_file`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
+
+### `accept_held_update`
+
+Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`), the CLI (`cli`). It changes this machine's installed skills (`writes_machine`).
+
+**Input**
+
+- `name`: text, at most 200 characters (required)
+- `target`: one of `user`, `project` (required)
+- `version`: a whole number, at least 1 (required)
+- `confirm`: text, at most 2,000 characters (required)
+- `flags`: a list of at most 20, each text, at most 40 characters (required)
+
+**Output**
+
+- text, for the person to read
+
+**Errors:** `conflict`, `not_installed`, `not_found`, `invalid_manifest`, `invalid_name`, `invalid_path`, `too_large`, `fingerprint_mismatch`, `exists_untracked`, `name_in_use`, `target_symlink`, `target_changed`, `target_not_private`, `target_unavailable`, `lock_busy`, `invalid_local_file`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
+
+### `list_installed_skills`
+
+Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`), the CLI (`cli`). It changes nothing (`reads`).
+
+**Input**
+
+- nothing
+
+**Output**
+
+- text, for the person to read
+
+**Errors:** `not_found`, `invalid_local_file`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
+
+### `set_skill_update_policy`
+
+Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`), the CLI (`cli`). It changes this machine's installed skills (`writes_machine`).
+
+**Input**
+
+- `policy`: one of `auto`, `notify`, `pin` (required)
+- `name`: text, at most 200 characters (optional)
+
+**Output**
+
+- text, for the person to read
+
+**Errors:** `not_installed`, `lock_busy`, `invalid_local_file`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
+
+<!-- End of the written reference. -->

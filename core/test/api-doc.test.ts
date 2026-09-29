@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { API_DOC_END, API_DOC_START, apiReference, withReference } from '../src/api-doc.ts';
+import { API_DOC_END, API_DOC_START, apiReference, operationPart, withReference } from '../src/api-doc.ts';
 import { OPERATIONS, inputSchema, type OperationDef } from '../src/api.ts';
 import { COMMON_ERRORS } from '../src/errors.ts';
 
@@ -63,6 +63,16 @@ describe('the API page\'s reference section (docs/api.md)', () => {
         for (const field of Object.keys(def.hostedForm)) expect(part.slice(part.indexOf('Hosted, instead')), `${def.name}.${field}`).toContain(`\`${field}\``);
       }
     }
+    // A hosted-only operation with a hosted form (none is in the table yet): said as the definition says it.
+    const hostedOnly: OperationDef = {
+      name: 'hosted_example', kind: 'catalog', phase: 'aws', faces: ['web'], effect: 'reads', run: 'x', output: 'text', errors: [], where: 'hosted',
+      input: { type: 'object', properties: { name: { type: 'string', maxLength: 200 }, files: { type: 'array', items: { type: 'string' } } }, required: ['name'] },
+      hostedForm: { files: { type: 'array', items: { type: 'object', properties: { sha256: { type: 'string', maxLength: 64 } } }, maxItems: 7 } },
+    };
+    const hosted = operationPart(hostedOnly);
+    expect(hosted).toContain('hosted catalogs only');
+    expect(hosted).not.toContain('local and hosted catalogs');
+    expect(hosted.slice(hosted.indexOf('Hosted, instead'))).toMatch(/`files`[^\n]*7[\s\S]*`sha256`[^\n]*64/);
     // Limits are said: a string's length, a list's size, a number's range, the values a field takes.
     const search = partOf(ref, 'search_shared_skills');
     expect(search).toMatch(/`limit`[^\n]*1[^\n]*50/);
