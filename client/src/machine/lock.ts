@@ -140,11 +140,15 @@ function lstatOr(path: string): Stats | undefined {
   }
 }
 
-/** When a process started, from `ps` (macOS and Linux), or undefined when it can't tell. */
+/** When a process started, from `ps` (macOS and Linux), or undefined when it can't tell. Read as the time since it started
+ *  ([[dd-]hh:]mm:ss), which has no time zone: a start printed as a local time would be parsed in this run's zone, and a
+ *  live holder taken for a stale one. */
 function startOf(pid: number): number | undefined {
-  const r = spawnSync('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8', env: { PATH: process.env['PATH'] ?? '/usr/bin:/bin', LC_ALL: 'C' }, timeout: 2000 });
-  const t = Date.parse((r.stdout ?? '').trim());
-  return Number.isFinite(t) ? t : undefined;
+  const r = spawnSync('ps', ['-o', 'etime=', '-p', String(pid)], { encoding: 'utf8', env: { PATH: process.env['PATH'] ?? '/usr/bin:/bin', LC_ALL: 'C' }, timeout: 2000 });
+  const m = /^(?:(?:(\d+)-)?(\d+):)?(\d+):(\d+)$/.exec((r.stdout ?? '').trim());
+  if (!m) return undefined;
+  const [days, hours, minutes, seconds] = [m[1], m[2], m[3], m[4]].map((x) => Number(x ?? 0)) as [number, number, number, number];
+  return Date.now() - (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
 }
 
 /** The lock file as found: its stat (never through a link) and who holds it, when that can be read. */

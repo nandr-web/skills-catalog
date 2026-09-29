@@ -1,6 +1,6 @@
 // The lock file around every change to lock.json (contract §4.5, "One writer at a time"): a stale one is taken, a live one
 // waited for, then lock_busy. Two real processes at once: lock-race-processes.test.ts (slow).
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CatalogError, Surface, actAs } from '@skills-catalog/core';
@@ -64,5 +64,28 @@ describe('the lock file', () => {
     expect(existsSync(join(p.osHome, '.claude', 'skills', 'alpha'))).toBe(false);
     expect(existsSync(join(p.home, 'lock.json'))).toBe(false);
     expect(JSON.parse(readFileSync(lockPath(p), 'utf8'))).toEqual({ pid: process.pid, started: startedHere });
+  });
+
+  // A holder's start, as the system reports it, is compared without a time zone: whatever TZ this run has, a live holder
+  // is never taken for a stale one (two runs would then write at once).
+  it('held by a live process in any time zone: still waited for, then lock_busy', async () => {
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], { stdio: 'ignore' });
+    const started = Date.now();
+    const tz = process.env['TZ'];
+    try {
+      for (const zone of ['Pacific/Kiritimati', 'Pacific/Pago_Pago', 'UTC']) {
+        process.env['TZ'] = zone;
+        const p = await published('alpha');
+        hold(p, child.pid!, started);
+        let t = Date.parse('2026-09-29T12:00:00Z');
+        const e = await install(ctxFor(p, () => new Date((t += 1000))), { name: 'alpha' }).catch((x: unknown) => x);
+        expect([zone, (e as CatalogError).code]).toEqual([zone, 'lock_busy']);
+        expect([zone, existsSync(join(p.osHome, '.claude', 'skills', 'alpha'))]).toEqual([zone, false]);
+      }
+    } finally {
+      if (tz === undefined) delete process.env['TZ'];
+      else process.env['TZ'] = tz;
+      child.kill();
+    }
   });
 });
