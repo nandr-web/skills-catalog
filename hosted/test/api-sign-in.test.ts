@@ -5,6 +5,7 @@
 import { Words } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
 import { createHostedHandler, type HostedRequest } from '../src/api/handler.ts';
+import { HostedGitHubSignIn } from '../src/github.ts';
 
 const words = Words.load();
 const GITHUB = `gho_${'a'.repeat(36)}`;
@@ -68,5 +69,24 @@ describe('sign_in_with_github, hosted', () => {
     const w = world();
     for (const op of ['list_tokens', 'revoke_token', 'search_shared_skills']) expect([op, (await w.handler.handle(post(op, {}))).status]).toEqual([op, 401]);
     expect(w.called).toEqual([]);
+  });
+
+  it('no token, GitHub\'s or ours, and never the app\'s secret, reaches the log, GitHub down or not', async () => {
+    const secret = 'S'.repeat(40);
+    for (const down of [true, false]) {
+      const logged: string[] = [];
+      const gh = new HostedGitHubSignIn({
+        clientId: 'Iv1.0123456789abcdef',
+        secret: async () => secret,
+        clock: { now: () => new Date() },
+        fetch: (async () => (down ? new Response('', { status: 502 }) : new Response(JSON.stringify({ user: { login: 'ana' } }), { status: 200 }))) as unknown as typeof fetch,
+      });
+      const catalog = { where: 'hosted', signIn: async (input: { github_token: string }) => ((await gh.login(input.github_token)), { token: 'catalog-token-issued', id: 'i', scope: 'read', expires_at: 'x' }) };
+      const handler = createHostedHandler({ catalog: catalog as never, tokens: { verify: async () => undefined }, words, origin: { allows: async () => true }, log: (l) => logged.push(l) });
+      const r = await handler.handle(post('sign_in_with_github', { github_token: GITHUB, scope: 'read' }));
+      expect(JSON.parse(String(r.body))).toMatchObject(down ? { ok: false, error: { code: 'internal_error' } } : { ok: true, data: { token: 'catalog-token-issued' } });
+      expect(logged.length).toBe(down ? 1 : 0);
+      for (const l of logged) for (const never of [GITHUB, secret, 'catalog-token-issued']) expect(l).not.toContain(never);
+    }
   });
 });
