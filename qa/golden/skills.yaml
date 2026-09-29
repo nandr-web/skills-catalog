@@ -343,7 +343,6 @@ flagged:
 # Checked independently by the kit's reviewer_oracle.py. Safety: every target is example.invalid (never resolves) or under
 # $RUN/outside/; nothing here is placed in an assistant's working folder.
 rules_review:
-  pending: "the rules reviewer: prompt_injection and context_cost (contract d9ad903, 739d0da)"
   # `lines`: each `line` is SKILL.md's line 5 after skill_head (a first install, so it's reviewed); `expect` is the one
   # prompt_injection flag's detail at {path: SKILL.md, line: 5}, or null for no flag.
   skill_head: "---\nname: review-line\ndescription: A skill with one reviewed line.\n---\n"

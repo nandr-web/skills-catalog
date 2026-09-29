@@ -299,7 +299,7 @@ describe('names (golden/skills.yaml missing-names, the name rules)', () => {
 describe('the gate pairs the core\'s diff decides now (golden/histories.yaml gate; the rest come with the update gate)', () => {
   // The kinds this diff computes today; pairs that expect runs_at_load, instructions_changed or a command position's
   // runnable_file are the update gate's (the next slice), in the same shared module.
-  const NOW = new Set(['capability_frontmatter', 'new_publisher']);
+  const NOW = new Set(['capability_frontmatter', 'new_publisher', 'prompt_injection']);
   const side = (key: string | null) => (key === null ? null : { files: tree(historyVersion(histories.versions[key])), publisher: 'ana' });
   const pairs = (histories.histories.gate.pairs as any[]).filter((p) => p.risk_flags.every((f: any) => NOW.has(f.kind)));
 

@@ -4,6 +4,7 @@
 import { CatalogError } from './errors.ts';
 import { MANIFEST, parseFrontmatter } from './manifest.ts';
 import { INVISIBLE, decodeText, isText, type Mode, type TreeFile } from './tree.ts';
+import { DEFAULT_CONTEXT_COST_BUDGET, reviewFlags } from './review.ts';
 
 // Flag text (a path, a change's sides, the detail) can carry a publisher's text, so it is plain text in the flag
 // itself (contract §5.3): an invisible character becomes \u{XXXX}, then the text is cut to 200 code points, ending in
@@ -421,12 +422,14 @@ function keyLine(lines: string[], key: string): number | undefined {
 }
 
 // `configuredSafeKeys` can only narrow the fixed safe list (contract §5.3): a key not on it always counts.
-// `configuredNonGrantingKeys` can only narrow the fixed non-granting list the same way.
+// `configuredNonGrantingKeys` can only narrow the fixed non-granting list the same way. `contextCostBudget` is the rules
+// reviewer's budget for SKILL.md's length, in estimated tokens.
 export function diffTrees(
   from: DiffSide | null,
   to: DiffSide,
   configuredSafeKeys: readonly string[] = DEFAULT_SAFE_FRONTMATTER_KEYS,
   configuredNonGrantingKeys: readonly string[] = DEFAULT_NON_GRANTING_KEYS,
+  contextCostBudget: number = DEFAULT_CONTEXT_COST_BUDGET,
 ): TreeDiff {
   const safeKeys = configuredSafeKeys.filter((k) => DEFAULT_SAFE_FRONTMATTER_KEYS.includes(k));
   const nonGranting = configuredNonGrantingKeys.filter((k) => DEFAULT_NON_GRANTING_KEYS.includes(k));
@@ -498,6 +501,8 @@ export function diffTrees(
   const publisher_changed = from !== null && from.publisher !== to.publisher;
   if (publisher_changed) risk.push({ kind: 'new_publisher', from: flagText(from!.publisher), to: flagText(to.publisher), detail: flagText(`${from!.publisher} → ${to.publisher}`) });
   // A path is publisher text too (checked at publish, but a flag is shown wherever it goes).
+  // The rules reviewer's flags join the diff's (contract §5.3, §10), beside each file's own reason.
+  risk.push(...reviewFlags(from, to, contextCostBudget));
   return { files, frontmatter_changes, publisher_changed, risk_flags: risk.map((f) => (f.path === undefined ? f : { ...f, path: flagText(f.path) })) };
 }
 

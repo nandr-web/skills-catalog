@@ -10,6 +10,7 @@ import { DEFAULT_SEARCH_LIMIT, SHA256_PATTERN, TOKEN_ID_PATTERN, VERSIONS_PAGE, 
 // face is checked as the strictest, so such an input is refused, never let through.
 const CATALOG_FACE: Face = 'mcp';
 import {
+  DEFAULT_CONTEXT_COST_BUDGET,
   DEFAULT_NON_GRANTING_KEYS,
   DEFAULT_SAFE_FRONTMATTER_KEYS,
   DEFAULT_LIMITS,
@@ -38,6 +39,7 @@ export interface CatalogConfig {
   limits: Limits;
   safeFrontmatterKeys: readonly string[]; // keys that can't grant anything; a change to any other key is a risk flag
   nonGrantingKeys: readonly string[]; // keys known to grant nothing: with only these, a changed file is no reason to ask
+  contextCostBudget: number; // the rules reviewer's budget for SKILL.md's length, in estimated tokens (contract §5.3)
   commonWords: readonly string[];
   readInlineBudget: number; // bytes of text one read inlines (contract §2: 24 KB keeps a result under 8,000 tokens)
   signInLogins: readonly string[]; // hosted: the GitHub logins that may sign in, each maybe login:id (§1.1); none, nobody
@@ -49,6 +51,7 @@ export const DEFAULT_CONFIG: CatalogConfig = {
   limits: DEFAULT_LIMITS,
   safeFrontmatterKeys: DEFAULT_SAFE_FRONTMATTER_KEYS,
   nonGrantingKeys: DEFAULT_NON_GRANTING_KEYS,
+  contextCostBudget: DEFAULT_CONTEXT_COST_BUDGET,
   commonWords: COMMON_WORDS,
   readInlineBudget: 24 * 1024,
   signInLogins: [],
@@ -563,7 +566,7 @@ export class Catalog {
     const req = validateInput<{ name: string; from: number; to: number }>('diff_shared_skill_versions', input, face, this.p.where);
     const a = (await this.versionOf(req.name, req.from)).record;
     const b = (await this.versionOf(req.name, req.to)).record;
-    const d = diffTrees({ files: await this.tree(a), publisher: a.publisher }, { files: await this.tree(b), publisher: b.publisher }, this.config.safeFrontmatterKeys, this.config.nonGrantingKeys);
+    const d = diffTrees({ files: await this.tree(a), publisher: a.publisher }, { files: await this.tree(b), publisher: b.publisher }, this.config.safeFrontmatterKeys, this.config.nonGrantingKeys, this.config.contextCostBudget);
     return { name: req.name, from: a.version, to: b.version, ...d };
   }
 
@@ -595,7 +598,7 @@ export class Catalog {
     const entries = tree.map(entryOf);
     const fingerprint = fingerprintOf(entries);
     const latest = skill ? await this.p.storage.version(name, latestNo) : undefined;
-    const diff = diffTrees(latest ? { files: await this.tree(latest), publisher: latest.publisher } : null, { files: tree, publisher }, this.config.safeFrontmatterKeys, this.config.nonGrantingKeys);
+    const diff = diffTrees(latest ? { files: await this.tree(latest), publisher: latest.publisher } : null, { files: tree, publisher }, this.config.safeFrontmatterKeys, this.config.nonGrantingKeys, this.config.contextCostBudget);
     const result = (version: number, created: boolean): PublishResult => ({
       name,
       version,

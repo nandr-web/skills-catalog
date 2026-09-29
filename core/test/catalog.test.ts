@@ -143,6 +143,14 @@ describe('dry run (contract §2)', () => {
       expect(r.risk_flags.map((f) => f.kind), JSON.stringify(nonGrantingKeys)).toEqual(kinds);
     }
   });
+  it('takes the rules reviewer\'s length budget from its config', async () => {
+    const skill = [{ path: 'SKILL.md', mode: '0644' as const, bytes: Buffer.from(`---\nname: long\ndescription: Long.\n---\n${'x'.repeat(400)}\n`) }];
+    const { catalog } = await openTest({ config: { contextCostBudget: 100 } });
+    const r = await catalog.publish(request('long', skill, { dry_run: true }), actAs('ana'));
+    expect(r.risk_flags.filter((f) => f.kind === 'context_cost')).toEqual([{ kind: 'context_cost', path: 'SKILL.md', detail: 'about 110 tokens (budget 100)' }]);
+    const plain = (await openTest()).catalog;
+    expect((await plain.publish(request('long', skill, { dry_run: true }), actAs('ana'))).risk_flags.filter((f) => f.kind === 'context_cost')).toEqual([]);
+  });
 });
 
 describe('not found (golden/skills.yaml missing-names)', () => {
