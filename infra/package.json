@@ -1,0 +1,26 @@
+{
+  "name": "@skills-catalog/infra",
+  "version": "0.1.0",
+  "description": "The hosted catalog's AWS stack in CDK: synthesized and checked in tests only, never deployed from here",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.15"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.271.0",
+    "cdk-nag": "3.0.2",
+    "constructs": "10.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.3",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  }
+}

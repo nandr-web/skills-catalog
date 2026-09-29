@@ -1,0 +1,3 @@
+# Synth output and bundled assets: made by tests, never committed
+cdk.out
+*.out
