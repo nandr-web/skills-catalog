@@ -6,7 +6,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
-const src = (f) => new URL(`../src/${f}`, import.meta.url);
+// A file under src/ by its name; the tests' own helpers as test/<name> (the cleanup that stops what a test started).
+const src = (f) => new URL(f.startsWith('test/') ? `../${f}` : `../src/${f}`, import.meta.url);
 const MUTATIONS = [
   // the fail-safe and the sandbox
   ['safe-delete.ts', 'the fail-safe trusts $HOME', 'export const realHome = () => userInfo().homedir;', "export const realHome = () => process.env.HOME ?? '';"],
@@ -83,9 +84,13 @@ const MUTATIONS = [
   ['agent/preflight.ts', 'the pre-flight doesn\'t say which assistant or version', '    if (claude) o.report?.(', '    if (false) o.report?.('],
   // the check fails closed: a tool it can't run, or one that sees nothing, refuses the run
   ['check.ts', 'a ps or lsof that can\'t run reads as nothing left behind', 'if (r.error || r.status === null || !ok(r.status)) {', 'if (false) {'],
-  ['check.ts', 'ps is looked up on PATH', "ps: '/bin/ps'", "ps: 'ps'"],
+  ['check.ts', 'ps is looked up on PATH', "export const PS = system('/bin/ps', '/usr/bin/ps');", "export const PS = 'ps';"],
   ['check.ts', 'a check that can\'t see its own marker process lets the run start', 'if (!runProcesses(runId, tools).some((p) => p.pid === marker.pid)) {', 'if (false) {'],
   ['run.ts', 'a run starts without proving the check can see', 'await checkSees(runId, o.tools);', ''],
+  // the tests stop what they start (a mutant here can leave a sleep or listener that ends itself within 60 s)
+  ['test/machine.ts', 'a test\'s detached child outlives the test', 'onTestFinished(() => stopGroup(child));', ''],
+  ['test/machine.ts', 'a group is signalled after its leader exited', 'if (child.pid && child.exitCode === null && child.signalCode === null) kill(-child.pid);', 'if (child.pid) kill(-child.pid);'],
+  ['test/machine.ts', 'cleanup leaves a timed-out run\'s processes running', 'for (const d of made) for (const id of runsIn(d))', 'for (const d of []) for (const id of runsIn(d))'],
 ];
 
 // A mutant is caught by its first failing test, so mutant runs stop there (--bail 1); the baseline runs everything.

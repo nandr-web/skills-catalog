@@ -1,7 +1,7 @@
 // Safe deletion (qa-plan §6.5a; brief §1.6a), added after the QA tools failed a security review: the canaries, the fail-safe
 // on the real home, and the guards that keep a test process away from the real places. Every test here uses a fake
 // machine; the few that name a real place only check that it is refused, and nothing there exists or is created.
-import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
 import { platform, tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
@@ -14,7 +14,7 @@ import { DEFAULT_TTL_MS } from '../src/janitor.ts';
 import { removeLeftover, removeRun, RUN_ID, UnsafeError, verifyBase } from '../src/safe-delete.ts';
 import { createSandbox, FailSafeError, failSafe, newRunId, realHome, recordProcessGroup, sandboxBase } from '../src/sandbox.ts';
 import { teardown } from '../src/teardown.ts';
-import { cleanup, PROCESS_TEST_MS, machine, qaBareSync, qaSync, scratch, type TestMachine } from './machine.ts';
+import { cleanup, PROCESS_TEST_MS, machine, qaBareSync, qaSync, scratch, spawnDetached, type TestMachine } from './machine.ts';
 
 vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start processes (see PROCESS_TEST_MS)
 
@@ -112,7 +112,7 @@ describe('canary: run folders', () => {
     const m = machine();
     const byPid = run(m);                                                          // pid = this test process
     const byGroup = run(m); finished(byGroup.root);
-    const child = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' });
+    const child = spawnDetached('sleep', ['30']);
     const f = join(byGroup.root, 'run.json');
     writeFileSync(f, JSON.stringify({ ...JSON.parse(readFileSync(f, 'utf8')), pgids: [child.pid] }));
     try {

@@ -5,12 +5,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { leftoverNames, slug } from '../src/leftovers.ts';
 import { createSandbox, DIRS, FailSafeError, failSafe, newRunId, realHome } from '../src/sandbox.ts';
 import { teardown } from '../src/teardown.ts';
 import { compare, PRODUCT_DEFAULTS, runProcesses, snapshot, watchOn, type Watch } from '../src/check.ts';
-import { cleanup, PROCESS_TEST_MS, machine as fakeMachine, scratch, type TestMachine } from './machine.ts';
+import { cleanup, PROCESS_TEST_MS, machine as fakeMachine, scratch, spawnDetached, stopGroup, type TestMachine } from './machine.ts';
 
 vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start processes (see PROCESS_TEST_MS)
 
@@ -98,7 +98,7 @@ describe('teardown', () => {
   it('[3] kills each process group the run started', async () => {
     const m = machine();
     const sb = sandbox(m);
-    const child = spawn('sh', ['-c', 'sleep 30 & sleep 30'], { detached: true, stdio: 'ignore' });
+    const child = spawnDetached('sh', ['-c', 'sleep 30 & sleep 30']);
     const pgid = child.pid!;
     try {
       await teardown(sb, { machine: m, processGroups: [pgid] });
@@ -166,37 +166,36 @@ describe('before/after check', () => {
   it('[5] fails on a process group the run left alive', async () => {
     const m = machine();
     const sb = sandbox(m);
-    const child = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' });
-    try {
-      const w = { ...m.watch(sb), processGroups: [child.pid!] };
-      expect(compare(snapshot({ ...w, processGroups: [] }), snapshot(w)).map((d) => d.what)).toEqual([`process group ${child.pid} still running`]);
-    } finally { process.kill(-child.pid!, 'SIGKILL'); }
+    const child = spawnDetached('sleep', ['30']);
+    const w = { ...m.watch(sb), processGroups: [child.pid!] };
+    expect(compare(snapshot({ ...w, processGroups: [] }), snapshot(w)).map((d) => d.what)).toEqual([`process group ${child.pid} still running`]);
   });
 });
 
 describe('before/after check: processes and ports (plan §6.6)', () => {
+  // A listener that says its port, and ends itself after a minute whatever happens to the test that started it.
   const listener = (env: NodeJS.ProcessEnv) => {
-    const child = spawn(process.execPath, ['-e', "require('net').createServer().listen(0, '127.0.0.1', function () { console.log(this.address().port) })"], { detached: true, stdio: ['ignore', 'pipe', 'ignore'], env });
-    return { child, port: new Promise<string>((ok) => child.stdout!.once('data', (b) => ok(String(b).trim()))) };
+    const child = spawnDetached(process.execPath, ['-e', "require('net').createServer().listen(0, '127.0.0.1', function () { console.log(this.address().port) }); setTimeout(() => process.exit(0), 60000)"], { stdio: ['ignore', 'pipe', 'ignore'], env });
+    const port = new Promise<string>((ok, no) => {
+      const t = setTimeout(() => no(new Error('the listener never said its port (10 s)')), 10_000);
+      child.stdout!.once('data', (b) => (clearTimeout(t), ok(String(b).trim())));
+    });
+    return { child, port };
   };
 
   it('a process is the run\'s only by its environment: QA_RUN_ID in its arguments doesn\'t count', async () => {
     const m = machine();
     const sb = sandbox(m);
-    const decoy = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)', `QA_RUN_ID=${sb.runId}`], { detached: true, stdio: 'ignore', env: { ...process.env } });
-    const ours = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { detached: true, stdio: 'ignore', env: { ...process.env, ...sb.env } });
-    try {
-      await runningOwnCommand([decoy.pid!, ours.pid!], /setTimeout/);
-      expect(runProcesses(sb.runId).map((p) => p.pid)).toEqual([ours.pid]);
-    } finally {
-      for (const c of [decoy, ours]) process.kill(-c.pid!, 'SIGKILL');
-    }
+    const decoy = spawnDetached(process.execPath, ['-e', 'setTimeout(() => {}, 30000)', `QA_RUN_ID=${sb.runId}`], { env: { ...process.env } });
+    const ours = spawnDetached(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { env: { ...process.env, ...sb.env } });
+    await runningOwnCommand([decoy.pid!, ours.pid!], /setTimeout/);
+    expect(runProcesses(sb.runId).map((p) => p.pid)).toEqual([ours.pid]);
   });
 
   it('asks the system\'s ps by its path: a PATH without ps (as a run\'s may be) changes nothing', async () => {
     const m = machine();
     const sb = sandbox(m);
-    const ours = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { detached: true, stdio: 'ignore', env: { ...process.env, ...sb.env } });
+    const ours = spawnDetached(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { env: { ...process.env, ...sb.env } });
     const saved = process.env.PATH;
     try {
       await runningOwnCommand([ours.pid!], /setTimeout/);
@@ -204,7 +203,6 @@ describe('before/after check: processes and ports (plan §6.6)', () => {
       expect(runProcesses(sb.runId).map((p) => p.pid)).toEqual([ours.pid]);
     } finally {
       process.env.PATH = saved;
-      process.kill(-ours.pid!, 'SIGKILL');
     }
   });
 
@@ -214,16 +212,53 @@ describe('before/after check: processes and ports (plan §6.6)', () => {
     const w = m.watch(sb);
     const before = snapshot(w);
     const ours = listener({ ...process.env, ...sb.env }), theirs = listener({ ...process.env });
+    const port = await ours.port; await theirs.port;
+    const whats = compare(before, snapshot(w)).map((d) => d.what);
+    expect(whats).toHaveLength(2);
+    expect(whats).toEqual(expect.arrayContaining([
+      expect.stringMatching(new RegExp(`^process ${ours.child.pid} from this run still running`)),
+      expect.stringMatching(new RegExp(`^port 127\\.0\\.0\\.1:${port} still listening \\(process ${ours.child.pid}\\)`)),
+    ]));
+  });
+});
+
+describe('a test never leaves a process behind', () => {
+  let left = 0;
+  it('starts a child in a group of its own and ends without stopping it', () => {
+    left = spawnDetached('sleep', ['30']).pid!;
+    expect(alive(left)).toBe(true);
+  });
+  it('the previous test\'s child was killed when that test finished', async () => {
+    for (let i = 0; i < 50 && alive(left); i++) await new Promise((ok) => setTimeout(ok, 20));
+    expect(alive(left)).toBe(false);
+  });
+
+  // A test that times out never reaches its run's teardown: cleanup (afterEach) stops what that run started.
+  it('cleanup stops each process carrying the id of a run in the test\'s own folders, and nobody else\'s', async () => {
+    const m = machine();
+    const sb = sandbox(m);
+    const idle = (env: NodeJS.ProcessEnv) => {
+      const c = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { detached: true, stdio: 'ignore', env });
+      onTestFinished(() => { try { process.kill(-c.pid!, 'SIGKILL'); } catch { /* gone */ } });   // this test's own net
+      return c.pid!;
+    };
+    const ours = idle({ ...process.env, ...sb.env }), theirs = idle({ ...process.env, QA_RUN_ID: newRunId() });
+    await new Promise((ok) => setTimeout(ok, 200));
+    expect([alive(ours), alive(theirs)]).toEqual([true, true]);
+    cleanup();
+    for (let i = 0; i < 100 && alive(ours); i++) await new Promise((ok) => setTimeout(ok, 20));
+    expect([alive(ours), alive(theirs)]).toEqual([false, true]);
+  });
+
+  it('never signals a group whose leader has exited (its number may be someone else\'s by then)', async () => {
+    const done = spawn('true', [], { detached: true, stdio: 'ignore' });
+    await new Promise((ok) => done.once('exit', ok));
+    const kill = vi.spyOn(process, 'kill');
     try {
-      const port = await ours.port; await theirs.port;
-      const whats = compare(before, snapshot(w)).map((d) => d.what);
-      expect(whats).toHaveLength(2);
-      expect(whats).toEqual(expect.arrayContaining([
-        expect.stringMatching(new RegExp(`^process ${ours.child.pid} from this run still running`)),
-        expect.stringMatching(new RegExp(`^port 127\\.0\\.0\\.1:${port} still listening \\(process ${ours.child.pid}\\)`)),
-      ]));
+      stopGroup(done);
+      expect(kill).not.toHaveBeenCalled();
     } finally {
-      for (const c of [ours.child, theirs.child]) process.kill(-c.pid!, 'SIGKILL');
+      kill.mockRestore();
     }
   });
 });

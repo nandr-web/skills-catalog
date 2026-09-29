@@ -3,21 +3,59 @@
 // machinery passes one explicitly, and the qa command line runs here only with `--fake-machine <dir>`.
 // This file is the only test code that starts the qa command line (test/meta.test.ts checks that).
 import { spawn, spawnSync, type ChildProcess, type SpawnOptions } from 'node:child_process';
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, realpathSync, rmSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { onTestFinished } from 'vitest';
+import { runProcesses } from '../src/check.ts';
 import { fakeMachine, type Machine } from '../src/machine.ts';
+import { RUN_ID } from '../src/safe-delete.ts';
+import { sandboxBase } from '../src/sandbox.ts';
 
 /** The budget for a test that starts processes and runs the before/after check (`ps` over every process, `lsof`): a few
  *  seconds each on a busy machine, near vitest's default 5 s. Set per file (vi.setConfig) in the files whose tests do
  *  that, so a plain unit test keeps the default and still fails fast if it hangs. */
 export const PROCESS_TEST_MS = 30_000;
 
+/** A child in a process group of its own, for tests of the process checks. Its whole group is killed when the test
+ *  ends, however it ends: onTestFinished runs after a failure or a timeout too, where a `finally` in the test doesn't. */
+export function spawnDetached(command: string, args: string[], o: SpawnOptions = {}): ChildProcess {
+  const child = spawn(command, args, { stdio: 'ignore', ...o, detached: true });
+  onTestFinished(() => stopGroup(child));
+  return child;
+}
+
+/** Kill a detached child's whole group, but only while its leader hasn't exited: node records the exit before the number
+ *  can be reused, so a group that is someone else's by now is never signalled. Members that outlive their leader are left
+ *  to cleanup's run-id sweep (a run's processes) and to the listeners' own self-exit. */
+export function stopGroup(child: ChildProcess): void {
+  if (child.pid && child.exitCode === null && child.signalCode === null) kill(-child.pid);
+}
+
+const kill = (pid: number) => {
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch {
+    // already gone
+  }
+};
+
+/** The runs whose sandboxes are in a test's folder (a fake machine's tmp/skills-catalog-qa/<run-id>). */
+const runsIn = (d: string) => {
+  const base = sandboxBase(join(d, 'tmp'));
+  return existsSync(base) ? readdirSync(base).filter((n) => RUN_ID.test(n)) : [];
+};
+
 const made: string[] = [];
-/** Call from afterEach. */
-export const cleanup = () => { for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true }); };
+/** Call from afterEach, which runs after a timeout too. First every process still carrying the exact id of a run whose
+ *  sandbox is in the test's own folders (a test that timed out never reached its run's teardown), each one looked at
+ *  again right before the signal; never by name or port. Then the folders. */
+export const cleanup = () => {
+  for (const d of made) for (const id of runsIn(d)) for (const p of runProcesses(id)) if (runProcesses(id).some((q) => q.pid === p.pid)) kill(p.pid);
+  for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true });
+};
 
 /** A temporary folder of the test's own, by its real path. */
 export function scratch(prefix = 'qa-test-'): string {
