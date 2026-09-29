@@ -34,7 +34,7 @@ export type ServerOptions = { settings: Settings; version: string; surface?: Sur
 
 export function createMcpServer(o: ServerOptions) {
   const surface = o.surface ?? Surface.load();
-  const { ctx, close } = contextFor(o.settings, surface, o.now);
+  const { ctx, close } = contextFor(o.settings, surface, 'mcp', o.now);
   const tools = new Map(
     surface
       .toolDefs()

@@ -7,8 +7,10 @@ import { appendActivity, logWords } from './activity.ts';
 import { MACHINE_RUNS } from './machine/index.ts';
 import type { Settings } from './settings.ts';
 
-/** Everything an operation needs, the same on every face. `ids` makes the fence tokens around a publisher's text. */
-export type Context = { catalog: () => Promise<Catalog>; surface: Surface; settings: Settings; now: () => Date; ids: Ids };
+/** Everything an operation needs, the same on every face. `face` says which one asks: an input only a person may give
+ *  (the CLI's) is refused from the assistant's (MCP). `ids` makes the fence tokens around a publisher's text. */
+export type Face = 'mcp' | 'cli';
+export type Context = { catalog: () => Promise<Catalog>; surface: Surface; settings: Settings; face: Face; now: () => Date; ids: Ids };
 
 /** What an operation gives: the text for the assistant (or the person), and the activity log's target and result (the
  *  result in the surface's log words: logWords(surface).result). */
@@ -92,7 +94,7 @@ export function lazyCatalog(settings: Settings): { get: () => Promise<Catalog>; 
 }
 
 /** A context for a face: the catalog opened lazily, fence tokens from the core's random ids. */
-export function contextFor(settings: Settings, surface: Surface, now: () => Date = () => new Date()): { ctx: Context; close: () => void } {
+export function contextFor(settings: Settings, surface: Surface, face: Face, now: () => Date = () => new Date()): { ctx: Context; close: () => void } {
   const catalog = lazyCatalog(settings);
-  return { ctx: { catalog: catalog.get, surface, settings, now, ids: randomIds }, close: catalog.close };
+  return { ctx: { catalog: catalog.get, surface, settings, face, now, ids: randomIds }, close: catalog.close };
 }

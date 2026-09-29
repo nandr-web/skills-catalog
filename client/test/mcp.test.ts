@@ -3,10 +3,10 @@
 // own result for the same call, put through the same renderer: one registry, one set of words, the same answer.
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CatalogError, Surface, openCatalog, renderDiff, renderError, renderRead, renderSearch, renderVersions, type Catalog } from '@skills-catalog/core';
+import { CatalogError, OPERATIONS, Surface, openCatalog, renderDiff, renderError, renderRead, renderSearch, renderVersions, type Catalog } from '@skills-catalog/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { MAX_LINE } from '../src/mcp/server.ts';
-import { CLIENT_WORD_GAPS } from '../src/operations.ts';
+import { CLIENT_WORD_GAPS, RUNS } from '../src/operations.ts';
 import { open, seed } from './seed.ts';
 import { place, startServer, type Place, type Server } from './server.ts';
 
@@ -74,12 +74,15 @@ describe('the protocol (newline-delimited JSON-RPC 2.0 over stdio)', () => {
     for (const v of ['2025-03-26', '1999-01-01']) expect((await s.initialize(v)).result.protocolVersion).toBe('2025-11-25');
   });
 
-  it('lists exactly the registry\'s MCP tools, with the surface\'s names and words and the registry\'s schemas', async () => {
+  it('lists the registry\'s MCP tools it runs, with the surface\'s names and words and the registry\'s schemas: every catalog one, and machine ones as the installer adds them', async () => {
     const s = start(place());
     await s.initialize();
     const r = await s.send('tools/list');
-    expect(r.result.tools).toEqual(S.toolDefs().map(({ op: _op, ...t }) => t));
-    expect(r.result.tools.map((t: { name: string }) => t.name)).toEqual([N.search, N.get, N.versions, N.diff]);
+    const defs = S.toolDefs();
+    expect(r.result.tools).toEqual(defs.filter((d) => RUNS[d.op]).map(({ op: _op, ...t }) => t));
+    for (const name of [N.search, N.get, N.versions, N.diff]) expect(r.result.tools.map((t: { name: string }) => t.name)).toContain(name);
+    // What isn't served yet is a machine operation still to come, never a catalog one.
+    for (const d of defs.filter((x) => !RUNS[x.op])) expect(OPERATIONS[d.op]!.kind, d.op).toBe('machine');
     expect(r.result.nextCursor).toBeUndefined();
   });
 
