@@ -72,10 +72,12 @@ const bool: OutputSchema = { type: 'boolean' };
 const anyValue: OutputSchema = {};
 const oneOf = (...values: readonly string[]): OutputSchema => ({ type: 'string', enum: values });
 const list = (items: OutputSchema): OutputSchema => ({ type: 'array', items });
+// Closed: a field the code adds or drops shows as a schema change (JSON Schema leaves an object open unless it says so).
 const obj = (properties: Record<string, OutputSchema>, optional: readonly string[] = []): OutputSchema => ({
   type: 'object',
   properties,
   required: Object.keys(properties).filter((k) => !optional.includes(k)),
+  additionalProperties: false,
 });
 const riskFlag = obj({ kind: oneOf(...FLAG_KINDS), path: str, line: int, field: str, from: anyValue, to: anyValue, detail: str }, ['path', 'line', 'field', 'from', 'to']);
 const treeDiff = {
