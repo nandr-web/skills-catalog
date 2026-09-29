@@ -15,6 +15,10 @@
     "test": "vitest run --project fast",
     "test:slow": "vitest run --project slow --passWithNoTests",
     "test:all": "vitest run",
+    "test:clean-run": "vitest run --project fast test/clean-run.test.ts test/qa-run.test.ts test/safe-delete.test.ts test/env.test.ts test/meta.test.ts",
+    "test:agent-runner": "vitest run --project fast test/agent-runner.test.ts test/runner.test.ts test/scorer.test.ts test/assistant.test.ts test/preflight.test.ts test/scrub.test.ts test/env.test.ts",
+    "test:trace-check": "vitest run --project fast test/trace-check.test.ts",
+    "test:cli": "vitest run --project fast test/cli.test.ts",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test",
     "mutate": "node test/mutations.mjs"
