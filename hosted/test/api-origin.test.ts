@@ -150,4 +150,25 @@ describe('the handler checks the origin first', () => {
     expect(w.logged.length).toBe(1);
     expect(w.logged.join('\n')).not.toContain(CURRENT);
   });
+
+  it('the guards come before the body: with a body that is not JSON, the acting-as header is still 400 token_only and no token still 401', async () => {
+    const w = handler();
+    const bad = (headers: Record<string, string>) => w.h.handle(req('/api/v1/search_shared_skills', { [ORIGIN_HEADER]: CURRENT, ...headers }, '{not json'));
+    const actingAs = await bad({ authorization: 'Bearer t-dev1', 'x-skills-catalog-as': 'bo' });
+    expect(actingAs.status).toBe(400);
+    expect(JSON.parse(String(actingAs.body))).toMatchObject({ ok: false, error: { code: 'invalid_request', why: 'token_only' } });
+    const none = await bad({});
+    expect(none.status).toBe(401);
+    expect(JSON.parse(String(none.body))).toMatchObject({ ok: false, error: { code: 'unauthenticated' } });
+    expect([w.looked, w.touched]).toEqual([[], []]);
+  });
+
+  it('the files route has the same guards: the acting-as header is 400 and no token 401, nothing looked up or read', async () => {
+    const w = handler();
+    const get = (headers: Record<string, string>) => w.h.handle({ method: 'GET', path: `/api/v1/files/${'a'.repeat(64)}`, headers: { [ORIGIN_HEADER]: CURRENT, ...headers }, body: new Uint8Array() });
+    expect((await get({ authorization: 'Bearer t-dev1', 'x-skills-catalog-as': 'bo' })).status).toBe(400);
+    expect((await get({ 'x-skills-catalog-as': 'bo' })).status).toBe(400);
+    expect((await get({})).status).toBe(401);
+    expect([w.looked, w.touched]).toEqual([[], []]);
+  });
 });

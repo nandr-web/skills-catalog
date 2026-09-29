@@ -9,9 +9,11 @@ import { HTTP_DEVELOPER, HTTP_SEED, SHA, checkHttpCase, httpCases, skillMd } fro
 import { API_HEADERS, SECURITY_HEADERS, type FileAnswer } from '@skills-catalog/core/http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createHostedHandler, type HostedRequest } from '../src/api/handler.ts';
-import type { TokenHolder } from '../src/index.ts';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { S3Client } from '@aws-sdk/client-s3';
+import { createStores, HostedTokenStore, type Place, type TokenHolder } from '../src/index.ts';
 import { hostedAdapter } from './adapter.ts';
-import { startEmulator, type Emulator } from './emulator.ts';
+import { FAKE, startEmulator, type Emulator } from './emulator.ts';
 
 let emu: Emulator | undefined;
 beforeAll(async () => {
@@ -86,6 +88,38 @@ describe('the files route, hosted, answered by the catalog', () => {
       expect((await handler.handle(req({ method: 'GET', path: `/api/v1/files/${'f'.repeat(64)}` }))).status).toBe(404);
     } finally {
       catalog.close();
+    }
+  }, 30_000);
+});
+
+describe('a revoked token, from the real token store', () => {
+  it('works until it is revoked, then is 401 at once, on an operation and on the files route, before anything is read', async () => {
+    const place: Place = { table: 'handler-tokens', bucket: 'handler-tokens' };
+    const ddb = new DynamoDBClient({ ...FAKE, endpoint: emu!.endpoint });
+    const s3 = new S3Client({ ...FAKE, endpoint: emu!.endpoint, forcePathStyle: true });
+    try {
+      await createStores(ddb, s3, place);
+      const store = new HostedTokenStore({ ddb, place, clock: { now: () => new Date() } });
+      const token = await store.issue({ owner: HTTP_DEVELOPER, scope: 'publish', kind: 'personal', expiresAt: new Date(Date.now() + 3_600_000) });
+      const touched: string[] = [];
+      const handler = createHostedHandler({
+        catalog: new Proxy({}, { get: (_, k) => (touched.push(String(k)), () => Promise.resolve({ results: [] })) }) as never,
+        tokens: store,
+        words,
+        origin: THROUGH_THE_EDGE,
+        file: async (s) => (touched.push(`file ${s}`), { kind: 'unknown' }),
+      });
+      const search = req({ method: 'POST', path: '/api/v1/search_shared_skills', body: '{"query":"x"}' }, { authorization: `Bearer ${token}` });
+      const file = req({ method: 'GET', path: `/api/v1/files/${'a'.repeat(64)}` }, { authorization: `Bearer ${token}` });
+      expect((await handler.handle(search)).status).toBe(200);
+      await store.revoke(token);
+      touched.length = 0;
+      expect((await handler.handle(search)).status).toBe(401);
+      expect((await handler.handle(file)).status).toBe(401);
+      expect(touched).toEqual([]);
+    } finally {
+      ddb.destroy();
+      s3.destroy();
     }
   }, 30_000);
 });
