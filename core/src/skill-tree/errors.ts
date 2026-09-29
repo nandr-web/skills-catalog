@@ -22,7 +22,8 @@ export type ErrorCode =
   | 'not_installed'
   | 'invalid_local_file'
   | 'target_changed'
-  | 'target_not_private';
+  | 'target_not_private'
+  | 'lock_busy';
 
 export class CatalogError extends Error {
   readonly code: ErrorCode;

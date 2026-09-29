@@ -377,6 +377,12 @@ describe('the surface (vendored, recommended variant)', () => {
     expect(r({ path: temp, temp: true, staging })).toBe(s.format(w.target_changed_staging, { path: temp, staging }));
   });
 
+  it('another run holding the lock names the lock file and its process', () => {
+    const s = Surface.load();
+    const data = { path: '/home/ana/.skills-catalog/lock.json.lock', pid: 4242 };
+    expect(renderError(s, new CatalogError('lock_busy', data))).toBe(s.format(s.word('errors').lock_busy, data));
+  });
+
   it('a folder that isn\'t private picks its sentence by what it is: the home folder, a project, or a folder inside', () => {
     const s = Surface.load();
     const w = s.word('errors');

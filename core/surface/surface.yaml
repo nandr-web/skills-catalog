@@ -812,6 +812,7 @@ results:
     invalid_request: "invalid_request: {field} {why}, so nothing was done. Correct the call and try again."
     invalid_request_cli: "invalid_request: {field} {why}, so nothing was done. Correct the command and run it again."
     invalid_request_limit: "invalid_request: {field} {why}; the limit is {limit}. Nothing was done: call again within it (for example in batches)."
+    invalid_request_budget: "invalid_request: the context_cost_budget setting must be a positive whole number of estimated tokens (the default is 5000), so setup changed nothing: a budget can't turn the size check off. Tell the person, and use a number only once they agree."
     invalid_request_allowed: "invalid_request: {field} {why}: {allowed}. Nothing was done: call again with one of them."
     invalid_request_allowed_cli: "invalid_request: {field} {why}: {allowed}. Nothing was done: run it again with one of them."
     invalid_request_limit_cli: "invalid_request: {field} {why}; the limit is {limit}. Nothing was done: run it again within it (for example in batches)."
@@ -846,6 +847,7 @@ results:
     target_not_private_project_cli: "target_not_private: other people on this machine could change {path}, and the installer writes through it, so nothing was installed. Tell the person. In a shared project that may be the team's choice, so there are two ways on: install it to their own skills folder instead (the same install command without --project), or make the folder private with chmod go-w {path}. Propose one, and do it only once they agree."
     target_not_private_project_not_own: "target_not_private: {path} isn't the person's own and others on this machine can change it, so the installer won't install through it and nothing was installed. Tell the person; the way on is to install it to their own skills folder instead (${install} with target \"user\"). Propose it, and do it only once they agree."
     target_not_private_project_not_own_cli: "target_not_private: {path} isn't the person's own and others on this machine can change it, so the installer won't install through it and nothing was installed. Tell the person; the way on is to install it to their own skills folder instead (the same install command without --project). Propose it, and do it only once they agree."
+    lock_busy: "lock_busy: another run of this tool (process {pid}) is changing the installed skills, so nothing was changed. Try once more in a moment. Don't delete or edit the lock file: a stale one is taken over by itself. If it keeps happening, tell the person."
     invalid_local_file: "invalid_local_file: {path} {why}, so nothing was changed. The file is never repaired or rewritten automatically. Tell the person which file it is and why; they decide whether to fix it or remove it ({effect}). Change it only once they agree."
     local_file_effect:
       lock.json: "removing it loses the record of which skills came from the catalog: their folders stay, but they're no longer updated"
@@ -1022,6 +1024,7 @@ log:
     invalid_local_file: "refused: a local settings file is damaged"
     target_changed: "refused: the folder changed during the install"
     target_not_private: "refused: the folder isn't private"
+    lock_busy: "refused: another run was busy"
     person_only: waiting for the person
     fingerprint_mismatch: "refused: the catalog's copy doesn't match its fingerprint"
     internal_error: bug in skills-catalog (see its log)
