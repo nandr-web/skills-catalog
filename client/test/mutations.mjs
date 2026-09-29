@@ -39,7 +39,7 @@ const MUTATIONS = [
   // the web API's shared half (core/src/http): the routes, the body, the envelope, a file's answer, the refusals' numbers
   ['core:http/index.ts', 'an operation not served on the web is routed', "  return row && row.faces.includes('web') ? row : undefined;", '  return row;'],
   ['core:http/index.ts', 'an inherited key is an operation', 'const row = Object.hasOwn(OPERATIONS, op) ? OPERATIONS[op] : undefined;', 'const row = (OPERATIONS as Record<string, OperationDef>)[op];'],
-  ['core:http/index.ts', 'a person-only input is taken on the web', "validateInput<Record<string, unknown>>(op, parsed, 'web')", "validateInput<Record<string, unknown>>(op, parsed, 'cli')"],
+  ['core:http/index.ts', 'a person-only input is taken on the web', "validateInput<Record<string, unknown>>(op, parsed, 'web', where)", "validateInput<Record<string, unknown>>(op, parsed, 'cli', where)"],
   ['core:http/index.ts', 'a cut body is parsed as if whole', "  if (raw === 'cut') throw new CatalogError('too_large', { limit: 'request_bytes', max });\n", ''],
   ['core:http/index.ts', 'a transport\'s own sentence replaces every error\'s', "err.code === 'unauthenticated' && s.unauthenticated !== undefined ? s.unauthenticated", 's.unauthenticated !== undefined ? s.unauthenticated'],
   ['core:http/index.ts', 'a malformed fingerprint is looked up', "SHA256.test(sha256) ? await catalog.file(sha256) : { kind: 'unknown' }", 'await catalog.file(sha256)'],
@@ -65,6 +65,15 @@ const MUTATIONS = [
   ['web/handler.ts', 'a real publish without --publish is served', '      if (real && !o.publish) throw', '      if (false) throw'],
   ['web/handler.ts', 'a dry run counts as a real publish', "const real = name === 'publish_version' && input['dry_run'] !== true;", "const real = name === 'publish_version';"],
   ['web/handler.ts', 'the body is read before who is acting is checked', "    let developer: string;\n    try {\n      developer = actor(req.headers['x-skills-catalog-as']);", "    let developer: string;\n    await readBody(req.body, BODY_LIMIT);\n    try {\n      developer = actor(req.headers['x-skills-catalog-as']);"],
+  // serve (serve.test.ts): what it checks before anything is made, where it listens, and a refused connection
+  ['cli/serve.ts', 'serve starts with no terminal', '  if (!io.tty) {', '  if (false) {'],
+  ['cli/serve.ts', 'serve starts on a catalog that isn\'t a local folder', "  if (!settings.catalog.startsWith('file:')) {", '  if (false) {'],
+  ['cli/serve.ts', 'serve takes words it doesn\'t know', "    if (positionals.length) throw new Error('positional');", ''],
+  ['cli/serve.ts', 'the command to give the person echoes what was typed', "const command = [s.cli, 'serve', ...(port ? ['--port', String(port)] : []), ...(publish ? ['--publish'] : [])].join(' ');", "const command = [s.cli, 'serve', ...argv].join(' ');"],
+  ['web/serve.ts', 'serve listens on every address', "server.listen({ host: '127.0.0.1', port: o.port, exclusive: true }", "server.listen({ host: '::', port: o.port, exclusive: true }"],
+  ['web/serve.ts', 'a refused connection is kept alive for the next request', "unread ? { ...r.headers, connection: 'close' } : r.headers", 'r.headers'],
+  // Not listed: dropping `req.destroy()` after a refusal. Equivalent while the answer says Connection: close (Node's
+  // server closes that connection itself once the answer is sent); the destroy is kept so an unread body is never waited on.
   // Not listed: 'the body is read past its limit' (dropping the cut). The endless-body test then never ends: it would be
   // caught only by the test's time limit, minutes later; the cut is shown by that test on every run.
   ['operations.ts', 'search is worded as a read', 'present: (ctx, r, args) => renderSearch(ctx.words, r, (args ?? {}) as SearchInput),', 'present: (ctx, r) => renderRead(ctx.words, r, ctx.ids),'],

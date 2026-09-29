@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { CatalogError, OPERATIONS, renderDiff, renderError, renderRead, renderSearch, renderVersions, type Catalog } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
-import { COMMANDS, flagsFor } from '../src/cli/run.ts';
+import { COMMANDS, flagsFor, SERVED } from '../src/cli/run.ts';
 import { cli, fixedTokens, lastLogLine, S, TOKEN } from './cli-io.ts';
 import { open, seed } from './seed.ts';
 import { place, type Place } from './server.ts';
@@ -260,7 +260,7 @@ describe('update --accept on the command line', () => {
 
 // Every command a CLI word names is one the CLI serves, with the flags it names: an assistant that runs what the words
 // say never meets "unknown command". Commands still to come are listed, and the test trips when one is served.
-const NOT_SERVED_YET = ['preview', 'publish', 'setup', 'teardown', 'login', 'serve'];
+const NOT_SERVED_YET = ['preview', 'publish', 'setup', 'teardown', 'login'];
 // Where a word uses the product's name as the subject of a sentence ("skills-catalog hit a bug"), not as a command. Kept
 // by hand on purpose: any other word after the name is taken as a command, so a mistyped command can't pass as prose.
 const PROSE = ['hit', 'won', 'never', 'forget'];
@@ -315,7 +315,7 @@ describe('the words and the commands', () => {
     const gap = (at: string, command: string, flag: string) => FLAG_WORD_GAPS.some((g) => at.startsWith(g.at) && g.command === command && g.flag === flag);
     for (const { command, flags, at } of named) {
       if (NOT_SERVED_YET.includes(command) || PROSE.includes(command)) continue;
-      expect(Object.keys(COMMANDS), `${at} names ${command}`).toContain(command);
+      expect(SERVED, `${at} names ${command}`).toContain(command);
       for (const f of flags) if (!gap(at, command, f)) expect(flagsFor(command), `${at}: ${command} --${f}`).toContain(f);
     }
     // Each listed gap is still in the words (this trips when the word is fixed: take it off the list).
@@ -323,7 +323,7 @@ describe('the words and the commands', () => {
   });
 
   it('the commands still to come are not served yet (this trips when one is: take it off the list)', () => {
-    for (const c of NOT_SERVED_YET) expect(Object.keys(COMMANDS)).not.toContain(c);
+    for (const c of NOT_SERVED_YET) expect(SERVED).not.toContain(c);
   });
 
   it('no CLI word outside the listed gaps is shaped for the tools; each gap is still open', () => {
