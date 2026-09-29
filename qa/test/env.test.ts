@@ -1,14 +1,14 @@
 // No secrets reach a run (the QA plan §6 step 3, requirement qa-no-secrets-in-runs): every process a run starts (the
 // command, the assistant, the MCP servers it starts) gets only an allow-listed environment, and the runner plants a
 // marker under the usual secret names to prove it. The assistant keeps the real HOME (its login lives there).
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runScenarios } from '../src/agent/runner.ts';
 import { qaRun } from '../src/run.ts';
 import { childEnv, ENV_ALLOW, PLANTED_NAMES } from '../src/sandbox.ts';
-import { cleanup, PROCESS_TEST_MS, machine } from './machine.ts';
+import { cleanup, PROCESS_TEST_MS, machine, scratch } from './machine.ts';
 
 vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start processes (see PROCESS_TEST_MS)
 
@@ -57,6 +57,22 @@ describe('the environment a run\'s processes get', () => {
     }
     expect(() => childEnv({ env: { SKILLS_MANAGED_SETTINGS: '/run/managed', PATH: '/usr/bin' } }, {}), 'no sandbox named').toThrow(/SKILLS_MANAGED_SETTINGS/);
     expect(childEnv({ env: { ...base, SKILLS_MANAGED_SETTINGS: '/run/managed' } }, {}).SKILLS_MANAGED_SETTINGS).toBe('/run/managed');
+  });
+
+  // By path alone, a link in the sandbox would pass and the product would read through it. A link whose target exists is
+  // followed and found outside; one whose target isn't there yet (it could be made later) is refused as a link.
+  it('childEnv refuses managed settings reached through a link in the sandbox, whether or not its target exists yet', () => {
+    const root = scratch(), outside = scratch();
+    const env = (managed: string) => ({ env: { QA_SANDBOX: root, PATH: '/usr/bin', SKILLS_MANAGED_SETTINGS: managed } });
+    symlinkSync(outside, join(root, 'managed'));
+    symlinkSync(join(outside, 'not-yet'), join(root, 'later'));
+    mkdirSync(join(root, 'real'));
+    symlinkSync(join(outside, 'not-yet-either'), join(root, 'real', 'managed'));
+    for (const managed of [join(root, 'managed'), join(root, 'managed', 'deeper'), join(root, 'later'), join(root, 'later', 'managed'), join(root, 'real', 'managed')]) {
+      expect(() => childEnv(env(managed), {}), managed).toThrow(/SKILLS_MANAGED_SETTINGS/);
+    }
+    mkdirSync(join(root, 'plain'));
+    expect(childEnv(env(join(root, 'plain', 'managed')), {}).SKILLS_MANAGED_SETTINGS).toBe(join(root, 'plain', 'managed'));
   });
 
   it('qa run: the command sees no secret and no name outside the allow-list', async () => {

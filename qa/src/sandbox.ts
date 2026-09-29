@@ -3,8 +3,8 @@
 // Sandboxes live in one base directory, created 0700 and checked before use (§6.5a); each run's folder is named by its
 // run id and holds run.json {run_id, pid, started_at, pgids, preexisting}, which the janitor reads.
 import { randomBytes } from 'node:crypto';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { leftoverPaths } from './leftovers.ts';
 import type { Machine } from './machine.ts';
@@ -56,8 +56,26 @@ export function childEnv(sb: { env: Record<string, string> }, parent: NodeJS.Pro
  *  childEnv) or the demo's (its servers, demo/assistant.ts). */
 export function managedInside(managed: string | undefined, root: string | undefined): void {
   const inside = (m: string, r: string) => !within(r, m) && within(m, r);
-  if (managed && root && isAbsolute(managed) && isAbsolute(root) && inside(canonical(resolve(managed)), canonical(resolve(root)))) return;
+  if (managed && root && isAbsolute(managed) && isAbsolute(root)) {
+    const m = canonical(resolve(managed)), r = canonical(resolve(root));
+    if (inside(m, r) && !linkBelow(r, m)) return;
+  }
   throw new UnsafeError(`SKILLS_MANAGED_SETTINGS ${JSON.stringify(managed ?? null)} is not a folder inside the sandbox ${JSON.stringify(root ?? null)}: refusing to start a process that could read this machine's managed settings`);
+}
+
+/** Whether any part of `path` below `root` is a link. canonical() follows a link whose target exists, but not one whose
+ *  target isn't there yet, which could be made later and would then be read through. */
+function linkBelow(root: string, path: string): boolean {
+  let at = root;
+  for (const part of relative(root, path).split(sep)) {
+    at = join(at, part);
+    try {
+      if (lstatSync(at).isSymbolicLink()) return true;
+    } catch {
+      return false;   // not there: nothing below it is either
+    }
+  }
+  return false;
 }
 
 /** run.json is written whole: a temp file, then a rename. */
