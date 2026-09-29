@@ -21,11 +21,11 @@
     "test:catalog": "node scripts/node-check.mjs && vitest run --project fast test/catalog.test.ts test/golden-rules.test.ts",
     "test:discovery": "node scripts/node-check.mjs && vitest run --project fast test/discovery.test.ts",
     "test:storage": "node scripts/node-check.mjs && vitest run --project fast test/storage.test.ts",
-    "test:surface": "node scripts/node-check.mjs && vitest run --project fast test/surface.test.ts",
+    "test:words": "node scripts/node-check.mjs && vitest run --project fast test/words-file.test.ts",
     "test:node-check": "node scripts/node-check.mjs && vitest run --project fast test/node-check.test.ts",
     "typecheck": "tsc --noEmit",
     "check": "node scripts/node-check.mjs && npm run typecheck && npm test",
-    "vendor-surface": "node scripts/vendor-surface.ts",
+    "vendor-words": "node scripts/vendor-words.ts",
     "perf": "node scripts/node-check.mjs && node --disable-warning=ExperimentalWarning scripts/perf-search.ts",
     "try-it": "node scripts/node-check.mjs && node --disable-warning=ExperimentalWarning scripts/try-it.ts"
   },

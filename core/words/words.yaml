@@ -1,6 +1,6 @@
 # Every word an assistant sees from skills-catalog: tool names and descriptions, server instructions, result and
 # error sentences, setup text and the companion skill. Vendored from the agent-experience notes by
-# scripts/vendor-surface.ts; never edit by hand.
+# scripts/vendor-words.ts; never edit by hand.
 recommended: recommended
 variants:
   recommended:

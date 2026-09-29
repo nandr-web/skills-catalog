@@ -61,7 +61,7 @@ export function checkName(name: unknown): string {
 const FRONT = /^﻿?---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/;
 
 // invalid_manifest {fields, problem}: the front matter fields at fault (or SKILL.md itself when it can't be read at
-// all), and the problem as a code; the words for each are in the agent-facing surface.
+// all), and the problem as a code; the words for each are in the words file.
 export type ManifestProblem =
   | 'missing'
   | 'not_utf8'

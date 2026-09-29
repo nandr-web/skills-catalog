@@ -1,7 +1,7 @@
 // Shared by the race tests (installer-race.test.ts, and the full sweeps in installer-race-sweep.test.ts, a slow file):
 // places, the swaps, what a refusal says, and the sweeps themselves. Each test file mocks node:fs through race-fs.ts first.
 import { join } from 'node:path';
-import { Surface, actAs, type Catalog } from '@skills-catalog/core';
+import { Words, actAs, type Catalog } from '@skills-catalog/core';
 import { expect, it } from 'vitest';
 import { contextFor } from '../src/operations.ts';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
@@ -10,7 +10,7 @@ import { race } from './race-fs.ts';
 import { open, request, skillMd } from './seed.ts';
 import { place, type Place } from './server.ts';
 
-export const S = Surface.load();
+export const S = Words.load();
 export const install = MACHINE_RUNS['install_shared_skill']!;
 export const update = MACHINE_RUNS['update_installed_skills']!;
 export const accept = MACHINE_RUNS['accept_held_update']!;
@@ -31,7 +31,7 @@ export async function publish(p: Place, name: string, body: string): Promise<voi
 
 export const refused = (e: unknown) => e as { code?: string; data?: Record<string, unknown>; text?: string };
 // A refusal is thrown by install and accept, and is a skill's refused line in update's result: read it from either.
-// A sentence's slots read back from a line it made: the surface's own words, never hand-typed ones.
+// A sentence's slots read back from a line it made: the words file's own words, never hand-typed ones.
 export function unformat(template: string, line: string): Record<string, string> | undefined {
   const slots: string[] = [];
   const marked = S.format(template, Object.fromEntries([...template.matchAll(/\{(\w+)\}/g)].map(([, k]) => [k, `\u0001${k}\u0002`])));

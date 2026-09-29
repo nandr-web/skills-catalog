@@ -3,7 +3,7 @@
 // from another catalog, run as they are. Nothing here fills in or changes an expected value.
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { CatalogError, Surface, actAs } from '@skills-catalog/core';
+import { CatalogError, Words, actAs } from '@skills-catalog/core';
 import { fingerprint, sha256Hex, type RiskFlag } from '@skills-catalog/core/skill-tree';
 import { loadGolden } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
@@ -14,7 +14,7 @@ import { settingsFrom } from '../src/settings.ts';
 import { open, request } from './seed.ts';
 import { place, type Place } from './server.ts';
 
-const S = Surface.load();
+const S = Words.load();
 const install = MACHINE_RUNS['install_shared_skill']!;
 const update = MACHINE_RUNS['update_installed_skills']!;
 const accept = MACHINE_RUNS['accept_held_update']!;

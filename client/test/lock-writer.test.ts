@@ -6,7 +6,7 @@
 // is written. `exit` is the CLI's; here the error's code and data stand for it.
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
-import { Surface, actAs, type CatalogError } from '@skills-catalog/core';
+import { Words, actAs, type CatalogError } from '@skills-catalog/core';
 import { loadGolden } from '@skills-catalog/core/testing';
 import { describe, expect, it, vi } from 'vitest';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
@@ -19,7 +19,7 @@ import { place, type Place } from './server.ts';
 
 vi.mock('node:fs', async (o) => (await import('./race-fs.ts')).mockFs(await o()));
 
-const S = Surface.load();
+const S = Words.load();
 const install = MACHINE_RUNS['install_shared_skill']!;
 const update = MACHINE_RUNS['update_installed_skills']!;
 const list = MACHINE_RUNS['list_installed_skills']!;

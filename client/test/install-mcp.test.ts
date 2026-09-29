@@ -3,13 +3,13 @@
 // folder is inside it too.
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Surface } from '@skills-catalog/core';
+import { Words } from '@skills-catalog/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { open, request, seed, skillMd } from './seed.ts';
 import { place, startServer, type Place, type Server } from './server.ts';
 import { actAs } from '@skills-catalog/core';
 
-const S = Surface.load();
+const S = Words.load();
 const N = S.names as Record<'install' | 'update' | 'accept' | 'status', string>;
 const LOG = S.fill(S.doc.log) as { result: Record<string, any> };
 

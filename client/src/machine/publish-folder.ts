@@ -187,7 +187,7 @@ export async function publishFolder(ctx: Context, args: unknown): Promise<Done> 
     if (missing) throw new CatalogError('invalid_request', { field: missing, why: 'required' });
     if (!CONFIRM_FORM.test(req.confirm)) throw new CatalogError('invalid_request', { field: 'confirm', why: 'not_a_confirm' });
   }
-  const s = ctx.surface;
+  const s = ctx.words;
   const w = s.word('publish');
   const log = logWords(s);
   let real = req.folder;

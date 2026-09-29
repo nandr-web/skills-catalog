@@ -3,7 +3,7 @@
 // a look when it shows the person the reasons, and their no as an answer. Skill names only as this machine's hash.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { Surface } from '@skills-catalog/core';
+import { Words } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
 import { contextFor, perform } from '../src/operations.ts';
 import { settingsFrom } from '../src/settings.ts';
@@ -27,7 +27,7 @@ describe('looks and answers', () => {
     // Once something that writes has made it (a hold, an answer), a diff's look counts.
     recordUsage(p.home, { event: 'hold', skill: 'release-notes-kit', version: 2, reason: 'flagged', flags: ['runnable_file'], behind: 1 }, new Date(), { createKey: true });
     await cli(p, ['diff', 'release-notes-kit', '--from', '1', '--to', '2']);
-    const { ctx, close } = contextFor(settingsFrom(env(p), p.dir), Surface.load(), 'mcp');
+    const { ctx, close } = contextFor(settingsFrom(env(p), p.dir), Words.load(), 'mcp');
     try {
       await perform(ctx, 'diff_shared_skill_versions', 'diff', { name: 'release-notes-kit', from: 1, to: 2 });
       await perform(ctx, 'diff_shared_skill_versions', 'diff', { name: 'no-such-skill', from: 1, to: 2 });

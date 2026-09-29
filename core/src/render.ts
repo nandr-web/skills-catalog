@@ -1,5 +1,5 @@
 // Results and errors as the words an assistant (or a person at the CLI) reads: one renderer for the MCP text
-// content and the CLI's stdout. Every sentence comes from the surface; a result the surface has no words for yet
+// content and the CLI's stdout. Every sentence comes from the words file; a result the words file has no words for yet
 // is listed in WORD_GAPS and rendered as its data, never as hand-written prose.
 
 import { stringify } from 'yaml';
@@ -7,9 +7,9 @@ import { cursorOffset, type DiffResult, type InlineBudget, type ReadItem, type R
 import { CatalogError } from './errors.ts';
 import type { Ids } from './ports.ts';
 import { MANIFEST, flagText, oneLine, type RiskFlag } from './skill-tree/index.ts';
-import type { Surface } from './surface.ts';
+import type { Words } from './words-file.ts';
 
-// Words the agent-facing surface doesn't have yet (asked for). A test fails when one of them appears in the surface,
+// Words the words file doesn't have yet (asked for). A test fails when one of them appears in the words file,
 // so each is wired as soon as it lands.
 export const WORD_GAPS: readonly string[] = [];
 
@@ -29,14 +29,14 @@ const fenced = (text: string) => text.replace(CONTROLS, (c) => `\\u{${c.charCode
 // path, a key's old and new values, the detail) is escaped and cut (skill-tree's flagText, also applied here to
 // anything shown from a flag or a front matter change).
 
-// A timestamp shows as its day (UTC), in the surface's date words; the data keeps the full ISO time.
-const day = (s: Surface, iso: string) => {
+// A timestamp shows as its day (UTC), in the words file's date words; the data keeps the full ISO time.
+const day = (s: Words, iso: string) => {
   const [yyyy, mm, dd] = iso.slice(0, 10).split('-');
   return s.format(s.word('date'), { yyyy, mm, dd });
 };
 
 // `req` is the search as asked: its words and, for a later page, its cursor (read here, so no face parses one).
-export function renderSearch(s: Surface, r: SearchResult, req: SearchInput): string {
+export function renderSearch(s: Words, r: SearchResult, req: SearchInput): string {
   if (!s.guided) return JSON.stringify(r);
   const query = req.query ?? '';
   const offset = cursorOffset(req.cursor);
@@ -74,7 +74,7 @@ const quoted = (path: string) => JSON.stringify(path);
 // close the fence by planting a marker in any spelling: it can't know the token. Everything shown comes from the
 // read's own result, so a face can't show more than the core inlined (§2's budget): the fence holds the front matter
 // and the body when the core inlined it; a skill whose body was left out shows no fence at all.
-function renderItem(s: Surface, item: ReadItem, token: string, budget: InlineBudget): string {
+function renderItem(s: Words, item: ReadItem, token: string, budget: InlineBudget): string {
   const w = s.word('get');
   const size = (bytes: number) => s.format(w.size, { kb: Math.ceil(bytes / 1024) });
   const publisher = oneLine(item.publisher);
@@ -105,7 +105,7 @@ function renderItem(s: Surface, item: ReadItem, token: string, budget: InlineBud
 }
 
 // `ids` makes the read's fence token (the injected Ids, so tests can fix it).
-export function renderRead(s: Surface, r: ReadResult, ids: Ids): string {
+export function renderRead(s: Words, r: ReadResult, ids: Ids): string {
   if (!s.guided) return JSON.stringify(r);
   const token = ids.next();
   return r.skills
@@ -117,7 +117,7 @@ export function renderRead(s: Surface, r: ReadResult, ids: Ids): string {
     .join('\n\n');
 }
 
-export function renderVersions(s: Surface, r: VersionsResult): string {
+export function renderVersions(s: Words, r: VersionsResult): string {
   if (!s.guided) return JSON.stringify(r);
   const w = s.word('versions');
   const lines = [
@@ -130,13 +130,13 @@ export function renderVersions(s: Surface, r: VersionsResult): string {
 }
 
 // One sentence per risk flag, from the update gate's reasons.
-export function reasons(s: Surface, flags: readonly RiskFlag[]): string {
+export function reasons(s: Words, flags: readonly RiskFlag[]): string {
   const w = s.word('update.reason');
   return flags.map((f) => s.format(w[f.kind], { path: flagText(f.path ?? ''), detail: flagText(f.detail), ...(f.line === undefined ? {} : { line: f.line }) })).join('; ');
 }
 
 // `ids` makes the fence token for the changed lines, which are the publishers' data, like a read's text (§5.2).
-export function renderDiff(s: Surface, r: DiffResult, ids: Ids): string {
+export function renderDiff(s: Words, r: DiffResult, ids: Ids): string {
   if (!s.guided) return JSON.stringify(r);
   const w = s.word('diff');
   if (r.files.length === 0 && !r.publisher_changed) return s.format(w.same, { name: r.name, from: r.from, to: r.to });
@@ -166,13 +166,13 @@ export function shellQuote(text: string): string {
   return /^[A-Za-z0-9@%+=:,./_-]+$/.test(text) ? text : `'${text.replaceAll("'", "'\\''")}'`;
 }
 
-export function renderError(s: Surface, e: CatalogError): string {
+export function renderError(s: Words, e: CatalogError): string {
   if (!s.guided) return JSON.stringify({ error: e.toJSON() });
   const w = s.word('errors');
   // An error's data can carry a request's or a publisher's text (a path, an owner's name): each shown on one line.
   const clean = (v: unknown): unknown => (typeof v === 'string' ? oneLine(v) : Array.isArray(v) ? v.map(clean) : v);
   const data = Object.fromEntries(Object.entries(e.data).map(([k, v]) => [k, clean(v)]));
-  // A reason is a code (why: 'unknown_field'); the surface words it once errors.why exists (a listed gap until then).
+  // A reason is a code (why: 'unknown_field'); the words file words it once errors.why exists (a listed gap until then).
   const d: Record<string, unknown> = typeof data['why'] === 'string' ? { ...data, why: w.why?.[data['why'] as string] ?? data['why'] } : data;
   const fill = (template: string, fields: Record<string, unknown>) => {
     try {

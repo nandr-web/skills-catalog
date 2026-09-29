@@ -1,7 +1,7 @@
-// The CLI face's words: the same surface, with ${op} filled from its CLI names (the command to run, e.g.
+// The CLI face's words: the same words, with ${op} filled from its CLI names (the command to run, e.g.
 // "skills-catalog install <name>") and each word's `_cli` sibling in place of the word, since the command's own output is
 // read by a person, or by an assistant that ran it in a shell and can't call the MCP tools from there.
-import { Surface } from '@skills-catalog/core';
+import { Words } from '@skills-catalog/core';
 
 const CLI_NAMES = '__cli_face';
 
@@ -15,14 +15,14 @@ function preferCli(obj: unknown): unknown {
   return out;
 }
 
-export function cliSurface(s: Surface): Surface {
+export function cliWords(s: Words): Words {
   const doc = structuredClone(s.doc);
   const names = doc.names?.cli;
-  // A surface with no CLI names yet keeps the tool names (the vendored words before the CLI face's).
+  // A words file with no CLI names yet keeps the tool names (the vendored words before the CLI face's).
   if (names) {
     doc.names[CLI_NAMES] = Object.fromEntries(Object.entries(names as Record<string, string>).map(([k, v]) => [k, v.replaceAll('${cli}', s.cli)]));
     doc.variants[s.variant] = { ...doc.variants[s.variant], names: CLI_NAMES };
   }
   doc.results = preferCli(doc.results);
-  return new Surface(doc, s.variant);
+  return new Words(doc, s.variant);
 }

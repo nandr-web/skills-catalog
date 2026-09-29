@@ -77,7 +77,7 @@ const WINDOWS_DEVICE = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(\.|$)/i
 export const MAX_PATH_BYTES = 1024;
 export const MAX_SEGMENT_BYTES = 255;
 
-// Why a path is refused, as a code; the words for each are in the agent-facing surface (errors.why).
+// Why a path is refused, as a code; the words for each are in the words file (errors.why).
 export type PathWhy =
   | 'empty'
   | 'not_utf8'

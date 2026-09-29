@@ -5,7 +5,7 @@
 import { chmodSync, linkSync, mkdirSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import { CatalogError, Surface, actAs } from '@skills-catalog/core';
+import { CatalogError, Words, actAs } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
 import { contextFor, type Context } from '../src/operations.ts';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
@@ -14,7 +14,7 @@ import { settingsFrom } from '../src/settings.ts';
 import { open, request, skillMd } from './seed.ts';
 import { place, type Place } from './server.ts';
 
-const S = Surface.load();
+const S = Words.load();
 const SENTINEL = 'QA-SENTINEL-publish-folder';
 const publish = MACHINE_RUNS['publish_skill_to_catalog']!;
 

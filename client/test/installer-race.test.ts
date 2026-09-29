@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { CatalogError, actAs, renderError } from '@skills-catalog/core';
 import { fingerprint, sha256Hex } from '@skills-catalog/core/skill-tree';
 import { describe, expect, it, vi } from 'vitest';
-import { cliSurface } from '../src/cli/words.ts';
+import { cliWords } from '../src/cli/words.ts';
 import { logWords } from '../src/activity.ts';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
 import { pendingHold } from '../src/machine/installer.ts';
@@ -345,7 +345,7 @@ describe('folders another user could control are refused (target_not_private)', 
       { what: '.claude in the home, not theirs', target: 'user', at: (p) => join(p.osHome, '.claude'), change: { uid: uid + 1 }, way: /SKILLS_ASSISTANT_HOME/ },
     ];
     for (const face of ['mcp', 'cli'] as const) {
-      const words = face === 'cli' ? cliSurface(S) : S;
+      const words = face === 'cli' ? cliWords(S) : S;
       for (const t of tries) {
         const p = place();
         await publish(p, 'alpha', 'Body.\n');

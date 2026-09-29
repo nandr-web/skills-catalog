@@ -6,7 +6,7 @@
 import { execFileSync } from 'node:child_process';
 import { chmodSync, closeSync, constants, existsSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { actAs, Surface } from '@skills-catalog/core';
+import { actAs, Words } from '@skills-catalog/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { appendActivity } from '../src/activity.ts';
 import { CLIENT_WORD_GAPS } from '../src/operations.ts';
@@ -15,7 +15,7 @@ import { PROCESS_TEST_MS, place, startServer, type Place, type Server } from './
 
 vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start the server as a process (see PROCESS_TEST_MS)
 
-const S = Surface.load();
+const S = Words.load();
 const N = S.names as Record<'search' | 'get' | 'versions' | 'diff', string>;
 const TIME = /^\d\d:\d\d:\d\d$/;
 
@@ -31,7 +31,7 @@ afterEach(async () => {
 
 const logOf = (p: Place, path = join(p.home, 'activity.log')) => readFileSync(path, 'utf8');
 const linesOf = (p: Place, path?: string) => logOf(p, path).split('\n').filter(Boolean);
-/** The surface's log words (its top-level `log` section), and the result column's width: the longest of them. */
+/** The words file's log words (its top-level `log` section), and the result column's width: the longest of them. */
 const LOG = S.fill(S.doc.log) as { search_target: string; result: Record<string, any>; error: Record<string, string> };
 const WIDTH = Math.max(...[...Object.values(LOG.result).flatMap((w) => (typeof w === 'string' ? [w] : Object.values(w as Record<string, string>))), ...Object.values(LOG.error)].map((w) => w.length));
 const matched = (count: number, total: number) => S.format(LOG.search_target, { count, total });
@@ -248,7 +248,7 @@ describe('the activity log', () => {
     expect(lines[1]!.slice(0, column).trimEnd()).not.toContain(long);
   });
 
-  it('the log\'s words are the surface\'s, not a gap: every operation served has a result word, and every word is one line with no double space', () => {
+  it('the log\'s words are the words file\'s, not a gap: every operation served has a result word, and every word is one line with no double space', () => {
     expect(CLIENT_WORD_GAPS).not.toContain('log');
     for (const op of ['search', 'get', 'versions', 'diff']) expect(LOG.result[op], op).toBeDefined();
     const words = [LOG.search_target, ...Object.values(LOG.result).flatMap((w) => (typeof w === 'string' ? [w] : Object.values(w as Record<string, string>))), ...Object.values(LOG.error)];

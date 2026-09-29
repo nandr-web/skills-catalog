@@ -1,5 +1,5 @@
 // The contract's error codes (§9). An error carries its code and the fields its sentence needs; the sentence itself
-// comes from the agent-experience wording (surface.ts), so the CLI and MCP faces say the same thing.
+// comes from the agent-experience wording (words-file.ts), so the CLI and MCP faces say the same thing.
 
 export type ErrorCode =
   | 'internal_error'

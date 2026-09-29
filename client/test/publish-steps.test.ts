@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, chmodSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { CatalogError, Surface, actAs, renderError, shellQuote } from '@skills-catalog/core';
+import { CatalogError, Words, actAs, renderError, shellQuote } from '@skills-catalog/core';
 import { loadGolden } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
 import { contextFor } from '../src/operations.ts';
@@ -17,7 +17,7 @@ import { place, type Place } from './server.ts';
 
 const skills = loadGolden('skills.yaml');
 const histories = loadGolden('histories.yaml');
-const S = Surface.load();
+const S = Words.load();
 const publish = MACHINE_RUNS['publish_skill_to_catalog']!;
 const AS = 'dev1';
 

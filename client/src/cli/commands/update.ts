@@ -3,7 +3,7 @@
 // what waits and why, ask in the person's own terminal, and take it only on a yes. Without a terminal it refuses (exit
 // 3, run.ts), a backstop only, since a command can fake a terminal; setup never pre-allows it, so an assistant running
 // it meets the permission prompt.
-import { CatalogError, renderError, toCatalogError, type Surface } from '@skills-catalog/core';
+import { CatalogError, renderError, toCatalogError, type Words } from '@skills-catalog/core';
 import { appendActivity, logWords } from '../../activity.ts';
 import { pendingHold } from '../../machine/installer.ts';
 import type { Target } from '../../machine/lock.ts';
@@ -34,13 +34,13 @@ export const update: Command = {
 
 /** The activity-log line for the parts of update --accept that no operation logs: refused without a terminal, and the
  *  person's no. The target is a skill's name (and version), never other text. */
-export function logAccept(settings: Settings, s: Surface, target: string, result: string): void {
+export function logAccept(settings: Settings, s: Words, target: string, result: string): void {
   const log = logWords(s);
   appendActivity(settings.activityLog, { at: new Date(), who: settings.developer, tool: 'update --accept', target, result }, { ownFolder: settings.activityLogInHome, resultWidth: log.width });
 }
 
-// Words the CLI waits for from the surface (the --accept words); until they're vendored each shows as its data.
-const said = (s: Surface, path: string, fields: Record<string, unknown>) => {
+// Words the CLI waits for from the words file (the --accept words); until they're vendored each shows as its data.
+const said = (s: Words, path: string, fields: Record<string, unknown>) => {
   const w = s.word(path);
   return typeof w === 'string' ? s.format(w, fields) : `${path}: ${JSON.stringify(fields)}`;
 };

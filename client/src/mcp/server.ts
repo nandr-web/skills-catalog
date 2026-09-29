@@ -1,9 +1,9 @@
 // The MCP server over stdio (contract §1, §3): newline-delimited JSON-RPC 2.0 with the few methods a tools-only server
 // needs (initialize, ping, tools/list, tools/call). It's written here rather than taken from the MCP SDK, whose 17
-// runtime dependencies are for HTTP transports this server never uses. The tools are the API's (Surface.toolDefs),
+// runtime dependencies are for HTTP transports this server never uses. The tools are the API's (Words.toolDefs),
 // and each call is the client's face-neutral operation (operations.ts), so the MCP text is what the CLI prints.
 import type { Readable, Writable } from 'node:stream';
-import { Surface } from '@skills-catalog/core';
+import { Words } from '@skills-catalog/core';
 import { contextFor, perform, RUNS } from '../operations.ts';
 import type { Settings } from '../settings.ts';
 
@@ -30,10 +30,10 @@ const isId = (x: unknown): x is string | number => typeof x === 'string' || type
 const reply = (id: string | number, result: unknown) => ({ jsonrpc: '2.0', id, result });
 const failure = (id: string | number | null, code: number, message: string) => ({ jsonrpc: '2.0', id, error: { code, message } });
 
-export type ServerOptions = { settings: Settings; version: string; surface?: Surface; now?: () => Date };
+export type ServerOptions = { settings: Settings; version: string; words?: Words; now?: () => Date };
 
 export function createMcpServer(o: ServerOptions) {
-  const surface = o.surface ?? Surface.load();
+  const surface = o.words ?? Words.load();
   const { ctx, close } = contextFor(o.settings, surface, 'mcp', o.now);
   const tools = new Map(
     surface

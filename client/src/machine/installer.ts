@@ -15,7 +15,7 @@
 
 import { closeSync, constants, existsSync, fchmodSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync, writeSync, type BigIntStats } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { CatalogError, shellQuote, validateInput, type Catalog, type Surface, type VersionsResult } from '@skills-catalog/core';
+import { CatalogError, shellQuote, validateInput, type Catalog, type Words, type VersionsResult } from '@skills-catalog/core';
 import { DEFAULT_LIMITS, checkFetched, checkName, diffTrees, fingerprint, flagText, sha256Hex, type RiskFlag, type TreeDiff, type TreeFile } from '@skills-catalog/core/skill-tree';
 import { reasons } from '@skills-catalog/core';
 import { logWords } from '../activity.ts';
@@ -455,22 +455,22 @@ const sameSet = (a: readonly string[], b: readonly string[]) => {
 
 // ---------- words ----------
 
-// Words the surface has on the agent-experience notes' main but not in the vendored copy yet: until the next vendoring,
+// Words the words file has on the agent-experience notes' main but not in the vendored copy yet: until the next vendoring,
 // each is shown as its data (see operations.ts CLIENT_WORD_GAPS).
 const asData = (what: string, data: unknown) => `${what}: ${JSON.stringify(data)}`;
 
-const policyWords = (s: Surface, p: { policy: Policy; source: 'skill' | 'default' }) => {
+const policyWords = (s: Words, p: { policy: Policy; source: 'skill' | 'default' }) => {
   const name = s.word('policy_name')?.[p.policy];
   const source = s.word('policy_source')?.[p.source];
   return name !== undefined && source !== undefined ? name + source : p.policy;
 };
 
-function changesOf(s: Surface, d: TreeDiff): string {
+function changesOf(s: Words, d: TreeDiff): string {
   return d.files.map((f) => `${quoted(f.path)} ${f.status}`).join(', ');
 }
 
 // A refusal's reason in an update line: the error's subject and why, never the error's own sentence.
-function refusalReason(s: Surface, e: CatalogError): string {
+function refusalReason(s: Words, e: CatalogError): string {
   const why = s.word('errors.why')?.[String(e.data['why'])];
   if (e.code === 'invalid_path' && typeof e.data['path'] === 'string' && why) return `${quoted(flagText(e.data['path']))} ${why}`;
   if (e.code === 'invalid_name' && why) return `${quoted('name')} ${why}`;
@@ -522,14 +522,14 @@ export async function pendingHold(ctx: Context, name: string, target: Target = '
     notify: why === 'notify',
     ...(e && why === 'other_catalog' ? { was: e.catalog, now: ctx.settings.catalog } : {}),
     version: to.version,
-    reasons: flags.length ? reasons(ctx.surface, flags) : '',
+    reasons: flags.length ? reasons(ctx.words, flags) : '',
     confirm: encode({ name, target: at, version: to.version, fingerprint: to.fingerprint, latest: v.latest }),
     flags: kinds(flags),
   };
 }
 
 /** The command the person runs in their own terminal to take a held install into `target`. */
-const acceptCommand = (s: Surface, name: string, target: Target) => [s.cli, ...['update', name, '--accept', ...(target === 'project' ? ['--target', 'project'] : [])].map(shellQuote)].join(' ');
+const acceptCommand = (s: Words, name: string, target: Target) => [s.cli, ...['update', name, '--accept', ...(target === 'project' ? ['--target', 'project'] : [])].map(shellQuote)].join(' ');
 
 // ---------- operations ----------
 
@@ -537,7 +537,7 @@ type InstallInput = { name: string; version?: number; target?: Target; policy?: 
 
 export async function install(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<InstallInput>('install_shared_skill', args, ctx.face);
-  const s = ctx.surface;
+  const s = ctx.words;
   const log = logWords(s);
   const target = req.target ?? 'user';
   const { lock, config } = readRecords(ctx.settings.home);
@@ -609,7 +609,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
 }
 
 /** An update's line for a skill whose folder failed a check: the reason worded per code, else shown as its data. */
-function refusedTarget(s: Surface, at: { name: string; from: number; to: number }, err: CatalogError): string {
+function refusedTarget(s: Words, at: { name: string; from: number; to: number }, err: CatalogError): string {
   // A folder that changed mid-write has its own line, not "nothing was written": the moved-aside copy kept in staging, the
   // temp folder that changed (nothing installed touched), or the copy back in place; and whether a copy may be elsewhere.
   if (err.code === 'target_changed') {
@@ -625,7 +625,7 @@ function refusedTarget(s: Surface, at: { name: string; from: number; to: number 
 }
 
 /** The line naming where a replaced copy was kept (an entry recorded before identities were kept), or nothing. */
-function keptLine(s: Surface, name: string, kept: string | undefined): string {
+function keptLine(s: Words, name: string, kept: string | undefined): string {
   if (kept === undefined) return '';
   const w = s.word('update.kept_in_staging');
   return '\n' + (typeof w === 'string' ? s.format(w, { name, staging: kept }) : asData('kept_in_staging', { name, staging: kept }));
@@ -716,7 +716,7 @@ type AcceptInput = { name: string; target: Target; version: number; confirm: str
 
 export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<AcceptInput>('accept_held_update', args, ctx.face);
-  const s = ctx.surface;
+  const s = ctx.words;
   const { lock, config } = readRecords(ctx.settings.home);
   const t = decode(req.confirm);
   const conflict = () => new CatalogError('conflict', { name: req.name, held: true });
@@ -758,7 +758,7 @@ type UpdateInput = { names?: string[]; dry_run?: boolean; latest?: boolean };
 
 export async function update(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<UpdateInput>('update_installed_skills', args, ctx.face);
-  const s = ctx.surface;
+  const s = ctx.words;
   const w = s.word('update');
   const log = logWords(s);
   const { lock, config } = readRecords(ctx.settings.home);
@@ -943,7 +943,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
 }
 
 export async function list(ctx: Context): Promise<Done> {
-  const s = ctx.surface;
+  const s = ctx.words;
   const { lock, config } = readRecords(ctx.settings.home);
   const here = installedHere(ctx, lock);
   const catalog = here.length ? await ctx.catalog() : undefined;
@@ -968,7 +968,7 @@ type PolicyInput = { policy: Policy; name?: string };
 
 export async function setPolicy(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<PolicyInput>('set_skill_update_policy', args, ctx.face);
-  const s = ctx.surface;
+  const s = ctx.words;
   const home = ctx.settings.home;
   const w = s.word('policy_set');
   const name = s.word('policy_name')?.[req.policy] ?? req.policy;

@@ -3,7 +3,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Surface, renderError, type CatalogError } from '@skills-catalog/core';
+import { Words, renderError, type CatalogError } from '@skills-catalog/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { holdLock, startFromEtime, withLock } from '../src/machine/lock.ts';
 import { race } from './race-fs.ts';
@@ -12,7 +12,7 @@ import { place } from './server.ts';
 vi.mock('node:fs', async (o) => (await import('./race-fs.ts')).mockFs(await o()));
 // `ps` says this process started three days ago (a server running since before the laptop slept); any other pid is asked
 // for real.
-const S = Surface.load();
+const S = Words.load();
 const THREE_DAYS_MS = 3 * 24 * 3600 * 1000;
 vi.mock('node:child_process', async (o) => {
   const real = await o<typeof import('node:child_process')>();

@@ -9,7 +9,7 @@
 import { mkdtempSync, readdirSync, realpathSync, rmdirSync, rmSync, statSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
-import { CatalogError, Surface, actAs, openLocalCatalog, randomIds, renderDiff, renderError, renderRead, renderSearch, renderVersions, type Catalog } from '../src/index.ts';
+import { CatalogError, Words, actAs, openLocalCatalog, randomIds, renderDiff, renderError, renderRead, renderSearch, renderVersions, type Catalog } from '../src/index.ts';
 
 const dir = realpathSync(mkdtempSync(join(tmpdir(), 'skills-catalog-try-')));
 if (dir.startsWith(realpathSync(homedir()) + sep)) {
@@ -17,7 +17,7 @@ if (dir.startsWith(realpathSync(homedir()) + sep)) {
   throw new Error(`refusing ${dir}: it is under your home folder`);
 }
 
-const surface = Surface.load();
+const surface = Words.load();
 const ana = actAs('ana');
 const bob = actAs('bob');
 type File = { path: string; mode: string; content_base64: string };

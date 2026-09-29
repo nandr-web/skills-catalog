@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
-import { Surface } from '../../core/src/index.ts';
+import { Words } from '../../core/src/index.ts';
 import { answer, cliCommand, mcpBackend, serverEnv, type Stage, type Terminal } from '../src/demo/assistant.ts';
 import { conduct, type ConductorIo, type StepsFile, type Turn } from '../src/demo/conductor.ts';
 import { loadScenes, parseScenes, SCENES_FILE, ScenesError, type Scenes } from '../src/demo/scenes.ts';
@@ -18,7 +18,7 @@ const FAKE_SERVER = [process.execPath, here('fixtures/demo/fake-catalog-server.m
 const FAKE_CLI = [process.execPath, here('fixtures/demo/fake-cli.mjs')];
 const plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
 const OS_ADDED = ['__CF_USER_TEXT_ENCODING'];
-const surface = Surface.load();
+const surface = Words.load();
 // only a whole number above 0 ever reaches process.kill (0 or a negative one would mean a process group)
 const alive = (pid: number | undefined) => { if (!(Number.isSafeInteger(pid) && pid! > 0)) return false; try { process.kill(pid!, 0); return true; } catch { return false; } };
 const until = async (f: () => boolean, ms = 5000) => { for (let i = 0; i < ms / 25 && !f(); i++) await new Promise((r) => setTimeout(r, 25)); return f(); };

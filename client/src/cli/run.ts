@@ -1,5 +1,5 @@
 // The CLI face (contract §1, §3): the API's operations as commands, each in its own file (commands/), named as the
-// surface's CLI names write them. run.ts reads a command line, checks it the same way for every command, and runs the
+// words file's CLI names write them. run.ts reads a command line, checks it the same way for every command, and runs the
 // operation through `perform`, so the words, the activity log and "(Acting as …)" are the same as on every face. Results
 // go to stdout, errors to stderr. Exit 0 done, 1 an error, 3 needs the person.
 //
@@ -9,7 +9,7 @@
 // meets the permission prompt.
 
 import { parseArgs } from 'node:util';
-import { CatalogError, Surface, checkActor, renderError, shellQuote } from '@skills-catalog/core';
+import { CatalogError, Words, checkActor, renderError, shellQuote } from '@skills-catalog/core';
 import { NAME_RE, flagText } from '@skills-catalog/core/skill-tree';
 import { logWords } from '../activity.ts';
 import { actingAs, contextFor, perform } from '../operations.ts';
@@ -26,18 +26,18 @@ import { logAccept, update } from './commands/update.ts';
 import { versions } from './commands/versions.ts';
 import { recordUsage } from '../usage/record.ts';
 import { readOnlyContext } from './read-only.ts';
-import { cliSurface } from './words.ts';
+import { cliWords } from './words.ts';
 
 export type { Io } from './command.ts';
 
-/** The commands, keyed by the word after the command's name (as the surface's CLI names write it). */
+/** The commands, keyed by the word after the command's name (as the words file's CLI names write it). */
 export const COMMANDS: Record<string, Command> = { search, read, versions, diff, install, list, update, policy, stats };
 
 /** Every flag a command takes (no leading --), --as included. */
 export const flagsFor = (word: string): string[] => [...Object.keys(COMMANDS[word]?.flags ?? {}), 'as'];
 
-/** The commands this CLI serves, as the surface names them, and the MCP server. */
-export function usage(s: Surface): string {
+/** The commands this CLI serves, as the words file names them, and the MCP server. */
+export function usage(s: Words): string {
   const served = Object.values(s.names).filter((n) => Object.keys(COMMANDS).includes(n.split(' ')[1] ?? ''));
   return `${s.cli}\n${served.map((n) => `  ${n}`).join('\n')}\n  ${s.cli} mcp\n`;
 }
@@ -46,7 +46,7 @@ export function usage(s: Surface): string {
 const withoutAs = (argv: readonly string[]) => argv.filter((a, i) => !(a === '--as' || a.startsWith('--as=') || argv[i - 1] === '--as'));
 
 export async function runCli(argv: readonly string[], io: Io): Promise<number> {
-  const s = cliSurface(Surface.load());
+  const s = cliWords(Words.load());
   const [word, ...rest] = argv;
   const cmd = word === undefined || !Object.hasOwn(COMMANDS, word) ? undefined : COMMANDS[word];
   if (!cmd) {

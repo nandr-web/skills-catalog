@@ -1,4 +1,4 @@
-// Every word an assistant sees, rendered from the vendored surface.yaml (one variant: `recommended` unless told
+// Every word an assistant sees, rendered from the vendored words.yaml (one variant: `recommended` unless told
 // otherwise). Tool names in prose are written ${op} and filled from the variant's names; result fields are {field}
 // and must all be filled: a missing field is a bug here, never a "{field}" shown to an agent.
 
@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { parse } from 'yaml';
 import { OPERATIONS, inputSchema, type OperationDef, type Schema } from './api.ts';
 
-export const SURFACE_FILE = join(import.meta.dirname, '..', 'surface', 'surface.yaml');
+export const WORDS_FILE = join(import.meta.dirname, '..', 'words', 'words.yaml');
 
 export interface JsonSchema {
   type: string;
@@ -33,7 +33,7 @@ export interface ToolDef {
 
 export class UnfilledError extends Error {}
 
-export class Surface {
+export class Words {
   readonly doc: any;
   readonly variant: string;
   readonly v: Record<string, any>;
@@ -44,7 +44,7 @@ export class Surface {
   readonly words: any;
 
   constructor(doc: any, variant: string = doc.recommended) {
-    if (!doc.variants?.[variant]) throw new Error(`surface has no variant ${variant}; it has ${Object.keys(doc.variants ?? {}).join(', ')}`);
+    if (!doc.variants?.[variant]) throw new Error(`the words file has no variant ${variant}; it has ${Object.keys(doc.variants ?? {}).join(', ')}`);
     this.doc = doc;
     this.variant = variant;
     this.v = doc.variants[variant];
@@ -55,9 +55,9 @@ export class Surface {
     this.words = this.fill(doc.results);
   }
 
-  static load(variant?: string, file = SURFACE_FILE): Surface {
+  static load(variant?: string, file = WORDS_FILE): Words {
     const doc = parse(readFileSync(file, 'utf8'));
-    return new Surface(doc, variant ?? doc.recommended);
+    return new Words(doc, variant ?? doc.recommended);
   }
 
   // ${op} → this variant's tool name; ${cli} → the command. Unknown ${…} are left for the test to catch.
@@ -79,7 +79,7 @@ export class Surface {
     });
   }
 
-  // The words at a dotted path under results (e.g. "errors.not_found"), or undefined when the surface has none.
+  // The words at a dotted path under results (e.g. "errors.not_found"), or undefined when the words file has none.
   word(path: string): any {
     return path.split('.').reduce<any>((o, k) => (o == null ? undefined : o[k]), this.words);
   }
@@ -94,7 +94,7 @@ export class Surface {
   }
 
   // The MCP tools: every API operation that has one. Types, required fields and limits come from the API
-  // (one schema per operation, contract §1), without the inputs only a person at the CLI gives; the surface gives only
+  // (one schema per operation, contract §1), without the inputs only a person at the CLI gives; the words file gives only
   // the names and the words.
   toolDefs(operations: Record<string, OperationDef> = OPERATIONS): ToolDef[] {
     return Object.values(operations)
@@ -112,7 +112,7 @@ export class Surface {
       });
   }
 
-  // An API schema as JSON Schema, with each property's description from the surface's words for it.
+  // An API schema as JSON Schema, with each property's description from the words for it.
   private jsonSchema(schema: Schema, words: any): JsonSchema {
     const level = this.v['descriptions'];
     const out: JsonSchema = { type: schema.type };

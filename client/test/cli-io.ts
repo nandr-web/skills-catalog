@@ -1,12 +1,12 @@
 // Runs the CLI face in-process against a sandboxed place, the way the real command would (test/cli.test.ts shows the
 // real command matches): the environment points only into the sandbox, answers stand in for the person at a terminal.
 import { join } from 'node:path';
-import { Surface } from '@skills-catalog/core';
+import { Words } from '@skills-catalog/core';
 import { runCli, type Io } from '../src/cli/run.ts';
-import { cliSurface } from '../src/cli/words.ts';
+import { cliWords } from '../src/cli/words.ts';
 import type { Place } from './server.ts';
 
-export const S = cliSurface(Surface.load());
+export const S = cliWords(Words.load());
 
 export type Ran = { code: number; out: string; err: string; asked: string[] };
 

@@ -3,10 +3,10 @@
 // target; v2 raises exactly the row's flags against it. A row marked `pending` runs as skipped, never as passed.
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Surface, actAs } from '@skills-catalog/core';
+import { Words, actAs } from '@skills-catalog/core';
 import { loadGolden } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
-import { cliSurface } from '../src/cli/words.ts';
+import { cliWords } from '../src/cli/words.ts';
 import { contextFor, type Context } from '../src/operations.ts';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
 import { pendingHold } from '../src/machine/installer.ts';
@@ -15,7 +15,7 @@ import { settingsFrom } from '../src/settings.ts';
 import { open, request, skillMd } from './seed.ts';
 import { place, type Place } from './server.ts';
 
-const S = Surface.load();
+const S = Words.load();
 const install = MACHINE_RUNS['install_shared_skill']!;
 const update = MACHINE_RUNS['update_installed_skills']!;
 const policy = MACHINE_RUNS['set_skill_update_policy']!;
@@ -168,7 +168,7 @@ describe('accepting a hold keeps the policy and records the catalog (golden acce
 // copy from the catalog it came from is held as other_catalog, whether its files differ or not, and nothing changes.
 // On the CLI a hold's words are the CLI's: the command the person runs to take it, never the assistant's tool.
 describe('a hold over an installed copy, at the CLI', () => {
-  const words = cliSurface(S);
+  const words = cliWords(S);
   const cliCtx = (p: Place): Context => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), words, 'cli').ctx;
   for (const reason of ['pin', 'notify', 'other_catalog'] as const) {
     it(`held_${reason} names the command to run, not the tool`, async () => {

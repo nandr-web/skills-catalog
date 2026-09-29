@@ -1,4 +1,4 @@
-// skills-catalog stats (contract §3): the usage summary on this machine, in the surface's words: the window, the six
+// skills-catalog stats (contract §3): the usage summary on this machine, in the words: the window, the six
 // measures, then what asks for a review of when updates are held. Read from $SKILLS_HOME/usage only; nothing leaves the
 // machine, and no skill is named (the events hold only hashes).
 import { describe, expect, it } from 'vitest';
@@ -20,7 +20,7 @@ describe('stats', () => {
     expect([r.code, r.err, r.out.trimEnd()]).toEqual([0, '', w('empty')]);
   });
 
-  it('shows the window, the six measures and what asks for a review, in the surface\'s words', async () => {
+  it('shows the window, the six measures and what asks for a review, in the words file\'s words', async () => {
     const p = place();
     const now = Date.now();
     const at = (days: number, seconds = 0) => new Date(now - days * DAY + seconds * 1000);

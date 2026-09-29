@@ -3,7 +3,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CatalogError, Surface, actAs } from '@skills-catalog/core';
+import { CatalogError, Words, actAs } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
 import { holdLock, withLock } from '../src/machine/lock.ts';
@@ -16,7 +16,7 @@ import { place, type Place } from './server.ts';
 // used by a process started at another time, leaves a stale lock, which the next run removes and takes. A live holder is
 // waited for up to 5 seconds, then the run refuses with lock_busy {path, pid}, changing nothing (contract §4.5).
 describe('the lock file', () => {
-  const S = Surface.load();
+  const S = Words.load();
   const install = MACHINE_RUNS['install_shared_skill']!;
   const ctxFor = (p: Place, now?: () => Date): Context => {
     const { ctx } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), S, 'mcp');

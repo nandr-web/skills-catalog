@@ -3,7 +3,7 @@
 // way. A flag is an operation's input, --<field> with underscores as hyphens; a list is one comma-separated value, and
 // `none` is the empty list, so every input is one visible token in a permission prompt (contract §1). The shorthands
 // (install --project, read --files and --contents) and read's --path (a path may hold a comma) are the commands' own.
-import { CatalogError, inputSchema, type Surface } from '@skills-catalog/core';
+import { CatalogError, inputSchema, type Words } from '@skills-catalog/core';
 import type { Context } from '../operations.ts';
 
 export type FlagType = { type: 'string' | 'boolean'; multiple?: boolean };
@@ -20,7 +20,7 @@ export type Io = {
 };
 
 /** What a command's own run gets: the operation's context, the person's terminal, and what they typed. */
-export type Env = { ctx: Context; s: Surface; io: Io; words: readonly string[]; values: Values; input: Record<string, unknown>; withActing: (text: string) => string };
+export type Env = { ctx: Context; s: Words; io: Io; words: readonly string[]; values: Values; input: Record<string, unknown>; withActing: (text: string) => string };
 
 /** A command's words and flags don't make an input: run.ts prints the usage and exits 1. */
 export class Usage extends Error {}

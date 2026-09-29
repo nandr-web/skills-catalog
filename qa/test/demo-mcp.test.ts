@@ -9,7 +9,7 @@ import { isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { pidFrom } from '../src/pids.ts';
-import { Surface } from '../../core/src/index.ts';
+import { Words } from '../../core/src/index.ts';
 import { answer, mcpBackend, serverEnv, toolName, type Stage, type Turn } from '../src/demo/assistant.ts';
 import { serverCommand } from '../src/demo/director.ts';
 import { CLI_OPS, loadScenes, SCENES_FILE, SKILLS_DIR, type Scenes } from '../src/demo/scenes.ts';
@@ -23,7 +23,7 @@ const ORANGE = '\x1b[38;5;208m';
 const orange = (pane: string) => pane.split('\n').filter((l) => l.includes(ORANGE)).map(plain);
 // macOS itself adds __CF_USER_TEXT_ENCODING (the text encoding id) to every process it starts; it is no secret.
 const OS_ADDED = ['__CF_USER_TEXT_ENCODING'];
-const surface = Surface.load();
+const surface = Words.load();
 const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 const until = async (f: () => boolean, ms = 5000) => { for (let i = 0; i < ms / 25 && !f(); i++) await new Promise((r) => setTimeout(r, 25)); return f(); };
 const within = (p: string, dir: string) => { const r = relative(dir, p); return !!r && !r.startsWith('..') && !isAbsolute(r); };

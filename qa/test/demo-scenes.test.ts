@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stringify } from 'yaml';
 import { afterEach, describe, expect, it } from 'vitest';
-import { actAs, CatalogError, openLocalCatalog, Surface, type Catalog } from '../../core/src/index.ts';
+import { actAs, CatalogError, openLocalCatalog, Words, type Catalog } from '../../core/src/index.ts';
 import { answer, coreBackend, GUTTER, logLine, logWords, RESULT_WIDTH, shown, type Backend, type Stage, wrap } from '../src/demo/assistant.ts';
 import { CLI_OPS, loadScenes, parseScenes, SCENES_FILE, ScenesError, SKILLS_DIR, type Scenes } from '../src/demo/scenes.ts';
 import { keyCommand, renderSteps, type StepsState } from '../src/demo/steps-view.ts';
@@ -18,7 +18,7 @@ const ANSI = /\x1b\[[0-9;]*m/g;
 const plain = (s: string) => s.replace(ANSI, '');
 /** What the product said in a pane: the lines behind the gutter, without it (the stand-in's own lines are left out). */
 const productWords = (pane: string) => plain(pane).split('\n').filter((l) => l.startsWith('  │ ')).map((l) => l.slice(4)).join('\n');
-const surface = Surface.load();
+const surface = Words.load();
 const opened: Catalog[] = [];
 afterEach(() => { for (const c of opened.splice(0)) c.close(); cleanup(); });
 

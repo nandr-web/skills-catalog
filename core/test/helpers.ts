@@ -10,7 +10,7 @@ import { DB_FILE, openLocalCatalog, type LocalOptions } from '../src/local/index
 import type { RawFile } from './golden.ts';
 import { sandbox } from './sandbox.ts';
 
-// The budget of a test that walks a whole golden set or every surface variant: about 2.5 s here and over 5 s on a slower
+// The budget of a test that walks a whole golden set or every variant of the words file: about 2.5 s here and over 5 s on a slower
 // machine (Node 24 in a Linux container), so these few get their own budget instead of a global raise.
 export const HEAVY_MS = 30_000;
 

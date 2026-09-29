@@ -6,7 +6,7 @@ import type { Catalog, ReadItem } from '../src/catalog.ts';
 import { actAs } from '../src/local/index.ts';
 import { OPERATIONS } from '../src/api.ts';
 import { renderError, renderRead } from '../src/render.ts';
-import { Surface } from '../src/surface.ts';
+import { Words } from '../src/words-file.ts';
 import { DEFAULT_LIMITS } from '../src/skill-tree/index.ts';
 import { catalogNameOf, filesOf, generated, loadGolden, rawFilesOf, type RawFile } from './golden.ts';
 import { counterIds, errorOf, openTest, request, snapshot } from './helpers.ts';
@@ -51,7 +51,7 @@ describe('every refused fixture gives its golden code and reason, and stores not
     }
     if (fx.error_text_must_not_contain) {
       expect(JSON.stringify(e.toJSON())).not.toContain(fx.error_text_must_not_contain);
-      expect(renderError(Surface.load(), e)).not.toContain(fx.error_text_must_not_contain);
+      expect(renderError(Words.load(), e)).not.toContain(fx.error_text_must_not_contain);
     }
     for (const field of ['max', 'value'] as const) if (fx[field] !== undefined) expect(e.data[field], field).toEqual(limitValue(fx[field]));
     expect(snapshot(dir)).toBe(before);
@@ -182,7 +182,7 @@ describe('the read\'s inline budget (golden reads)', () => {
     if (c.expect.frontmatter_returned !== undefined) expect(withFrontmatter).toBe(c.expect.frontmatter_returned === true ? items.length : c.expect.frontmatter_returned);
     expect(r.inline_budget).toEqual(c.expect.inline_budget);
     // The words an assistant gets for this read: never more text than the core inlined.
-    const s = Surface.load();
+    const s = Words.load();
     const text = renderRead(s, r, counterIds());
     // The note up to its end line (the line carries this read's token).
     const fenced = text.split(s.format((s.word('get').data_note as string).split('{end}')[0]!, { publisher: 'ana' })).length - 1;
@@ -215,7 +215,7 @@ describe('search filter limits (golden search_filters)', () => {
 
 describe('the fence (golden fence)', () => {
   it('planted end markers in several spellings stay inside; one start and one end marker carry the real token', async () => {
-    const s = Surface.load();
+    const s = Words.load();
     const { catalog } = await openTest();
     const end = s.word('get').fence[1] as string;
     const planted = [s.format(end, { token: '' }), s.format(end, { token: 'x' }), s.format(end, { token: 'x' }).toUpperCase()];

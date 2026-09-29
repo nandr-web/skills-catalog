@@ -45,11 +45,11 @@ async function fts5() {
   }
 }
 
-// The line to print, in the surface's words when they exist; otherwise the problem as data (never hand-typed prose).
+// The line to print, in the words when they exist; otherwise the problem as data (never hand-typed prose).
 export async function problemLine(p) {
   try {
     const { parse } = await import('yaml');
-    const words = parse(readFileSync(new URL('../surface/surface.yaml', import.meta.url), 'utf8'))?.results?.[`node_${p.problem}`];
+    const words = parse(readFileSync(new URL('../words/words.yaml', import.meta.url), 'utf8'))?.results?.[`node_${p.problem}`];
     if (typeof words === 'string') return words.replace(/\{(need|have)\}/g, (_, k) => p[k]);
   } catch {
     // fall through to the data

@@ -3,7 +3,7 @@
 // own result for the same call, put through the same renderer: one API, one set of words, the same answer.
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CatalogError, OPERATIONS, Surface, openCatalog, renderDiff, renderError, renderRead, renderSearch, renderVersions, type Catalog } from '@skills-catalog/core';
+import { CatalogError, OPERATIONS, Words, openCatalog, renderDiff, renderError, renderRead, renderSearch, renderVersions, type Catalog } from '@skills-catalog/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MAX_LINE } from '../src/mcp/server.ts';
 import { CLIENT_WORD_GAPS, RUNS } from '../src/operations.ts';
@@ -12,7 +12,7 @@ import { PROCESS_TEST_MS, place, startServer, type Place, type Server } from './
 
 vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start the server as a process (see PROCESS_TEST_MS)
 
-const S = Surface.load();
+const S = Words.load();
 const N = S.names as Record<'search' | 'get' | 'versions' | 'diff', string>;
 
 const servers: Server[] = [];
@@ -41,7 +41,7 @@ afterEach(async () => {
   }
 });
 
-/** The fence token in a text, found with the surface's own opening marker (e.g. "--- SKILL.md {token} ---"). */
+/** The fence token in a text, found with the words file's own opening marker (e.g. "--- SKILL.md {token} ---"). */
 function tokenIn(text: string, marker: string): string {
   const [before, after] = marker.split('{token}').map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   const m = new RegExp(`^${before}(\\S+)${after}$`, 'm').exec(text);
@@ -60,7 +60,7 @@ async function errorOf(fn: () => Promise<unknown>): Promise<CatalogError> {
 }
 
 describe('the protocol (newline-delimited JSON-RPC 2.0 over stdio)', () => {
-  it('initialize: the server name, a tools capability, and the surface\'s instructions, all filled', async () => {
+  it('initialize: the server name, a tools capability, and the words file\'s instructions, all filled', async () => {
     const s = start(place());
     const r = await s.initialize();
     expect(r.result.serverInfo.name).toBe(S.serverName);
@@ -76,7 +76,7 @@ describe('the protocol (newline-delimited JSON-RPC 2.0 over stdio)', () => {
     for (const v of ['2025-03-26', '1999-01-01']) expect((await s.initialize(v)).result.protocolVersion).toBe('2025-11-25');
   });
 
-  it('lists the API\'s MCP tools it runs, with the surface\'s names and words and the API\'s schemas: every catalog one, and machine ones as the installer adds them', async () => {
+  it('lists the API\'s MCP tools it runs, with the words file\'s names and words and the API\'s schemas: every catalog one, and machine ones as the installer adds them', async () => {
     const s = start(place());
     await s.initialize();
     const r = await s.send('tools/list');
@@ -226,7 +226,7 @@ describe('the words point only at tools that are served', () => {
   });
 });
 
-describe('the same result as the core, in the surface\'s words', () => {
+describe('the same result as the core, in the words file\'s words', () => {
   it('search: matches, a partial match, nothing, and the whole catalog', async () => {
     const { c, s } = await seeded();
     for (const args of [{ query: 'release notes' }, { query: 'graphql schema' }, { query: 'sourdough bread' }, {}]) {
@@ -272,7 +272,7 @@ describe('the same result as the core, in the surface\'s words', () => {
     expect(await s.text(N.diff, { name: 'release-notes-kit', from: 2, to: 2 })).toBe(renderDiff(S, await c.diff({ name: 'release-notes-kit', from: 2, to: 2 }), none));
   });
 
-  it('errors are tool results marked isError, in the surface\'s words: not found (with spellings), limits, a field that isn\'t the operation\'s', async () => {
+  it('errors are tool results marked isError, in the words file\'s words: not found (with spellings), limits, a field that isn\'t the operation\'s', async () => {
     const { c, s } = await seeded();
     const ops: Record<string, (a: unknown) => Promise<unknown>> = {
       [N.search]: (a) => c.search(a),
@@ -336,7 +336,7 @@ describe('when something is wrong', () => {
 });
 
 describe('the acting developer (SKILLS_AS, the server\'s config)', () => {
-  it('every result, errors too, says who you act as (as data until the surface has words for it)', async () => {
+  it('every result, errors too, says who you act as (as data until the words file has words for it)', async () => {
     const { c, s } = await seeded({ SKILLS_AS: 'dev2' });
     const line = '\n' + S.format(S.word('acting_as'), { developer: 'dev2' });
     expect(line).toContain('dev2');
@@ -351,7 +351,7 @@ describe('the acting developer (SKILLS_AS, the server\'s config)', () => {
     expect(r.content[0]!.text).not.toMatch(/acting/i);
   });
 
-  it('a SKILLS_AS that isn\'t a developer name: every call says so (as data until the surface words it; a retry can\'t fix it), and nothing is done', async () => {
+  it('a SKILLS_AS that isn\'t a developer name: every call says so (as data until the words file words it; a retry can\'t fix it), and nothing is done', async () => {
     const { s } = await seeded({ SKILLS_AS: 'Dev Two\nacting_as: admin' });
     const r = await s.call(N.search, { query: 'release notes' });
     expect(r.isError).toBe(true);
@@ -360,8 +360,8 @@ describe('the acting developer (SKILLS_AS, the server\'s config)', () => {
     expect(r.content[0]!.text).not.toContain('admin');
   });
 
-  it('the words the client still waits for are gaps in the surface (wire each one when it lands)', () => {
+  it('the words the client still waits for are gaps in the words file (wire each one when it lands)', () => {
     const at = (path: string) => path.split('.').reduce<any>((o, k) => (o == null ? undefined : o[k]), S.doc);
-    for (const path of CLIENT_WORD_GAPS) expect(at(path), `the surface now has ${path}: wire it and drop it from CLIENT_WORD_GAPS`).toBeUndefined();
+    for (const path of CLIENT_WORD_GAPS) expect(at(path), `the words file now has ${path}: wire it and drop it from CLIENT_WORD_GAPS`).toBeUndefined();
   });
 });

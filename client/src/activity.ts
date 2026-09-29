@@ -1,21 +1,21 @@
 // The activity log, for the demo's bottom pane: one plain line per tool call, `HH:MM:SS  who  tool  result  target`
-// (UTC, spaces only). The result is one of the surface's log words (its top-level `log` section), padded to the longest
+// (UTC, spaces only). The result is one of the words file's log words (its top-level `log` section), padded to the longest
 // of them, so the target, which can be long (skill names run to 64 characters), comes last and never shifts a column.
 // The caller builds the target from the result (skill names and versions, a match count), so nothing an assistant
 // typed, and no skill text, ever reaches it. Writing it never fails or stalls a tool call: the log is for watching.
 import { closeSync, constants, fchmodSync, fstatSync, mkdirSync, openSync, writeSync, type Stats } from 'node:fs';
 import { dirname } from 'node:path';
-import type { Surface } from '@skills-catalog/core';
+import type { Words } from '@skills-catalog/core';
 
 export type Activity = { at: Date; who?: string | undefined; tool: string; target: string; result: string };
 
-/** The log's words from the surface: a search's target, a result by operation (and outcome), an error by code, and the
+/** The log's words from the words file: a search's target, a result by operation (and outcome), an error by code, and the
  *  result column's width (the longest word). */
 export type LogWords = { width: number; searchTarget: (count: number, total: number) => string; result: (op: string, outcome?: string) => string; error: (code: string) => string };
 
-const cache = new WeakMap<Surface, LogWords>();
+const cache = new WeakMap<Words, LogWords>();
 
-export function logWords(s: Surface): LogWords {
+export function logWords(s: Words): LogWords {
   const known = cache.get(s);
   if (known) return known;
   const log = s.fill(s.doc.log) as { search_target: string; result: Record<string, string | Record<string, string>>; error: Record<string, string> };
@@ -26,10 +26,10 @@ export function logWords(s: Surface): LogWords {
     result: (op, outcome) => {
       const w = log.result[op];
       const word = typeof w === 'string' ? w : outcome === undefined ? undefined : w?.[outcome];
-      if (word === undefined) throw new Error(`the surface's log has no result for ${op}${outcome ? ` (${outcome})` : ''}`);
+      if (word === undefined) throw new Error(`the words file's log has no result for ${op}${outcome ? ` (${outcome})` : ''}`);
       return word;
     },
-    // A code the log has no word for is shown as refused, with its code (the surface's rule).
+    // A code the log has no word for is shown as refused, with its code (the words file's rule).
     error: (code) => log.error[code] ?? `refused: ${code}`,
   };
   cache.set(s, words);

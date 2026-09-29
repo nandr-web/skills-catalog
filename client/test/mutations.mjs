@@ -26,13 +26,13 @@ const MUTATIONS = [
   // test that calls 20 tools and closes at once stays, for a catalog whose storage waits (the hosted one).
   ['operations.ts', 'a catalog that failed to open is never tried again', '        opened = undefined;\n', ''],
   // the words an assistant reads
-  ['operations.ts', 'a bug\'s traceback reaches the assistant', ": renderError(surface, err), target: NONE, result: log.error(err.code) };", ": (err.code === 'internal_error' && e instanceof Error ? String(e.stack) : renderError(surface, err)), target: NONE, result: log.error(err.code) };"],
+  ['operations.ts', 'a bug\'s traceback reaches the assistant', ": renderError(words, err), target: NONE, result: log.error(err.code) };", ": (err.code === 'internal_error' && e instanceof Error ? String(e.stack) : renderError(surface, err)), target: NONE, result: log.error(err.code) };"],
   ['operations.ts', 'errors don\'t say who you act as', 'return { text: settings.developer ?', 'return { text: settings.developer && !isError ?'],
-  ['operations.ts', 'the acting line is data, not the surface\'s words', "s.format(s.word('acting_as'), { developer })", '`acting_as: ${developer}`'],
+  ['operations.ts', 'the acting line is data, not the words', "s.format(s.word('acting_as'), { developer })", '`acting_as: ${developer}`'],
   ['operations.ts', 'a SKILLS_AS that isn\'t a developer name is ignored', 'if (settings.developerInvalid) throw', 'if (false) throw'],
   ['settings.ts', 'SKILLS_AS is taken whatever it holds', 'const valid = as !== undefined && ACTOR.test(as);', 'const valid = as !== undefined;'],
-  ['operations.ts', 'a later page says it shows the first cards (the request isn\'t passed on)', 'renderSearch(ctx.surface, r, (args ?? {}) as SearchInput)', 'renderSearch(ctx.surface, r, {})'],
-  ['operations.ts', 'every read\'s fence has the same token', 'renderRead(ctx.surface, r, ctx.ids)', "renderRead(ctx.surface, r, { next: () => 'fixed' })"],
+  ['operations.ts', 'a later page says it shows the first cards (the request isn\'t passed on)', 'renderSearch(ctx.words, r, (args ?? {}) as SearchInput)', 'renderSearch(ctx.words, r, {})'],
+  ['operations.ts', 'every read\'s fence has the same token', 'renderRead(ctx.words, r, ctx.ids)', "renderRead(ctx.words, r, { next: () => 'fixed' })"],
   // the activity log
   ['operations.ts', 'the log\'s search target is the query', 'target: log.searchTarget(r.total_matches, r.catalog_size)', 'target: String((args as { query?: string } | undefined)?.query)'],
   ['operations.ts', 'the log\'s read target comes from the arguments', "target: items.map((i) => `${i.name} v${i.version}`).join(', ') || NONE", "target: String((args as { name?: string } | undefined)?.name ?? NONE)"],

@@ -4,7 +4,7 @@
 // stored hashed.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Surface, actAs } from '@skills-catalog/core';
+import { Words, actAs } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
 import { contextFor, type Context } from '../src/operations.ts';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
@@ -13,7 +13,7 @@ import { settingsFrom } from '../src/settings.ts';
 import { open, request, skillMd } from './seed.ts';
 import { place, type Place } from './server.ts';
 
-const S = Surface.load();
+const S = Words.load();
 const install = MACHINE_RUNS['install_shared_skill']!;
 const update = MACHINE_RUNS['update_installed_skills']!;
 const accept = MACHINE_RUNS['accept_held_update']!;

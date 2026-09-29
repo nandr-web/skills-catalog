@@ -1,7 +1,7 @@
 // Usage metrics, the `use` event (contract §3): every operation on any face records one, with the API's name and a
 // result code: an error's code, the operation's outcome where it has one (a search's match), or "ok". Never the query,
 // a name or a path. And the outcome a face acts on: the CLI's read exits 1 when none of its names is found (§1).
-import { actAs, Surface } from '@skills-catalog/core';
+import { actAs, Words } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
 import { contextFor, perform } from '../src/operations.ts';
 import { settingsFrom } from '../src/settings.ts';
@@ -81,7 +81,7 @@ describe('the use event', () => {
   it('the assistant\'s tools count installs, updates and a held install taken the same way', async () => {
     const p = place();
     await seed(p);
-    const { ctx, close } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, p.dir), Surface.load(), 'mcp');
+    const { ctx, close } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, p.dir), Words.load(), 'mcp');
     try {
       await perform(ctx, 'install_shared_skill', 'install', { name: 'sql-migration-helper' });
       const held = await perform(ctx, 'install_shared_skill', 'install', { name: 'release-notes-kit' });
@@ -103,7 +103,7 @@ describe('the use event', () => {
   it('the assistant\'s tools count the same way', async () => {
     const p = place();
     await seed(p);
-    const { ctx, close } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, p.dir), Surface.load(), 'mcp');
+    const { ctx, close } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, p.dir), Words.load(), 'mcp');
     try {
       await perform(ctx, 'search_shared_skills', 'search', { query: 'zzz-nothing-like-this' });
       await perform(ctx, 'read_shared_skill', 'read', { name: 'no-such-skill' });

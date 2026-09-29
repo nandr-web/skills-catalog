@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error: a plain .mjs script, on purpose (it must run on any Node)
 import { NEED, nodeProblem, problemLine } from '../scripts/node-check.mjs';
-import { Surface } from '../src/surface.ts';
+import { Words } from '../src/words-file.ts';
 
 describe('the Node check (contract §8)', () => {
   it('needs 24.15 or later, and FTS5 in node:sqlite', () => {
@@ -16,8 +16,8 @@ describe('the Node check (contract §8)', () => {
     expect(nodeProblem('25.2.1', false)).toEqual({ problem: 'no_fts5', need: '24.15.0', have: '25.2.1' });
   });
 
-  it('says what is wrong in the surface\'s words', async () => {
-    const s = Surface.load();
+  it('says what is wrong in the words file\'s words', async () => {
+    const s = Words.load();
     for (const p of [{ problem: 'too_old', need: '24.15.0', have: '22.12.0' }, { problem: 'no_fts5', need: '24.15.0', have: '25.2.1' }]) {
       expect(await problemLine(p)).toBe(s.format(s.word(`node_${p.problem}`), { need: p.need, have: p.have }));
     }

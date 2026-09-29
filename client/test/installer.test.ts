@@ -3,7 +3,7 @@
 // yes, never overwrites or shadows what it didn't install, and records what it did in the lock.
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CatalogError, Surface, actAs, reasons, renderError, type Catalog } from '@skills-catalog/core';
+import { CatalogError, Words, actAs, reasons, renderError, type Catalog } from '@skills-catalog/core';
 import { checkTree, diffTrees, fingerprint, sha256Hex, type Mode } from '@skills-catalog/core/skill-tree';
 import { loadGolden } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
@@ -14,7 +14,7 @@ import { settingsFrom } from '../src/settings.ts';
 import { open, request, skillMd } from './seed.ts';
 import { place, type Place } from './server.ts';
 
-const S = Surface.load();
+const S = Words.load();
 const AUTO_DEFAULT = S.word('policy_name').auto + S.word('policy_source').default;
 const run = (op: string) => MACHINE_RUNS[op]!;
 const install = run('install_shared_skill');

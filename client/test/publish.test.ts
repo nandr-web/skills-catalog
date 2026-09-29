@@ -5,14 +5,14 @@
 // stdio and check what the catalog stored, read back through the core.
 import { mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { actAs, CatalogError, renderError, Surface, type Catalog } from '@skills-catalog/core';
+import { actAs, CatalogError, renderError, Words, type Catalog } from '@skills-catalog/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { open, request, seed, skillMd } from './seed.ts';
 import { PROCESS_TEST_MS, place, startServer, type Place, type Server } from './server.ts';
 
 vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start the server as a process (see PROCESS_TEST_MS)
 
-const S = Surface.load();
+const S = Words.load();
 const P = S.names['publish']!;
 const LOG = S.fill(S.doc.log) as { result: Record<string, any>; error: Record<string, string> };
 const IGNORED = ['.git/config', '.env', '.env.local', 'id_rsa', 'deploy-key.pem', '.DS_Store'];
@@ -41,7 +41,7 @@ function folder(p: Place, name: string, body = 'Body.\n', extra: Record<string, 
   return dir;
 }
 
-/** Step 2's values in a preview: the surface's words end with `confirm "<value>", name "<name>", version <n>, files <n>
+/** Step 2's values in a preview: the words end with `confirm "<value>", name "<name>", version <n>, files <n>
  *  and flags [<kinds>]`. */
 function step2In(text: string) {
   expect(S.word('publish').preview).toContain('confirm "{confirm}", name "{name}", version {version}, files {n_send} and flags {flags}');

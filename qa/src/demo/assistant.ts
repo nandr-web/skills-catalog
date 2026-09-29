@@ -18,7 +18,7 @@ import { actAs } from '../../../core/src/local/identity.ts';
 import type { Ids } from '../../../core/src/ports.ts';
 import { renderDiff, renderError, renderRead, renderSearch, renderVersions } from '../../../core/src/render.ts';
 import { flagText } from '../../../core/src/skill-tree/diff.ts';
-import { Surface } from '../../../core/src/surface.ts';
+import { Words } from '../../../core/src/words-file.ts';
 import { managedInside } from '../sandbox.ts';
 import { PANE_PATH, serverCommand } from './director.ts';
 import { CLI_OPS, findAsk, loadScenes, SCENES_FILE, ScenesError, type Call, type Scenes } from './scenes.ts';
@@ -57,7 +57,7 @@ export type Stage = {
   who: string;
   scenes: Scenes;
   backend: Backend;
-  surface: Surface;
+  surface: Words;
   /** The pane (ANSI colours included). */
   out: (text: string) => void;
   /** The pane's width in columns: the product's lines wrap at it (0 or none: no wrapping). A function is asked each time
@@ -73,7 +73,7 @@ export type Stage = {
 export type Turn = { who: string; say: string; step: number | null; ok: boolean; at: string };
 
 /** A scene's op as this surface's tool name; setup is the command, until the installer serves it. */
-export function toolName(s: Surface, op: string): string {
+export function toolName(s: Words, op: string): string {
   if (op === 'setup') return `${s.cli} setup`;
   const name = s.names[op === 'read' ? 'get' : op];
   if (!name) throw new Error(`the surface has no tool for ${op}`);
@@ -83,7 +83,7 @@ export function toolName(s: Surface, op: string): string {
 /** The activity log's words: the surface's own (its top-level `log` section), read as the catalog's server reads them
  *  (client/src/activity.ts), so both backends log the same words: a search's target, a result by operation (and
  *  outcome), an error by code, and the result column's width (the longest of them). */
-export function logWords(s: Surface) {
+export function logWords(s: Words) {
   const log = s.fill(s.doc.log) as { search_target: string; result: Record<string, string | Record<string, string>>; error: Record<string, string> };
   const all = [...Object.values(log.result).flatMap((w) => (typeof w === 'string' ? [w] : Object.values(w))), ...Object.values(log.error)];
   return {
@@ -99,7 +99,7 @@ export function logWords(s: Surface) {
     error: (code: string) => log.error[code] ?? `refused: ${code}`,
   };
 }
-export const RESULT_WIDTH = logWords(Surface.load()).width;
+export const RESULT_WIDTH = logWords(Words.load()).width;
 
 /** One activity.log line: `HH:MM:SS  <who>  <tool:27>  <result, padded>  <target>`, UTC. who is "-" unless a developer,
  *  padded to the longest developer id (at least 4). */
@@ -123,7 +123,7 @@ export function readFolder(dir: string, sub = ''): { path: string; mode: string;
 
 /** The core, in this process: each developer publishes from their own skill folders. `ids` makes the tokens that fence
  *  a read's and a diff's publisher text (the core's random ones unless a test fixes them). */
-export function coreBackend(o: { catalog: Catalog | Promise<Catalog>; surface: Surface; skillsDir: string; ids?: Ids }): Backend {
+export function coreBackend(o: { catalog: Catalog | Promise<Catalog>; surface: Words; skillsDir: string; ids?: Ids }): Backend {
   const s = o.surface, words = logWords(s);
   // loaded at the first call, as the catalog is: the module opens SQLite, whose warning must not reach the pane first
   const ids = async (): Promise<Ids> => o.ids ?? (await import('../../../core/src/local/index.ts')).randomIds;
@@ -229,14 +229,14 @@ export function cliCommand(server: readonly string[]): string[] {
 /** The lines of a server's result to colour orange, found by the surface's own words: a refusal's first line; a publish
  *  preview's review line (what the catalog flagged); the diff header that says it can run something new, and the files
  *  listed right under it that can run. */
-export function alertLines(s: Surface, text: string, isError: boolean): number[] {
+export function alertLines(s: Words, text: string, isError: boolean): number[] {
   if (isError) return [0];
   const lines = text.split('\n');
   const review = String(s.word('publish.review')).split('{')[0];
   const reviewed = review ? lines.flatMap((l, i) => (l.startsWith(review) ? [i] : [])) : [];
   return [...reviewed, ...diffAlert(s, lines)];
 }
-function diffAlert(s: Surface, lines: string[]): number[] {
+function diffAlert(s: Words, lines: string[]): number[] {
   const w = s.word('diff');
   const header = String(w.header), at = header.indexOf('{executes}');
   if (at < 0) return [];
@@ -255,7 +255,7 @@ function diffAlert(s: Surface, lines: string[]): number[] {
  *  server's own words (its result's text). Publish is two: the preview, then, once the person says yes, the confirm with
  *  the values the preview gives for it (a refused preview is never confirmed). The server writes activity.log. A server
  *  that won't start, or stops, is each call's error; close() stops it, at any moment. */
-export function mcpBackend(o: { command: string[]; root: string; who: string; catalog: string; activityLog: string; surface: Surface; cli?: string[]; terminal?: Terminal }): Backend & { close(): void; kill(signal: NodeJS.Signals): void; pid(): number | undefined } {
+export function mcpBackend(o: { command: string[]; root: string; who: string; catalog: string; activityLog: string; surface: Words; cli?: string[]; terminal?: Terminal }): Backend & { close(): void; kill(signal: NodeJS.Signals): void; pid(): number | undefined } {
   const s = o.surface;
   let child: ChildProcess | undefined, stopped = false;
   // The tools the server serves, each with the inputs it takes (its inputSchema's properties).
@@ -487,7 +487,7 @@ async function main(): Promise<number> {
   process.removeAllListeners('warning');
   process.on('warning', (w) => { if (w.name !== 'ExperimentalWarning') process.stderr.write(`${w.name}: ${w.message}\n`); });
   const { openCatalog } = await import('../../../core/src/open.ts');
-  const surface = Surface.load();
+  const surface = Words.load();
   const stage: Omit<Stage, 'backend'> = {
     who, scenes, surface,
     out: (s) => { process.stdout.write(s); },
