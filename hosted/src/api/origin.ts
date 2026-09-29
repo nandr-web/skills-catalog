@@ -47,6 +47,8 @@ export function originGuard(p: { names: { current: string; previous: string }; r
         }
       } else if (age >= ORIGIN_VALUES_MS) {
         // Good values in hand: read again in the background and answer with them; a failed read leaves them standing.
+        // On Lambda a background read can be frozen between invocations and resume on the next; `reading` is cleared
+        // only when it settles, so requests keep sharing it rather than starting another.
         read().catch(() => {});
       }
       if (!good || p.clock.now().getTime() - good.at >= ORIGIN_KEEP_MS) return false;
