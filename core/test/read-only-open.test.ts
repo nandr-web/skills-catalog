@@ -75,7 +75,7 @@ describe('a read-only open of a catalog that exists', () => {
 
   it('never sweeps leftovers, delivers pending events or rebuilds a stale index', async () => {
     const dir = await published();
-    // an old leftover in tmp/, a pending event, and a search index made with another tokenizer
+    // an old leftover in tmp/, a pending event, and a search index made with the tokenizer an older version used
     const leftover = join(dir, 'tmp', 'leftover');
     writeFileSync(leftover, 'x');
     const old = new Date(Date.now() - 2 * 60 * 60 * 1000);
@@ -83,11 +83,15 @@ describe('a read-only open of a catalog that exists', () => {
     const w = new DatabaseSync(join(dir, DB_FILE));
     w.prepare('INSERT INTO outbox (event) VALUES (?)').run(JSON.stringify({ type: 'version_published', name: 'alpha', version: 1 }));
     w.exec("DROP TABLE search_fts; CREATE VIRTUAL TABLE search_fts USING fts5 (name UNINDEXED, words, description, tokenize = 'unicode61');");
+    w.exec("INSERT INTO search_fts (name, words, description) VALUES ('alpha', 'alpha', 'The alpha skill.')");
     w.close();
     const before = contents(dir);
     const catalog = await readOnly(dir);
     try {
-      await catalog.search({ query: 'alpha' });
+      // the stale index is read as it is: every read answers, none writes
+      expect(await reads(catalog)).toEqual(['alpha']);
+      expect((await catalog.read({ name: 'alpha' })).skills.map((e) => ('error' in e ? e.error.code : e.name))).toEqual(['alpha']);
+      expect((await catalog.versions({ name: 'alpha' })).versions).toHaveLength(1);
     } finally {
       catalog.close();
     }
@@ -100,6 +104,28 @@ describe('a read-only open of a catalog that exists', () => {
     } finally {
       r.close();
     }
+  });
+});
+
+describe('a read-only open of a catalog file the reads can\'t use', () => {
+  // a table the reads query is missing (a foreign or damaged file), or the file is empty: refused as catalog_unreadable
+  // when opened, never internal_error on the first read
+  for (const table of ['skills', 'versions', 'search_cards', 'search_fts']) {
+    it(`without its ${table} table, refuses with catalog_unreadable`, async () => {
+      const dir = await published();
+      const w = new DatabaseSync(join(dir, DB_FILE));
+      w.exec(`DROP TABLE ${table}`);
+      w.close();
+      const before = contents(dir);
+      expect((await errorOf(() => readOnly(dir))).toJSON()).toEqual({ code: 'invalid_request', field: 'catalog', why: 'catalog_unreadable', path: dir });
+      expect(contents(dir)).toEqual(before);
+    });
+  }
+
+  it('empty, refuses with catalog_unreadable', async () => {
+    const dir = sandbox();
+    writeFileSync(join(dir, DB_FILE), '');
+    expect((await errorOf(() => readOnly(dir, false))).toJSON()).toEqual({ code: 'invalid_request', field: 'catalog', why: 'catalog_unreadable', path: dir });
   });
 });
 
