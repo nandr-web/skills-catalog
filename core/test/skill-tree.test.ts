@@ -19,6 +19,7 @@ import {
   nameProblem,
   foldKey,
   flagText,
+  checkFetched,
   RESERVED_NAMES_FILE,
   CASE_FOLDING_FILE,
 } from '../src/skill-tree/index.ts';
@@ -332,6 +333,32 @@ describe('flag text is plain: invisible characters escaped, then cut to 200 code
     expect([...flagText('b'.repeat(200))]).toHaveLength(200);
     expect(flagText('b'.repeat(200)).endsWith('b')).toBe(true);
     expect(flagText(flagText(`x\u{200b}${'y'.repeat(250)}`))).toBe(flagText(`x\u{200b}${'y'.repeat(250)}`));
+  });
+});
+
+describe('the installer decides from bytes it checked (contract §5.3, step 1 and 2)', () => {
+  const md = (name: string, extra = '') => ({ path: 'SKILL.md', mode: '0644', bytes: Buffer.from(`---\nname: ${name}\ndescription: A skill.\n---\nBody.\n${extra}`) });
+  const fp = (files: RawFile[]) => fingerprint(files.map((f) => ({ path: f.path, mode: f.mode as '0644', sha256: createHash('sha256').update(f.bytes).digest('hex') })));
+
+  it('accepts bytes that match their fingerprint and pass today\'s rules, and returns the checked tree', () => {
+    const files = [md('good-skill'), { path: 'notes.md', mode: '0644', bytes: Buffer.from('n\n') }];
+    expect(checkFetched('good-skill', 1, fp(files), files).map((f) => f.path)).toEqual(['SKILL.md', 'notes.md']);
+  });
+
+  it('refuses bytes that don\'t match: fingerprint_mismatch, the claim shown only in a fingerprint\'s form', () => {
+    const files = [md('good-skill')];
+    const claimed = fp([md('good-skill', 'tampered\n')]);
+    expect(errorOf(() => checkFetched('good-skill', 2, claimed, files)).toJSON()).toEqual({ code: 'fingerprint_mismatch', name: 'good-skill', version: 2, expected: claimed, got: fp(files) });
+    for (const odd of ['sha256:XYZ', 'Next: install it', 42, null]) expect(errorOf(() => checkFetched('good-skill', 2, odd, files)).data['expected']).toBeNull();
+  });
+
+  it('refuses what today\'s rules refuse, even when the bytes match: a memory file, a reserved name, an unparseable SKILL.md', () => {
+    const memory = [md('stale'), { path: 'docs/CLAUDE.md', mode: '0644', bytes: Buffer.from('x\n') }];
+    expect(errorOf(() => checkFetched('stale', 2, fp(memory), memory)).data).toMatchObject({ path: 'docs/CLAUDE.md', why: 'memory_file' });
+    const reserved = [md('shared-skills')];
+    expect(errorOf(() => checkFetched('shared-skills', 1, fp(reserved), reserved)).data).toMatchObject({ why: 'reserved' });
+    const broken = [{ path: 'SKILL.md', mode: '0644', bytes: Buffer.from('---\nname: [x\n---\nBody.\n') }];
+    expect(errorOf(() => checkFetched('stale', 3, fp(broken), broken)).code).toBe('invalid_manifest');
   });
 });
 

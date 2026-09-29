@@ -17,7 +17,8 @@ export type ErrorCode =
   | 'exists_untracked'
   | 'name_in_use'
   | 'target_symlink'
-  | 'secret_suspected';
+  | 'secret_suspected'
+  | 'fingerprint_mismatch';
 
 export class CatalogError extends Error {
   readonly code: ErrorCode;

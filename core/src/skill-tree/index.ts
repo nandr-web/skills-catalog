@@ -7,3 +7,4 @@ export * from './tree.ts';
 export * from './manifest.ts';
 export * from './diff.ts';
 export * from './secrets.ts';
+export * from './fetched.ts';
