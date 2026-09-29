@@ -3,9 +3,11 @@
 // system program on macOS); so the check also lists the processes holding it. Only those holding that very file (by
 // device and inode) on descriptor 3, of this user, started at or after the run did, count as the run's; any other
 // holder (an indexer, a backup agent, anything opened later on another descriptor) is never listed or signalled.
-import { describe, expect, it } from 'vitest';
+import { fstatSync } from 'node:fs';
+import { afterEach, describe, expect, it } from 'vitest';
 import { CheckBlind, DEFAULT_TOOLS, markedProcesses } from '../src/check.ts';
-import { stopEscaped } from '../src/run.ts';
+import { qaRun, stopEscaped } from '../src/run.ts';
+import { cleanup, machine } from './machine.ts';
 import { heldOnFd3, sortHolders, type Marker } from '../src/marker.ts';
 
 const MARKER: Marker = { path: '/x/.run-marker', dev: 16777231, ino: 63215361, since: Date.parse('Tue Sep 29 03:31:30 2026') };
@@ -65,5 +67,21 @@ describe('stopping the run\'s processes', () => {
 
   it('an lsof that fails (an exit other than 0, or 1 for none) makes the marker listing blind, never "none"', () => {
     expect(() => markedProcesses(MARKER, { ...DEFAULT_TOOLS, lsof: '/bin/sh' })).toThrow(CheckBlind);
+  });
+});
+
+describe('the marker\'s number stays the run\'s until the check is done', () => {
+  afterEach(cleanup);
+
+  // Once the file is deleted and nothing holds it, its inode number is free, and a file opened later (fd 3 is often a
+  // program's first) could get it: qa holds its own descriptor on the marker until the leftovers are stopped.
+  it('qa still holds the marker, deleted with the sandbox, when it stops what the run left', { timeout: 60_000 }, async () => {
+    const m = machine();
+    let seen: { nlink: number; same: boolean } | undefined;
+    await qaRun({
+      machine: m, command: ['/usr/bin/true'],
+      beforeStop: ({ fd, marker }) => { const st = fstatSync(fd); seen = { nlink: st.nlink, same: st.ino === marker.ino && st.dev === marker.dev }; },
+    });
+    expect(seen).toEqual({ nlink: 0, same: true });
   });
 });

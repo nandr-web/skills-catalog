@@ -29,6 +29,8 @@ export type RunOptions = {
   signal?: AbortSignal;
   stdio?: 'inherit' | 'ignore';
   onStart?: (sb: Sandbox, pgid: number) => void;
+  /** Tests: called right before the run's leftovers are stopped, with qa's own descriptor on the marker. */
+  beforeStop?: (held: { fd: number; marker: Marker }) => void;
   productRepo?: string | null; toolFiles?: string[];
   tools?: Tools;
 };
@@ -71,6 +73,7 @@ export async function qaRun(o: RunOptions): Promise<RunResult> {
     productRepo: o.productRepo === null ? undefined : o.productRepo ?? PRODUCT_REPO, toolFiles: o.toolFiles,
   });
   let marker: Marker | undefined;
+  let held: number | undefined;   // qa's own descriptor on the marker
   const before = snapshot(watch([]));
   const sb = createSandbox({ runId, machine: m });
   let pgid = 0;
@@ -87,16 +90,14 @@ export async function qaRun(o: RunOptions): Promise<RunResult> {
   const onAbort = () => stopGroup('interrupted');
   let cleanup: Cleanup | undefined;
   try {
-    // The run's marker as the command's descriptor 3: what it starts keeps it (marker.ts). qa's own copy closes at once.
+    // The run's marker as the command's descriptor 3: what it starts keeps it (marker.ts). qa keeps its own descriptor
+    // open until the leftovers are stopped: while a file is open its inode number can't go to another file, so no later
+    // program's descriptor 3 can match it after the sandbox (and the marker) are deleted.
     const made = createMarker(sb.root, Date.now());
     marker = made.marker;
+    held = made.fd;
     const io = o.stdio ?? 'ignore';
-    let started: ChildProcess;
-    try {
-      started = spawn(o.command[0], o.command.slice(1), { cwd: sb.dirs.work, env: childEnv(sb), detached: true, stdio: [io, io, io, made.fd] });
-    } finally {
-      closeSync(made.fd);
-    }
+    const started = spawn(o.command[0], o.command.slice(1), { cwd: sb.dirs.work, env: childEnv(sb), detached: true, stdio: [io, io, io, made.fd] });
     child = started;
     pgid = started.pid!;
     recordProcessGroup(sb, pgid);
@@ -117,11 +118,16 @@ export async function qaRun(o: RunOptions): Promise<RunResult> {
     // A command's session ids aren't trusted (it can write anything into its sandbox): qa run deletes no session folder.
     cleanup = await teardown(sb, { machine: m, processGroups: pgid ? [pgid] : [], leaders: child ? [child] : [] });
   }
-  const differences = compare(before, snapshot(watch(pgid ? [pgid] : [])));
-  // Holders of the marker that aren't the run's (another user's, or started before the run): named, never signalled.
-  let notTheRuns: (Holder & { why: string })[] = [];
-  try { notTheRuns = marker ? markedProcesses(marker, o.tools).others : []; } catch { /* the check above already refused a blind lsof */ }
-  const stopped = await stopEscaped(runId, o.tools, marker);
-  const status: RunStatus = ending ?? (differences.length ? 'leak' : exitCode === 0 ? 'pass' : 'fail');
-  return { status, exitCode, differences, sandbox: sb.root, runId, stopped, janitor: swept, teardown: cleanup, notTheRuns };
+  try {
+    const differences = compare(before, snapshot(watch(pgid ? [pgid] : [])));
+    // Holders of the marker that aren't the run's (another user's, or started before the run): named, never signalled.
+    let notTheRuns: (Holder & { why: string })[] = [];
+    try { notTheRuns = marker ? markedProcesses(marker, o.tools).others : []; } catch { /* the check above already refused a blind lsof */ }
+    if (held !== undefined && marker) o.beforeStop?.({ fd: held, marker });
+    const stopped = await stopEscaped(runId, o.tools, marker);
+    const status: RunStatus = ending ?? (differences.length ? 'leak' : exitCode === 0 ? 'pass' : 'fail');
+    return { status, exitCode, differences, sandbox: sb.root, runId, stopped, janitor: swept, teardown: cleanup, notTheRuns };
+  } finally {
+    if (held !== undefined) closeSync(held);
+  }
 }
