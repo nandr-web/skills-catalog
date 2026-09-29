@@ -1,4 +1,4 @@
-// One CLI command: which registry operation it runs, the flags it takes, and how its words and flags become the
+// One CLI command: which API operation it runs, the flags it takes, and how its words and flags become the
 // operation's input. Each command lives in its own file (commands/), and run.ts reads, checks and runs them all the same
 // way. A flag is an operation's input, --<field> with underscores as hyphens; a list is one comma-separated value, and
 // `none` is the empty list, so every input is one visible token in a permission prompt (contract §1). The shorthands
@@ -26,7 +26,7 @@ export type Env = { ctx: Context; s: Surface; io: Io; words: readonly string[]; 
 export class Usage extends Error {}
 
 export type Command = {
-  /** The registry's operation; for a command that only runs on its own, its own name (stats). */
+  /** The API's operation; for a command that only runs on its own, its own name (stats). */
   op: string;
   /** The flags it takes, by name (no leading --). */
   flags: Record<string, FlagType>;
@@ -65,7 +65,7 @@ export function schemaFlags(op: string, except: readonly string[] = []): Record<
   );
 }
 
-// A number where one is expected; anything else goes to the registry as typed, which refuses it in its own words.
+// A number where one is expected; anything else goes to the API as typed, which refuses it in its own words.
 const numberOr = (v: string): number | string => (/^-?\d+$/.test(v) ? Number(v) : v);
 
 /** A list flag's value: comma-separated, `none` for the empty list. */

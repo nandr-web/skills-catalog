@@ -1,7 +1,7 @@
 // The rest of the CLI face (contract §2, §3): search, read, versions, diff and policy, beside install, list and update.
-// Each command runs the registry's operation and prints the core's own rendering of its result, so the CLI says what the
+// Each command runs the API's operation and prints the core's own rendering of its result, so the CLI says what the
 // assistant's tools say, in the CLI's words (a command where a tool would be named). The oracle for each is the core's
-// renderer on the same call made directly. (preview and publish follow the registry's split: their own test file.)
+// renderer on the same call made directly. (preview and publish follow the API's split: their own test file.)
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';

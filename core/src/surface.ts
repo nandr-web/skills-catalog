@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
-import { OPERATIONS, inputSchema, type OperationDef, type Schema } from './registry.ts';
+import { OPERATIONS, inputSchema, type OperationDef, type Schema } from './api.ts';
 
 export const SURFACE_FILE = join(import.meta.dirname, '..', 'surface', 'surface.yaml');
 
@@ -93,17 +93,17 @@ export class Surface {
     return text ? this.fill(text) : null;
   }
 
-  // The MCP tools: every registry operation that has one. Types, required fields and limits come from the registry
+  // The MCP tools: every API operation that has one. Types, required fields and limits come from the API
   // (one schema per operation, contract §1), without the inputs only a person at the CLI gives; the surface gives only
   // the names and the words.
   toolDefs(operations: Record<string, OperationDef> = OPERATIONS): ToolDef[] {
     return Object.values(operations)
-      .filter((op) => op.mcp && op.surface && this.doc.tools[op.surface])
+      .filter((op) => op.mcp && op.words && this.doc.tools[op.words])
       .map((op) => {
-        const spec = this.doc.tools[op.surface!];
+        const spec = this.doc.tools[op.words!];
         const input = inputSchema(op, 'mcp');
         return {
-          name: this.names[op.surface!]!,
+          name: this.names[op.words!]!,
           op: op.name,
           description: this.fill(spec.description[this.v['descriptions']]),
           inputSchema: this.jsonSchema(input, { properties: spec.params ?? {} }) as ToolDef['inputSchema'],
@@ -112,7 +112,7 @@ export class Surface {
       });
   }
 
-  // A registry schema as JSON Schema, with each property's description from the surface's words for it.
+  // An API schema as JSON Schema, with each property's description from the surface's words for it.
   private jsonSchema(schema: Schema, words: any): JsonSchema {
     const level = this.v['descriptions'];
     const out: JsonSchema = { type: schema.type };

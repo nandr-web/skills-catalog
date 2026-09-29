@@ -1,4 +1,4 @@
-// Usage metrics, the `use` event (contract §3): every operation on any face records one, with the registry's name and a
+// Usage metrics, the `use` event (contract §3): every operation on any face records one, with the API's name and a
 // result code: an error's code, the operation's outcome where it has one (a search's match), or "ok". Never the query,
 // a name or a path. And the outcome a face acts on: the CLI's read exits 1 when none of its names is found (§1).
 import { actAs, Surface } from '@skills-catalog/core';

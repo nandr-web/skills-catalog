@@ -1,6 +1,6 @@
 // skills-catalog stats: the usage summary on this machine (contract §3): the kept window, six measures of what update
 // holds cost and whether they changed an answer, and what asks for a review of when updates are held (§5.3). Read from
-// $SKILLS_HOME/usage only, never sent anywhere; the events name no skill. Not an operation of the registry: it reads
+// $SKILLS_HOME/usage only, never sent anywhere; the events name no skill. Not an operation of the API: it reads
 // this machine's own counts, so it runs on its own and touches no catalog.
 import type { Surface } from '@skills-catalog/core';
 import { readUsage } from '../../usage/record.ts';

@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Catalog, ReadItem } from '../src/catalog.ts';
 import { actAs } from '../src/local/index.ts';
-import { OPERATIONS } from '../src/registry.ts';
+import { OPERATIONS } from '../src/api.ts';
 import { renderError, renderRead } from '../src/render.ts';
 import { Surface } from '../src/surface.ts';
 import { DEFAULT_LIMITS } from '../src/skill-tree/index.ts';

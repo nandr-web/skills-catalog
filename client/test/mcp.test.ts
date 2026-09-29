@@ -1,6 +1,6 @@
 // The MCP face (contract §1, §3; the QA plan's interface layer): the server as a real process over stdio, driven by a
 // client written here. The protocol is checked against the MCP spec's rules, and every tool's text against the core's
-// own result for the same call, put through the same renderer: one registry, one set of words, the same answer.
+// own result for the same call, put through the same renderer: one API, one set of words, the same answer.
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CatalogError, OPERATIONS, Surface, openCatalog, renderDiff, renderError, renderRead, renderSearch, renderVersions, type Catalog } from '@skills-catalog/core';
@@ -76,7 +76,7 @@ describe('the protocol (newline-delimited JSON-RPC 2.0 over stdio)', () => {
     for (const v of ['2025-03-26', '1999-01-01']) expect((await s.initialize(v)).result.protocolVersion).toBe('2025-11-25');
   });
 
-  it('lists the registry\'s MCP tools it runs, with the surface\'s names and words and the registry\'s schemas: every catalog one, and machine ones as the installer adds them', async () => {
+  it('lists the API\'s MCP tools it runs, with the surface\'s names and words and the API\'s schemas: every catalog one, and machine ones as the installer adds them', async () => {
     const s = start(place());
     await s.initialize();
     const r = await s.send('tools/list');

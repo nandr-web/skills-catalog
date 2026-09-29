@@ -28,7 +28,7 @@ const NONE = '-';
 // Where a look happened, by face (usage metrics); a new face (the web UI's) must name its own.
 const LOOK_FACE: Record<Face, 'cli' | 'assistant' | 'web'> = { mcp: 'assistant', cli: 'cli' };
 
-/** The catalog's operations, keyed by the registry's operation name; each face names it its own way (the MCP tool's name
+/** The catalog's operations, keyed by the API's operation name; each face names it its own way (the MCP tool's name
  *  is the surface's). The target comes from the result (the skills it returned, a match count), never from the
  *  arguments, which can hold anything. */
 export const CATALOG_RUNS: Record<string, Run> = {
@@ -68,7 +68,7 @@ export const actingAs = (s: Surface, developer: string) => s.format(s.word('acti
 /** `outcome`: the operation's outcome code, or the error's code. */
 export type Answer = { text: string; isError: boolean; outcome: string };
 
-/** One operation on any face: `op` is the registry's name, `name` what this face calls it (for the log). */
+/** One operation on any face: `op` is the API's name, `name` what this face calls it (for the log). */
 export async function perform(ctx: Context, op: string, name: string, args: unknown): Promise<Answer> {
   const run = RUNS[op];
   if (!run) throw new Error(`no operation ${op}`);

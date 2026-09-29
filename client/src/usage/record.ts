@@ -36,7 +36,7 @@ export type UsageEvent =
   // At each sync, so it doubles as the count of syncs (a hook's sync is a session). The mode comes once the installer
   // detects permissive modes (contract §5.3); until then the event has only its face.
   | { event: 'mode'; mode?: 'default' | 'auto' | 'bypass' | 'sandbox_auto_allow' | 'broad_bash_rule'; face: 'hook' | 'mcp' | 'update' }
-  // One per operation: the registry's name and a result code ("ok", an outcome such as a search's "none", or an error
+  // One per operation: the API's name and a result code ("ok", an outcome such as a search's "none", or an error
   // code). Never the query, a name or a path.
   | { event: 'use'; op: string; result: string };
 

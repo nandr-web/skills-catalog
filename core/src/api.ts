@@ -1,4 +1,4 @@
-// One registry of operations (contract §1): each is defined once, with a typed input schema, and the faces (CLI, MCP,
+// The API (contract §1): each operation is defined once, with a typed input schema, and the faces (CLI, MCP,
 // later HTTP) are generated from it. Slice 1 holds the catalog operations; the machine operations join in slice 2.
 
 import { CatalogError } from './errors.ts';
@@ -16,7 +16,7 @@ export interface OperationDef {
   kind: 'catalog' | 'machine';
   phase: 1 | 2 | 'aws' | 'later';
   mcp: boolean;
-  surface?: string; // its key in the agent-facing surface (the tool's words), for operations with an MCP tool
+  words?: string; // its key in the words file (the tool's words), for operations with an MCP tool
   input: Extract<Schema, { type: 'object' }>;
   // Inputs only a person at the CLI gives (contract §3): never in the MCP schema, and refused from the MCP face.
   cliOnly?: readonly string[];
@@ -45,7 +45,7 @@ const version = { type: 'integer', minimum: 1 } as const;
 export const OPERATIONS: Record<string, OperationDef> = {
   search_shared_skills: {
     name: 'search_shared_skills',
-    surface: 'search',
+    words: 'search',
     kind: 'catalog',
     phase: 1,
     mcp: true,
@@ -69,7 +69,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
   },
   read_shared_skill: {
     name: 'read_shared_skill',
-    surface: 'get',
+    words: 'get',
     kind: 'catalog',
     phase: 1,
     mcp: true,
@@ -86,7 +86,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
   },
   list_shared_skill_versions: {
     name: 'list_shared_skill_versions',
-    surface: 'versions',
+    words: 'versions',
     kind: 'catalog',
     phase: 1,
     mcp: true,
@@ -94,7 +94,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
   },
   diff_shared_skill_versions: {
     name: 'diff_shared_skill_versions',
-    surface: 'diff',
+    words: 'diff',
     kind: 'catalog',
     phase: 1,
     mcp: true,
@@ -137,7 +137,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
   // Machine operations (contract §3): they run in the client, on this machine; the CLI and the MCP server are their faces.
   publish_skill_to_catalog: {
     name: 'publish_skill_to_catalog',
-    surface: 'publish',
+    words: 'publish',
     kind: 'machine',
     phase: 1,
     mcp: true,
@@ -160,7 +160,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
   },
   install_shared_skill: {
     name: 'install_shared_skill',
-    surface: 'install',
+    words: 'install',
     kind: 'machine',
     phase: 1,
     mcp: true,
@@ -173,7 +173,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
   },
   update_installed_skills: {
     name: 'update_installed_skills',
-    surface: 'update',
+    words: 'update',
     kind: 'machine',
     phase: 1,
     mcp: true,
@@ -185,7 +185,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
   },
   accept_held_update: {
     name: 'accept_held_update',
-    surface: 'accept',
+    words: 'accept',
     kind: 'machine',
     phase: 1,
     mcp: true,
@@ -197,7 +197,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
   },
   list_installed_skills: {
     name: 'list_installed_skills',
-    surface: 'status',
+    words: 'status',
     kind: 'machine',
     phase: 1,
     mcp: true,
@@ -205,7 +205,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
   },
   set_skill_update_policy: {
     name: 'set_skill_update_policy',
-    surface: 'policy',
+    words: 'policy',
     kind: 'machine',
     phase: 1,
     mcp: true,

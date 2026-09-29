@@ -3,7 +3,7 @@
 
 import { CatalogError } from './errors.ts';
 import type { Clock, Events, Identity, Ids, SearchCard, SearchIndex, Storage, VersionRecord } from './ports.ts';
-import { DEFAULT_SEARCH_LIMIT, VERSIONS_PAGE, validateInput } from './registry.ts';
+import { DEFAULT_SEARCH_LIMIT, VERSIONS_PAGE, validateInput } from './api.ts';
 
 // The catalog's own operations have no input only a person gives (a person's override, like allow_suspected_secrets,
 // is gated on the machine operation that passes it on, with its caller's face). Checked as the strictest face, so if one

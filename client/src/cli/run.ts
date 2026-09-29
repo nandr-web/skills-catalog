@@ -1,4 +1,4 @@
-// The CLI face (contract §1, §3): the registry's operations as commands, each in its own file (commands/), named as the
+// The CLI face (contract §1, §3): the API's operations as commands, each in its own file (commands/), named as the
 // surface's CLI names write them. run.ts reads a command line, checks it the same way for every command, and runs the
 // operation through `perform`, so the words, the activity log and "(Acting as …)" are the same as on every face. Results
 // go to stdout, errors to stderr. Exit 0 done, 1 an error, 3 needs the person.

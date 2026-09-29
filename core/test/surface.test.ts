@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { readFileSync } from 'node:fs';
-import { DEFAULT_SEARCH_LIMIT, MAX_READ_NAMES, MAX_READ_PATHS, MAX_SEARCH_LIMIT, OPERATIONS, validateInput } from '../src/registry.ts';
+import { DEFAULT_SEARCH_LIMIT, MAX_READ_NAMES, MAX_READ_PATHS, MAX_SEARCH_LIMIT, OPERATIONS, validateInput } from '../src/api.ts';
 import { MAX_TAGS, SECRET_KINDS, TAG_MAX_LENGTH, checkTree, diffTrees, type RiskFlag, type RiskKind } from '../src/skill-tree/index.ts';
 import { WORD_GAPS, reasons, renderDiff, renderError, renderRead, renderSearch, renderVersions, shellQuote } from '../src/render.ts';
 import { SURFACE_FILE, Surface } from '../src/surface.ts';
@@ -44,7 +44,7 @@ describe('the surface (vendored, recommended variant)', () => {
     expect(s.serverName).toBe('skills-catalog');
   });
 
-  it('names only catalog tools the registry has (the recommended names)', async () => {
+  it('names only catalog tools the API has (the recommended names)', async () => {
     const s = Surface.load();
     for (const op of ['search', 'get', 'versions', 'diff']) expect(Object.keys(OPERATIONS)).toContain(s.names[op]);
   });
@@ -111,7 +111,7 @@ describe('the surface (vendored, recommended variant)', () => {
     for (const l of plantedLines) expect(lines).toContain(l.replaceAll('\r', '\\u{000d}'));
   });
 
-  it('builds each MCP tool schema from the registry, with only the words from the surface', async () => {
+  it('builds each MCP tool schema from the API, with only the words from the surface', async () => {
     const s = Surface.load();
     const tools = Object.fromEntries(s.toolDefs().map((t) => [t.op, t]));
     expect(Object.keys(tools).sort()).toEqual(Object.values(OPERATIONS).filter((o) => o.mcp).map((o) => o.name).sort());
@@ -142,7 +142,7 @@ describe('the surface (vendored, recommended variant)', () => {
     expect(props('list_installed_skills')).toEqual([]);
     expect(props('set_skill_update_policy')).toEqual(['policy', 'name']);
     expect(tools['set_skill_update_policy']!.inputSchema.properties!['policy']).toMatchObject({ enum: ['auto', 'notify', 'pin'] });
-    for (const [op, t] of Object.entries(tools)) expect(t.name, op).toBe(s.names[OPERATIONS[op]!.surface!]);
+    for (const [op, t] of Object.entries(tools)) expect(t.name, op).toBe(s.names[OPERATIONS[op]!.words!]);
   });
 
   it('refuses a CLI-only input that comes through the MCP face, and takes it from the CLI', async () => {
@@ -158,8 +158,8 @@ describe('the surface (vendored, recommended variant)', () => {
     }
   });
 
-  it('the MCP tool list drops CLI-only inputs by the registry\'s own filter, for any operation it is given', () => {
-    const op = { name: 'probe', kind: 'machine', phase: 1, mcp: true, surface: 'publish', cliOnly: ['secret'],
+  it('the MCP tool list drops CLI-only inputs by the API\'s own filter, for any operation it is given', () => {
+    const op = { name: 'probe', kind: 'machine', phase: 1, mcp: true, words: 'publish', cliOnly: ['secret'],
       input: { type: 'object', properties: { folder: { type: 'string' }, secret: { type: 'boolean' } }, required: ['folder'] } } as const;
     const [tool] = Surface.load().toolDefs({ probe: op });
     expect(Object.keys(tool!.inputSchema.properties!)).toEqual(['folder']);
@@ -433,21 +433,21 @@ describe('the surface (vendored, recommended variant)', () => {
   });
 });
 
-describe('every limit the words quote has one source: the registry or the manifest rules', () => {
+describe('every limit the words quote has one source: the API or the manifest rules', () => {
   const s = Surface.load();
   const numbers = (text: string, re: RegExp) => (re.exec(text) ?? []).slice(1).map(Number);
   const search = s.toolDefs().find((t) => t.op === 'search_shared_skills')!.inputSchema.properties!;
 
-  it('the default page is the registry\'s default search limit, in each variant the product ships', async () => {
+  it('the default page is the API\'s default search limit, in each variant the product ships', async () => {
     for (const v of Object.keys(doc.variants).filter((v) => v.startsWith(doc.recommended))) expect(Surface.load(v).page, v).toBe(DEFAULT_SEARCH_LIMIT);
     expect(search['limit']!.description).toContain(`Default ${DEFAULT_SEARCH_LIMIT};`);
   });
 
-  it('a search asks for 1 to the registry\'s maximum cards', async () => {
+  it('a search asks for 1 to the API\'s maximum cards', async () => {
     expect(numbers(search['limit']!.description!, /(\d+)-(\d+)/)).toEqual([search['limit']!.minimum, MAX_SEARCH_LIMIT]);
   });
 
-  it('a read takes up to the registry\'s number of names and of paths', async () => {
+  it('a read takes up to the API\'s number of names and of paths', async () => {
     const get = doc.tools.get;
     expect(numbers(get.description.guided, /\(up to (\d+)\)/)).toEqual([MAX_READ_NAMES]);
     expect(numbers(get.params.names.guided, /\(up to (\d+)\)/)).toEqual([MAX_READ_NAMES]);

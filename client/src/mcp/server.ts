@@ -1,6 +1,6 @@
 // The MCP server over stdio (contract §1, §3): newline-delimited JSON-RPC 2.0 with the few methods a tools-only server
 // needs (initialize, ping, tools/list, tools/call). It's written here rather than taken from the MCP SDK, whose 17
-// runtime dependencies are for HTTP transports this server never uses. The tools are the registry's (Surface.toolDefs),
+// runtime dependencies are for HTTP transports this server never uses. The tools are the API's (Surface.toolDefs),
 // and each call is the client's face-neutral operation (operations.ts), so the MCP text is what the CLI prints.
 import type { Readable, Writable } from 'node:stream';
 import { Surface } from '@skills-catalog/core';

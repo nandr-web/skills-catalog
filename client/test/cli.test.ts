@@ -1,4 +1,4 @@
-// The CLI face (contract §1, §3): the registry's operations as commands, named as the surface's CLI names them. Skill
+// The CLI face (contract §1, §3): the API's operations as commands, named as the surface's CLI names them. Skill
 // names are positional; every other input is --field-name (a list one comma-separated value). Results go to stdout and
 // errors to stderr, with "(Acting as …)" last on both while a developer is set; exit 0 done, 1 an error, 3 needs the
 // person. The person-only step (update <name> --accept) asks in the person's own terminal and refuses without one.
