@@ -73,6 +73,7 @@ function reportRun(name: string, r: RunResult): number {
   for (const s of [...r.janitor.skipped, ...r.teardown.skipped]) if (!/^live run/.test(s.why)) console.error(`  not deleted: ${s.path}: ${s.why}`);
   for (const d of r.differences) console.error(`  left behind: ${d.what}`);
   for (const pid of r.stopped) console.error(`  stopped process ${pid}, which the run left running`);
+  for (const h of r.notTheRuns ?? []) console.error(`  left alone: process ${h.pid} (${h.command}) holds the run's marker but is ${h.why === "another user's" ? "another user's" : 'older than the run'}`);
   console.error(statusLine(name, r));
   return { pass: 0, fail: r.exitCode || 1, leak: 2, timeout: 124, interrupted: 130 }[r.status];
 }

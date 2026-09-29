@@ -32,7 +32,7 @@ describe('the process and port checks fail closed', () => {
   });
 
   it('sees its own marker process and its port with the real tools', async () => {
-    await expect(checkSees(newRunId())).resolves.toBeUndefined();
+    await expect(checkSees(newRunId(), DEFAULT_TOOLS)).resolves.toBeUndefined();
   });
 
   it('a ps that runs and sees nothing, or an lsof that sees no port, refuses', async () => {

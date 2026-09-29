@@ -3,11 +3,13 @@
 // skills folder, project, tmp and cache folders named after this sandbox, this run's session envs, the product's default places,
 // in ~/.claude.json and settings.json only the keys a run could add, and the run's processes and listening ports (every
 // process a run starts carries its QA_RUN_ID). Any difference fails the run. It only reads.
-import { spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess, type SpawnSyncReturns } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { closeSync, existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { slug } from './leftovers.ts';
+import { heldOnFd3, markerOf, sortHolders, type Holder, type Marker } from './marker.ts';
 import { pidFrom } from './pids.ts';
 import type { Machine, Roots } from './machine.ts';
 
@@ -22,6 +24,7 @@ export type Watch = Roots & {
   productRepo?: string;          // the product repo checkout (assistants tried to patch a crashed tool: agent-experience.md, 'Internal errors: no traceback')
   toolFiles?: string[];          // the installed tool's files
   tools?: Tools;                 // ps and lsof (DEFAULT_TOOLS unless a test swaps one)
+  marker?: Marker;               // the run's marker (marker.ts): its holders are the run's processes too
 };
 
 /** ps and lsof by their full paths, never whichever copy PATH finds first, and found when a run's PATH has none (macOS
@@ -44,8 +47,8 @@ export class CheckBlind extends Error {
   }
 }
 
-function run(path: string, args: string[], ok: (status: number) => boolean): SpawnSyncReturns<string> {
-  const r = spawnSync(path, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+function run(path: string, args: string[], ok: (status: number) => boolean, env?: Record<string, string>): SpawnSyncReturns<string> {
+  const r = spawnSync(path, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...(env ? { env: { ...process.env, ...env } } : {}) });
   if (r.error || r.status === null || !ok(r.status)) {
     const why = r.error ? ((r.error as NodeJS.ErrnoException).code ?? r.error.message) : `exit ${r.status ?? r.signal}`;
     throw new CheckBlind(`the before/after check needs ${path} to see what a run leaves behind, and it failed (${why}); nothing was run. Run \`${[path, ...args].join(' ')}\` in a terminal to see why`);
@@ -147,6 +150,25 @@ export function procProcesses(runId: string, proc = '/proc', uid = process.getui
   });
 }
 
+/** The processes holding the run's marker on descriptor 3 (marker.ts): the run's (this user's, started at or after the
+ *  run did), and the others, named. `only`: just these (a re-check right before a signal). lsof failing makes the check
+ *  blind, as for ports. */
+export function markedProcesses(m: Marker, tools: Tools = DEFAULT_TOOLS, only?: number[]): { ours: Holder[]; others: (Holder & { why: string })[] } {
+  const uid = process.getuid?.();
+  const r = run(tools.lsof, ['-n', '-P', '-a', '-u', String(uid), '-d', '3', ...(only ? ['-p', only.join(',')] : []), '-F', 'pDi'], (status) => status === 0 || status === 1);
+  const pids = heldOnFd3(r.stdout ?? '', m).filter((p) => p !== process.pid && (!only || only.includes(p)));
+  if (!pids.length) return { ours: [], others: [] };
+  const ps = run(tools.ps, ['-o', 'pid=,uid=,lstart=,command=', '-p', pids.join(',')], (status) => status === 0 || status === 1, { LC_ALL: 'C' });   // 1: one of them is gone
+  return sortHolders(pids, ps.stdout ?? '', m, uid);
+}
+
+/** A run's processes: those carrying its id, and those holding its marker; one entry each. */
+export function allRunProcesses(runId: string, marker: Marker | undefined, tools: Tools = DEFAULT_TOOLS): Holder[] {
+  const byEnv = runProcesses(runId, tools);
+  if (!marker) return byEnv;
+  return [...byEnv, ...markedProcesses(marker, tools).ours.filter((p) => !byEnv.some((q) => q.pid === p.pid))];
+}
+
 /** The TCP ports these processes listen on, and their UDP sockets. lsof exits 1 when it finds none. */
 function listening(pids: number[], tools: Tools = DEFAULT_TOOLS): { pid: number; addr: string }[] {
   if (!pids.length) return [];
@@ -166,25 +188,38 @@ function listening(pids: number[], tools: Tools = DEFAULT_TOOLS): { pid: number;
 export async function checkSees(runId: string, tools: Tools = DEFAULT_TOOLS): Promise<void> {
   // Not installed (common on a minimal Linux): say how to fix it, before anything starts.
   if (!existsSync(tools.lsof)) throw new CheckBlind("this run needs lsof to check that it cleans up after itself, and it isn't installed. Install it (e.g. `sudo apt install lsof`) and run again. Nothing was run");
-  const marker = spawn(process.execPath, ['-e', "const s = require('net').createServer().listen(0, '127.0.0.1', () => console.log(s.address().port)); setTimeout(() => process.exit(0), 60000)"], {
-    stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, QA_RUN_ID: runId },
-  });
-  const gone = new Promise((ok) => { marker.once('exit', ok); marker.once('error', ok); });
+  // The marker process holds a marker on descriptor 3, as a run's command does (marker.ts): this file, which exists
+  // already (nothing to make or delete) and which nothing else holds as its descriptor 3.
+  const made = markerOf(fileURLToPath(import.meta.url), Date.now());
+  let marker: ChildProcess | undefined;
   try {
-    const port = await new Promise<string>((ok, no) => {
-      const t = setTimeout(() => no(new CheckBlind("the before/after check's marker process never said its port (10 s); nothing was run")), 10_000);
-      marker.once('error', (e) => (clearTimeout(t), no(new CheckBlind(`the before/after check couldn't start its marker process (${(e as NodeJS.ErrnoException).code ?? e.message}); nothing was run`))));
-      marker.stdout!.once('data', (b) => (clearTimeout(t), ok(String(b).trim())));
+    marker = spawn(process.execPath, ['-e', "const s = require('net').createServer().listen(0, '127.0.0.1', () => console.log(s.address().port)); setTimeout(() => process.exit(0), 60000)"], {
+      stdio: ['ignore', 'pipe', 'ignore', made.fd], env: { ...process.env, QA_RUN_ID: runId },
     });
-    if (!runProcesses(runId, tools).some((p) => p.pid === marker.pid)) {
-      throw new CheckBlind(`the before/after check can't see this run's own marker process with ${tools.proc ?? tools.ps}, so it would miss a process a run leaves behind; nothing was run`);
-    }
-    if (!listening([marker.pid!], tools).some((l) => l.addr === `127.0.0.1:${port}`)) {
-      throw new CheckBlind(`the before/after check can't see the port this run's own marker process listens on with ${tools.lsof}, so it would miss a port a run leaves open; nothing was run`);
+    closeSync(made.fd);
+    const m = marker;
+    const gone = new Promise((ok) => { m.once('exit', ok); m.once('error', ok); });
+    try {
+      const port = await new Promise<string>((ok, no) => {
+        const t = setTimeout(() => no(new CheckBlind("the before/after check's marker process never said its port (10 s); nothing was run")), 10_000);
+        m.once('error', (e) => (clearTimeout(t), no(new CheckBlind(`the before/after check couldn't start its marker process (${(e as NodeJS.ErrnoException).code ?? e.message}); nothing was run`))));
+        m.stdout!.once('data', (b) => (clearTimeout(t), ok(String(b).trim())));
+      });
+      if (!runProcesses(runId, tools).some((p) => p.pid === m.pid)) {
+        throw new CheckBlind(`the before/after check can't see this run's own marker process with ${tools.proc ?? tools.ps}, so it would miss a process a run leaves behind; nothing was run`);
+      }
+      if (!listening([m.pid!], tools).some((l) => l.addr === `127.0.0.1:${port}`)) {
+        throw new CheckBlind(`the before/after check can't see the port this run's own marker process listens on with ${tools.lsof}, so it would miss a port a run leaves open; nothing was run`);
+      }
+      if (!markedProcesses(made.marker, tools).ours.some((p) => p.pid === m.pid)) {
+        throw new CheckBlind(`the before/after check can't see which processes hold the run's marker with ${tools.lsof}, so it would miss a program a run leaves in a session of its own; nothing was run`);
+      }
+    } finally {
+      m.kill('SIGKILL');
+      await gone;
     }
   } finally {
-    marker.kill('SIGKILL');
-    await gone;
+    if (!marker) closeSync(made.fd);
   }
 }
 
@@ -214,7 +249,7 @@ export function snapshot(w: Watch): Snapshot {
     try { process.kill(-g, 0); out.set(`\u0001pgid ${g}`, { kind: 'process', label: `process group ${g}`, sig: 'running' }); } catch { /* gone */ }
   }
   if (w.runId) {
-    const procs = runProcesses(w.runId, w.tools);
+    const procs = allRunProcesses(w.runId, w.marker, w.tools);
     for (const p of procs) out.set(`\u0001proc ${p.pid}`, { kind: 'process', label: `process ${p.pid} from this run`, sig: `running (${p.command})` });
     for (const l of listening(procs.map((p) => p.pid), w.tools)) out.set(`\u0001port ${l.addr}`, { kind: 'port', label: `port ${l.addr}`, sig: `listening (process ${l.pid})` });
   }

@@ -2,14 +2,15 @@
 // every ending (pass, fail, timeout, SIGINT), after snapshot, and any difference fails the run (qa-plan §6; brief §1).
 // Everything runs on a fake machine (test/machine.ts); the check on the real machine is a script run by hand
 // (test/live/qa-run-real.ts), never a test.
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { qaRun } from '../src/run.ts';
 import { checksProcesses, compare, PS, snapshot, watchOn } from '../src/check.ts';
+import { pidFrom } from '../src/pids.ts';
 import { sandboxBase } from '../src/sandbox.ts';
-import { cleanup, PROCESS_TEST_MS, machine, qaSpawn } from './machine.ts';
+import { cleanup, PROCESS_TEST_MS, machine, qaSpawn, spawnDetached } from './machine.ts';
 
 vi.setConfig({ testTimeout: PROCESS_TEST_MS });   // these tests start processes (see PROCESS_TEST_MS)
 
@@ -86,6 +87,48 @@ describe('qa run', () => {
     const r = await qaRun({ machine: m, command: node(`const fs = require('fs'); fs.mkdirSync(${JSON.stringify(join(m.home, '.skills-catalog'))}); fs.writeFileSync(${JSON.stringify(leak)}, '{}')`) });
     expect(r.status).toBe('leak');
     expect(r.differences.map((d) => d.what)).toEqual([`added folder ${join(m.home, '.skills-catalog')}`, `added file ${leak}`]);
+  });
+
+  // A shell's background job that starts a session of its own and becomes a system program (perl's setsid, then exec):
+  // on macOS ps can't read a system program's environment, and it has left the run's process group; it still holds the
+  // marker the run's command was given, which is how the check finds it.
+  it.skipIf(!existsSync('/usr/bin/perl'))('[6] a system program that leaves the run in a session of its own fails the run, and is stopped', async () => {
+    const m = machine();
+    const file = join(m.tmp, 'escaped-sleep.pid');
+    let sleeper = 0;   // kept in memory as soon as it's written (the file goes with the test's folders first)
+    const read = () => { try { sleeper ||= pidFrom(readFileSync(file, 'utf8')) ?? 0; } catch { /* not written yet */ } };
+    const watch = setInterval(read, 20);
+    onTestFinished(() => {
+      clearInterval(watch);
+      read();
+      const command = sleeper > 0 ? spawnSync(PS, ['-p', String(sleeper), '-o', 'command='], { encoding: 'utf8' }).stdout ?? '' : '';
+      if (command.includes('sleep 59')) try { process.kill(sleeper, 'SIGKILL'); } catch { /* gone */ }
+    });
+    const r = await qaRun({
+      machine: m,
+      // perl writes its pid once it has its own session, and the shell ends only then (else the run's group, killed at
+      // teardown, would take perl with it before it left)
+      command: ['/bin/sh', '-c', `f="$QA_SANDBOX/../../escaped-sleep.pid"; /usr/bin/perl -MPOSIX -e 'POSIX::setsid(); open(my $f, ">", $ARGV[0]) or die; print $f $$; close $f; exec "/bin/sleep", "59"' "$f" & while [ ! -s "$f" ]; do /bin/sleep 0.05; done`],
+    });
+    read();
+    expect(sleeper).toBeGreaterThan(0);
+    expect(r.status).toBe('leak');
+    const whats = r.differences.map((d) => d.what);
+    expect(whats.some((w) => w.startsWith(`process ${sleeper} from this run still running`)), whats.join('\n')).toBe(true);
+    expect(r.stopped).toContain(sleeper);
+  });
+
+  it('[6] a program of this user that opens the run\'s marker itself (another descriptor, no run id) is never counted or signalled', async () => {
+    const m = machine();
+    let stranger: ChildProcess | undefined;
+    const r = await qaRun({
+      machine: m, command: ['/bin/sleep', '0.5'],
+      // started by the test, not the run: an indexer or a backup agent reading the file stands for it
+      onStart: (sb) => { stranger = spawnDetached(process.execPath, ['-e', `require('fs').openSync(${JSON.stringify(join(sb.root, '.run-marker'))}, 'r'); setTimeout(() => {}, 30000)`], { env: { PATH: '/usr/bin:/bin' } }); },
+    });
+    expect(r.status).toBe('pass');
+    expect(r.stopped).not.toContain(stranger!.pid);
+    expect(stranger!.exitCode === null && stranger!.signalCode === null).toBe(true);
   });
 
   it('[6] a process that escapes the run\'s process group fails the run, and is stopped', async () => {
