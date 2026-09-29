@@ -23,8 +23,9 @@ export class JsonTextError extends Error {
   }
 }
 
-type Container = Extract<JsonNode, { kind: 'object' | 'array' }>;
-type Frame = { node: Container; path: string[] | null; key?: string; keyStart?: number; expectKey: boolean; seen: Set<string> };
+/** An object or an array. */
+export type JsonContainer = Extract<JsonNode, { kind: 'object' | 'array' }>;
+type Frame = { node: JsonContainer; path: string[] | null; key?: string; keyStart?: number; expectKey: boolean; seen: Set<string> };
 
 const WS = new Set([' ', '\t', '\n', '\r']);
 const NUMBER = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
@@ -102,7 +103,7 @@ export function scanJson(text: string, follow: (path: readonly string[]) => bool
       // An object's members are followed by its path of keys; an array's items by its own object's following.
       const path = !f ? [] : f.path && f.node.kind === 'object' ? [...f.path, f.key!] : null;
       const followed = path !== null && follow(path);
-      const node: Container = c === '{' ? { kind: 'object', start: i, end: -1, members: [] } : { kind: 'array', start: i, end: -1, items: [] };
+      const node: JsonContainer = c === '{' ? { kind: 'object', start: i, end: -1, members: [] } : { kind: 'array', start: i, end: -1, items: [] };
       found(node);
       stack.push({ node, path: followed ? path : null, expectKey: c === '{', seen: new Set() });
       i++;
