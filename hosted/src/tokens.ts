@@ -3,7 +3,7 @@
 // token#<hash>). A token that's unknown, revoked or at its expiry is nobody. The token itself is shown once, at issue.
 
 import { createHash, randomBytes } from 'node:crypto';
-import { DeleteItemCommand, GetItemCommand, PutItemCommand, type DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { GetItemCommand, PutItemCommand, UpdateItemCommand, type DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import type { Clock } from '@skills-catalog/core';
 import type { Place } from './place.ts';
 
@@ -42,13 +42,24 @@ export class HostedTokenStore {
     if (!token) return undefined;
     const r = await this.p.ddb.send(new GetItemCommand({ TableName: this.p.place.table, Key: keyOf(token), ConsistentRead: true }));
     const i = r.Item;
-    if (!i) return undefined;
+    if (!i || i['revoked_at'] !== undefined) return undefined;
     if (!(Date.parse(i['expires_at']!.S!) > this.p.clock.now().getTime())) return undefined;
     return { owner: i['owner']!.S!, scope: i['scope']!.S! as TokenScope, kind: i['kind']!.S! as TokenKind };
   }
 
-  /** The token no longer works. (The API's role may delete only these items.) */
+  /** The token no longer works: its record stays, marked with when it was revoked (the API's role deletes nothing). */
   async revoke(token: string): Promise<void> {
-    await this.p.ddb.send(new DeleteItemCommand({ TableName: this.p.place.table, Key: keyOf(token) }));
+    await this.p.ddb.send(
+      new UpdateItemCommand({
+        TableName: this.p.place.table,
+        Key: keyOf(token),
+        UpdateExpression: 'SET revoked_at = if_not_exists(revoked_at, :at)',
+        ConditionExpression: 'attribute_exists(pk)',
+        ExpressionAttributeValues: { ':at': { S: this.p.clock.now().toISOString() } },
+      }),
+    ).catch((e: { name?: string }) => {
+      // An unknown token is already nobody.
+      if (e.name !== 'ConditionalCheckFailedException') throw e;
+    });
   }
 }

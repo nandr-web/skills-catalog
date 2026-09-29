@@ -49,8 +49,9 @@ export class HostedSweep {
     return this.p.s3.send(new DeleteObjectCommand({ Bucket: this.p.place.bucket, Key: blobKey(sha256) }));
   }
 
-  /** One scheduled run. `beforeMark` is a test seam: it runs between pass 1's look and its marks. */
-  async run({ beforeMark }: { beforeMark?: () => Promise<void> } = {}): Promise<{ deleted: string[]; marked: string[]; unmarked: string[] }> {
+  /** One scheduled run. Test seams: `beforeRecheck` runs between the first look and pass 2's fresh read of the versions,
+   *  `beforeMark` between pass 1's look and its marks. */
+  async run({ beforeRecheck, beforeMark }: { beforeRecheck?: () => Promise<void>; beforeMark?: () => Promise<void> } = {}): Promise<{ deleted: string[]; marked: string[]; unmarked: string[] }> {
     const done = { deleted: [] as string[], marked: [] as string[], unmarked: [] as string[] };
     const due: string[] = [];
     const candidates: string[] = [];
@@ -70,6 +71,7 @@ export class HostedSweep {
 
     // Pass 2: look again at each file whose mark has waited, with the version records read afresh.
     if (due.length) {
+      await beforeRecheck?.();
       const fresh = await this.referenced();
       for (const sha of due) {
         const b = await inspect(this.p.s3, this.p.place, sha);
