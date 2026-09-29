@@ -1,0 +1,193 @@
+// The web API's transport-free half (contract §1.1), run the way a transport runs it: route, then the catalog's answer
+// (an operation's envelope, or a file's), with the shared cases every transport answers the same. The guards are each
+// transport's own; their numbers come from here.
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import type { Catalog } from '../src/catalog.ts';
+import { CatalogError } from '../src/errors.ts';
+import { dispatch, effectOf, fileResponse, operationResponse, refuse, route, STATUS, type FileAnswer, type HttpResponse } from '../src/http/index.ts';
+import { renderError } from '../src/render.ts';
+import { Words } from '../src/words-file.ts';
+import { checkHttpCase, HTTP_DEVELOPER, HTTP_SEED, httpCases, skillMd, type HttpCase } from './http-cases.ts';
+import { openTest } from './helpers.ts';
+
+const W = Words.load();
+const b64 = (text: string) => Buffer.from(text).toString('base64');
+
+async function seeded(): Promise<Catalog> {
+  const { catalog } = await openTest();
+  for (const s of HTTP_SEED) {
+    await catalog.publish({ name: s.name, files: [{ path: 'SKILL.md', mode: '0644', content_base64: b64(skillMd(s.name, s.description)) }] }, { actor: async () => HTTP_DEVELOPER }, 'cli');
+  }
+  return catalog;
+}
+
+/** A transport past its guards: the core's route, then the catalog's answer. A file case's catalog answers only its
+ *  fingerprint's lookup, and fails the case if a malformed one reaches it. */
+async function answer(c: HttpCase, catalog: Catalog): Promise<HttpResponse> {
+  if (c.refuse) return refuse(c.refuse, { words: W });
+  const req = c.request!;
+  const r = route(req.method, req.path);
+  switch (r.kind) {
+    case 'operation': {
+      const raw = req.body === 'cut' ? 'cut' : new TextEncoder().encode(req.body ?? '');
+      return operationResponse({ op: r.op, raw, catalog, developer: HTTP_DEVELOPER, face: 'web', words: W });
+    }
+    case 'file': {
+      const files = { file: async (sha: string): Promise<FileAnswer> => (c.file ? c.file : Promise.reject(new Error(`looked up ${sha}`))) };
+      return fileResponse(files, r.sha256);
+    }
+    case 'method':
+      return refuse('method', { words: W });
+    default:   // not_found, and pairing (the local page's own, not the API's)
+      return refuse('not_found', { words: W });
+  }
+}
+
+describe('the shared cases', () => {
+  for (const c of httpCases) {
+    it(c.name, async () => {
+      const catalog = await seeded();
+      try {
+        expect(checkHttpCase(c, await answer(c, catalog))).toEqual([]);
+      } finally {
+        catalog.close();
+      }
+    });
+  }
+});
+
+describe('the published schema (docs/api/openapi.json) says what these answer', () => {
+  const schema = JSON.parse(readFileSync(new URL('../../docs/api/openapi.json', import.meta.url), 'utf8')) as {
+    paths: Record<string, Record<string, { responses: Record<string, unknown> }>>;
+    components: { schemas: { Words: { properties: Record<string, unknown> }; ErrorCode?: { enum?: string[] } } };
+  };
+  const pathOf = (path: string) => (path.startsWith('/api/v1/files/') ? '/api/v1/files/{sha256}' : path);
+  const routed = httpCases.filter((c) => c.request && schema.paths[pathOf(c.request.path)]);
+
+  it('each status a route answers is one its schema declares; a method it doesn\'t declare is 405', async () => {
+    expect(routed.length).toBeGreaterThan(10);
+    const catalog = await seeded();
+    try {
+      const undeclared: string[] = [];
+      for (const c of routed) {
+        const r = await answer(c, catalog);
+        const operation = schema.paths[pathOf(c.request!.path)]![c.request!.method.toLowerCase()];
+        const declared = operation ? Object.keys(operation.responses) : ['405'];
+        if (!declared.includes(String(r.status))) undeclared.push(`${c.request!.method} ${pathOf(c.request!.path)} ${r.status}`);
+      }
+      expect([...new Set(undeclared)]).toEqual([]);
+    } finally {
+      catalog.close();
+    }
+  });
+
+  it('each envelope has only the published keys, and words only the published words', async () => {
+    const catalog = await seeded();
+    try {
+      const wordKeys = Object.keys(schema.components.schemas.Words.properties);
+      for (const c of [...routed, ...httpCases.filter((x) => x.refuse === 'token_only')]) {
+        const r = await answer(c, catalog);
+        if (!String(r.headers['content-type']).startsWith('application/json')) continue;
+        const body = JSON.parse(String(r.body)) as Record<string, unknown>;
+        expect(Object.keys(body).filter((k) => !['ok', body['ok'] ? 'data' : 'error', 'words'].includes(k)), c.name).toEqual([]);
+        expect(Object.keys((body['words'] ?? {}) as object).filter((k) => !wordKeys.includes(k)), c.name).toEqual([]);
+      }
+    } finally {
+      catalog.close();
+    }
+  });
+});
+
+describe('every response', () => {
+  it('carries the fixed security headers and never any Access-Control-*', async () => {
+    const catalog = await seeded();
+    try {
+      for (const c of httpCases) {
+        const r = await answer(c, catalog);
+        for (const k of ['content-security-policy', 'x-content-type-options', 'referrer-policy', 'cross-origin-opener-policy', 'cross-origin-resource-policy']) expect(r.headers[k], `${c.name} ${k}`).toBeTruthy();
+        expect(Object.keys(r.headers).filter((k) => k.startsWith('access-control-')), c.name).toEqual([]);
+      }
+    } finally {
+      catalog.close();
+    }
+  });
+});
+
+describe('the refusals\' numbers', () => {
+  it('one table: 401, 403, 404, 405, 415 and 400 token_only; the files route\'s 302 and 503', () => {
+    expect(STATUS).toEqual({ no_token: 401, refused: 403, not_found: 404, method: 405, not_json: 415, token_only: 400, link: 302, on_its_way: 503 });
+  });
+});
+
+describe('route', () => {
+  it('knows the pairing path, and leaves an unknown operation to the transport to refuse after its token check', () => {
+    expect(route('POST', '/api/pair')).toEqual({ kind: 'pair' });
+    expect(route('POST', '/api/v1/nothing_here')).toEqual({ kind: 'not_found', operationPath: true });
+    expect(route('POST', '/')).toEqual({ kind: 'not_found', operationPath: false });
+  });
+});
+
+describe('effectOf', () => {
+  it('says what an operation does, so a read-only caller is refused a write before dispatch', () => {
+    expect(effectOf('publish_version')).toBe('writes_catalog');
+    expect(effectOf('search_shared_skills')).toBe('reads');
+    expect(effectOf('constructor')).toBeUndefined();
+  });
+});
+
+describe('dispatch', () => {
+  it('passes publish the acting developer as its identity and the face after it; the others the face', async () => {
+    const catalog = await seeded();
+    try {
+      const skill = { name: 'dispatched', files: [{ path: 'SKILL.md', mode: '0644', content_base64: b64(skillMd('dispatched', 'Through dispatch.')) }] };
+      expect(await dispatch('publish_version', skill, { catalog, developer: 'dev2', face: 'web' })).toMatchObject({ publisher: 'dev2', version: 1 });
+      await expect(dispatch('publish_version', { ...skill, allow_suspected_secrets: true }, { catalog, developer: 'dev2', face: 'web' })).rejects.toMatchObject({ code: 'invalid_request', data: { field: 'allow_suspected_secrets', why: 'unknown_field' } });
+      expect(await dispatch('publish_version', { ...skill, dry_run: true, allow_suspected_secrets: true }, { catalog, developer: 'dev2', face: 'cli' })).toMatchObject({ dry_run: true });
+      expect(await dispatch('search_shared_skills', { query: 'dispatched' }, { catalog, developer: undefined, face: 'mcp' })).toMatchObject({ total_matches: 1 });
+    } finally {
+      catalog.close();
+    }
+  });
+
+  it('with no developer, a publish is unauthenticated', async () => {
+    const catalog = await seeded();
+    try {
+      const skill = { name: 'nobody', files: [{ path: 'SKILL.md', mode: '0644', content_base64: b64(skillMd('nobody', 'No one.')) }] };
+      await expect(dispatch('publish_version', skill, { catalog, developer: undefined, face: 'web' })).rejects.toMatchObject({ code: 'unauthenticated' });
+    } finally {
+      catalog.close();
+    }
+  });
+});
+
+describe('operationResponse', () => {
+  it('words an error with the words file; a transport overrides only unauthenticated', async () => {
+    const catalog = await seeded();
+    try {
+      const nobody = { op: 'publish_version', raw: new TextEncoder().encode(JSON.stringify({ name: 'x', files: [] })), catalog, developer: undefined, face: 'web' as const, words: W };
+      const plain = JSON.parse(String((await operationResponse(nobody)).body));
+      expect(plain.words.error).toBe(renderError(W, new CatalogError('unauthenticated', {})));
+      const local = JSON.parse(String((await operationResponse({ ...nobody, unauthenticated: 'set one up' })).body));
+      expect(local.words.error).toBe('set one up');
+      const other = JSON.parse(String((await operationResponse({ ...nobody, developer: 'dev1', raw: new TextEncoder().encode('{') , unauthenticated: 'set one up' })).body));
+      expect(other.words.error).toBe(renderError(W, new CatalogError('invalid_request', { field: 'body', why: 'not_json' })));
+    } finally {
+      catalog.close();
+    }
+  });
+
+  it('runs the transport\'s own run when it gives one (the local log), and lets a bug through to the transport', async () => {
+    const catalog = await seeded();
+    try {
+      const seen: string[] = [];
+      const run = async (op: string, input: unknown) => (seen.push(op), dispatch(op, input, { catalog, developer: 'dev1', face: 'web' }));
+      const ok = await operationResponse({ op: 'search_shared_skills', raw: new TextEncoder().encode('{}'), catalog, developer: 'dev1', face: 'web', words: W, run });
+      expect([ok.status, seen]).toEqual([200, ['search_shared_skills']]);
+      const bug = () => operationResponse({ op: 'search_shared_skills', raw: new TextEncoder().encode('{}'), catalog, developer: 'dev1', face: 'web', words: W, run: async () => { throw new TypeError('a bug'); } });
+      await expect(bug()).rejects.toThrow(TypeError);
+    } finally {
+      catalog.close();
+    }
+  });
+});
