@@ -24,6 +24,30 @@ describe('recording usage', () => {
     expect(statSync(join(h, 'usage', '2026-09-29.jsonl')).mode & 0o777).toBe(0o600);
   });
 
+  // The field an event is seen from was called surface before the API's names (the words file, faces); a person's kept
+  // lines from before still count.
+  it('writes the face an event came from; a line kept from before, with surface, reads as face', () => {
+    const h = home();
+    mkdirSync(join(h, 'usage'), { recursive: true, mode: 0o700 });
+    const before = [
+      { v: 1, at: '2026-09-29T10:00:00.000Z', event: 'notice', surface: 'hook', waiting: 1 },
+      { v: 1, at: '2026-09-29T10:00:01.000Z', event: 'mode', surface: 'update' },
+      { v: 1, at: '2026-09-29T10:00:02.000Z', event: 'look', skill: 'AAAAAAAAAAAAAAAA', version: 2, surface: 'cli' },
+      { v: 1, at: '2026-09-29T10:00:03.000Z', event: 'notice', surface: 'mcp', face: 'hook', waiting: 1 },
+    ];
+    writeFileSync(join(h, 'usage', '2026-09-29.jsonl'), before.map((l) => JSON.stringify(l) + '\n').join(''), { mode: 0o600 });
+    recordUsage(h, { event: 'notice', face: 'mcp', waiting: 2 }, new Date('2026-09-29T11:00:00Z'));
+    expect(lines(h, '2026-09-29').at(-1)).toEqual({ v: 1, at: '2026-09-29T11:00:00.000Z', event: 'notice', face: 'mcp', waiting: 2 });
+    expect(readUsage(h, new Date('2026-09-29T12:00:00Z'))).toEqual([
+      { v: 1, at: '2026-09-29T10:00:00.000Z', event: 'notice', face: 'hook', waiting: 1 },
+      { v: 1, at: '2026-09-29T10:00:01.000Z', event: 'mode', face: 'update' },
+      { v: 1, at: '2026-09-29T10:00:02.000Z', event: 'look', skill: 'AAAAAAAAAAAAAAAA', version: 2, face: 'cli' },
+      // a line with both says face; surface is only read where face is missing
+      { v: 1, at: '2026-09-29T10:00:03.000Z', event: 'notice', face: 'hook', waiting: 1 },
+      { v: 1, at: '2026-09-29T11:00:00.000Z', event: 'notice', face: 'mcp', waiting: 2 },
+    ]);
+  });
+
   it('stores a skill\'s name only as a keyed hash: the same on this machine, different on another, never the name', () => {
     const h = home();
     const at = day('2026-09-29');
