@@ -5,6 +5,8 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { exists } from '../src/groups.ts';
+import { pidFrom } from '../src/pids.ts';
 import { parse, stringify } from 'yaml';
 import { runScenarios } from '../src/agent/runner.ts';
 import { RUN_ID } from '../src/safe-delete.ts';
@@ -107,13 +109,17 @@ describe('agent scenario runner: safety of the round', () => {
     const stop = new AbortController();
     const t0 = Date.now();
     const pending = runScenarios({ ...base(m), scenarios: ['A1', 'A2'], setups: ['mcp'], signal: stop.signal });
-    for (let i = 0; i < 200 && !existsSync(pidFile); i++) await new Promise((ok) => setTimeout(ok, 50));
+    // The file can exist before its number is in it (an empty file reads as 0, and kill(0, 0) never throws): wait for a pid.
+    const fakePid = () => pidFrom(existsSync(pidFile) ? readFileSync(pidFile, 'utf8') : '');
+    for (let i = 0; i < 200 && !fakePid(); i++) await new Promise((ok) => setTimeout(ok, 50));
+    const fake = fakePid();
+    expect(fake).toBeGreaterThan(0);
     stop.abort();
     const report = await pending;
     expect(Date.now() - t0).toBeLessThan(15_000);
     expect(report.stopped).toBe('interrupted');
     expect(report.runs).toHaveLength(1);
-    expect(() => process.kill(Number(readFileSync(pidFile, 'utf8')), 0)).toThrow();
+    expect(exists(fake!)).toBe(false);                                            // the assistant is gone
     expect(readdirSync(join(m.tmp, 'skills-catalog-qa'))).toEqual([]);
   });
 
