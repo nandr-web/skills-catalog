@@ -219,7 +219,7 @@ export async function publishFolder(ctx: Context, args: unknown): Promise<Done> 
       const confirm = mac(key, { folder: real, fingerprint: fp, name, latest, message, files: files.length, flags }).toString('base64url');
       const shown = skipped.slice(0, SKIPPED_SHOWN).map((p) => quoted(flagText(p)));
       const changed = (r.diff_from_latest?.files ?? []).map((f) => quoted(f.path));
-      const notes = r.risk_flags.map((f: RiskFlag) => s.format(s.word('quality.note')[f.kind], { path: f.path ?? '', detail: f.detail }));
+      const notes = r.risk_flags.map((f: RiskFlag) => s.format(s.word('quality.note')[f.kind], { path: flagText(f.path ?? ''), detail: flagText(f.detail) }));
       const text = s.format(w.preview, {
         name,
         version: r.version,
