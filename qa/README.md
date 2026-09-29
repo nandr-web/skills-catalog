@@ -23,7 +23,8 @@ Node 24.15 or later. From this folder:
 | Command | What it does |
 |---|---|
 | `npm install` | Local dependencies only |
-| `npm run check` | Typecheck and every test. Nothing touches your machine: each test builds a fake one in a temporary folder |
+| `npm run check` | Typecheck and the tests, except the slow ones listed with their times in `test/slow.json`. Nothing touches your machine: each test builds a fake one in a temporary folder |
+| `npm run test:slow` / `npm run test:all` | The slow tests only / every test |
 | `npm run mutate` | Puts back known bugs one at a time; the tests must catch every one. Stops first if the suite is red |
 | `node src/cli.ts run -- <command>` | Runs a command in a fresh sandbox and checks that nothing outside it changed (files, settings keys, processes, ports) |
 | `node src/cli.ts janitor --dry-run` | Lists the old, finished runs it would remove; without `--dry-run`, removes them |

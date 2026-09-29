@@ -47,15 +47,15 @@ The package count differs by one between macOS and Linux (a macOS-only file watc
 
 </details>
 
-### 3. Run every test (10 to 20 seconds)
+### 3. Run the tests (about 10 seconds)
 
-Type-checks the code, then runs the whole suite. Each test makes its own catalog in a temporary folder and deletes it; a safety check fails the run if anything tries to write under your home folder.
+Type-checks the code, then runs the tests, except the few slow ones listed with their times in `test/slow.json` (`npm run test:slow` runs those; `npm run test:all` runs everything). Each test makes its own catalog in a temporary folder and deletes it; a safety check fails the run if anything tries to write under your home folder.
 
 ```sh
 npm run check
 ```
 
-You should see **Tests 387 passed (387)**.
+You should see **Tests 385 passed (385)**.
 
 <details><summary>What it printed on our machine</summary>
 
@@ -64,7 +64,7 @@ You should see **Tests 387 passed (387)**.
 > node scripts/node-check.mjs && npm run typecheck && npm test
 …
  Test Files  7 passed (7)
-      Tests  387 passed (387)
+      Tests  385 passed (385)
 ```
 
 </details>
