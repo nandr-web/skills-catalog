@@ -14,6 +14,22 @@
 - **Find it by asking.** An assistant searches the catalog in plain words, and says so when nothing really fits.
 - **Stay current, safely.** One update brings every installed skill to its newest version; anything that could run something new waits for your yes.
 
+## In real Claude Code
+
+Three real sessions (Claude Code on Sonnet, typed as a person would), recorded with [`qa/reels/record.sh`](qa/reels/record.sh).
+
+**ana publishes.** Her assistant shows the files it would send and waits for her yes; Claude Code's permission prompt is her consent.
+
+<p align="center"><img alt="ana asks Claude Code to publish ./release-note-draft; it previews what it would send (SKILL.md and template.md, nothing skipped) and asks; she says yes, approves the permission prompt, and release-note-draft v1 is in the shared catalog" src="docs/pictures/reel-publish.gif" width="100%"></p>
+
+**bob finds and installs it.** His assistant searches, reads the skill before installing it, and installs it into his project; `skills-catalog list` shows it in his own terminal.
+
+<p align="center"><img alt="bob asks Claude Code for a shared skill for writing release notes, installed into this project; it searches, reads release-note-draft, installs it; back in his shell, skills-catalog list shows release-note-draft v1, the latest, for this project only" src="docs/pictures/reel-install.gif" width="100%"></p>
+
+**bob's update waits for his yes.** Version 2 adds a script, so his assistant tells him why it's held and doesn't take it. In his own terminal he looks at the change, then takes it.
+
+<p align="center"><img alt="bob asks Claude Code to update his shared skills; it says release-note-draft v2 adds scripts/collect.sh, a script that could run on his machine, and asks; in his shell, skills-catalog diff shows in orange that it can run something new and the script's two lines; skills-catalog update release-note-draft --accept shows the same reason behind an orange bar, he answers y, and it says Took it" src="docs/pictures/reel-update.gif" width="100%"></p>
+
 ## The demo up close
 
 **ana publishes.** Her assistant shows what it would send before anything is published. Version 2 adds a script, so the review says so, in orange, and waits for her yes.
