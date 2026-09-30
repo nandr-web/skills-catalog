@@ -2,7 +2,7 @@
 
 <p align="center">Publish an AI-assistant skill once; another developer's assistant finds it, installs the same skill, and keeps it up to date.</p>
 
-<p align="center"><img alt="Node.js 24.15 or later" src="https://img.shields.io/badge/node-%E2%89%A5%2024.15-2f6f3e"> <img alt="Runs on macOS and Linux" src="https://img.shields.io/badge/runs%20on-macOS%20%7C%20Linux-3a4a56"> <img alt="Status: usable locally and in AWS" src="https://img.shields.io/badge/status-usable%20locally%20and%20in%20AWS-2f6f3e"></p>
+<p align="center"><img alt="Node.js 24.15 or later" src="https://img.shields.io/badge/node-%E2%89%A5%2024.15-2f6f3e"> <img alt="Runs on macOS and Linux" src="https://img.shields.io/badge/runs%20on-macOS%20%7C%20Linux-3a4a56"> <img alt="Status: ready locally and in AWS" src="https://img.shields.io/badge/status-ready%20locally%20and%20in%20AWS-2f6f3e"></p>
 
 <p align="center"><img alt="The one-click demo in one terminal window: on the left, ana's assistant publishes two skills, then version 2 of one, which adds a script; in the middle, bob's assistant finds and installs it, compares the versions, is refused publishing over ana's skill, searches for something the catalog doesn't have and gets only a close match, and his update that could run something new is held until he says yes; on the right, the steps to look for, each ticked when the demo sees it (the first, setup, is planned and not in the demo yet); at the bottom, the catalog server logs every call" src="docs/pictures/one-click-demo.gif" width="100%"></p>
 
@@ -26,7 +26,7 @@
 
 ## Install
 
-**Status: usable locally and in AWS.** The catalog, the assistant's tools and the CLI run on your machine; the hosted catalog runs in AWS and passes its smoke test end to end (publish through upload links, search, read, install, a held update, with real Claude Code). Signing in with GitHub on the deployment is the one step not yet verified: until it is, a hosted catalog is used with a personal token.
+**Status: ready locally and in AWS.** The catalog, the assistant's tools and the CLI run on your machine; the hosted catalog runs in AWS and passes its smoke test end to end: signing in with GitHub, publishing through upload links, search, read, install and a held update, with real Claude Code.
 
 Needs git, Node.js 24.15 or later (`node --version`), macOS or Linux (with `ps`, from procps: slim container images lack it), and [Claude Code](https://code.claude.com/docs/en/overview).
 
@@ -266,7 +266,7 @@ Nothing to clean up: every step deletes its temporary folders. To remove everyth
 | | |
 |---|---|
 | **Built** | The core catalog: publish (all-or-nothing, owner-only), versions with fingerprints, keyword search that says when nothing matches exactly, reading a skill, history, diffs with risk flags, a local SQLite + file store behind replaceable parts. The assistant's tools (MCP): find, read, compare and publish skills (a preview first, then the person's yes), and install, update and list them. The installer holds risky updates until the person says yes: an update is risky when it adds a script, a file that isn't Markdown, new tool permissions or a new publisher. A CLI for the person: `install`, `list` and `update` (with `--accept` for a held update). A hosted catalog in AWS: the API on Lambda with DynamoDB and S3 behind CloudFront and a firewall, its stack in CDK (checked by cdk-nag), deployed and passing its smoke test, and the client for it (`SKILLS_CATALOG=https://…`, `skills-catalog login`). |
-| **Next** | Signing in with GitHub verified on the deployment, one guided `setup` command, more kinds of risky change to hold. Designed in [docs/contract.md](docs/contract.md). |
+| **Next** | One guided `setup` command (including the AWS option), more kinds of risky change to hold, the web page the hosted catalog will serve. Designed in [docs/contract.md](docs/contract.md). |
 | **Later** | A web UI with a delta view, bundles, agent reviewers. |
 
 ## How it works
