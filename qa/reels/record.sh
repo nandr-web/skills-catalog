@@ -183,7 +183,10 @@ back_to_shell() {
   # Ctrl-C twice, not /exit: typing a slash opens Claude Code's command menu, which lists this machine's own commands.
   sleep 2; T send-keys -t r C-c; sleep 0.6; T send-keys -t r C-c
   # the shell's own prompt on the last line, then a breath: Ctrl-L sent while Claude Code is still exiting prints as ^L
-  wait_for "Resume this session" 30; until screen | grep -v '^ *$' | tail -1 | grep -qE '\\$ *$'; do sleep 0.3; done; sleep 1
+  wait_for "Resume this session" 30
+  local end=$((SECONDS + 30))
+  until screen | grep -v '^ *$' | tail -1 | grep -qE '\$ *$'; do ((SECONDS < end)) || { echo "record: no shell prompt after Claude Code" >&2; return 1; }; sleep 0.3; done
+  sleep 1
   T send-keys -t r C-l; sleep 1
 }
 reel_publish() {
