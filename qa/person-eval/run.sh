@@ -21,11 +21,17 @@ for t in $(seq 1 "$TRIES"); do
     [ "$who" = bob ] && printf '%s\n' "$out" >"$OUT/$t-$s.md"
     return 0
   }
-  ask ana publish "Yes, go ahead, I confirm."
+  # ana's publish is setup: asked again (up to 3 times) while her assistant only previews it
+  published() { grep -qE "ana +publish_skill_to_catalog +published +release-note-draft v$1" "$SC_TRY_DIR/activity.log" 2>/dev/null; }
+  setup() {  # scenario version
+    for _ in 1 2 3; do ask ana "$1" "Yes, go ahead, I confirm."; published "$2" && return 0; done
+    echo "person-eval: try $t: ana's $1 never published (the try will be left out)" >&2
+  }
+  setup publish 1
   ask bob search
   ask bob search-miss
   ask bob install
-  ask ana publish-v2 "Yes, go ahead, I confirm."
+  setup publish-v2 2
   ask bob diff
   ask bob update
   ask bob list
