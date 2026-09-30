@@ -11,6 +11,7 @@ import { perform } from '../../operations.ts';
 import type { Settings } from '../../settings.ts';
 import { recordUsage } from '../../usage/record.ts';
 import { fromSchemaFlags, schemaFlags, Usage, type Command, type Env } from '../command.ts';
+import { MARK, barred, painter } from '../terminal.ts';
 
 const own = schemaFlags('update_installed_skills', ['names']);
 const TARGETS: readonly unknown[] = ['user', 'project'];
@@ -77,7 +78,10 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
   const intro = first ? 'update.accept_intro_install' : hold.reason === 'other_catalog' ? 'update.accept_intro_other_catalog' : hold.reason === 'pin' ? 'update.accept_intro_pin' : hold.notify && !hold.flags.length ? 'update.accept_intro_notify' : 'update.accept_intro';
   // The person is at this terminal: the command to look first, rather than asking their assistant.
   const look = io.person ? (first ? 'person.accept_look_install' : 'person.accept_look') : first ? 'update.accept_look_install' : 'update.accept_look';
-  io.stdout(said(s, intro, at) + '\n' + said(s, look, at) + '\n');
+  // A person sees what waits and why behind the orange bar every "needs your OK" has (person.ts).
+  const paint = painter(io.color === true);
+  const shown = io.person ? barred(paint, 'attention', [paint('attention', paint('bold', `${MARK.attention} `)) + paint('bold', said(s, intro, at)), '', said(s, look, at)]).join('\n') : `${said(s, intro, at)}\n${said(s, look, at)}`;
+  io.stdout(shown + '\n');
   // Showing the person the reasons is a look (usage metrics); their no is an answer. Their yes is an answer too, for the
   // installer to record where a held update is taken, on every face: not recorded yet (usage-look.test.ts says so).
   recordUsage(ctx.settings.home, { event: 'look', skill: name, version: hold.version, face: 'cli' }, ctx.now(), { createKey: true });
@@ -90,6 +94,6 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
     return 0;
   }
   const a = await perform(ctx, 'accept_held_update', 'update --accept', { name, target: hold.target, version: hold.version, confirm: hold.confirm, flags: hold.flags });
-  (a.isError ? io.stderr : io.stdout)(a.text + '\n');
+  (a.isError ? io.stderr : io.stdout)((io.person && !a.isError ? `${paint('ok', MARK.ok)} ` : '') + a.text + '\n');
   return a.isError ? 1 : 0;
 }

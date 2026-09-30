@@ -153,5 +153,13 @@ describe('the CLI for a person at a terminal', () => {
     const r = await cli(p, ['update', 'release-notes-kit', '--accept'], { tty: true, person: true, answers: ['n'] });
     expect(r.out).toContain('To see exactly what changes first:  skills-catalog diff release-notes-kit --from 1 --to 2');
     expect(r.out).not.toMatch(/ask your assistant/);
+    // What waits and why sits behind the bar; the answer and the result follow it.
+    expect(r.out.split('\n').slice(0, 3)).toEqual([
+      '┃ ▲ release-notes-kit v1 → v2 is waiting for your OK, because it adds or changes scripts/collect.sh, which can run on this machine.',
+      '┃ ',
+      '┃ To see exactly what changes first:  skills-catalog diff release-notes-kit --from 1 --to 2',
+    ]);
+    const yes = await cli(p, ['update', 'release-notes-kit', '--accept'], { tty: true, person: true, answers: ['y'] });
+    expect(yes.out.split('\n').find((l) => l.startsWith('✓ '))).toMatch(/^✓ Took the held update: release-notes-kit v1 -> v2/);
   });
 });

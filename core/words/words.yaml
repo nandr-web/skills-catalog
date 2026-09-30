@@ -629,11 +629,11 @@ results:
       new_publisher: it comes from a different publisher ({detail})
       prompt_injection: "{path} has text that tries to steer the assistant (found: {detail})"
       context_cost: "it got much longer: {detail}"
-    accept_intro: "{name} v{from} -> v{to} is waiting for your OK, because {reasons}."
+    accept_intro: "{name} v{from} → v{to} is waiting for your OK, because {reasons}."
     accept_intro_install: "{name} v{to} is waiting for your OK before it's installed to {path}, because {reasons}."
-    accept_intro_notify: '{name} v{from} -> v{to} is available. Your setting for {name} is "tell me first", so it waits for your OK.'
+    accept_intro_notify: '{name} v{from} → v{to} is available. Your setting for {name} is "tell me first", so it waits for your OK.'
     accept_intro_pin: "{name} v{from} is pinned here, and v{to} is waiting for your OK to replace it. It stays pinned, at v{to}.{also}"
-    accept_intro_other_catalog: "{name} v{from} -> v{to} is waiting for your OK: the copy here came from another catalog ({was}) and this version comes from {now}, so it may be a different skill that shares the name.{also}"
+    accept_intro_other_catalog: "{name} v{from} → v{to} is waiting for your OK: the copy here came from another catalog ({was}) and this version comes from {now}, so it may be a different skill that shares the name.{also}"
     accept_also: " It could also change what runs on this machine, because {reasons}."
     accept_look: To see exactly what changes first, ask your assistant to show you the diff of {name} from v{from} to v{to}.
     accept_look_install: To read it first, ask your assistant to show you {name} v{to}.
