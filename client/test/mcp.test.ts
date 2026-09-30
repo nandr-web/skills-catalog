@@ -59,6 +59,11 @@ async function errorOf(fn: () => Promise<unknown>): Promise<CatalogError> {
   throw new Error('expected a CatalogError');
 }
 
+// A result is the assistant's words, then (with the words' person view on) the same result laid out for the person in
+// markdown, under the line that says what it is for (person-view.test.ts checks that part).
+const FOR_PERSON = `\n\n${S.format(S.word('person.for_person'))}\n\n`;
+const assistant = (text: string) => text.split(FOR_PERSON)[0]!;
+
 describe('the protocol (newline-delimited JSON-RPC 2.0 over stdio)', () => {
   it('initialize: the server name, a tools capability, and the words file\'s instructions, all filled', async () => {
     const s = start(place());
@@ -232,7 +237,8 @@ describe('the same result as the core, in the words file\'s words', () => {
     for (const args of [{ query: 'release notes' }, { query: 'graphql schema' }, { query: 'sourdough bread' }, {}]) {
       const r = await s.call(N.search, args);
       expect(r.isError).toBeUndefined();
-      expect(r.content).toEqual([{ type: 'text', text: renderSearch(S, await c.search(args), args) }]);
+      expect(r.content).toHaveLength(1);
+      expect([r.content[0]!.type, assistant(r.content[0]!.text)]).toEqual(['text', renderSearch(S, await c.search(args), args)]);
     }
   });
 
@@ -240,7 +246,7 @@ describe('the same result as the core, in the words file\'s words', () => {
     const { c, s } = await seeded();
     const first = await c.search({ limit: 5 });
     const args = { limit: 5, cursor: first.next_cursor! };
-    const text = await s.text(N.search, args);
+    const text = assistant(await s.text(N.search, args));
     expect(text).toBe(renderSearch(S, await c.search(args), args));
     expect(text).toContain(S.format(S.word('search').header_all, { total: first.catalog_size, first: 6, last: 10 }));
   });
@@ -264,12 +270,12 @@ describe('the same result as the core, in the words file\'s words', () => {
 
   it('versions and diff (the changed lines fenced with a token of their own)', async () => {
     const { c, s } = await seeded();
-    expect(await s.text(N.versions, { name: 'release-notes-kit' })).toBe(renderVersions(S, await c.versions({ name: 'release-notes-kit' })));
-    const changed = await s.text(N.diff, { name: 'release-notes-kit', from: 1, to: 2 });
+    expect(assistant(await s.text(N.versions, { name: 'release-notes-kit' }))).toBe(renderVersions(S, await c.versions({ name: 'release-notes-kit' })));
+    const changed = assistant(await s.text(N.diff, { name: 'release-notes-kit', from: 1, to: 2 }));
     const token = tokenIn(changed, S.word('diff').fence[0]);
     expect(changed).toBe(renderDiff(S, await c.diff({ name: 'release-notes-kit', from: 1, to: 2 }), { next: () => token }));
     const none = { next: (): string => { throw new Error('the same content has no lines to fence'); } };
-    expect(await s.text(N.diff, { name: 'release-notes-kit', from: 2, to: 2 })).toBe(renderDiff(S, await c.diff({ name: 'release-notes-kit', from: 2, to: 2 }), none));
+    expect(assistant(await s.text(N.diff, { name: 'release-notes-kit', from: 2, to: 2 }))).toBe(renderDiff(S, await c.diff({ name: 'release-notes-kit', from: 2, to: 2 }), none));
   });
 
   it('errors are tool results marked isError, in the words file\'s words: not found (with spellings), limits, a field that isn\'t the operation\'s', async () => {
@@ -340,7 +346,7 @@ describe('the acting developer (SKILLS_AS, the server\'s config)', () => {
     const { c, s } = await seeded({ SKILLS_AS: 'dev2' });
     const line = '\n' + S.format(S.word('acting_as'), { developer: 'dev2' });
     expect(line).toContain('dev2');
-    expect(await s.text(N.search, { query: 'release notes' })).toBe(renderSearch(S, await c.search({ query: 'release notes' }), { query: 'release notes' }) + line);
+    expect(assistant(await s.text(N.search, { query: 'release notes' }))).toBe(renderSearch(S, await c.search({ query: 'release notes' }), { query: 'release notes' }) + line);
     expect(await s.text(N.get, { name: 'relase-notes-kit' })).toBe(renderError(S, await errorOf(() => c.read({ name: 'relase-notes-kit' }))) + line);
   });
 

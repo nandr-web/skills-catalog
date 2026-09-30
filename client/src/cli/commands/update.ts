@@ -11,7 +11,7 @@ import { perform } from '../../operations.ts';
 import type { Settings } from '../../settings.ts';
 import { recordUsage } from '../../usage/record.ts';
 import { fromSchemaFlags, schemaFlags, Usage, type Command, type Env } from '../command.ts';
-import { MARK, barred, painter } from '../terminal.ts';
+import { MARK, barred, painter } from '../../person/terminal.ts';
 
 const own = schemaFlags('update_installed_skills', ['names']);
 const TARGETS: readonly unknown[] = ['user', 'project'];
@@ -78,7 +78,7 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
   const intro = first ? 'update.accept_intro_install' : hold.reason === 'other_catalog' ? 'update.accept_intro_other_catalog' : hold.reason === 'pin' ? 'update.accept_intro_pin' : hold.notify && !hold.flags.length ? 'update.accept_intro_notify' : 'update.accept_intro';
   // The person is at this terminal: the command to look first, rather than asking their assistant.
   const look = io.person ? (first ? 'person.accept_look_install' : 'person.accept_look') : first ? 'update.accept_look_install' : 'update.accept_look';
-  // A person sees what waits and why behind the orange bar every "needs your OK" has (person.ts).
+  // A person sees what waits and why behind the orange bar every "needs your OK" has (person/view.ts).
   const paint = painter(io.color === true);
   const shown = io.person ? barred(paint, 'attention', [paint('attention', paint('bold', `${MARK.attention} `)) + paint('bold', said(s, intro, at)), '', said(s, look, at)]).join('\n') : `${said(s, intro, at)}\n${said(s, look, at)}`;
   io.stdout(shown + '\n');

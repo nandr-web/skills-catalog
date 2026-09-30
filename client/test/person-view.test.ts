@@ -1,4 +1,4 @@
-// The CLI for a person at a terminal (cli/person.ts): the same results, addressed to them and laid out to be seen at a
+// The CLI for a person at a terminal (person/view.ts): the same results, addressed to them and laid out to be seen at a
 // glance. Nothing meant for an assistant reaches them (instructions about "the person", fence markers, error codes,
 // tool names), what waits for their decision comes last behind a bar with the commands that answer it, and colour is
 // only ever extra: every mark and word is there without it. Without a person reading, the words are the assistant's,
@@ -72,7 +72,7 @@ describe('the CLI for a person at a terminal', () => {
     expect(block).toContain('• it adds or changes scripts/collect.sh, which can run on this machine');
     expect(block).toContain('skills-catalog diff release-notes-kit --from 1 --to 2');
     expect(block).toContain('skills-catalog update release-notes-kit --accept');
-    expect(lines.slice(0, first).join('\n')).toContain('✓ 1 already up to date');
+    expect(lines.slice(0, first).join('\n')).toMatch(/✓ +1 already up to date/);
   });
 
   it('list lines the skills up in columns, marking which are behind, and says how to update', async () => {

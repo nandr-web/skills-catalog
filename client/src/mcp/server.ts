@@ -5,6 +5,8 @@
 import type { Readable, Writable } from 'node:stream';
 import { Words } from '@skills-catalog/core';
 import { contextFor, perform, RUNS } from '../operations.ts';
+import { markdown } from '../person/medium.ts';
+import { withPersonView } from '../person/view.ts';
 import type { Settings } from '../settings.ts';
 
 /** The protocol versions this server speaks, newest first. 2025-03-26 isn't offered: it requires JSON-RPC batches. */
@@ -35,6 +37,7 @@ export type ServerOptions = { settings: Settings; version: string; words?: Words
 export function createMcpServer(o: ServerOptions) {
   const words = o.words ?? Words.load();
   const { ctx, close } = contextFor(o.settings, words, 'mcp', o.now);
+  const personMarkdown = words.v['person_view'] === 'markdown';
   const tools = new Map(
     words
       .toolDefs()
@@ -47,7 +50,9 @@ export function createMcpServer(o: ServerOptions) {
     const def = tools.get(params['name']);
     if (!def) throw new RpcError(INVALID_PARAMS, `Unknown tool: ${params['name']}`);
     const a = await perform(ctx, def.op, def.name, params['arguments']);
-    return { content: [{ type: 'text', text: a.text }], ...(a.isError ? { isError: true } : {}) };
+    // With the words' person view on, a result also carries itself laid out for the person, in markdown, to show as is.
+    const text = personMarkdown ? withPersonView(words, markdown, def.op, a, isObject(params['arguments']) ? params['arguments'] : {}) : a.text;
+    return { content: [{ type: 'text', text }], ...(a.isError ? { isError: true } : {}) };
   }
 
   async function dispatch(method: string, params: unknown): Promise<unknown> {

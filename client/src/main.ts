@@ -8,7 +8,7 @@ import { runServe } from './cli/serve.ts';
 import { cliWords } from './cli/words.ts';
 import { serveStdio } from './mcp/server.ts';
 import { settingsFrom } from './settings.ts';
-import { wantsColor } from './cli/terminal.ts';
+import { wantsColor } from './person/terminal.ts';
 
 const USAGE = `skills-catalog: your team's shared skills catalog, on this machine
 

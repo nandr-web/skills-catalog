@@ -13,6 +13,7 @@ variants:
     matching: any
     quality: notes
     setup: agent-mode
+    person_view: markdown
   recommended-cli:
     names: proposed
     descriptions: guided
@@ -916,6 +917,8 @@ results:
       same: latest
       behind: v{latest} available
       project: this project only
+      columns: " | Skill | Installed | Latest | Where | Updates"
+      empty_reply: Nothing from the shared catalog is installed here yet.
       next_behind: "To update: ${update}"
       empty: "Nothing from the shared catalog is installed here yet. Find a skill: ${search}"
     search:
@@ -926,6 +929,9 @@ results:
       shares: "shares only: {words}"
       empty: 'No skill matches "{query}" ({total} in the catalog). Try other words: ${search}'
       empty_catalog: The shared catalog is empty. Nobody has published a skill yet.
+      empty_reply: 'No skill matches "{query}" ({total} in the catalog).'
+      columns: "Skill | Version | Publisher | What it does"
+      columns_partial: "Skill | Version | Publisher | Shares only | What it does"
       next: "Read one: ${cli} read {name}    Install one: ${cli} install {name}"
       more: "More: the same search with --cursor {cursor}"
     read:
@@ -940,6 +946,7 @@ results:
         one: "{name}: 1 version"
         other: "{name}: {n} versions"
       no_message: no note
+      columns: "Version | Published | By | Note"
       more: "Older: the same command with --cursor {cursor}"
       next: "What changed in the latest: ${cli} diff {name} --from {from} --to {to}"
     diff:
@@ -948,6 +955,7 @@ results:
         other: "{name} v{from} → v{to}: {n} files changed"
       runs: "Can run something new on this machine:"
       runs_no: Nothing new can run on this machine.
+      columns: "Change | File | Note"
       status:
         added: added
         changed: changed
@@ -980,6 +988,7 @@ results:
       look: "See the change:  ${cli} diff {name} --from {from} --to {to}"
       take: "Take it:         ${cli} update {name} --accept"
       stays: Until then it stays on v{from}.
+      ask: "**Take v{to} of {name}?** Until you say yes, it stays on v{from}."
       refused_title: "Not updated:"
     errors:
       not_found: 'No skill named "{name}" in the shared catalog.'
@@ -991,6 +1000,7 @@ results:
     accepted_install: "Installed {name} v{to}, its files checked against the catalog's."
     accept_look_install: "To read it first:  ${cli} read {name} --version {to}"
     usage: "skills-catalog didn't understand that. It takes:"
+    for_person: "For the person: this result laid out for them in markdown (tables, marks, the box for what needs their yes). Show it in your reply as it is, before anything you add; say in your own words only what it leaves out."
 setup:
   questions:
     - ask: Keep installed skills up to date automatically? Updates that could change what runs on this machine still wait for you.

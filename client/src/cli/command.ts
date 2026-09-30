@@ -14,10 +14,10 @@ export type Io = {
   cwd: string;
   /** A person at a terminal can answer (stdin and stdout are both terminals). */
   tty: boolean;
-  /** A person reads the output (stdout is a terminal): results are laid out for them (person.ts), not worded for an
+  /** A person reads the output (stdout is a terminal): results are laid out for them (person/view.ts), not worded for an
    *  assistant. Absent or false: the words an assistant reads, as on the MCP face. */
   person?: boolean;
-  /** Colour in what the person reads (terminal.ts: a terminal, and no NO_COLOR). */
+  /** Colour in what the person reads (person/terminal.ts: a terminal, and no NO_COLOR). */
   color?: boolean;
   ask: (question: string) => Promise<string>;
   stdout: (text: string) => void;

@@ -24,7 +24,7 @@ export type Context = { catalog: () => Promise<Catalog>; words: Words; settings:
 export type Ran = { data: unknown; target: string; result: string; outcome?: string; view?: unknown };
 
 /** A machine operation's run: its text today (its row's output is 'text'), with the log's target and result. `view`:
- *  the same result as data, for a face that lays it out for a person (the CLI at a terminal, cli/person.ts). */
+ *  the same result as data, for a face that lays it out for a person (the CLI at a terminal, person/view.ts). */
 export type Done = { text: string; target: string; result: string; outcome?: string; view?: unknown };
 export type MachineRun = (ctx: Context, args: unknown) => Promise<Done>;
 

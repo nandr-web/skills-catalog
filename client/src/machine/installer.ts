@@ -533,7 +533,7 @@ const acceptCommand = (s: Words, name: string, target: Target) => [s.cli, ...['u
 
 // ---------- operations ----------
 
-/** An update's result as data, for a person's view (cli/person.ts). An item's `lines` are the words the text gives it. */
+/** An update's result as data, for a person's view (person/view.ts). An item's `lines` are the words the text gives it. */
 export type UpdateItem = { kind: 'updated' | 'would_update' | 'held_flagged' | 'held_notify' | 'held_pin' | 'held_other_catalog' | 'refused'; name: string; from: number; to: number; flags: RiskFlag[]; lines: string[] };
 export type UpdateView = { kind: 'update'; checked: number; unchanged: number; dry_run: boolean; items: UpdateItem[] };
 /** The installed skills as data, for a person's view. */
@@ -781,7 +781,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
   const lines: string[] = [];
   const targets: string[] = [];
   let unchanged = 0;
-  // The same result as data, for a person's view (cli/person.ts): one item per skill that did something or waits.
+  // The same result as data, for a person's view (person/view.ts): one item per skill that did something or waits.
   const items: UpdateItem[] = [];
   const item = (kind: UpdateItem['kind'], at: { name: string; from: number; to: number }, flags: readonly RiskFlag[], ...said: string[]) => {
     lines.push(...said);

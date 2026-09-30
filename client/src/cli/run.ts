@@ -28,8 +28,8 @@ import { recordUsage } from '../usage/record.ts';
 import { readOnlyContext } from './read-only.ts';
 import { PROCESS_COMMANDS } from './process.ts';
 import { cliWords } from './words.ts';
-import { personView, usageLead } from './person.ts';
-import { painter } from './terminal.ts';
+import { personView, usageLead } from '../person/view.ts';
+import { terminal } from '../person/medium.ts';
 
 export type { Io } from './command.ts';
 
@@ -119,7 +119,7 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
     const a = await perform(ctx, cmd.op, word!, input);
     const failed = a.isError || (cmd.failsOn?.includes(a.outcome) ?? false);
     // A person reads the result laid out for them, where this command has a view; otherwise its words.
-    const shown = io.person ? personView(s, painter(io.color === true), cmd.op, a, input) : undefined;
+    const shown = io.person ? personView(s, terminal(io.color === true), cmd.op, a, input) : undefined;
     (failed ? io.stderr : io.stdout)((shown === undefined ? a.text : withActing(shown)) + '\n');
     return failed ? 1 : 0;
   } catch (e) {
