@@ -94,7 +94,10 @@ cast, *words = sys.argv[1:]
 esc = re.compile(r"\x1b(\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(\x07|\x1b\\)|[()][0-9A-Za-z]|[=>78DEHMc])")
 body = "".join(e[2] for e in map(json.loads, open(cast).read().splitlines()[1:]) if e[1] == "o")
 flat = re.sub(r"[\s─-╿]", "", esc.sub("", body))
-found = [w for w in words + ["pax8", "Pax8", "/Users/", "/var/folders"] if len(w) > 2 and w in flat]
+home, user, host = words
+# a short user name is an ordinary word too: look for it where it names this machine (a path, an address)
+look = [home, f"/{user}/", f"{user}@", host, "pax8", "Pax8", "/Users/", "/var/folders"]
+found = [w for w in look if len(w) > 2 and w in flat]
 sys.exit(f"record: {cast} shows {found}") if found else print(f"record: {cast.rsplit('/', 1)[-1]} clean")
 PY
 }
