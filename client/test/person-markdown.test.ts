@@ -36,7 +36,7 @@ async function started(extra?: Parameters<typeof seed>[1]) {
 const NOT_FOR_PERSON = [/tell the (person|user)/i, /do not follow|don't follow/i, /_shared_skills?\b|_installed_skills\b|accept_held_update/, /\bconfirm\b/, /\bflags\b/, /skills-catalog /, /\$\{\w+\}|\{\w+\}/];
 
 describe('the MCP result, laid out for the person', () => {
-  it('a held update: a box that says why, and ends on the one question', async () => {
+  it('a held update: a box that says why and what happens until the person says yes, asking nothing itself', async () => {
     const s = await started();
     await s.call(T['install']!, { name: 'release-notes-kit', version: 1 });
     const shown = person(await s.text(T['update']!, {}));
@@ -44,8 +44,9 @@ describe('the MCP result, laid out for the person', () => {
     expect(box[0]).toBe('> **▲ Waiting for your OK: 1 update**');
     expect(box).toContain('> **release-notes-kit v1 → v2, not installed:**');
     expect(box).toContain('> - it adds or changes scripts/collect.sh, which can run on this machine');
-    expect(box.at(-1)).toBe('> **Take v2 of release-notes-kit?** Until you say yes, it stays on v1.');
-    expect(shown.match(/\?/g)).toHaveLength(1);
+    expect(box.at(-1)).toBe('> It stays on v1 until you say yes.');
+    // The one question is the assistant's to ask, in its own words: a question here too made two (measured on Opus).
+    expect(shown).not.toMatch(/\?/);
     for (const re of NOT_FOR_PERSON) expect(shown, String(re)).not.toMatch(re);
   });
 
@@ -64,6 +65,10 @@ describe('the MCP result, laid out for the person', () => {
     expect(diff).toContain('| added | scripts/collect.sh | can run |');
     expect(diff).toMatch(/^```diff\n[\s\S]*\+#!\/bin\/sh[\s\S]*\n```$/m);
     for (const text of [found, list, versions, diff]) for (const re of NOT_FOR_PERSON) expect(text, `${re}\n${text}`).not.toMatch(re);
+    // An update behind, or a single match: the view says so and asks nothing; the assistant asks its one question.
+    const one = person(await s.text(T['search']!, { query: 'release notes' }));
+    expect(one).toContain('**release-notes-kit**');
+    for (const text of [one, list]) expect(text, text).not.toMatch(/\?/);
   });
 
   it('a publisher\'s text can\'t format itself, link, or break a table', async () => {

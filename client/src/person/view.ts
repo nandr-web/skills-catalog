@@ -61,7 +61,8 @@ function list({ say, m }: Ctx, v: ListView | undefined): string | undefined {
   ]);
   const out = [paint('bold', say('list.title', { n: v.rows.length })), '', ...m.table(header(say, 'list.columns'), rows)];
   const behind = v.rows.filter((r) => r.state === 'behind').length;
-  if (behind) out.push('', m.commands ? say('list.next_behind') : say('list.ask', { n: behind }));
+  // In markdown the view asks nothing: the assistant asks the person its one question (a question here too made two).
+  if (behind && m.commands) out.push('', say('list.next_behind'));
   return out.join('\n');
 }
 
@@ -92,7 +93,7 @@ function update({ s, say, m }: Ctx, v: UpdateView | undefined): string | undefin
       const bullet = m.kind === 'terminal' ? '  • ' : '- ';
       for (const w of why) block.push(bullet + w);
       if (m.commands) block.push('', `  ${say('update.look', at)}`, `  ${say('update.take', at)}`, paint('dim', `  ${say('update.stays', at)}`), '');
-      else block.push('', say('update.ask', at), '');
+      else block.push('', say('update.stays_reply', at), '');
     }
     while (block.at(-1) === '') block.pop();
     out.push('', ...m.callout(block));
@@ -117,8 +118,6 @@ function search({ say, m }: Ctx, r: SearchResult, req: SearchInput): string {
     // A table the person scans: one row per skill, what it does in its own words.
     const rows = r.results.map((c) => [paint('bold', c.name), `v${c.latest_version}`, m.text(oneLine(c.publisher)), ...(partial ? [m.text(c.matched_words.join(', '))] : []), m.text(oneLine(c.description))]);
     out.push(...m.table(header(say, partial ? 'search.columns_partial' : 'search.columns'), rows));
-    // The one next step, as a question; none for a close match, which is never offered as a fit.
-    if (!partial && r.results.length === 1) out.push('', say('search.ask', { name: r.results[0]!.name }));
     return out.join('\n');
   }
   for (const c of r.results) {
