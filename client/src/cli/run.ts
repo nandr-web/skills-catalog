@@ -28,6 +28,8 @@ import { recordUsage } from '../usage/record.ts';
 import { readOnlyContext } from './read-only.ts';
 import { PROCESS_COMMANDS } from './process.ts';
 import { cliWords } from './words.ts';
+import { personView, usageLead } from './person.ts';
+import { painter } from './terminal.ts';
 
 export type { Io } from './command.ts';
 
@@ -53,10 +55,12 @@ const withoutAs = (argv: readonly string[]) => argv.filter((a, i) => !(a === '--
 
 export async function runCli(argv: readonly string[], io: Io): Promise<number> {
   const s = cliWords(Words.load());
+  // A person who typed something the CLI doesn't take is told so before the list of what it takes.
+  const showUsage = () => io.stderr((io.person ? usageLead(s) + '\n' : '') + usage(s));
   const [word, ...rest] = argv;
   const cmd = word === undefined || !Object.hasOwn(COMMANDS, word) ? undefined : COMMANDS[word];
   if (!cmd) {
-    io.stderr(usage(s));
+    showUsage();
     return 1;
   }
   let values: Values;
@@ -65,7 +69,7 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
     const options = Object.fromEntries(Object.entries({ as: { type: 'string' as const }, ...cmd.flags }).map(([k, f]) => [k, { type: f.type, ...('multiple' in f && f.multiple ? { multiple: true } : {}) }]));
     ({ values, positionals: words } = parseArgs({ args: [...rest], allowPositionals: true, strict: true, options }) as { values: Values; positionals: string[] });
   } catch {
-    io.stderr(usage(s));
+    showUsage();
     return 1;
   }
 
@@ -87,7 +91,7 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
     input = cmd.input(words, values);
   } catch (e) {
     if (e instanceof Usage) {
-      io.stderr(usage(s));
+      showUsage();
       return 1;
     }
     io.stderr(withActing(renderError(s, e as CatalogError)) + '\n');
@@ -114,11 +118,13 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
     if (own) return await own;
     const a = await perform(ctx, cmd.op, word!, input);
     const failed = a.isError || (cmd.failsOn?.includes(a.outcome) ?? false);
-    (failed ? io.stderr : io.stdout)(a.text + '\n');
+    // A person reads the result laid out for them, where this command has a view; otherwise its words.
+    const shown = io.person ? personView(s, painter(io.color === true), cmd.op, a, input) : undefined;
+    (failed ? io.stderr : io.stdout)((shown === undefined ? a.text : withActing(shown)) + '\n');
     return failed ? 1 : 0;
   } catch (e) {
     if (!(e instanceof Usage)) throw e;
-    io.stderr(usage(s));
+    showUsage();
     return 1;
   } finally {
     close();

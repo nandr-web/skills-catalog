@@ -75,7 +75,9 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
   const also = hold.flags.length ? said(s, 'update.accept_also', { reasons: hold.reasons }) : '';
   const at = { name, from: hold.installed, to: hold.version, reasons: hold.reasons, path: hold.path, was: hold.was, now: hold.now, also };
   const intro = first ? 'update.accept_intro_install' : hold.reason === 'other_catalog' ? 'update.accept_intro_other_catalog' : hold.reason === 'pin' ? 'update.accept_intro_pin' : hold.notify && !hold.flags.length ? 'update.accept_intro_notify' : 'update.accept_intro';
-  io.stdout(said(s, intro, at) + '\n' + said(s, first ? 'update.accept_look_install' : 'update.accept_look', at) + '\n');
+  // The person is at this terminal: the command to look first, rather than asking their assistant.
+  const look = io.person ? (first ? 'person.accept_look_install' : 'person.accept_look') : first ? 'update.accept_look_install' : 'update.accept_look';
+  io.stdout(said(s, intro, at) + '\n' + said(s, look, at) + '\n');
   // Showing the person the reasons is a look (usage metrics); their no is an answer. Their yes is an answer too, for the
   // installer to record where a held update is taken, on every face: not recorded yet (usage-look.test.ts says so).
   recordUsage(ctx.settings.home, { event: 'look', skill: name, version: hold.version, face: 'cli' }, ctx.now(), { createKey: true });

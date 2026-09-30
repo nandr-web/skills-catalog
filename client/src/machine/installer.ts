@@ -533,6 +533,12 @@ const acceptCommand = (s: Words, name: string, target: Target) => [s.cli, ...['u
 
 // ---------- operations ----------
 
+/** An update's result as data, for a person's view (cli/person.ts). An item's `lines` are the words the text gives it. */
+export type UpdateItem = { kind: 'updated' | 'would_update' | 'held_flagged' | 'held_notify' | 'held_pin' | 'held_other_catalog' | 'refused'; name: string; from: number; to: number; flags: RiskFlag[]; lines: string[] };
+export type UpdateView = { kind: 'update'; checked: number; unchanged: number; dry_run: boolean; items: UpdateItem[] };
+/** The installed skills as data, for a person's view. */
+export type ListView = { kind: 'list'; rows: { name: string; target: Target; version: number; latest: number; policy: Policy; policy_words: string; state: 'same' | 'behind' }[] };
+
 type InstallInput = { name: string; version?: number; target?: Target; policy?: Policy };
 
 export async function install(ctx: Context, args: unknown): Promise<Done> {
@@ -775,6 +781,12 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
   const lines: string[] = [];
   const targets: string[] = [];
   let unchanged = 0;
+  // The same result as data, for a person's view (cli/person.ts): one item per skill that did something or waits.
+  const items: UpdateItem[] = [];
+  const item = (kind: UpdateItem['kind'], at: { name: string; from: number; to: number }, flags: readonly RiskFlag[], ...said: string[]) => {
+    lines.push(...said);
+    items.push({ kind, ...at, flags: [...flags], lines: said });
+  };
   // The log's one word for the call: the outcome that most needs the person, else updated, else up to date.
   const RANK = ['unchanged', 'updated', 'refused', 'held_pin', 'held_notify', 'held_flagged', 'held_other_catalog'];
   let outcome = 'unchanged';
@@ -797,7 +809,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
         checkName(e.name);
       } catch (err) {
         if (!(err instanceof CatalogError)) throw err;
-        lines.push(s.format(w.refused, { name: e.name, from: e.version, to: v.latest, reason: refusalReason(s, err) }));
+        item('refused', { name: e.name, from: e.version, to: v.latest }, [], s.format(w.refused, { name: e.name, from: e.version, to: v.latest, reason: refusalReason(s, err) }));
         refused(err.code);
         continue;
       }
@@ -810,7 +822,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
           if (folderFingerprint(here) === e.fingerprint) await recordAgain(ctx, here, e.target, e, hold.change);
         } catch (err) {
           if (!(err instanceof CatalogError) || err.code === 'lock_busy') throw err;
-          lines.push(refusedTarget(s, { name: e.name, from: e.version, to: e.version }, err));
+          item('refused', { name: e.name, from: e.version, to: e.version }, [], refusedTarget(s, { name: e.name, from: e.version, to: e.version }, err));
           refused(err.code);
           continue;
         }
@@ -825,7 +837,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
         dest = checkTarget(ctx, e.target, e.name, lock);
       } catch (err) {
         if (!(err instanceof CatalogError)) throw err;
-        lines.push(refusedTarget(s, at, err));
+        item('refused', at, [], refusedTarget(s, at, err));
         refused(err.code);
         continue;
       }
@@ -835,7 +847,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
       } catch (err) {
         if (!(err instanceof CatalogError)) throw err;
         const refusedFingerprint = s.word('update.refused_fingerprint');
-        lines.push(
+        item('refused', at, [],
           err.code === 'fingerprint_mismatch'
             ? typeof refusedFingerprint === 'string' ? s.format(refusedFingerprint, at) : asData('refused', { ...at, error: err.toJSON() })
             : s.format(w.refused, { ...at, reason: refusalReason(s, err) }),
@@ -855,16 +867,14 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
         // silently; taken on a yes, which records the catalog in use.
         if (entry.catalog !== ctx.settings.catalog) {
           recordHold(ctx, e.name, to.version, 'other_catalog', d.risk_flags, to.version - entry.version);
-          lines.push(s.format(w.held_other_catalog, { ...at, was: entry.catalog, now: ctx.settings.catalog, also }));
-          lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
+          item('held_other_catalog', at, d.risk_flags, s.format(w.held_other_catalog, { ...at, was: entry.catalog, now: ctx.settings.catalog, also }), s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
           saw('held_other_catalog');
           return true;
         }
         // Pinned: stays, and the person may still take this version; it stays pinned, at that version.
         if (policy === 'pin') {
           recordHold(ctx, e.name, to.version, 'pin', d.risk_flags, to.version - entry.version);
-          lines.push(s.format(w.held_pin, at));
-          lines.push(s.format(ctx.face === 'cli' ? w.held_pin_next_cli : w.held_pin_next, take));
+          item('held_pin', at, d.risk_flags, s.format(w.held_pin, at), s.format(ctx.face === 'cli' ? w.held_pin_next_cli : w.held_pin_next, take));
           saw('held_pin');
           return true;
         }
@@ -872,15 +882,13 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
         // the flags it shows, [] when none.
         if (policy === 'notify') {
           recordHold(ctx, e.name, to.version, 'notify', d.risk_flags, to.version - entry.version);
-          lines.push(d.risk_flags.length ? s.format(w.held_notify_flagged, { ...at, reasons: reasons(s, d.risk_flags) }) : s.format(w.held_notify, at));
-          lines.push(s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
+          item('held_notify', at, d.risk_flags, d.risk_flags.length ? s.format(w.held_notify_flagged, { ...at, reasons: reasons(s, d.risk_flags) }) : s.format(w.held_notify, at), s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
           saw('held_notify');
           return true;
         }
         if (d.risk_flags.length) {
           recordHold(ctx, e.name, to.version, 'flagged', d.risk_flags, to.version - entry.version);
-          lines.push(s.format(w.held_flagged, { ...at, reasons: reasons(s, d.risk_flags) }));
-          lines.push(s.format(ctx.face === 'cli' ? w.held_next_cli : w.held_next, take));
+          item('held_flagged', at, d.risk_flags, s.format(w.held_flagged, { ...at, reasons: reasons(s, d.risk_flags) }), s.format(ctx.face === 'cli' ? w.held_next_cli : w.held_next, take));
           saw('held_flagged');
           return true;
         }
@@ -888,7 +896,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
       };
       // A dry run writes nothing and takes no lock: it says what this read would do.
       if (req.dry_run) {
-        if (!heldOver(e, d)) lines.push(s.format(w.would_update, { ...at, changes: changesOf(s, d) }));
+        if (!heldOver(e, d)) item('would_update', at, d.risk_flags, s.format(w.would_update, { ...at, changes: changesOf(s, d) }));
         continue;
       }
       // A folder that changed while it was being written is that skill's refused line; the other skills go on.
@@ -916,7 +924,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
         });
       } catch (err) {
         if (!(err instanceof CatalogError) || err.code === 'lock_busy') throw err;
-        lines.push(refusedTarget(s, at, err));
+        item('refused', at, [], refusedTarget(s, at, err));
         refused(err.code);
         continue;
       }
@@ -926,12 +934,12 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
         if (done === 'unchanged') unchanged++;
         // Removed meanwhile: no longer installed, so left out of an update of every skill; named, it's not_installed.
         else if (req.names) {
-          lines.push(s.format(w.refused, { ...at, reason: refusalReason(s, new CatalogError('not_installed', { name: e.name })) }));
+          item('refused', at, [], s.format(w.refused, { ...at, reason: refusalReason(s, new CatalogError('not_installed', { name: e.name })) }));
           refused('not_installed');
         }
         continue;
       }
-      lines.push(s.format(w.updated, { ...at, from: done.from, changes: changesOf(s, done.d) }) + keptLine(s, e.name, done.written.kept));
+      item('updated', { ...at, from: done.from }, done.d.risk_flags, s.format(w.updated, { ...at, from: done.from, changes: changesOf(s, done.d) }) + keptLine(s, e.name, done.written.kept));
       saw('updated');
     }
   } finally {
@@ -939,7 +947,8 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
   }
   if (unchanged) lines.push(s.format(w.unchanged, { n: unchanged }));
   const text = [s.format(w.header, { checked: chosen.length }), ...lines].join('\n');
-  return { text, target: targets.join(', ') || '-', result: outcome === 'refused' ? log.error(refusal!) : log.result('update', outcome), outcome };
+  const view: UpdateView = { kind: 'update', checked: chosen.length, unchanged, dry_run: req.dry_run === true, items };
+  return { text, target: targets.join(', ') || '-', result: outcome === 'refused' ? log.error(refusal!) : log.result('update', outcome), outcome, view };
 }
 
 export async function list(ctx: Context): Promise<Done> {
@@ -950,7 +959,7 @@ export async function list(ctx: Context): Promise<Done> {
   const rows = [];
   for (const e of here) {
     const latest = (await catalog!.versions({ name: e.name })).latest;
-    rows.push({ name: e.name, target: e.target, version: e.version, latest, policy: policyOf(e, config), state: latest === e.version ? 'same' : 'behind' });
+    rows.push({ name: e.name, target: e.target, version: e.version, latest, policy: policyOf(e, config), state: latest === e.version ? ('same' as const) : ('behind' as const) });
   }
   const w = s.word('status');
   let text: string;
@@ -961,7 +970,8 @@ export async function list(ctx: Context): Promise<Done> {
     if (rows.some((r) => r.state === 'behind')) lines.push(s.format(w.next_behind));
     text = [s.format(w.header, { n: rows.length }), ...lines].join('\n');
   }
-  return { text, target: rows.map((r) => `${r.name} v${r.version}`).join(', ') || '-', result: logWords(s).result('status') };
+  const view: ListView = { kind: 'list', rows: rows.map((r) => ({ ...r, policy: r.policy.policy, policy_words: policyWords(s, r.policy) })) };
+  return { text, target: rows.map((r) => `${r.name} v${r.version}`).join(', ') || '-', result: logWords(s).result('status'), view };
 }
 
 type PolicyInput = { policy: Policy; name?: string };

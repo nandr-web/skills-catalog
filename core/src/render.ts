@@ -22,7 +22,7 @@ const list = (xs: readonly string[]) => xs.join(', ');
 // Text inside a fence can't drive a terminal (contract §5.2): every C0 control but TAB and LF, DEL, every C1 control and
 // a CR not directly before an LF is shown as \u{xxxx}. Only what's shown changes; the data keeps its bytes.
 const CONTROLS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]|\r(?!\n)/g;
-const fenced = (text: string) => text.replace(CONTROLS, (c) => `\\u{${c.charCodeAt(0).toString(16).padStart(4, '0')}}`);
+export const fenced = (text: string) => text.replace(CONTROLS, (c) => `\\u{${c.charCodeAt(0).toString(16).padStart(4, '0')}}`);
 
 // Publisher text shown outside a fence can't forge the product's own lines (contract §5.2): a one-line field (a
 // description, a message, a developer's name) shows a line break or control character as a space, and flag text (a
@@ -82,7 +82,7 @@ function renderItem(s: Words, item: ReadItem, token: string, budget: InlineBudge
   const body = item.manifest.body;
   const shown = body !== undefined;
   if (shown) {
-    const skillMd = `---\n${stringify(item.manifest.frontmatter, { lineWidth: 0 })}---\n${body}`;
+    const skillMd = skillMdOf(item)!;
     const end = s.format(w.fence[1], { token });
     lines.push(s.format(w.data_note, { publisher, end }), s.format(w.fence[0], { token }), fenced(skillMd.trimEnd()), end);
   }
@@ -103,6 +103,11 @@ function renderItem(s: Words, item: ReadItem, token: string, budget: InlineBudge
   lines.push(s.format(w.next, { name: item.name }));
   return lines.join('\n');
 }
+
+/** A read's SKILL.md as its text (front matter, then body), when the read carries its body; control characters are
+ *  still the caller's to show escaped (fenced). */
+export const skillMdOf = (item: ReadItem): string | undefined =>
+  item.manifest.body === undefined ? undefined : `---\n${stringify(item.manifest.frontmatter, { lineWidth: 0 })}---\n${item.manifest.body}`;
 
 // `ids` makes the read's fence token (the injected Ids, so tests can fix it).
 export function renderRead(s: Words, r: ReadResult, ids: Ids): string {

@@ -10,7 +10,7 @@ export const S = cliWords(Words.load());
 
 export type Ran = { code: number; out: string; err: string; asked: string[] };
 
-export async function cli(p: Place, argv: string[], o: { tty?: boolean; answers?: string[]; env?: Record<string, string>; cwd?: string } = {}): Promise<Ran> {
+export async function cli(p: Place, argv: string[], o: { tty?: boolean; person?: boolean; color?: boolean; answers?: string[]; env?: Record<string, string>; cwd?: string } = {}): Promise<Ran> {
   const out: string[] = [];
   const err: string[] = [];
   const asked: string[] = [];
@@ -19,6 +19,8 @@ export async function cli(p: Place, argv: string[], o: { tty?: boolean; answers?
     env: { SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, ...o.env },
     cwd: o.cwd ?? join(p.dir, 'project'),
     tty: o.tty ?? false,
+    ...(o.person === undefined ? {} : { person: o.person }),
+    ...(o.color === undefined ? {} : { color: o.color }),
     ask: async (q) => {
       asked.push(q);
       return answers.shift() ?? '';

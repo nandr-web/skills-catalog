@@ -909,6 +909,87 @@ results:
     install_unsafe_writable_by_others: "install_unsafe: {path} can be changed by other users on this machine, and the session-start hook would run the code there each time a session starts, so setup changed nothing. Tell the person: install skills-catalog (or Node) in a folder only they can change, then run setup from there. Don't change permissions yourself."
     install_unsafe_too_many_files: "install_unsafe: skills-catalog's installed files at {path} are too many, or nested too deep, for setup to check them all, and the session-start hook would run them each time a session starts, so setup changed nothing. Tell the person: install skills-catalog somewhere with an ordinary package tree (for example a fresh clone, then npm ci), then run setup from there. Don't delete or move files yourself."
     assistant_config_elsewhere: "assistant_config_elsewhere: {setting} is set, so Claude Code may keep its settings and MCP servers somewhere other than where setup would write, and setup changed nothing. Tell the person; there are two ways on: set SKILLS_ASSISTANT_HOME to the folder Claude Code really uses and run setup again, or add the entries below by hand."
+  person:
+    list:
+      title: "Installed from the shared catalog: {n}"
+      same: latest
+      behind: v{latest} available
+      where:
+        user: all your projects
+        project: this project
+      next_behind: "To update: ${update}"
+      empty: "Nothing from the shared catalog is installed here yet. Find a skill: ${search}"
+    search:
+      header: '{count} of {total} skills match "{query}"'
+      header_all: "The shared catalog: {total} skills"
+      header_page: "The shared catalog: {total} skills, showing {first} to {last}"
+      partial: 'Nothing matches every word of "{query}". Closest, sharing only some words:'
+      shares: "shares only: {words}"
+      empty: 'No skill matches "{query}" ({total} in the catalog). Try other words: ${search}'
+      empty_catalog: The shared catalog is empty. Nobody has published a skill yet.
+      next: "Read one: ${cli} read {name}    Install one: ${cli} install {name}"
+      more: "More: the same search with --cursor {cursor}"
+    read:
+      header: "{name} v{version}{latest_mark}, published by {publisher} on {published_at}"
+      older: " (the latest is v{latest})"
+      as_written: "SKILL.md, as {publisher} wrote it:"
+      files: "Files: {files}"
+      left_out: "Not shown, to keep this short: {files}. Read one: ${cli} read {name} --path <file>"
+      next: "To install it: ${cli} install {name}"
+    versions:
+      header:
+        one: "{name}: 1 version"
+        other: "{name}: {n} versions"
+      no_message: no note
+      more: "Older: the same command with --cursor {cursor}"
+      next: "What changed in the latest: ${cli} diff {name} --from {from} --to {to}"
+    diff:
+      header:
+        one: "{name} v{from} → v{to}: 1 file changed"
+        other: "{name} v{from} → v{to}: {n} files changed"
+      runs: "Can run something new on this machine:"
+      runs_no: Nothing new can run on this machine.
+      status:
+        added: added
+        changed: changed
+        removed: removed
+      kind:
+        executable: can run
+        script: a script
+        binary: binary, not shown
+      frontmatter: "front matter {field}: {from} → {to}"
+      publisher: "publisher: {from} → {to}"
+      same: "{name} v{from} and v{to} have the same content."
+    update:
+      checked:
+        one: "Checked 1 installed skill against the shared catalog"
+        other: "Checked {n} installed skills against the shared catalog"
+      updated: "{name} v{from} → v{to}"
+      would_update: "{name} v{from} → v{to} (dry run: nothing changed)"
+      unchanged:
+        one: 1 already up to date
+        other: "{n} already up to date"
+      waiting:
+        one: "Waiting for your OK: 1 update"
+        other: "Waiting for your OK: {n} updates"
+      held_title: "{name} v{from} → v{to}, not installed:"
+      why:
+        held_flagged: it could change what runs on this machine
+        held_notify: 'your setting for it is "tell me first"'
+        held_pin: you pinned it at v{from}
+        held_other_catalog: the copy here came from another catalog, so it may be a different skill with the same name
+      look: "See the change:  ${cli} diff {name} --from {from} --to {to}"
+      take: "Take it:         ${cli} update {name} --accept"
+      stays: Until then it stays on v{from}.
+      refused_title: "Not updated:"
+    errors:
+      not_found: 'No skill named "{name}" in the shared catalog.'
+      not_found_suggest: "Did you mean: {names}?"
+      not_found_next: "Search by words instead: ${search}"
+      not_installed: "{name} isn't installed here. See what is: ${status}"
+    accept_look: "To see exactly what changes first:  ${cli} diff {name} --from {from} --to {to}"
+    accept_look_install: "To read it first:  ${cli} read {name} --version {to}"
+    usage: "skills-catalog didn't understand that. It takes:"
 setup:
   questions:
     - ask: Keep installed skills up to date automatically? Updates that could change what runs on this machine still wait for you.

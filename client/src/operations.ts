@@ -21,10 +21,11 @@ export type Context = { catalog: () => Promise<Catalog>; words: Words; settings:
 /** What a run gives: its data, and the activity log's target and result (the result in the words file's log words:
  *  logWords(ctx.words).result). `outcome`, a code, where the operation has one worth counting or acting on (a search's
  *  match, "none_found" for a read that found none of its names); absent means "ok". */
-export type Ran = { data: unknown; target: string; result: string; outcome?: string };
+export type Ran = { data: unknown; target: string; result: string; outcome?: string; view?: unknown };
 
-/** A machine operation's run: its text today (its row's output is 'text'), with the log's target and result. */
-export type Done = { text: string; target: string; result: string; outcome?: string };
+/** A machine operation's run: its text today (its row's output is 'text'), with the log's target and result. `view`:
+ *  the same result as data, for a face that lays it out for a person (the CLI at a terminal, cli/person.ts). */
+export type Done = { text: string; target: string; result: string; outcome?: string; view?: unknown };
 export type MachineRun = (ctx: Context, args: unknown) => Promise<Done>;
 
 /** Words the client waits for from the words file, as paths from the words file's top. Until one lands it's shown
@@ -108,7 +109,7 @@ export const actingAs = (s: Words, developer: string) => s.format(s.word('acting
 
 /** `text`: the face's words ('' on the web face, which presents nothing); `data`: the operation's data, on success
  *  only; `error`: the error, on failure only; `outcome`: the operation's outcome code, or the error's code. */
-export type Answer = { text: string; isError: boolean; outcome: string; data?: unknown; error?: CatalogError };
+export type Answer = { text: string; isError: boolean; outcome: string; data?: unknown; view?: unknown; error?: CatalogError };
 
 /** One operation on any face: `op` is the API's name, `name` what this face calls it (for the log). */
 export async function perform(ctx: Context, op: string, name: string, args: unknown): Promise<Answer> {
@@ -130,7 +131,7 @@ export async function perform(ctx: Context, op: string, name: string, args: unkn
     ctx.refuse?.(op, args);
     const ran = await run(ctx, op, args);
     ({ target, result } = ran);
-    answer = { text: web ? '' : present(ctx, op, ran.data, args), isError: false, outcome: ran.outcome ?? 'ok', data: ran.data };
+    answer = { text: web ? '' : present(ctx, op, ran.data, args), isError: false, outcome: ran.outcome ?? 'ok', data: ran.data, ...(ran.view === undefined ? {} : { view: ran.view }) };
   } catch (e) {
     const err = toCatalogError(e, settings.home, ctx.now());
     // A local catalog has no sign-in: no developer name is a setup matter, in its own words (not "run login").
