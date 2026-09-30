@@ -111,3 +111,12 @@ describe("each function's role", () => {
     }
   });
 });
+
+describe('the stage and its routes', () => {
+  it("the stage is made after the sign-in route its throttle names (CloudFormation refuses a RouteSettings key for a route that isn't there yet)", () => {
+    const routes = t.findResources('AWS::ApiGatewayV2::Route') as Record<string, any>;
+    const signIn = Object.entries(routes).find(([, r]) => r.Properties.RouteKey === SIGN_IN_ROUTE)![0];
+    const stage = Object.values(t.findResources('AWS::ApiGatewayV2::Stage'))[0] as any;
+    expect([stage.DependsOn ?? []].flat()).toContain(signIn);
+  });
+});

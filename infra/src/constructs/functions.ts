@@ -71,7 +71,7 @@ export class Api extends Construct {
     const integration = new HttpLambdaIntegration('Handler', this.fn);
     this.http = new HttpApi(this, 'Http', { defaultIntegration: integration, createDefaultStage: false });
     // Signing in goes to the same function by a route of its own, so the stage can throttle it on its own.
-    this.http.addRoutes({ path: SIGN_IN_PATH, methods: [HttpMethod.POST], integration });
+    const signInRoutes = this.http.addRoutes({ path: SIGN_IN_PATH, methods: [HttpMethod.POST], integration });
     const stage = new HttpStage(this, 'Stage', {
       httpApi: this.http,
       stageName: '$default',
@@ -79,6 +79,8 @@ export class Api extends Construct {
       throttle: { rateLimit: p.throttle.rate, burstLimit: p.throttle.burst },
       accessLogSettings: { destination: new LogGroupLogDestination(new LogGroup(this, 'AccessLogs', { retention: RetentionDays.ONE_MONTH, removalPolicy: p.removal })) },
     });
+    // The throttle below names the sign-in route, which must exist before the stage (CloudFormation's order otherwise).
+    for (const r of signInRoutes) stage.node.addDependency(r);
     (stage.node.defaultChild as CfnStage).addPropertyOverride('RouteSettings', {
       [SIGN_IN_ROUTE]: { ThrottlingRateLimit: SIGN_IN_THROTTLE.rate, ThrottlingBurstLimit: SIGN_IN_THROTTLE.burst },
     });

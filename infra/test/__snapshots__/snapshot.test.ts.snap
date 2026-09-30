@@ -535,7 +535,11 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
           }
         },
         "StageName": "$default"
-      }
+      },
+      "DependsOn": [
+        "ApiHttpPOSTapiv1signinwithgithubHandlerPermission4DC13E6B",
+        "ApiHttpPOSTapiv1signinwithgithubCD16183D"
+      ]
     },
     "IndexerLogs8FF9DFD2": {
       "Type": "AWS::Logs::LogGroup",
@@ -2366,7 +2370,11 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
           }
         },
         "StageName": "$default"
-      }
+      },
+      "DependsOn": [
+        "ApiHttpPOSTapiv1signinwithgithubHandlerPermission4DC13E6B",
+        "ApiHttpPOSTapiv1signinwithgithubCD16183D"
+      ]
     },
     "IndexerLogs8FF9DFD2": {
       "Type": "AWS::Logs::LogGroup",

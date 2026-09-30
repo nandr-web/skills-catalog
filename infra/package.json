@@ -11,7 +11,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test",
-    "deploy-plan": "node --disable-warning=ExperimentalWarning scripts/deploy-plan.ts"
+    "deploy-plan": "node --disable-warning=ExperimentalWarning scripts/deploy-plan.ts",
+    "smoke": "node --disable-warning=ExperimentalWarning scripts/smoke.ts"
   },
   "dependencies": {
     "aws-cdk-lib": "2.271.0",
