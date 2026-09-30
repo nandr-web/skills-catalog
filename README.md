@@ -28,7 +28,7 @@ Three real sessions (Claude Code on Sonnet, typed as a person would), recorded w
 
 **bob's update waits for his yes.** Version 2 adds a script, so his assistant tells him why it's held and doesn't take it. In his own terminal he looks at the change, then takes it.
 
-<p align="center"><img alt="bob asks Claude Code to update his shared skills; it says release-note-draft v2 adds scripts/collect.sh, a script that could run on his machine, and asks; in his shell, skills-catalog diff shows in orange that it can run something new and the script's two lines; skills-catalog update release-note-draft --accept shows the same reason behind an orange bar, he answers y, and it says Took it" src="docs/pictures/reel-update.gif" width="100%"></p>
+<p align="center"><img alt="bob asks Claude Code to update his shared skills; its reply shows a box, Waiting for your OK: release-note-draft v2 adds scripts/collect.sh, which can run on this machine, and it stays on v1 until he says yes; it asks; in his shell, skills-catalog diff shows in orange that it can run something new and the script's two lines; skills-catalog update release-note-draft --accept shows the same reason behind an orange bar, he answers y, and it says Took it" src="docs/pictures/reel-update.gif" width="100%"></p>
 
 ## The demo up close
 
