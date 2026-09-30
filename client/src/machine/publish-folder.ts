@@ -232,6 +232,8 @@ export async function publishFolder(ctx: Context, args: unknown): Promise<Done> 
         folder: quoted(req.folder),
         confirm,
         flags: JSON.stringify(flags),
+        // The message is part of what the confirm binds: say it, or that there is none, so an assistant adds nothing.
+        message_part: message === null ? w.no_message : s.format(w.with_message, { message: JSON.stringify(message) }),
       });
       return { text, target: `${name} v${r.version}`, result: log.result('publish', 'preview') };
     }

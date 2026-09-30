@@ -80,6 +80,7 @@ describe('publish a folder, in two steps (contract §3)', () => {
       S.format(S.word('publish.preview'), {
         name: 'ignore-list', version: 1, change: S.word('publish.new_skill'), n_send: 1, send: '"SKILL.md"', n_skip: 5,
         skip: ['".DS_Store"', '".env"', '".git/"', '"id_fake"', '"key.pem"'].join(', '), review: '', folder: JSON.stringify(dir), confirm, flags: '[]',
+        message_part: S.format(S.word('publish.with_message'), { message: JSON.stringify('First version.') }),
       }),
     );
     expect(preview.result).toBe(S.doc.log.result.publish.preview);
@@ -100,6 +101,17 @@ describe('publish a folder, in two steps (contract §3)', () => {
     // The same folder again: nothing new.
     const again = await publish(ctx, { folder: dir });
     expect(again.text).toBe(S.format(S.word('publish.identical'), { folder: JSON.stringify(dir), name: 'ignore-list', latest: 1 }));
+  });
+
+  it('a preview without a message says to add none (an assistant that adds one at step 2 is refused: conflict)', async () => {
+    const p = place();
+    const dir = folder(p, 'no-note', { 'SKILL.md': skillMd('no-note', 'Published without a message.') });
+    const ctx = ctxFor(p, 'ana');
+    const preview = await publish(ctx, { folder: dir });
+    expect(preview.text).toContain(S.word('publish.no_message').trim());
+    const e = await refusal(() => publish(ctx, { folder: dir, message: 'Initial publish', ...step2Of(preview.text) }));
+    expect(e.code).toBe('conflict');
+    expect(await versionsOf(p, 'no-note')).toBe(0);
   });
 
   it('refuses at step 2 when the folder changed since the preview, or another version landed: nothing stored', async () => {

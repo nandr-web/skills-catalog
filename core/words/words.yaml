@@ -663,8 +663,10 @@ results:
       Preview only: nothing was published. {name} would become v{version} in the shared catalog ({change}).
       Files it would send ({n_send}): {send}
       Files it skips ({n_skip}): {skip}
-      {review}Show the person these lists, ask whether to publish them, and end your turn: their request to publish isn't a yes to these lists. Only after they say yes: ${publish} with folder {folder}, confirm "{confirm}", name "{name}", version {version}, files {n_send} and flags {flags}, all exactly as given here.
+      {review}Show the person these lists, ask whether to publish them, and end your turn: their request to publish isn't a yes to these lists. Only after they say yes: ${publish} with folder {folder}, confirm "{confirm}", name "{name}", version {version}, files {n_send} and flags {flags}{message_part}, all exactly as given here.
     new_skill: a new skill
+    with_message: "; message {message}"
+    no_message: "; no message (adding one needs a new preview)"
     change_from: "changes from v{latest}: {files}"
     skip_none: none
     skip_more: " and {n} more"
