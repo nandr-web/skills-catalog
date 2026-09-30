@@ -84,6 +84,7 @@ record() {  # name: records what the reel_<name> function does, then checks and 
   T kill-server
   wait "$rec" || true
   trim "$cast"
+  quiet_account "$cast"
   check "$cast"
   "$AGG" --font-size 14 --fps-cap 15 --idle-time-limit 2 --last-frame-duration 5 "$cast" "$OUT/reel-$1.gif" 2>/dev/null
   echo "record: $OUT/reel-$1.gif ($(du -h "$OUT/reel-$1.gif" | cut -f1))"
@@ -102,6 +103,22 @@ while cut > max(1, len(lines) - 6) and restore in lines[cut - 1]:
 open(cast, "w").writelines(lines[:cut])
 PY
 }
+quiet_account() {  # Claude Code's notices about the signed-in account's usage (how much of its limit, when it resets, in
+  # which timezone) say nothing about the catalog and aren't the recorder's to publish: each is blanked where it's drawn,
+  # one space per character, so every other cell stays where it was. check() then fails the cast if any of it is left.
+  python3 - "$1" <<'PY'
+import json, re, sys
+cast = sys.argv[1]
+notice = re.compile(r"(You've used \d+% of your|You're close to|Approaching (your )?\w*|You're now using|Now using) [^\x1b\r\n]*")
+lines = open(cast).read().splitlines()
+out = [lines[0]]
+for line in lines[1:]:
+    e = json.loads(line)
+    if e[1] == "o": e[2] = notice.sub(lambda m: " " * len(m.group(0)), e[2])
+    out.append(json.dumps(e, ensure_ascii=False))
+open(cast, "w").write("\n".join(out) + "\n")
+PY
+}
 check() {  # a cast holds nothing of this machine: its home, user or host, joined across wrapped rows
   python3 - "$1" "$HOME" "$(id -un)" "$(hostname -s)" <<'PY'
 import json, re, sys
@@ -112,6 +129,8 @@ flat = re.sub(r"[\s─-╿]", "", esc.sub("", body))
 home, user, host = words
 # a short user name is an ordinary word too: look for it where it names this machine (a path, an address)
 look = [home, f"/{user}/", f"{user}@", host, "pax8", "Pax8", "/Users/", "/var/folders"]
+# nor anything of the account's usage (quiet_account blanks it)
+look += ["weeklylimit", "usagecredits", "usageallocation", "extrausage", "America/", "Europe/", "Asia/"]
 found = [w for w in look if len(w) > 2 and w in flat]
 sys.exit(f"record: {cast} shows {found}") if found else print(f"record: {cast.rsplit('/', 1)[-1]} clean")
 PY
