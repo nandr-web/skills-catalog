@@ -60,7 +60,8 @@ function list({ say, m }: Ctx, v: ListView | undefined): string | undefined {
     paint('dim', r.policy_words),
   ]);
   const out = [paint('bold', say('list.title', { n: v.rows.length })), '', ...m.table(header(say, 'list.columns'), rows)];
-  if (m.commands && v.rows.some((r) => r.state === 'behind')) out.push('', say('list.next_behind'));
+  const behind = v.rows.filter((r) => r.state === 'behind').length;
+  if (behind) out.push('', m.commands ? say('list.next_behind') : say('list.ask', { n: behind }));
   return out.join('\n');
 }
 
@@ -116,6 +117,8 @@ function search({ say, m }: Ctx, r: SearchResult, req: SearchInput): string {
     // A table the person scans: one row per skill, what it does in its own words.
     const rows = r.results.map((c) => [paint('bold', c.name), `v${c.latest_version}`, m.text(oneLine(c.publisher)), ...(partial ? [m.text(c.matched_words.join(', '))] : []), m.text(oneLine(c.description))]);
     out.push(...m.table(header(say, partial ? 'search.columns_partial' : 'search.columns'), rows));
+    // The one next step, as a question; none for a close match, which is never offered as a fit.
+    if (!partial && r.results.length === 1) out.push('', say('search.ask', { name: r.results[0]!.name }));
     return out.join('\n');
   }
   for (const c of r.results) {
