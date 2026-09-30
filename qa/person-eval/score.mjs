@@ -1,6 +1,7 @@
 // Scores the answers run.sh saved, for a person reading them (the visual-first tenets): structure they can see at a
 // glance (a table, the marks ✓ ↑ ▲ ✗, a quoted box, bold), one question at most, few words, no internal terms, and still
-// the right behaviour (the held update never taken, a close match never passed off as a fit).
+// the right behaviour (the held update never taken, a close match never passed off as a fit). Yes/no measures show k/n,
+// the share, and its 95% interval in brackets.
 //   node qa/person-eval/score.mjs <out dir> [<out dir> …]      one column per folder, one row per measure
 import { readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -61,6 +62,14 @@ function scoreDir(dir) {
 
 const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN);
 const pct = (x) => `${Math.round(x * 100)}%`;
+// A yes/no measure as k/n with its Wilson 95% interval: with a handful of answers, the range says how little they prove.
+function rate(xs) {
+  const n = xs.length, k = xs.reduce((a, b) => a + b, 0);
+  if (!n) return '-';
+  const z = 1.96, p = k / n, d = 1 + (z * z) / n;
+  const mid = (p + (z * z) / (2 * n)) / d, half = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d;
+  return `${k}/${n} ${pct(p)} [${Math.round(Math.max(0, mid - half) * 100)}–${Math.round(Math.min(1, mid + half) * 100)}]`;
+}
 const dirs = process.argv.slice(2);
 if (!dirs.length) { console.error('usage: node score.mjs <out dir> [<out dir> …]'); process.exit(1); }
 const all = dirs.map(scoreDir);
@@ -69,16 +78,16 @@ const col = (label, f) => [label, ...all.map(f)];
 const table = [
   ['', ...dirs.map((d) => basename(d))],
   col('answers', (rs) => String(rs.length)),
-  col('still right', (rs) => pct(mean(rs.map((r) => r.right)))),
-  col('has a table', (rs) => pct(mean(rs.map((r) => r.table)))),
-  col('uses the marks', (rs) => pct(mean(rs.map((r) => r.marks)))),
-  col('has a quoted box', (rs) => pct(mean(rs.map((r) => r.box)))),
-  col('uses bold', (rs) => pct(mean(rs.map((r) => r.bold)))),
+  col('still right', (rs) => rate(rs.map((r) => r.right))),
+  col('has a table', (rs) => rate(rs.map((r) => r.table))),
+  col('uses the marks', (rs) => rate(rs.map((r) => r.marks))),
+  col('has a quoted box', (rs) => rate(rs.map((r) => r.box))),
+  col('uses bold', (rs) => rate(rs.map((r) => r.bold))),
   col('questions (mean)', (rs) => mean(rs.map((r) => r.questions)).toFixed(1)),
-  col('more than one question', (rs) => pct(mean(rs.map((r) => (r.questions > 1 ? 1 : 0))))),
+  col('more than one question', (rs) => rate(rs.map((r) => (r.questions > 1 ? 1 : 0)))),
   col('words (mean)', (rs) => String(Math.round(mean(rs.map((r) => r.words))))),
-  col('any internal term', (rs) => pct(mean(rs.map((r) => (r.internal.length ? 1 : 0))))),
-  col('doubts it out loud', (rs) => pct(mean(rs.map((r) => r.doubts)))),
+  col('any internal term', (rs) => rate(rs.map((r) => (r.internal.length ? 1 : 0)))),
+  col('doubts it out loud', (rs) => rate(rs.map((r) => r.doubts))),
 ];
 const widths = table[0].map((_, i) => Math.max(...table.map((r) => r[i].length)));
 for (const r of table) console.log(r.map((c, i) => c.padEnd(widths[i])).join('  '));
