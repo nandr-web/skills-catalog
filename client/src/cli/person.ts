@@ -50,7 +50,8 @@ function list(say: Say, paint: Paint, v: ListView | undefined): string | undefin
     paint('bold', r.name),
     `v${r.version}`,
     r.state === 'same' ? paint('dim', say('list.same')) : paint('newer', say('list.behind', { latest: r.latest })),
-    paint('dim', say(`list.where.${r.target}`)),
+    // Where it applies only when it isn't the usual place (the person's own skills folder, for every project).
+    r.target === 'project' ? paint('dim', say('list.project')) : '',
     paint('dim', r.policy_words),
   ]);
   const out = [paint('bold', say('list.title', { n: v.rows.length })), '', ...columns(rows)];

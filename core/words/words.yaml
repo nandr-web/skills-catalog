@@ -915,9 +915,7 @@ results:
       title: "Installed from the shared catalog: {n}"
       same: latest
       behind: v{latest} available
-      where:
-        user: all your projects
-        project: this project
+      project: this project only
       next_behind: "To update: ${update}"
       empty: "Nothing from the shared catalog is installed here yet. Find a skill: ${search}"
     search:

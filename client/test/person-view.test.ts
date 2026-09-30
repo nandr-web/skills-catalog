@@ -87,6 +87,14 @@ describe('the CLI for a person at a terminal', () => {
     expect(r.out).toContain('To update: skills-catalog update');
   });
 
+  it('list says where a skill applies only when it is this project alone', async () => {
+    const p = await installedBehind();
+    await cli(p, ['install', 'demo-skill-01', '--project']);
+    const rows = (await person(p, ['list'])).out.split('\n').filter((l) => /^  [✓↑]/.test(l));
+    expect(rows.find((l) => l.includes('demo-skill-01'))).toContain('this project only');
+    expect(rows.filter((l) => l.includes('this project'))).toHaveLength(1);
+  });
+
   it('a search that only partly matches says so first, and names the shared words on each card', async () => {
     const p = await installedBehind();
     const r = await person(p, ['search', 'graphql', 'schema']);
