@@ -191,11 +191,11 @@ cmd_selftest() {
   cmd_install >/dev/null
   echo "- ana's interactive launch starts Claude Code with the scenario as its first prompt (tmux)"
   local isock="sc-try-i-$$" pane=""
-  tmux -L "$isock" new-session -d -x 200 -y 50 "'$0' launch ana list; sleep 30"
-  for _ in $(seq 1 40); do pane="$(tmux -L "$isock" capture-pane -p)"; echo "$pane" | grep -qiE 'Claude Code v|trust the files|invalid mcp|not found' && break; sleep 0.5; done
+  tmux -L "$isock" new-session -d -x 200 -y 50 "'$0' launch ana list --model $ST_MODEL; sleep 30"
+  for _ in $(seq 1 40); do pane="$(tmux -L "$isock" capture-pane -p)"; echo "$pane" | grep -qiE 'Claude Code v|trust this folder|invalid mcp|not found' && break; sleep 0.5; done
   tmux -L "$isock" kill-server 2>/dev/null || true
   if echo "$pane" | grep -qiE 'invalid mcp|config file not found|^error'; then echo "$pane" | head -5 >&2; st_fail "the interactive launch failed"; fi
-  echo "$pane" | grep -qiE 'Claude Code v|trust the files' || { echo "$pane" | head -5 >&2; st_fail "the interactive launch didn't reach Claude Code"; }
+  echo "$pane" | grep -qiE 'Claude Code v|trust this folder' || { echo "$pane" | head -5 >&2; st_fail "the interactive launch didn't reach Claude Code"; }
   echo "  ok   Claude Code started, its MCP config read"
   st_step ana publish
   st_expect 'ana .*publish_skill_to_catalog +published +release-note-draft v1' "ana published release-note-draft v1"

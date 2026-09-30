@@ -26,57 +26,85 @@
 
 ## Install
 
-**Status: ready locally and in AWS.** The catalog, the assistant's tools and the CLI run on your machine; the hosted catalog runs in AWS and passes its smoke test end to end: signing in with GitHub, publishing through upload links, search, read, install and a held update, with real Claude Code.
+**Status: ready locally and in AWS.** The catalog, its assistant tools and the CLI run on your machine; the hosted catalog passes its end-to-end smoke test with real Claude Code (GitHub sign-in, publish, search, read, install, a held update).
 
-Needs git, Node.js 24.15 or later (`node --version`), macOS or Linux (with `ps`, from procps: slim container images lack it), and [Claude Code](https://code.claude.com/docs/en/overview).
+**Needs:** git · Node.js 24.15+ (`node --version`) · macOS or Linux, with `ps` (procps; slim container images lack it) · [Claude Code](https://code.claude.com/docs/en/overview)
 
-**Ask your assistant.** Paste this into Claude Code:
+### Ask your assistant
+
+Paste this into Claude Code:
 
 ```text
-Install the Skills Catalog from https://github.com/nandr-web/skills-catalog for me: clone it into ~/skills-catalog,
-run `npm ci --ignore-scripts` in its core/ and client/ folders (it needs Node.js 24.15 or later), then register its
-MCP server for all my projects with
-`claude mcp add skills-catalog --scope user -- "$(command -v node)" --disable-warning=ExperimentalWarning ~/skills-catalog/client/src/cli.ts mcp`.
-Show me each command before you run it, and tell me to restart Claude Code when it's done.
+Install the Skills Catalog (https://github.com/nandr-web/skills-catalog). It needs Node.js 24.15+.
+
+1. git clone https://github.com/nandr-web/skills-catalog.git ~/skills-catalog
+2. cd ~/skills-catalog/core && npm ci --ignore-scripts
+3. cd ~/skills-catalog/client && npm ci --ignore-scripts
+4. Register its MCP server for all my projects:
+   claude mcp add skills-catalog --scope user -- "$(command -v node)" --disable-warning=ExperimentalWarning ~/skills-catalog/client/src/cli.ts mcp
+
+Show me each command before you run it.
+When it's done, tell me to restart Claude Code.
 ```
 
-**Or run it yourself:**
+### Or run it yourself
 
 ```sh
 git clone https://github.com/nandr-web/skills-catalog.git ~/skills-catalog
 cd ~/skills-catalog/core && npm ci --ignore-scripts
 cd ~/skills-catalog/client && npm ci --ignore-scripts
 claude mcp add skills-catalog --scope user -- "$(command -v node)" --disable-warning=ExperimentalWarning ~/skills-catalog/client/src/cli.ts mcp
+cd ~/skills-catalog
 ```
 
-Restart Claude Code, then ask it, for example, *"find a shared skill for release notes"* or *"publish my skill in ./my-skill"*. The catalog lives in `~/.skills-catalog/catalog`; set `SKILLS_CATALOG` (with `-e SKILLS_CATALOG=file:///path/to/a/shared/folder` on the `claude mcp add` line) to share one with your team. Installed skills go to `~/.claude/skills`, or the project's `.claude/skills` when you ask for this project.
+### Then
 
-To uninstall: `claude mcp remove skills-catalog --scope user`, then `rm -rf ~/skills-catalog ~/.skills-catalog`. Skills you installed stay in `.claude/skills` until you delete them.
+Restart Claude Code and ask, for example, *"find a shared skill for release notes"* or *"publish my skill in ./my-skill"*.
+
+- **Catalog:** `~/.skills-catalog/catalog`. To share one with your team, add `-e SKILLS_CATALOG=file:///path/to/a/shared/folder` to the `claude mcp add` line.
+- **Installed skills:** `~/.claude/skills`, or the project's `.claude/skills` if you ask for this project.
+
+**Uninstall:**
+
+```sh
+claude mcp remove skills-catalog --scope user
+rm -rf ~/skills-catalog ~/.skills-catalog
+```
+
+Skills you installed stay in `.claude/skills` until you delete them.
 
 ### Use a hosted catalog (AWS)
 
-A team shares one catalog in AWS instead of a folder. Point the MCP server at it and give it a token:
+A team shares one catalog in AWS instead of a folder. Point the MCP server at it (replacing the local one), then sign in:
 
 ```sh
+claude mcp remove skills-catalog --scope user
 claude mcp add skills-catalog --scope user -e SKILLS_CATALOG=https://<the catalog's address> -- "$(command -v node)" --disable-warning=ExperimentalWarning ~/skills-catalog/client/src/cli.ts mcp
 cd ~/skills-catalog/client
 SKILLS_CATALOG=https://<the catalog's address> node src/cli.ts login --client-id <its GitHub app's client id>   # sign in with GitHub
 SKILLS_CATALOG=https://<the catalog's address> node src/cli.ts login --with-token < token.txt                   # or a personal token
+cd ~/skills-catalog
 ```
 
-The token is saved in `~/.skills-catalog/token` (only you can read it); `node src/cli.ts logout` deletes it. Only the GitHub logins the deployment lists may sign in; its owner issues personal tokens with `npm run issue-token` in `hosted/`.
+- **Token:** saved in `~/.skills-catalog/token`, readable only by you. `node src/cli.ts logout` (in `client/`) deletes it.
+- **Who may sign in:** only the GitHub logins the deployment lists. Its owner issues personal tokens with `npm run issue-token` in `hosted/`.
 
-**Deploy your own.** In `infra/`, `npm run deploy-plan -- --account <your 12-digit account> --logins <GitHub logins>` prints what a deploy makes, its budget alarm and every command in order, and runs nothing; you run them with your AWS credentials (several minutes, mostly CloudFront). `npm run smoke -- --url <its address>` checks it, and with `SKILLS_TOKEN` set it publishes, finds, fetches back and diffs a test skill.
+**Deploy your own** (in `infra/`):
+
+1. `npm run deploy-plan -- --account <your 12-digit account> --logins <GitHub logins>` prints what it makes, its budget alarm and every command. It runs nothing.
+2. Run those commands with your AWS credentials (several minutes, mostly CloudFront).
+3. `npm run smoke -- --url <its address>` checks it. With `SKILLS_TOKEN` set, it also publishes, finds, fetches back and diffs a test skill.
 
 ## Try it
 
-Three ways, from a clone of this repository; each cleans up after itself.
+Three ways; each cleans up after itself. They assume the install above (the repository in `~/skills-catalog`).
 
 ### In real Claude Code (about two minutes)
 
-One script plays two developers, ana and bob, each a project wired to this checkout's MCP server, sharing one catalog in a sandbox folder (`~/sc-try`); nothing touches your own `~/.claude`.
+One script plays two developers, ana and bob: two projects on this checkout's MCP server, sharing one sandbox catalog (`~/sc-try`). Nothing touches your own `~/.claude`.
 
 ```sh
+cd ~/skills-catalog
 qa/try-claude.sh install                # installs core/ and client/, makes the sandbox
 qa/try-claude.sh launch ana publish     # Claude Code as ana: publishes two skills (say yes to the preview)
 qa/try-claude.sh launch bob install     # Claude Code as bob: finds ana's skill and installs it
@@ -87,11 +115,13 @@ qa/try-claude.sh status                 # what's published and installed; qa/try
 qa/try-claude.sh uninstall
 ```
 
-`qa/try-claude.sh selftest` runs the whole walk-through unattended with `claude -p` (Haiku, a few cents) and checks each step on the catalog's own log. `qa/try-claude.sh` alone lists every scenario.
+- `qa/try-claude.sh` alone lists every scenario.
+- `qa/try-claude.sh selftest` runs it all unattended with `claude -p` (Haiku, a few cents), checking each step on the catalog's log.
 
 ### In Docker (nothing on your machine but Docker)
 
 ```sh
+cd ~/skills-catalog
 docker build -t skills-catalog .
 docker run --rm skills-catalog                                   # the tests, then two developers in a script
 docker run --rm -it skills-catalog npm --prefix qa run demo      # the one-window demo below, inside the container
@@ -100,16 +130,18 @@ docker run --rm -e ANTHROPIC_API_KEY skills-catalog qa/try-claude.sh selftest   
 
 ### Watch the demo (one terminal window)
 
-Two developers' assistants share a skill in one terminal window. The assistants here are scripted stand-ins (no model) calling the real MCP server and CLI. Needs tmux 3.2 or later (macOS: `brew install tmux`; Linux: `sudo apt install tmux` on Debian 12, Ubuntu 22.04 or later), and a full-size terminal, about 200 by 50.
+Scripted stand-ins (no model) for two assistants, calling the real MCP server and CLI.
+
+**Needs:** tmux 3.2+ (macOS: `brew install tmux`; Linux: `sudo apt install tmux` on Debian 12, Ubuntu 22.04+) · a terminal about 200 by 50
 
 ```sh
-cd core && npm ci --ignore-scripts
-cd ../client && npm ci --ignore-scripts
-cd ../qa && npm ci --ignore-scripts
+cd ~/skills-catalog/qa && npm ci --ignore-scripts
 npm run demo
 ```
 
-You should see **the window at the top, playing**, and the Steps pane ending with **Done: 7 seen, 1 planned, 0 missed**. Enter moves to the next step, p pauses, q stops; everything the demo made is removed when it ends. What each pane shows: [the one-click demo](qa/README.md#the-one-click-demo).
+- You should see **the window at the top, playing**, with the Steps pane ending **Done: 7 seen, 1 planned, 0 missed**.
+- Enter: next step · p: pause · q: stop. It removes everything it made when it ends.
+- What each pane shows: [the one-click demo](qa/README.md#the-one-click-demo).
 
 <details><summary><b>Step by step</b>: check Node, install, run the tests, two developers in a script, check the speed (about two minutes)</summary>
 
@@ -265,9 +297,9 @@ Nothing to clean up: every step deletes its temporary folders. To remove everyth
 
 | | |
 |---|---|
-| **Built** | The core catalog: publish (all-or-nothing, owner-only), versions with fingerprints, keyword search that says when nothing matches exactly, reading a skill, history, diffs with risk flags, a local SQLite + file store behind replaceable parts. The assistant's tools (MCP): find, read, compare and publish skills (a preview first, then the person's yes), and install, update and list them. The installer holds risky updates until the person says yes: an update is risky when it adds a script, a file that isn't Markdown, new tool permissions or a new publisher. A CLI for the person: `install`, `list` and `update` (with `--accept` for a held update). A hosted catalog in AWS: the API on Lambda with DynamoDB and S3 behind CloudFront and a firewall, its stack in CDK (checked by cdk-nag), deployed and passing its smoke test, and the client for it (`SKILLS_CATALOG=https://…`, `skills-catalog login`). |
-| **Next** | One guided `setup` command (including the AWS option), more kinds of risky change to hold, the web page the hosted catalog will serve. Designed in [docs/contract.md](docs/contract.md). |
-| **Later** | A web UI with a delta view, bundles, agent reviewers. |
+| **Built** | **Catalog:** publish (all-or-nothing, owner-only), versions with fingerprints, keyword search that says when nothing matches exactly, read, history, diffs with risk flags. A local SQLite + file store behind replaceable parts.<br>**Assistant tools (MCP):** find, read, compare and publish (a preview, then your yes); install, update and list.<br>**Installer:** holds a risky update until you say yes. Risky: it adds a script, a non-Markdown file, new tool permissions or a new publisher.<br>**CLI:** `install`, `list`, `update` (`--accept` takes a held update).<br>**Hosted in AWS:** the API on Lambda with DynamoDB and S3, behind CloudFront and a firewall. CDK stack checked by cdk-nag. Deployed; passes its smoke test. Client: `SKILLS_CATALOG=https://…`, `skills-catalog login`. |
+| **Next** | A guided `setup` command (with the AWS option) · more kinds of risky change to hold · the hosted catalog's web page. Designed in [docs/contract.md](docs/contract.md). |
+| **Later** | A web UI with a delta view · bundles · agent reviewers. |
 
 ## How it works
 
