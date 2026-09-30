@@ -154,7 +154,8 @@ cmd_launch() {
     allowed="$allowed,${t}install_shared_skill,${t}update_installed_skills,${t}list_installed_skills,${t}publish_skill_to_catalog"
     exec claude -p "$prompt" "${args[@]}" --allowedTools "$allowed" --max-budget-usd 0.5
   fi
-  [ -n "$prompt" ] && args+=("$prompt")
+  # The prompt goes first: --mcp-config takes several files, so a prompt after it would be read as another one.
+  if [ -n "$prompt" ]; then exec claude "$prompt" "${args[@]}"; fi
   exec claude "${args[@]}"
 }
 
@@ -188,6 +189,14 @@ cmd_selftest() {
   node_ok; claude_ok; command -v tmux >/dev/null || die "selftest needs tmux (for the y/N in a real terminal)"
   SANDBOX="$(mktemp -d "${TMPDIR:-/tmp}/sc-try-selftest.XXXXXX")"; rmdir "$SANDBOX"; export SC_TRY_DIR="$SANDBOX"
   cmd_install >/dev/null
+  echo "- ana's interactive launch starts Claude Code with the scenario as its first prompt (tmux)"
+  local isock="sc-try-i-$$" pane=""
+  tmux -L "$isock" new-session -d -x 200 -y 50 "'$0' launch ana list; sleep 30"
+  for _ in $(seq 1 40); do pane="$(tmux -L "$isock" capture-pane -p)"; echo "$pane" | grep -qiE 'Claude Code v|trust the files|invalid mcp|not found' && break; sleep 0.5; done
+  tmux -L "$isock" kill-server 2>/dev/null || true
+  if echo "$pane" | grep -qiE 'invalid mcp|config file not found|^error'; then echo "$pane" | head -5 >&2; st_fail "the interactive launch failed"; fi
+  echo "$pane" | grep -qiE 'Claude Code v|trust the files' || { echo "$pane" | head -5 >&2; st_fail "the interactive launch didn't reach Claude Code"; }
+  echo "  ok   Claude Code started, its MCP config read"
   st_step ana publish
   st_expect 'ana .*publish_skill_to_catalog +published +release-note-draft v1' "ana published release-note-draft v1"
   st_expect 'ana .*publish_skill_to_catalog +published +sql-migrations v1' "ana published sql-migrations v1"
