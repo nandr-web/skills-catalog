@@ -141,7 +141,7 @@ reel_update() {
   # The person looks at the change in their own terminal, then takes it there (both stay on screen).
   say "skills-catalog diff release-note-draft --from 1 --to 2"; sleep 4
   say "skills-catalog update release-note-draft --accept"; wait_for "Take it\\?" 60; sleep 3
-  say "y"; wait_for "Took the held update" 60; sleep 3
+  say "y"; wait_for "Took it|Took the held update" 60; sleep 3
 }
 
 mkdir -p "$OUT"
