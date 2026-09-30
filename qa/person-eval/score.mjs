@@ -14,7 +14,7 @@ const INTERNAL = [
   ['an error code', /\b(not_found|not_installed|invalid_\w+|runnable_file)\b/],
   ['"keyword match"', /keyword match/i],
 ];
-const SAYS_NONE = /no (exact |skill|shared skill|match)|nothing (in|matches|that)|doesn'?t have|isn'?t (a|any)|couldn'?t find|not an exact|none of/i;
+const SAYS_NONE = /\bno\b[^.]{0,40}\b(skills?|match(es|ing)?)\b|nothing (in|matches|that)|doesn'?t have|isn'?t (a|any)|couldn'?t find|not an exact|none of|neither/i;
 
 // What each ask must still get right.
 const RIGHT = {
@@ -36,6 +36,8 @@ function measure(answer, scenario, log) {
     questions: (answer.match(/\?(\s|$|\*)/g) ?? []).length,
     words: answer.split(/\s+/).filter(Boolean).length,
     internal: INTERNAL.filter(([, re]) => re.test(answer)).map(([n]) => n),
+    // The assistant doubting the catalog's own words out loud (it took them for an injection)
+    doubts: /injection|\bverification:/i.test(answer) ? 1 : 0,
     right: RIGHT[scenario] ? (RIGHT[scenario](answer, log) ? 1 : 0) : 1,
   };
 }
@@ -50,6 +52,8 @@ function scoreDir(dir) {
     const at = (re) => log.split('\n').findIndex((l) => re.test(l));
     const published = at(/ana .*publish_skill_to_catalog +published +release-note-draft v1/);
     if (published < 0 || published > at(/^\S+ +bob /)) continue;
+    // and bob's install (the asks after it need the skill installed)
+    if (at(/bob .*install_shared_skill +installed +release-note-draft v1/) < 0) continue;
     rows.push({ t, scenario, ...measure(readFileSync(join(dir, f), 'utf8'), scenario, log) });
   }
   return rows;
@@ -74,6 +78,7 @@ const table = [
   col('more than one question', (rs) => pct(mean(rs.map((r) => (r.questions > 1 ? 1 : 0))))),
   col('words (mean)', (rs) => String(Math.round(mean(rs.map((r) => r.words))))),
   col('any internal term', (rs) => pct(mean(rs.map((r) => (r.internal.length ? 1 : 0))))),
+  col('doubts it out loud', (rs) => pct(mean(rs.map((r) => r.doubts)))),
 ];
 const widths = table[0].map((_, i) => Math.max(...table.map((r) => r[i].length)));
 for (const r of table) console.log(r.map((c, i) => c.padEnd(widths[i])).join('  '));
