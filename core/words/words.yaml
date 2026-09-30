@@ -485,6 +485,7 @@ results:
     more_cli: "More results: run the same search with --cursor {cursor}."
     next: "Next: read one with ${get}, or install it with ${install}."
     empty: 'Shared catalog: no skill matches "{query}" ({ranking}; {total} skills in the catalog). {hint}'
+    empty_catalog: "Shared catalog: it is empty, so nothing matches \"{query}\": nobody has published a skill yet. Tell the user the catalog is empty; searching again won't find anything."
     partial_header: 'Shared catalog: no skill matches every word of "{query}" ({ranking}). The closest share only some of them:'
     partial_card: "- {name} (v{version}, {publisher}; shares only: {shared}): {description}"
     partial_next: Tell the user nothing in the catalog matched exactly. Offer these only as close, naming the words they share; never present one as a fit.

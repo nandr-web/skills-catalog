@@ -515,6 +515,16 @@ describe('publisher text never forges the product\'s own lines (contract §4.1, 
     expect((await catalog.publish(request('fmt', md('Formats code.'), { message: 'first' }), actAs('dev-one'))).created).toBe(true);
   });
 
+  it('an empty catalog says so, rather than to search once more with other words', () => {
+    const s = Words.load();
+    const empty = renderSearch(s, { results: [], match: 'none', ranking: 'lexical', total_matches: 0, catalog_size: 0 }, { query: 'release notes' });
+    expect(empty).toBe(s.format(s.word('search.empty_catalog'), { query: 'release notes' }));
+    expect(empty).not.toMatch(/search once more/i);
+    // A catalog with skills in it still suggests other words.
+    const none = renderSearch(s, { results: [], match: 'none', ranking: 'lexical', total_matches: 0, catalog_size: 3 }, { query: 'sourdough' });
+    expect(none).toMatch(/Search once more with different words/);
+  });
+
   it('shows every one-line field on one line and a diff\'s changed lines inside the fence, whatever was stored', async () => {
     const s = Words.load();
     const card = { name: 'fmt', description: planted, latest_version: 1, tags: [], publisher: `ana${planted}`, matched_words: ['code'] };

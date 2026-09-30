@@ -42,6 +42,8 @@ export function renderSearch(s: Words, r: SearchResult, req: SearchInput): strin
   const offset = cursorOffset(req.cursor);
   const w = s.word('search');
   const ranking = w.ranking[r.ranking];
+  // An empty catalog: another search can't find anything, so it says so rather than suggesting other words.
+  if (r.results.length === 0 && r.catalog_size === 0 && typeof w.empty_catalog === 'string') return s.format(w.empty_catalog, { query });
   if (r.results.length === 0) {
     const hint = w.empty_hint[r.ranking === 'lexical' ? 'lexical' : 'other'];
     return s.format(w.empty, { query, ranking, total: r.catalog_size, hint });
