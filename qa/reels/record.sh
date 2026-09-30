@@ -32,7 +32,7 @@ rcfile() {
   cat >"$BASE/$1.rc" <<EOF
 PS1='\[\e[1;36m\]$1\[\e[0m\] \$ '
 cd "$SC_TRY_DIR/$1"
-claude() { command claude --strict-mcp-config --mcp-config "$SC_TRY_DIR/$1/.mcp.json" --model $MODEL --setting-sources project,local --allowedTools "$ALLOWED" "\$@"; }
+claude() { command claude --strict-mcp-config --mcp-config "$SC_TRY_DIR/$1/.mcp.json" --model $MODEL --setting-sources project,local --permission-mode default --allowedTools "$ALLOWED" "\$@"; }
 skills-catalog() { "$C/qa/try-claude.sh" cli $1 "\$@"; }
 export SC_TRY_DIR="$SC_TRY_DIR"
 EOF
@@ -62,7 +62,7 @@ turn() {
 shell_for() {  # who: a fresh tmux session running their shell
   T kill-server 2>/dev/null || true
   rcfile "$1"
-  T -f /dev/null new-session -d -s r -x "$W" -y "$H" "env -i HOME=$HOME PATH=$PATH TERM=xterm-256color LANG=en_US.UTF-8 bash --rcfile $BASE/$1.rc -i"
+  T -f /dev/null new-session -d -s r -x "$W" -y "$H" "env -i HOME='$HOME' USER='$USER' LOGNAME='$USER' PATH='$PATH' TERM=xterm-256color LANG=en_US.UTF-8 bash --rcfile $BASE/$1.rc -i"
   T set -g status off
   wait_for "$1.*\\$"
 }
@@ -103,7 +103,6 @@ reel_publish() {
   say claude; wait_for "Claude Code v" 60; sleep 1
   say "Publish my skill in ./release-note-draft to the shared skills catalog"; turn
   say "yes, publish it"; turn
-  say "/exit"; sleep 2
 }
 reel_install() {
   say claude; wait_for "Claude Code v" 60; sleep 1
