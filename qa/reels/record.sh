@@ -86,6 +86,7 @@ record() {  # name: records what the reel_<name> function does, then checks and 
   trim "$cast"
   quiet_account "$cast"
   check "$cast"
+  screens "$cast"
   "$AGG" --font-size 14 --fps-cap 15 --idle-time-limit 2 --last-frame-duration 5 "$cast" "$OUT/reel-$1.gif" 2>/dev/null
   echo "record: $OUT/reel-$1.gif ($(du -h "$OUT/reel-$1.gif" | cut -f1))"
 }
@@ -105,18 +106,59 @@ PY
 }
 quiet_account() {  # Claude Code's notices about the signed-in account's usage (how much of its limit, when it resets, in
   # which timezone) say nothing about the catalog and aren't the recorder's to publish: each is blanked where it's drawn,
-  # one space per character, so every other cell stays where it was. check() then fails the cast if any of it is left.
+  # one space per character, so every other cell stays where it was. tmux colours each word on its own, so the notice is
+  # found in the text as seen (colour codes left out) and blanked around them. check() then fails a cast with any left.
   python3 - "$1" <<'PY'
 import json, re, sys
 cast = sys.argv[1]
-notice = re.compile(r"(You've used \d+% of your|You're close to|Approaching (your )?\w*|You're now using|Now using) [^\x1b\r\n]*")
+# The notice from its start, or any piece of it tmux redraws on its own after moving the cursor.
+notice = re.compile(r"((You've used \d+% of your|You're close to|Approaching (your )?\w+|You're now using|Now using) "
+                    r"|(Your )?(weekly|daily|monthly|five-hour|session) limit|usage (credits|allocation)|extra usage"
+                    r"|resets \w+ \d+|\((America|Europe|Asia|Africa|Australia|Pacific|Atlantic|Indian|Antarctica|Etc)/)[^\n]*")
+piece_words = re.compile(r"credits|weekly|allocation|resets|extra usage|\w+/[A-Z][a-z]+_[A-Z]")
+token = re.compile(r"\x1b\[[0-9;]*m|\x1b\[[0-?]*[ -/]*[@-~]|\x1b.|[\r\n]|.", re.S)
+def quiet(data):
+    parts = token.findall(data)
+    seen, at = [], []  # the text as seen: colour codes skipped, any other control a line break
+    for i, p in enumerate(parts):
+        if re.fullmatch(r"\x1b\[[0-9;]*m", p): continue
+        seen.append(p if len(p) == 1 and p not in "\r\n" and p != "\x1b" else "\n"); at.append(i)
+    text = "".join(seen)
+    for m in notice.finditer(text):
+        for k in range(m.start(), m.end()): parts[at[k]] = " "
+    # tmux may redraw a notice from the middle of a word ("sage credits"): any piece it draws on its own (between two
+    # cursor moves) that holds one of the notice's words is blanked whole.
+    start = 0
+    for piece in text.split("\n"):
+        if piece_words.search(piece):
+            for k in range(start, start + len(piece)): parts[at[k]] = " "
+        start += len(piece) + 1
+    return "".join(parts)
+# tmux splits its output anywhere, escape codes included: the whole stream is quieted at once, then cut back into the
+# same events (a blanked character is one space, so every event keeps its length).
 lines = open(cast).read().splitlines()
-out = [lines[0]]
-for line in lines[1:]:
-    e = json.loads(line)
-    if e[1] == "o": e[2] = notice.sub(lambda m: " " * len(m.group(0)), e[2])
-    out.append(json.dumps(e, ensure_ascii=False))
-open(cast, "w").write("\n".join(out) + "\n")
+events = [json.loads(l) for l in lines[1:]]
+shown = [e for e in events if e[1] == "o"]
+whole = quiet("".join(e[2] for e in shown))
+at = 0
+for e in shown:
+    e[2], at = whole[at:at + len(e[2])], at + len(e[2])
+open(cast, "w").write("\n".join([lines[0]] + [json.dumps(e, ensure_ascii=False) for e in events]) + "\n")
+PY
+}
+screens() {  # every screen of the cast, as a terminal draws it (asciinema's own emulator), shows none of the account's usage
+  python3 - "$1" "$ASCIINEMA" "$H" <<'PY'
+import re, subprocess, sys
+cast, asciinema, rows = sys.argv[1], sys.argv[2], int(sys.argv[3])
+bad = re.compile(r"credits|weekly|allocation|resets|\w+/[A-Z][a-z]+_[A-Z]")
+lines = open(cast).read().splitlines()
+part = cast + ".part"
+for n in range(2, len(lines) + 1):
+    open(part, "w").write("\n".join(lines[:n]) + "\n")
+    shown = "\n".join(subprocess.run([asciinema, "convert", "-f", "txt", part, "-"], capture_output=True, text=True, check=True).stdout.splitlines()[-rows:])
+    m = bad.search(shown)
+    if m: sys.exit(f"record: {cast} screen {n - 1} shows {shown[max(0, m.start() - 30):m.end() + 30]!r}")
+print(f"record: {cast.rsplit('/', 1)[-1]}: {len(lines) - 1} screens checked")
 PY
 }
 check() {  # a cast holds nothing of this machine: its home, user or host, joined across wrapped rows
@@ -130,7 +172,7 @@ home, user, host = words
 # a short user name is an ordinary word too: look for it where it names this machine (a path, an address)
 look = [home, f"/{user}/", f"{user}@", host, "pax8", "Pax8", "/Users/", "/var/folders"]
 # nor anything of the account's usage (quiet_account blanks it)
-look += ["weeklylimit", "usagecredits", "usageallocation", "extrausage", "America/", "Europe/", "Asia/"]
+look += ["weekly", "credits", "allocation", "resets", "extrausage", "America/", "Europe/", "Asia/"]
 found = [w for w in look if len(w) > 2 and w in flat]
 sys.exit(f"record: {cast} shows {found}") if found else print(f"record: {cast.rsplit('/', 1)[-1]} clean")
 PY
