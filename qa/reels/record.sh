@@ -83,9 +83,24 @@ record() {  # name: records what the reel_<name> function does, then checks and 
   sleep 3
   T kill-server
   wait "$rec" || true
+  trim "$cast"
   check "$cast"
   "$AGG" --font-size 14 --fps-cap 15 --idle-time-limit 2 --last-frame-duration 5 "$cast" "$OUT/reel-$1.gif" 2>/dev/null
   echo "record: $OUT/reel-$1.gif ($(du -h "$OUT/reel-$1.gif" | cut -f1))"
+}
+trim() {  # the cast ends where the reel does: tmux closing (its "[server exited]", the screen it restores) isn't shown
+  python3 - "$1" <<'PY'
+import sys
+cast = sys.argv[1]
+lines = open(cast).read().splitlines(keepends=True)
+# In the file, JSON writes the escape as the six characters \u001b. Only the last few events are tmux closing.
+said = ("[server exited]", "[exited]", "[detached")
+restore = "\\u001b[?1049l"
+cut = next((i for i in range(len(lines) - 1, 0, -1) if any(e in lines[i] for e in said)), len(lines))
+while cut > max(1, len(lines) - 6) and restore in lines[cut - 1]:
+    cut -= 1
+open(cast, "w").writelines(lines[:cut])
+PY
 }
 check() {  # a cast holds nothing of this machine: its home, user or host, joined across wrapped rows
   python3 - "$1" "$HOME" "$(id -un)" "$(hostname -s)" <<'PY'
@@ -102,6 +117,11 @@ sys.exit(f"record: {cast} shows {found}") if found else print(f"record: {cast.rs
 PY
 }
 
+# Out of Claude Code, back in the person's shell, on a clear screen (without Claude Code's "Resume this session" lines).
+back_to_shell() {
+  sleep 2; say "/exit"; wait_for "Resume this session|\\$ *$" 30; sleep 0.5
+  T send-keys -t r C-l; sleep 1
+}
 reel_publish() {
   say claude; wait_for "Claude Code v" 60; sleep 1
   say "Publish my skill in ./release-note-draft to the shared skills catalog"; turn
@@ -110,16 +130,18 @@ reel_publish() {
 reel_install() {
   say claude; wait_for "Claude Code v" 60; sleep 1
   say "Find a shared skill for writing release notes and install it into this project"; turn
-  say "/exit"; sleep 1
-  say "ls .claude/skills/release-note-draft"; sleep 2
+  back_to_shell
+  say "skills-catalog list"; sleep 3
 }
 reel_update() {
   say claude; wait_for "Claude Code v" 60; sleep 1
   say "Update my shared skills"; turn
-  say "/exit"; sleep 1
-  say "skills-catalog update release-note-draft --accept"; wait_for "Take it\\?" 60; sleep 2
-  say "y"; wait_for "Took the held update" 60; sleep 1
-  say "ls .claude/skills/release-note-draft/scripts"; sleep 2
+  back_to_shell
+  # The person looks at the change in their own terminal, then takes it there.
+  say "skills-catalog diff release-note-draft --from 1 --to 2"; sleep 4
+  T send-keys -t r C-l; sleep 0.5
+  say "skills-catalog update release-note-draft --accept"; wait_for "Take it\\?" 60; sleep 3
+  say "y"; wait_for "Took the held update" 60; sleep 3
 }
 
 mkdir -p "$OUT"
