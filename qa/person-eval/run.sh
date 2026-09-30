@@ -14,7 +14,10 @@ for t in $(seq 1 "$TRIES"); do
   "$TRY" install >/dev/null
   ask() {  # who scenario [extra words]: the answer, saved when it's bob's
     local who=$1 s=$2 out; shift 2
-    out=$("$TRY" launch "$who" "$s" "$@" -p --model "$MODEL" </dev/null 2>&1) || true   # no stdin: claude -p would wait on it
+    # ana's steps are setup, not scored, and run on Haiku, which publishes in one answer (a larger model shows the preview
+    # and waits for a yes that a one-answer claude -p can't give)
+    local model=$MODEL; [ "$who" = ana ] && model=haiku
+    out=$("$TRY" launch "$who" "$s" "$@" -p --model "$model" </dev/null 2>&1) || true   # no stdin: claude -p would wait on it
     [ "$who" = bob ] && printf '%s\n' "$out" >"$OUT/$t-$s.md"
     return 0
   }
