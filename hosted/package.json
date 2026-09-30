@@ -10,7 +10,8 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "issue-token": "node --disable-warning=ExperimentalWarning scripts/issue-token.ts"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "3.1142.0",

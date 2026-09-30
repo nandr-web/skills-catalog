@@ -120,3 +120,15 @@ describe('the stage and its routes', () => {
     expect([stage.DependsOn ?? []].flat()).toContain(signIn);
   });
 });
+
+describe('reading the search file before it exists', () => {
+  it("the indexer may list the bucket, so S3 answers a missing search file 404 (without it, AWS answers 403 AccessDenied, which moto doesn't)", () => {
+    const fns = t.findResources('AWS::Lambda::Function') as Record<string, any>;
+    const [, indexer] = Object.entries(fns).find(([id]) => id.startsWith('IndexerHandler'))!;
+    const roleId = indexer.Properties.Role['Fn::GetAtt'][0];
+    const statements = (Object.values(t.findResources('AWS::IAM::Policy')) as any[])
+      .filter((p) => p.Properties.Roles.some((r: any) => r.Ref === roleId))
+      .flatMap((p) => p.Properties.PolicyDocument.Statement);
+    expect(statements.some((s) => [s.Action].flat().includes('s3:ListBucket'))).toBe(true);
+  });
+});

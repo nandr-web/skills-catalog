@@ -621,6 +621,16 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
               }
             },
             {
+              "Action": "s3:ListBucket",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "StorageFiles48C02C92",
+                  "Arn"
+                ]
+              }
+            },
+            {
               "Action": [
                 "sqs:ReceiveMessage",
                 "sqs:ChangeMessageVisibility",
@@ -2452,6 +2462,16 @@ exports[`the throwaway template > is as pinned (asset hashes aside) 1`] = `
                     },
                     "/search/cards.json"
                   ]
+                ]
+              }
+            },
+            {
+              "Action": "s3:ListBucket",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "StorageFiles48C02C92",
+                  "Arn"
                 ]
               }
             },

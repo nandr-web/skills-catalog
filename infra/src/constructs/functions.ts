@@ -95,6 +95,8 @@ export class Indexer extends Construct {
     this.fn = catalogFunction(this, { ...p, timeout: Duration.minutes(1) });
     this.fn.addToRolePolicy(records(p.storage, ['GetItem', 'Query', 'PutItem', 'UpdateItem']));
     this.fn.addToRolePolicy(files(p.storage, ['GetObject', 'PutObject'], SEARCH_KEY));
+    // A missing search file (before the first publish) is then 404, not 403 AccessDenied.
+    this.fn.addToRolePolicy(listing(p.storage));
   }
 }
 
