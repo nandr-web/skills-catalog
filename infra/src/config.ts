@@ -27,8 +27,8 @@ export type StageConfig = {
   runtimeVersionArn?: string | undefined;
   /** A monthly budget in US dollars (throwaway too: a forgotten stack is the likeliest surprise bill). */
   budgetUsd: number;
-  /** CloudFront's flat-rate Free plan. Off for both: AWS refuses this stack's web ACL rules (a rate rule with a scope-down
-   *  among them) for the Free tier, found on the first demo deploy; pay-as-you-go costs cents at demo scale. */
+  /** CloudFront's flat-rate Free plan. Off for both: AWS refused this stack's web ACL for the Free tier ("not eligible for
+   *  this subscription tier") on the first demo deploy; pay-as-you-go costs cents at demo scale. */
   freePlan: boolean;
   /** Where the alarms go: an email address given at the deploy go, never in code (like the account). */
   alertEmail?: string | undefined;
