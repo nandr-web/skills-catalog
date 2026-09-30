@@ -109,5 +109,5 @@ steps:
         calls: [{op: accept, name: release-note-draft}]
         then: [{type: y, after: Take it? (y/N)}]
     expect_server:
-      bob: [was NOT installed, Take it? (y/N), Took the held update]
+      bob: [was NOT installed, Take it? (y/N), "Took it:"]
       log: ['held: needs an OK', 'taken, with an OK']

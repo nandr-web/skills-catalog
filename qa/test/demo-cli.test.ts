@@ -218,7 +218,7 @@ describe('the conductor, for a step that asks the person', () => {
     const w = world((who, text, w) => {
       if (text === 'update my skills') { w.panes[who] += '● skills-catalog update\n  │ was NOT installed\n› '; w.panes.log += 'held: needs an OK\n'; w.turns.push(turn(who, text)); }
       else if (text.endsWith('--accept')) w.panes[who] += 'waiting for your OK\nTake it? (y/N) ';
-      else if (text === 'y') { w.panes[who] += 'Took the held update\n› '; w.panes.log += 'taken, with an OK\n'; w.turns.push(turn(who, 'skills-catalog update release-note-draft --accept')); }
+      else if (text === 'y') { w.panes[who] += 'Took it: release-note-draft v1 → v2\n› '; w.panes.log += 'taken, with an OK\n'; w.turns.push(turn(who, 'skills-catalog update release-note-draft --accept')); }
     });
     const r = await conduct(step8(), w.io, { mode: 'auto', pace: 0, attached: false, server: true, settleMs: 200 });
     expect(w.typed).toEqual(['bob: update my skills', 'bob: skills-catalog update release-note-draft --accept', 'bob: y']);

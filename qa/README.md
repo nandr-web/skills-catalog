@@ -82,7 +82,7 @@ npm run demo
 | 5 | bob compares v1 and v2 | "Can run something new on this machine: yes", in orange, in bob's pane |
 | 6 | bob publishes his fix over ana's skill | "not_owner: release-note-draft belongs to ana", in bob's pane; nothing is published |
 | 7 | bob searches for a graphql schema skill | nothing matches exactly; the closest only shares "schema", in bob's pane |
-| 8 | an update that can run something new waits for bob | "was NOT installed", then bob's own "Take it? (y/N)" answered y, and "Took the held update", in bob's pane (with `--core`, planned) |
+| 8 | an update that can run something new waits for bob | "was NOT installed", then bob's own "Take it? (y/N)" answered y, and "Took it:", in bob's pane (with `--core`, planned) |
 
 It plays on its own, a few seconds per step. **Enter**: the next step now. **p**: pause. **q** or **Ctrl-C**: stop,
 remove everything and say whether anything was left behind (before the last step, it also says after which step it
