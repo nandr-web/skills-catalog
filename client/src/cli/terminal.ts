@@ -34,8 +34,11 @@ const ANSI = /\x1b\[[0-9;]*m/g;
 /** The width a person sees: without colour codes, one column per character. */
 export const width = (text: string) => [...text.replace(ANSI, '')].length;
 
-/** Rows as columns that line up (each cell padded to its column's widest), two spaces apart, indented. */
-export function columns(rows: readonly (readonly string[])[], indent = '  '): string[] {
+/** Rows as columns that line up (each cell padded to its column's widest), two spaces apart, indented. A column empty
+ *  in every row is left out. */
+export function columns(all: readonly (readonly string[])[], indent = '  '): string[] {
+  const used = (i: number) => all.some((r) => width(r[i] ?? '') > 0);
+  const rows = all.map((r) => r.filter((_, i) => used(i)));
   const widths: number[] = [];
   for (const r of rows) r.forEach((c, i) => (widths[i] = Math.max(widths[i] ?? 0, width(c))));
   return rows.map((r) => indent + r.map((c, i) => (i === r.length - 1 ? c : c + ' '.repeat(widths[i]! - width(c)))).join('  ').trimEnd());
