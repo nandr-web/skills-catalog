@@ -49,6 +49,14 @@ Run these by hand, in order, with AWS credentials for account ${i.account}:
    skills-catalog login --client-id ${clientId}
    Then the assistant's tools and the CLI use the hosted catalog.
 
+7. Or, without GitHub (CI, or before the app exists): a personal token, issued with these AWS credentials (in hosted/):
+   TABLE=$(aws cloudformation describe-stack-resources --region ${REGION} --stack-name ${stack} --query "StackResources[?ResourceType=='AWS::DynamoDB::Table'].PhysicalResourceId" --output text)
+   npm run issue-token -- --table "$TABLE" --owner <their github login> --days 30
+   On their machine: export SKILLS_TOKEN=<the token>, or skills-catalog login --with-token < a file holding it.
+
+8. Check it (in infra/): npm run smoke -- --url <CatalogUrl>, and with SKILLS_TOKEN set it publishes, finds, reads,
+   fetches back and diffs a skill named smoke-<time>.
+
 To delete it: ${CDK_CLI} destroy ${stack} ${ctx}${config.keepHistory ? ' (the table and bucket are kept: delete them by hand)' : ''}
 `;
 }

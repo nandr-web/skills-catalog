@@ -152,15 +152,8 @@ describe('lost events raise an alarm', () => {
 });
 
 describe('demo only', () => {
-  it('subscribes the distribution and its web ACL to the flat-rate Free plan; throwaway does not', () => {
-    const demo = synth('demo');
-    demo.hasResourceProperties('AWS::PricingPlanManager::Subscription', {
-      PlanFamily: 'CloudFront',
-      PlanTier: 'FREE',
-      UsageLevel: 'DEFAULT',
-      ResourceArns: [Match.anyValue(), Match.anyValue()],
-    });
-    synth('throwaway').resourceCountIs('AWS::PricingPlanManager::Subscription', 0);
+  it("neither preset takes CloudFront's flat-rate Free plan: AWS refuses this web ACL's rules for that tier (found on the first demo deploy)", () => {
+    for (const preset of ['demo', 'throwaway'] as const) synth(preset).resourceCountIs('AWS::PricingPlanManager::Subscription', 0);
   });
 
   it('a budget alarm, and a small one for throwaway too (a forgotten throwaway stack is the likeliest surprise bill)', () => {

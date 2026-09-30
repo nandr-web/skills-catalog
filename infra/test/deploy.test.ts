@@ -38,7 +38,7 @@ describe('the deploy plan', () => {
   const plan = deployPlan({ preset: 'throwaway', account: REAL, logins: 'ana,bob', clientId: 'Iv1.abc' });
 
   it('prints every step in order, with the pinned CDK CLI, and the client side last', () => {
-    const order = ['github.com/settings/applications/new', 'ssm put-parameter', 'origin-secret', `${CDK_CLI} bootstrap aws://${REAL}/us-east-1`, `${CDK_CLI} deploy`, 'SKILLS_CATALOG=', 'skills-catalog login'];
+    const order = ['github.com/settings/applications/new', 'ssm put-parameter', 'origin-secret', `${CDK_CLI} bootstrap aws://${REAL}/us-east-1`, `${CDK_CLI} deploy`, 'SKILLS_CATALOG=', 'skills-catalog login', 'npm run issue-token', 'npm run smoke'];
     let at = -1;
     for (const want of order) {
       const i = plan.indexOf(want, at + 1);

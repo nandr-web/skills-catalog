@@ -1650,37 +1650,6 @@ exports[`the demo template > is as pinned (asset hashes aside) 1`] = `
           }
         ]
       }
-    },
-    "GuardrailsFreePlan2F8E13FC": {
-      "Type": "AWS::PricingPlanManager::Subscription",
-      "Properties": {
-        "PlanFamily": "CloudFront",
-        "PlanTier": "FREE",
-        "ResourceArns": [
-          {
-            "Fn::Join": [
-              "",
-              [
-                "arn:",
-                {
-                  "Ref": "AWS::Partition"
-                },
-                ":cloudfront::111111111111:distribution/",
-                {
-                  "Ref": "SiteEdge06AD6D73"
-                }
-              ]
-            ]
-          },
-          {
-            "Fn::GetAtt": [
-              "SiteFirewallB06E926C",
-              "Arn"
-            ]
-          }
-        ],
-        "UsageLevel": "DEFAULT"
-      }
     }
   },
   "Outputs": {

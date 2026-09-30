@@ -27,7 +27,8 @@ export type StageConfig = {
   runtimeVersionArn?: string | undefined;
   /** A monthly budget in US dollars (throwaway too: a forgotten stack is the likeliest surprise bill). */
   budgetUsd: number;
-  /** Demo: CloudFront's flat-rate Free plan. */
+  /** CloudFront's flat-rate Free plan. Off for both: AWS refuses this stack's web ACL rules (a rate rule with a scope-down
+   *  among them) for the Free tier, found on the first demo deploy; pay-as-you-go costs cents at demo scale. */
   freePlan: boolean;
   /** Where the alarms go: an email address given at the deploy go, never in code (like the account). */
   alertEmail?: string | undefined;
@@ -54,5 +55,5 @@ function named(preset: PresetName) {
 export const PRESETS: Record<PresetName, StageConfig> = {
   throwaway: { ...named('throwaway'), removal: RemovalPolicy.DESTROY, keepHistory: false, throttle: { rate: 20, burst: 40 }, rateLimitPer5Min: 1000, budgetUsd: 5, freePlan: false },
   // runtimeVersionArn is set at the demo deploy go, to the version the throwaway smoke test proved.
-  demo: { ...named('demo'), removal: RemovalPolicy.RETAIN, keepHistory: true, throttle: { rate: 50, burst: 100 }, rateLimitPer5Min: 2000, budgetUsd: 10, freePlan: true },
+  demo: { ...named('demo'), removal: RemovalPolicy.RETAIN, keepHistory: true, throttle: { rate: 50, burst: 100 }, rateLimitPer5Min: 2000, budgetUsd: 10, freePlan: false },
 };
