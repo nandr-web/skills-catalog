@@ -2,6 +2,9 @@
 # Records the README's reels: real Claude Code sessions (no stand-ins) on this checkout's MCP server, typed by this
 # script into a terminal as a person would, recorded with asciinema and rendered to GIFs with agg.
 #   qa/reels/record.sh [publish] [install] [update]      (default: all three, in that order: each needs the one before)
+#   qa/reels/record.sh stills                            the README's screenshots instead: one PNG per use case (shot-*.png),
+#                                                        each the last screen of its own Claude Code session (needs ffmpeg
+#                                                        and ImageMagick's magick)
 # Needs tmux, asciinema 3 and agg (ASCIINEMA= and AGG= name them if they aren't on PATH), and Claude Code signed in.
 # Everything runs in a fresh clone under /tmp/reel.* (short, neutral paths on screen), deleted at the end. Each cast is
 # checked for this machine's names (home, user, host) before it's rendered; the GIFs go to docs/pictures/ (REEL_OUT=).
@@ -13,7 +16,9 @@ REPO=$(cd "$(dirname "$0")/../.." && pwd)
 ASCIINEMA=${ASCIINEMA:-asciinema}; AGG=${AGG:-agg}; MODEL=${REEL_MODEL:-sonnet}; OUT=${REEL_OUT:-$REPO/docs/pictures}
 W=112; H=34; SOCK="reel-$$"
 REELS=("$@"); [ ${#REELS[@]} -gt 0 ] || REELS=(publish install update)
-for t in tmux "$ASCIINEMA" "$AGG" claude git node; do command -v "$t" >/dev/null || { echo "record: $t isn't on PATH" >&2; exit 1; }; done
+[ "${REELS[*]}" = stills ] && H=56   # a still is one screen: tall enough that an answer never scrolls its question away
+NEEDS=(tmux "$ASCIINEMA" "$AGG" claude git node); [ "${REELS[*]}" = stills ] && NEEDS+=(ffmpeg magick)
+for t in "${NEEDS[@]}"; do command -v "$t" >/dev/null || { echo "record: $t isn't on PATH" >&2; exit 1; }; done
 
 BASE=$(mktemp -d /tmp/reel.XXXXXX)
 cleanup() { tmux -L "$SOCK" kill-server 2>/dev/null || true; rm -rf "$BASE"; }
@@ -73,7 +78,7 @@ trust() {
   if screen | grep -q "trust this folder"; then T send-keys -t r Down; sleep 0.3; T send-keys -t r Enter; wait_for "Claude Code v" 60; fi
   sleep 1; say "/exit"; sleep 2
 }
-record() {  # name: records what the reel_<name> function does, then checks and renders it
+record() {  # name who [still]: records what the reel_<name> function does, then checks and renders it (a GIF, or a still)
   local cast="$BASE/$1.cast"
   shell_for "$2"
   "$ASCIINEMA" rec --headless --quiet --overwrite --window-size "${W}x$H" -c "tmux -L $SOCK attach -t r" "$cast" &
@@ -87,8 +92,17 @@ record() {  # name: records what the reel_<name> function does, then checks and 
   quiet_account "$cast"
   check "$cast"
   screens "$cast"
+  if [ "${3:-}" = still ]; then still "$cast" "$OUT/shot-${1#s_}.png"; return; fi
   "$AGG" --font-size 14 --fps-cap 15 --idle-time-limit 2 --last-frame-duration 5 "$cast" "$OUT/reel-$1.gif" 2>/dev/null
   echo "record: $OUT/reel-$1.gif ($(du -h "$OUT/reel-$1.gif" | cut -f1))"
+}
+still() {  # cast png: its last screen, drawn larger, with the empty rows below it cut and an even margin all round
+  local gif="${1%.cast}.gif" last="${1%.cast}.png" bg
+  "$AGG" --font-size 20 --idle-time-limit 1 --last-frame-duration 1 "$1" "$gif" 2>/dev/null
+  ffmpeg -loglevel error -y -i "$gif" -vf reverse -frames:v 1 "$last"
+  bg=$(magick "$last" -format '%[pixel:p{0,0}]' info:)
+  magick "$last" -bordercolor "$bg" -border 1 -fuzz 8% -trim +repage -border 24 "$2"
+  echo "record: $2 ($(magick identify -format '%wx%h' "$2"))"
 }
 trim() {  # the cast ends where the reel does: tmux closing (its "[server exited]", the screen it restores) isn't shown
   python3 - "$1" <<'PY'
@@ -105,7 +119,8 @@ open(cast, "w").writelines(lines[:cut])
 PY
 }
 quiet_account() {  # Claude Code's notices about the signed-in account's usage (how much of its limit, when it resets, in
-  # which timezone), and its "Resume this session" lines as it exits (they name the session), say nothing about the
+  # which timezone), the account's plan in its header ("Claude Pro"), and its "Resume this session" lines as it exits (they
+  # name the session), say nothing about the
   # catalog and aren't the recorder's to publish: each is blanked where it's drawn,
   # one space per character, so every other cell stays where it was. tmux colours each word on its own, so the notice is
   # found in the text as seen (colour codes left out) and blanked around them. check() then fails a cast with any left.
@@ -116,7 +131,7 @@ cast = sys.argv[1]
 notice = re.compile(r"((You've used \d+% of your|You're close to|Approaching (your )?\w+|You're now using|Now using) "
                     r"|(Your )?(weekly|daily|monthly|five-hour|session) limit|usage (credits|allocation)|extra usage"
                     r"|resets \w+ \d+|\((America|Europe|Asia|Africa|Australia|Pacific|Atlantic|Indian|Antarctica|Etc)/"
-                    r"|Resume this session|claude --resume)[^\n]*")
+                    r"|Resume this session|claude --resume|(· )?Claude (Pro|Max|Team|Enterprise)\b)[^\n]*")
 piece_words = re.compile(r"credits|weekly|allocation|resets|extra usage|\w+/[A-Z][a-z]+_[A-Z]|Resume this|--resume")
 token = re.compile(r"\x1b\[[0-9;]*m|\x1b\[[0-?]*[ -/]*[@-~]|\x1b.|[\r\n]|.", re.S)
 def quiet(data):
@@ -153,7 +168,7 @@ screens() {  # every screen of the cast, as a terminal draws it (asciinema's own
   python3 - "$1" "$ASCIINEMA" "$H" <<'PY'
 import re, subprocess, sys
 cast, asciinema, rows = sys.argv[1], sys.argv[2], int(sys.argv[3])
-bad = re.compile(r"credits|weekly|allocation|resets|\w+/[A-Z][a-z]+_[A-Z]|Resume this session|claude --resume|\^L")
+bad = re.compile(r"credits|weekly|allocation|resets|\w+/[A-Z][a-z]+_[A-Z]|Resume this session|claude --resume|\^L|Claude (Pro|Max|Team|Enterprise)\b")
 lines = open(cast).read().splitlines()
 part = cast + ".part"
 for n in range(2, len(lines) + 1):
@@ -177,7 +192,7 @@ look = [home, f"/{user}/", f"{user}@", host, "pax8", "Pax8", "/Users/", "/var/fo
 # nor anything of the account's usage (quiet_account blanks it)
 look += ["weekly", "credits", "allocation", "resets", "extrausage", "America/", "Europe/", "Asia/"]
 # nor Claude Code's resume lines (quiet_account blanks them too)
-look += ["Resumethissession", "--resume"]
+look += ["Resumethissession", "--resume", "ClaudePro", "ClaudeMax", "ClaudeTeam", "ClaudeEnterprise"]
 found = [w for w in look if len(w) > 2 and w in flat]
 sys.exit(f"record: {cast} shows {found}") if found else print(f"record: {cast.rsplit('/', 1)[-1]} clean")
 PY
@@ -193,6 +208,27 @@ back_to_shell() {
   until screen | grep -v '^ *$' | tail -1 | grep -qE '\$ *$'; do ((SECONDS < end)) || { echo "record: no shell prompt after Claude Code" >&2; return 1; }; sleep 0.3; done
   sleep 1
   T send-keys -t r C-l; sleep 1
+}
+# The stills: each one ask in a fresh Claude Code session (its screen shows only that), in the story's order.
+ask_claude() { say claude; wait_for "Claude Code v" 60; sleep 1; say "$1"; turn; }
+reel_s_publish() { reel_publish; }
+reel_s_search() { ask_claude "Find a shared skill for writing release notes"; }
+reel_s_install() { ask_claude "Install release-note-draft from the shared catalog into this project"; }
+reel_s_list() { ask_claude "Which shared skills do I have installed?"; }
+reel_s_update() { ask_claude "Update my shared skills"; }
+reel_s_closest() { ask_claude "Find a shared skill for a graphql schema"; }
+reel_s_terminal() {  # the person's own terminal: the change, then taking it
+  say "skills-catalog diff release-note-draft --from 1 --to 2"; sleep 4
+  say "skills-catalog update release-note-draft --accept"; wait_for "Take it\\?" 60; sleep 2
+  say "y"; wait_for "Took it" 60; sleep 2
+}
+# Off camera, ana publishes with Haiku in one answer, asked again (up to 3 times) while it only previews.
+off_camera_publish() {  # scenario-or-words skill version
+  for _ in 1 2 3; do
+    "$C/qa/try-claude.sh" launch ana "$1" "Yes, go ahead, I confirm." -p --model haiku >/dev/null 2>&1 </dev/null || true
+    grep -qE "ana +publish_skill_to_catalog +published +$2 v$3" "$SC_TRY_DIR/activity.log" 2>/dev/null && return 0
+  done
+  echo "record: ana's publish of $2 v$3 didn't happen" >&2; return 1
 }
 reel_publish() {
   say claude; wait_for "Claude Code v" 60; sleep 1
@@ -225,6 +261,16 @@ for r in "${REELS[@]}"; do
       # Off camera: ana publishes version 2, which adds a script (Haiku, answering once).
       "$C/qa/try-claude.sh" launch ana publish-v2 "Yes, publish it." -p --model haiku >/dev/null
       record update bob ;;
-    *) echo "record: no reel $r (publish, install, update)" >&2; exit 1 ;;
+    stills)
+      record s_publish ana still
+      off_camera_publish "Publish my skill in ./sql-migrations to the shared skills catalog." sql-migrations 1
+      record s_search bob still
+      record s_install bob still
+      off_camera_publish publish-v2 release-note-draft 2
+      record s_list bob still
+      record s_update bob still
+      record s_closest bob still
+      record s_terminal bob still ;;
+    *) echo "record: no reel $r (publish, install, update, stills)" >&2; exit 1 ;;
   esac
 done

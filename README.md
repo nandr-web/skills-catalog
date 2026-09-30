@@ -1,48 +1,68 @@
 <h1 align="center">Skills Catalog</h1>
 
-<p align="center">Publish an AI-assistant skill once; another developer's assistant finds it, installs the same skill, and keeps it up to date.</p>
+<p align="center">Share an AI-assistant skill once.<br>Your teammates' assistants find it, install it, and keep it up to date.</p>
 
 <p align="center"><img alt="Node.js 24.15 or later" src="https://img.shields.io/badge/node-%E2%89%A5%2024.15-2f6f3e"> <img alt="Runs on macOS and Linux" src="https://img.shields.io/badge/runs%20on-macOS%20%7C%20Linux-3a4a56"> <img alt="Status: ready locally and in AWS" src="https://img.shields.io/badge/status-ready%20locally%20and%20in%20AWS-2f6f3e"></p>
 
-<p align="center"><img alt="The one-click demo in one terminal window: on the left, ana's assistant publishes two skills, then version 2 of one, which adds a script; in the middle, bob's assistant finds and installs it, compares the versions, is refused publishing over ana's skill, searches for something the catalog doesn't have and gets only a close match, and his update that could run something new is held until he says yes; on the right, the steps to look for, each ticked when the demo sees it (the first, setup, is planned and not in the demo yet); at the bottom, the catalog server logs every call" src="docs/pictures/one-click-demo.gif" width="100%"></p>
+<p align="center"><a href="docs/pictures/claude-code/update.png"><img alt="Claude Code: bob asks to update his shared skills. The reply shows a box, Waiting for your OK: 1 update. release-note-draft v1 to v2 is not installed because it adds scripts/collect.sh, which can run on this machine. It stays on v1 until he says yes. Then one question: install v2?" src="docs/pictures/claude-code/update.png" width="100%"></a></p>
 
-<p align="center"><sub>Two developers' assistants (scripted stand-ins, no model) on the real catalog and its MCP server, recorded from <a href="qa/README.md#the-one-click-demo">the one-click demo</a>.</sub></p>
+<p align="center"><sub>Real Claude Code. Version 2 of a skill adds a script, so the update waits for a yes.</sub></p>
 
 <p align="center"><a href="#install">Install</a> · <a href="#try-it">Try it</a> · <a href="docs/architecture.md">Architecture</a> · <a href="docs/decisions.md">Decisions</a> · <a href="docs/contract.md">Contract</a></p>
 
-- **Publish once.** A skill goes into a shared catalog with its version and fingerprint; nobody hands files around.
-- **Find it by asking.** An assistant searches the catalog in plain words, and says so when nothing really fits.
-- **Stay current, safely.** One update brings every installed skill to its newest version; anything that could run something new waits for your yes.
+- **Publish once.** A skill goes into a shared catalog, with its version and fingerprint.
+- **Find it by asking.** Your assistant searches in plain words. It says so when nothing really fits.
+- **Stay current, safely.** One update brings every skill up to date. Anything that could run something new waits for your yes.
 
-## In real Claude Code
+## See it in Claude Code
 
-Three real sessions (Claude Code on Sonnet, typed as a person would), recorded with [`qa/reels/record.sh`](qa/reels/record.sh).
+Real sessions: ana and bob, two developers sharing one catalog. Click a screen to open it full size.
 
-**ana publishes.** Her assistant shows the files it would send and waits for her yes; Claude Code's permission prompt is her consent.
+<table>
+<tr>
+<td width="33%" valign="top"><b>1 · ana publishes</b><br><a href="docs/pictures/claude-code/publish.png"><img alt="ana asks Claude Code to publish ./release-note-draft. It shows a preview first: a table of the files it would send (SKILL.md, template.md) and none skipped. She says yes, and v1 is in the shared catalog." src="docs/pictures/claude-code/publish.png" width="100%"></a><br><sub>A preview first. Nothing is sent until she says yes.</sub></td>
+<td width="33%" valign="top"><b>2 · bob finds it</b><br><a href="docs/pictures/claude-code/search.png"><img alt="bob asks for a shared skill for writing release notes. The reply is a table: release-note-draft, v1, by ana, what it does. It read the skill and asks whether to install it." src="docs/pictures/claude-code/search.png" width="100%"></a><br><sub>Matches as a table. It reads the skill before offering it.</sub></td>
+<td width="33%" valign="top"><b>3 · bob's installed skills</b><br><a href="docs/pictures/claude-code/list.png"><img alt="bob asks which shared skills he has installed. A table with an up arrow: release-note-draft, installed v1, v2 available, updates automatic." src="docs/pictures/claude-code/list.png" width="100%"></a><br><sub>↑ marks a newer version.</sub></td>
+</tr>
+<tr>
+<td valign="top"><b>4 · Nothing fits</b><br><a href="docs/pictures/claude-code/closest.png"><img alt="bob asks for a GraphQL schema skill. The catalog has none. A marked line says the closest match shares only one word, schema, with a table row for sql-migrations. The reply says it isn't a real fit." src="docs/pictures/claude-code/closest.png" width="100%"></a><br><sub>The closest is shown as close, never as a fit.</sub></td>
+<td valign="top"><b>5 · bob decides, in his own terminal</b><br><a href="docs/pictures/claude-code/terminal.png"><img alt="bob's terminal: skills-catalog diff shows in orange that v2 can run something new, and the script's two lines. skills-catalog update --accept asks Take it? He answers y: Took it." src="docs/pictures/claude-code/terminal.png" width="100%"></a><br><sub>The change in orange, then “✓ Took it”.</sub></td>
+<td valign="top"><b>Watch it move</b><br><sub>Three short reels of the same story, below.</sub></td>
+</tr>
+</table>
+
+<details><summary><b>The reels</b>: ana publishes · bob installs · bob's update waits for his yes</summary>
+
+<br>Recorded with [`qa/reels/record.sh`](qa/reels/record.sh) (Claude Code on Sonnet, typed as a person would).
+
+**ana publishes.** A preview, then her yes. Claude Code's permission prompt is her consent.
 
 <p align="center"><img alt="ana asks Claude Code to publish ./release-note-draft; it previews what it would send (SKILL.md and template.md, nothing skipped) and asks; she says yes, approves the permission prompt, and release-note-draft v1 is in the shared catalog" src="docs/pictures/reel-publish.gif" width="100%"></p>
 
-**bob finds and installs it.** His assistant searches, reads the skill before installing it, and installs it into his project; `skills-catalog list` shows it in his own terminal.
+**bob finds and installs it.** His assistant reads it first. `skills-catalog list` shows it in his own terminal.
 
 <p align="center"><img alt="bob asks Claude Code for a shared skill for writing release notes, installed into this project; it searches, reads release-note-draft, installs it; back in his shell, skills-catalog list shows release-note-draft v1, the latest, for this project only" src="docs/pictures/reel-install.gif" width="100%"></p>
 
-**bob's update waits for his yes.** Version 2 adds a script, so his assistant tells him why it's held and doesn't take it. In his own terminal he looks at the change, then takes it.
+**bob's update waits for his yes.** Version 2 adds a script. He looks at the change, then takes it.
 
 <p align="center"><img alt="bob asks Claude Code to update his shared skills; its reply shows a box, Waiting for your OK: release-note-draft v2 adds scripts/collect.sh, which can run on this machine, and it stays on v1 until he says yes; it asks; in his shell, skills-catalog diff shows in orange that it can run something new and the script's two lines; skills-catalog update release-note-draft --accept shows the same reason behind an orange bar, he answers y, and it says Took it" src="docs/pictures/reel-update.gif" width="100%"></p>
 
-## The demo up close
+</details>
 
-**ana publishes.** Her assistant shows what it would send before anything is published. Version 2 adds a script, so the review says so, in orange, and waits for her yes.
+**Assistants:**
 
-<p align="center"><img alt="Close up on ana's assistant: she publishes two skills, each shown as a preview before anything is published, then version 2 of release-note-draft, whose review says in orange that it includes something that can run (scripts/collect.sh); she says yes and it is published" src="docs/pictures/one-click-demo-closeup-left.gif"></p>
-
-**bob finds, compares and updates.** He installs ana's skill, sees what version 2 changes, is refused publishing over her skill, and takes the update that could run something new only with his own yes. The steps on the right tick as the demo sees each one.
-
-<p align="center"><img alt="Close up on bob's assistant and the steps: bob finds ana's skill and installs it, compares versions 1 and 2 (the new script in orange), is refused publishing over ana's skill, gets only a close match for a graphql schema, and takes the held update with his own yes; each step is ticked on the right when the demo sees it" src="docs/pictures/one-click-demo-closeup.gif" width="100%"></p>
+| Assistant | Status |
+|---|---|
+| Claude Code | ✓ Works today (the screens above) |
+| pi | Next (phase 2) |
+| Copilot, Codex, Cursor, Gemini CLI | Later (phase 3) |
 
 ## Install
 
-**Status: ready locally and in AWS.** The catalog, its assistant tools and the CLI run on your machine; the hosted catalog passes its end-to-end smoke test with real Claude Code (GitHub sign-in, publish, search, read, install, a held update).
+**Status: ready locally and in AWS.**
+
+- **On your machine:** the catalog, its assistant tools and the CLI.
+- **In AWS:** the hosted catalog passes its end-to-end test with real Claude Code: GitHub sign-in, publish, search, read, install, a held update.
 
 **Needs:** git · Node.js 24.15+ (`node --version`) · macOS or Linux, with `ps` (procps; slim container images lack it) · [Claude Code](https://code.claude.com/docs/en/overview)
 
@@ -113,11 +133,15 @@ cd ~/skills-catalog
 
 ## Try it
 
-Three ways; each cleans up after itself. They assume the install above (the repository in `~/skills-catalog`).
+Two ways. Each cleans up after itself. Both assume the install above (the repository in `~/skills-catalog`).
 
 ### In real Claude Code (about two minutes)
 
-One script plays two developers, ana and bob: two projects on this checkout's MCP server, sharing one sandbox catalog (`~/sc-try`). Nothing touches your own `~/.claude`.
+One script plays two developers, ana and bob.
+
+- Each gets a project wired to this checkout's MCP server.
+- They share one sandbox catalog (`~/sc-try`).
+- Nothing touches your own `~/.claude`.
 
 ```sh
 cd ~/skills-catalog
@@ -140,28 +164,15 @@ qa/try-claude.sh uninstall
 cd ~/skills-catalog
 docker build -t skills-catalog .
 docker run --rm skills-catalog                                   # the tests, then two developers in a script
-docker run --rm -it skills-catalog npm --prefix qa run demo      # the one-window demo below, inside the container
 docker run --rm -e ANTHROPIC_API_KEY skills-catalog qa/try-claude.sh selftest   # real Claude Code, end to end
 ```
 
-### Watch the demo (one terminal window)
-
-Scripted stand-ins (no model) for two assistants, calling the real MCP server and CLI.
-
-**Needs:** tmux 3.2+ (macOS: `brew install tmux`; Linux: `sudo apt install tmux` on Debian 12, Ubuntu 22.04+) · a terminal about 200 by 50
-
-```sh
-cd ~/skills-catalog/qa && npm ci --ignore-scripts
-npm run demo
-```
-
-- You should see **the window at the top, playing**, with the Steps pane ending **Done: 7 seen, 1 planned, 0 missed**.
-- Enter: next step · p: pause · q: stop. It removes everything it made when it ends.
-- What each pane shows: [the one-click demo](qa/README.md#the-one-click-demo).
-
 <details><summary><b>Step by step</b>: check Node, install, run the tests, two developers in a script, check the speed (about two minutes)</summary>
 
-Five steps from a clone of this repository, in about two minutes. Needs git, Node.js 24.15 or later (npm comes with it), and macOS or Linux; WSL2 behaves as Linux, and Windows isn't supported today. The test, perf and try-it commands refuse an older Node. Nothing is installed outside this folder, except npm's usual cache.
+Five steps from a clone of this repository, in about two minutes.
+
+- **Needs:** git · Node.js 24.15+ (npm comes with it) · macOS or Linux. WSL2 counts as Linux; Windows isn't supported today.
+- **Stays here:** nothing is installed outside this folder, except npm's usual cache.
 
 ### 1. Check Node (a few seconds)
 
@@ -175,7 +186,7 @@ You should see **v24.15.0 or later**. Anything lower, or "command not found": in
 
 ### 2. Install (a few seconds)
 
-Installs the exact versions this project pins into `core/node_modules`; `--ignore-scripts` stops any package from running its own install step (none needs one).
+Installs the exact versions this project pins into `core/node_modules`. `--ignore-scripts` stops any package from running its own install step (none needs one).
 
 ```sh
 cd core
@@ -198,13 +209,18 @@ The package count differs by one between macOS and Linux (a macOS-only file watc
 
 ### 3. Run the tests (about 10 seconds)
 
-Type-checks the code, then runs the tests, except the few slow ones listed with their times in `test/slow.json` (`npm run test:slow` runs those; `npm run test:all` runs everything). Each test makes its own catalog in a temporary folder and deletes it; a safety check fails the run if anything tries to write under your home folder.
+Type-checks the code, then runs the tests.
+
+- **Left out:** the few slow tests listed in `test/slow.json`. `npm run test:slow` runs those; `npm run test:all` runs everything.
+- **Safe:** each test makes its own catalog in a temporary folder and deletes it. A safety check fails the run if anything writes under your home folder.
 
 ```sh
 npm run check
 ```
 
-You should see **Tests 376 passed | 15 skipped (391)**. The skipped tests are checks written ahead for behaviour that's planned but not built yet.
+You should see **Tests 925 passed | 56 expected fail | 15 skipped (996)**.
+
+- **Expected fail** and **skipped:** checks written ahead for behaviour that's planned but not built yet (more kinds of risky change, for example). Each passes once its piece is built.
 
 <details><summary>What it printed on our machine</summary>
 
@@ -212,15 +228,18 @@ You should see **Tests 376 passed | 15 skipped (391)**. The skipped tests are ch
 > @skills-catalog/core@0.1.0 check
 > node scripts/node-check.mjs && npm run typecheck && npm test
 …
- Test Files  7 passed (7)
-      Tests  376 passed | 15 skipped (391)
+ Test Files  27 passed (27)
+      Tests  925 passed | 56 expected fail | 15 skipped (996)
 ```
 
 </details>
 
 ### 4. Two developers, one catalog (a few seconds)
 
-A short script makes a new, empty catalog in a temporary folder, plays two developers, ana and bob, prints what the catalog answers at each step, and deletes it. The lines marked │ are what an AI assistant reads back.
+A short script plays two developers, ana and bob, on a new, empty catalog in a temporary folder.
+
+- It prints what the catalog answers at each step, then deletes the folder.
+- Lines marked │ are what an AI assistant reads back.
 
 ```sh
 npm run try-it
@@ -278,11 +297,16 @@ Deleted /private/var/folders/…/T/skills-catalog-try-GaibFW. Nothing else was c
 
 </details>
 
-Scene 7: only a skill's first publisher may publish new versions of it. Scene 8: when nothing matches exactly, the closest skill is offered only as close, never as a fit. The script is [core/scripts/try-it.ts](core/scripts/try-it.ts).
+- **Scene 7:** only a skill's first publisher may publish new versions of it.
+- **Scene 8:** when nothing matches exactly, the closest skill is offered only as close, never as a fit.
+- The script: [core/scripts/try-it.ts](core/scripts/try-it.ts).
 
 ### 5. Check the speed with 10,000 skills (about a minute)
 
-Builds a 10,000-skill catalog in a temporary folder (it goes quiet for about a minute while it builds), then times opening, publishing, searching and reading against the budgets in [the test plan](qa/qa-plan.md), and deletes the catalog.
+Builds a 10,000-skill catalog in a temporary folder, then times the main calls against the budgets in [the test plan](qa/qa-plan.md).
+
+- It goes quiet for about a minute while it builds.
+- It times opening, publishing, searching and reading, then deletes the catalog.
 
 ```sh
 npm run perf
@@ -311,11 +335,17 @@ Nothing to clean up: every step deletes its temporary folders. To remove everyth
 
 ## Where it stands
 
-| | |
-|---|---|
-| **Built** | **Catalog:** publish (all-or-nothing, owner-only), versions with fingerprints, keyword search that says when nothing matches exactly, read, history, diffs with risk flags. A local SQLite + file store behind replaceable parts.<br>**Assistant tools (MCP):** find, read, compare and publish (a preview, then your yes); install, update and list.<br>**Installer:** holds a risky update until you say yes. Risky: it adds a script, a non-Markdown file, new tool permissions or a new publisher.<br>**CLI:** `install`, `list`, `update` (`--accept` takes a held update).<br>**Hosted in AWS:** the API on Lambda with DynamoDB and S3, behind CloudFront and a firewall. CDK stack checked by cdk-nag. Deployed; passes its smoke test. Client: `SKILLS_CATALOG=https://…`, `skills-catalog login`. |
-| **Next** | A guided `setup` command (with the AWS option) · more kinds of risky change to hold · the hosted catalog's web page. Designed in [docs/contract.md](docs/contract.md). |
-| **Later** | A web UI with a delta view · bundles · agent reviewers. |
+**Built**
+
+- **Catalog:** publish (all-or-nothing, owner-only) · versions with fingerprints · keyword search that says when nothing matches exactly · read · history · diffs with risk flags. A local SQLite + file store, behind replaceable parts.
+- **Assistant tools (MCP):** find · read · compare · publish (a preview, then your yes) · install · update · list.
+- **Installer:** holds a risky update until you say yes. Risky: it adds a script, a non-Markdown file, new tool permissions or a new publisher.
+- **CLI:** `install` · `list` · `update` (`--accept` takes a held update).
+- **Hosted in AWS:** the API on Lambda, with DynamoDB and S3, behind CloudFront and a firewall. The CDK stack is checked by cdk-nag. Deployed, and passes its smoke test. Client: `SKILLS_CATALOG=https://…` and `skills-catalog login`.
+
+**Next:** a guided `setup` command (with the AWS option) · more kinds of risky change to hold · pi (phase 2) · the hosted catalog's web page. Designed in [docs/contract.md](docs/contract.md).
+
+**Later:** a web UI with a delta view · bundles · agent reviewers · Copilot, Codex, Cursor and Gemini CLI.
 
 ## How it works
 

@@ -38,6 +38,10 @@ The check of `qa run` on the real machine is a script, run by hand: `node test/l
 
 ## The one-click demo
 
+> **Deferred from the README (2026-09-30).** Its stand-in assistants print each tool result as it comes, raw markdown
+> and all, where a real assistant shows the person a rendered reply. The README shows real Claude Code screens instead
+> (`qa/reels/record.sh stills`). The demo still runs as described here.
+
 Two developers, ana and bob, share skills through one catalog, in one terminal window. You watch each step and what
 it should show. Their assistants are stand-ins for now: each makes the calls an assistant would, with no model (no
 login, no cost), on the real catalog: its MCP server (this repository's own, one per developer) and, for installing
