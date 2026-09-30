@@ -14,7 +14,7 @@ for t in $(seq 1 "$TRIES"); do
   "$TRY" install >/dev/null
   ask() {  # who scenario [extra words]: the answer, saved when it's bob's
     local who=$1 s=$2 out; shift 2
-    out=$("$TRY" launch "$who" "$s" "$@" -p --model "$MODEL" 2>&1) || true
+    out=$("$TRY" launch "$who" "$s" "$@" -p --model "$MODEL" </dev/null 2>&1) || true   # no stdin: claude -p would wait on it
     [ "$who" = bob ] && printf '%s\n' "$out" >"$OUT/$t-$s.md"
     return 0
   }

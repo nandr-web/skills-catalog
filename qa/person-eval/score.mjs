@@ -47,7 +47,9 @@ function scoreDir(dir) {
     let log = '';
     try { log = readFileSync(join(dir, `${t}-activity.log`), 'utf8'); } catch {}
     // A try whose setup failed (ana's skills never published) says nothing about the words: left out.
-    if (!/ana .*publish_skill_to_catalog +published +release-note-draft v1/.test(log)) continue;
+    const at = (re) => log.split('\n').findIndex((l) => re.test(l));
+    const published = at(/ana .*publish_skill_to_catalog +published +release-note-draft v1/);
+    if (published < 0 || published > at(/^\S+ +bob /)) continue;
     rows.push({ t, scenario, ...measure(readFileSync(join(dir, f), 'utf8'), scenario, log) });
   }
   return rows;
