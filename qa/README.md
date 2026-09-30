@@ -150,5 +150,5 @@ Exit codes of `qa run`: the command's own code, `2` something was left behind, `
 | `src/` | The tools: `run`, `janitor`, `check` (before/after), `sandbox`, `safe-delete`, `agent/` (the scenario runner and its scorer) |
 | `test/` | Their tests; `test/machine.ts` builds the fake machines |
 | `fixtures/traces/` | Recorded, scrubbed assistant traces with hand-written scores |
-| `person-eval/` | What a real assistant shows the person: `run.sh <checkout> <out> [tries] [model]` walks ana's and bob's story with `claude -p` (costs a little); `node score.mjs <out…>` scores bob's answers (tables, marks, a box, one question, words, internal terms, still right) as k/n with 95% intervals, one column per run |
+| `person-eval/` | What a real assistant shows the person: `run.sh <checkout> <out> [tries] [model]` walks ana's and bob's story with `claude -p` (costs a little); `node score.mjs [--history <file.jsonl>] <out…>` scores bob's answers (tables, marks, a box, one question, words and each ask's ceiling in `ceilings.json`, internal terms, still right) as k/n with 95% intervals, with what the run cost, one column per run; `--history` keeps one line per answer |
 | `reels/` | `record.sh`: the README's reels, real Claude Code sessions recorded and checked screen by screen |

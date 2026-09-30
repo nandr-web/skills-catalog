@@ -152,6 +152,8 @@ cmd_launch() {
     local t=mcp__skills-catalog__ allowed
     allowed="${t}search_shared_skills,${t}read_shared_skill,${t}list_shared_skill_versions,${t}diff_shared_skill_versions"
     allowed="$allowed,${t}install_shared_skill,${t}update_installed_skills,${t}list_installed_skills,${t}publish_skill_to_catalog"
+    # SC_TRY_TRACE=1: the answer as a stream-json trace (every tool call and result, the answer, what it cost)
+    [ -n "${SC_TRY_TRACE:-}" ] && args+=(--output-format stream-json --verbose)
     exec claude -p "$prompt" "${args[@]}" --allowedTools "$allowed" --max-budget-usd 0.5
   fi
   # The prompt goes first: --mcp-config takes several files, so a prompt after it would be read as another one.

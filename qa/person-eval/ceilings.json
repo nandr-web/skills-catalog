@@ -1,0 +1,11 @@
+{
+  "about": "The most words an answer to each of bob's asks should take, for a person to read at a glance (words beyond a table or box are prose they have to read). A starting point, set 2026-09-30 a little above what main's Sonnet and Opus answers took then; change them here, not in the scorer.",
+  "words": {
+    "search": 130,
+    "search-miss": 110,
+    "install": 150,
+    "diff": 160,
+    "update": 140,
+    "list": 110
+  }
+}
