@@ -105,7 +105,8 @@ open(cast, "w").writelines(lines[:cut])
 PY
 }
 quiet_account() {  # Claude Code's notices about the signed-in account's usage (how much of its limit, when it resets, in
-  # which timezone) say nothing about the catalog and aren't the recorder's to publish: each is blanked where it's drawn,
+  # which timezone), and its "Resume this session" lines as it exits (they name the session), say nothing about the
+  # catalog and aren't the recorder's to publish: each is blanked where it's drawn,
   # one space per character, so every other cell stays where it was. tmux colours each word on its own, so the notice is
   # found in the text as seen (colour codes left out) and blanked around them. check() then fails a cast with any left.
   python3 - "$1" <<'PY'
@@ -114,8 +115,9 @@ cast = sys.argv[1]
 # The notice from its start, or any piece of it tmux redraws on its own after moving the cursor.
 notice = re.compile(r"((You've used \d+% of your|You're close to|Approaching (your )?\w+|You're now using|Now using) "
                     r"|(Your )?(weekly|daily|monthly|five-hour|session) limit|usage (credits|allocation)|extra usage"
-                    r"|resets \w+ \d+|\((America|Europe|Asia|Africa|Australia|Pacific|Atlantic|Indian|Antarctica|Etc)/)[^\n]*")
-piece_words = re.compile(r"credits|weekly|allocation|resets|extra usage|\w+/[A-Z][a-z]+_[A-Z]")
+                    r"|resets \w+ \d+|\((America|Europe|Asia|Africa|Australia|Pacific|Atlantic|Indian|Antarctica|Etc)/"
+                    r"|Resume this session|claude --resume)[^\n]*")
+piece_words = re.compile(r"credits|weekly|allocation|resets|extra usage|\w+/[A-Z][a-z]+_[A-Z]|Resume this|--resume")
 token = re.compile(r"\x1b\[[0-9;]*m|\x1b\[[0-?]*[ -/]*[@-~]|\x1b.|[\r\n]|.", re.S)
 def quiet(data):
     parts = token.findall(data)
@@ -146,11 +148,12 @@ for e in shown:
 open(cast, "w").write("\n".join([lines[0]] + [json.dumps(e, ensure_ascii=False) for e in events]) + "\n")
 PY
 }
-screens() {  # every screen of the cast, as a terminal draws it (asciinema's own emulator), shows none of the account's usage
+screens() {  # every screen of the cast, as a terminal draws it (asciinema's own emulator), shows none of the account's usage,
+  # nor Claude Code's resume lines (they name the session), nor a Ctrl-L printed as ^L
   python3 - "$1" "$ASCIINEMA" "$H" <<'PY'
 import re, subprocess, sys
 cast, asciinema, rows = sys.argv[1], sys.argv[2], int(sys.argv[3])
-bad = re.compile(r"credits|weekly|allocation|resets|\w+/[A-Z][a-z]+_[A-Z]")
+bad = re.compile(r"credits|weekly|allocation|resets|\w+/[A-Z][a-z]+_[A-Z]|Resume this session|claude --resume|\^L")
 lines = open(cast).read().splitlines()
 part = cast + ".part"
 for n in range(2, len(lines) + 1):
@@ -173,17 +176,19 @@ home, user, host = words
 look = [home, f"/{user}/", f"{user}@", host, "pax8", "Pax8", "/Users/", "/var/folders"]
 # nor anything of the account's usage (quiet_account blanks it)
 look += ["weekly", "credits", "allocation", "resets", "extrausage", "America/", "Europe/", "Asia/"]
+# nor Claude Code's resume lines (quiet_account blanks them too)
+look += ["Resumethissession", "--resume"]
 found = [w for w in look if len(w) > 2 and w in flat]
 sys.exit(f"record: {cast} shows {found}") if found else print(f"record: {cast.rsplit('/', 1)[-1]} clean")
 PY
 }
 
-# Out of Claude Code, back in the person's shell, on a clear screen (without Claude Code's "Resume this session" lines).
+# Out of Claude Code, back in the person's shell, on a clear screen. Claude Code's "Resume this session" lines, drawn as it
+# exits, are blanked in the cast by quiet_account (clearing after them still showed them for a frame).
 back_to_shell() {
   # Ctrl-C twice, not /exit: typing a slash opens Claude Code's command menu, which lists this machine's own commands.
   sleep 2; T send-keys -t r C-c; sleep 0.6; T send-keys -t r C-c
   # the shell's own prompt on the last line, then a breath: Ctrl-L sent while Claude Code is still exiting prints as ^L
-  wait_for "Resume this session" 30
   local end=$((SECONDS + 30))
   until screen | grep -v '^ *$' | tail -1 | grep -qE '\$ *$'; do ((SECONDS < end)) || { echo "record: no shell prompt after Claude Code" >&2; return 1; }; sleep 0.3; done
   sleep 1
