@@ -119,7 +119,8 @@ PY
 
 # Out of Claude Code, back in the person's shell, on a clear screen (without Claude Code's "Resume this session" lines).
 back_to_shell() {
-  sleep 2; say "/exit"; wait_for "Resume this session|\\$ *$" 30; sleep 0.5
+  # Ctrl-C twice, not /exit: typing a slash opens Claude Code's command menu, which lists this machine's own commands.
+  sleep 2; T send-keys -t r C-c; sleep 0.6; T send-keys -t r C-c; wait_for "Resume this session|\\$ *$" 30; sleep 0.5
   T send-keys -t r C-l; sleep 1
 }
 reel_publish() {
@@ -137,9 +138,8 @@ reel_update() {
   say claude; wait_for "Claude Code v" 60; sleep 1
   say "Update my shared skills"; turn
   back_to_shell
-  # The person looks at the change in their own terminal, then takes it there.
+  # The person looks at the change in their own terminal, then takes it there (both stay on screen).
   say "skills-catalog diff release-note-draft --from 1 --to 2"; sleep 4
-  T send-keys -t r C-l; sleep 0.5
   say "skills-catalog update release-note-draft --accept"; wait_for "Take it\\?" 60; sleep 3
   say "y"; wait_for "Took the held update" 60; sleep 3
 }

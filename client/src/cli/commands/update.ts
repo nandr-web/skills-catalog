@@ -94,6 +94,8 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
     return 0;
   }
   const a = await perform(ctx, 'accept_held_update', 'update --accept', { name, target: hold.target, version: hold.version, confirm: hold.confirm, flags: hold.flags });
-  (a.isError ? io.stderr : io.stdout)((io.person && !a.isError ? `${paint('ok', MARK.ok)} ` : '') + a.text + '\n');
+  // A person gets the result in one line; the full sentence (with where it went) is the assistant's.
+  const done = io.person && !a.isError ? withActing(`${paint('ok', MARK.ok)} ${said(s, first ? 'person.accepted_install' : 'person.accepted', at)}`) : a.text;
+  (a.isError ? io.stderr : io.stdout)(done + '\n');
   return a.isError ? 1 : 0;
 }

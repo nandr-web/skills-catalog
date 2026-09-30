@@ -987,6 +987,8 @@ results:
       not_found_next: "Search by words instead: ${search}"
       not_installed: "{name} isn't installed here. See what is: ${status}"
     accept_look: "To see exactly what changes first:  ${cli} diff {name} --from {from} --to {to}"
+    accepted: "Took it: {name} v{from} → v{to}, its files checked against the catalog's."
+    accepted_install: "Installed {name} v{to}, its files checked against the catalog's."
     accept_look_install: "To read it first:  ${cli} read {name} --version {to}"
     usage: "skills-catalog didn't understand that. It takes:"
 setup:

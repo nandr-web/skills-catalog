@@ -160,6 +160,6 @@ describe('the CLI for a person at a terminal', () => {
       '┃ To see exactly what changes first:  skills-catalog diff release-notes-kit --from 1 --to 2',
     ]);
     const yes = await cli(p, ['update', 'release-notes-kit', '--accept'], { tty: true, person: true, answers: ['y'] });
-    expect(yes.out.split('\n').find((l) => l.startsWith('✓ '))).toMatch(/^✓ Took the held update: release-notes-kit v1 -> v2/);
+    expect(yes.out.split('\n').find((l) => l.startsWith('✓ '))).toBe("✓ Took it: release-notes-kit v1 → v2, its files checked against the catalog's.");
   });
 });
