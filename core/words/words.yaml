@@ -1071,6 +1071,7 @@ results:
       stays_reply: It stays on v{from} until you say yes.
       look_reply: Ask to see the change first, if you want to.
       refused_title: "Not updated:"
+      kept: "Your changed copy of {name} is kept at {path}. Delete it once you've checked it."
     errors:
       unreachable: "Can't reach the catalog at {catalog} ({detail})."
       unreachable_next: "Check your connection, or the SKILLS_CATALOG setting."

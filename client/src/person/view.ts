@@ -88,7 +88,10 @@ function update({ s, say, m }: Ctx, v: UpdateView | undefined): string | undefin
   const would = v.items.filter((i) => i.kind === 'would_update');
   if (would.length) out.push(paint('bold', say('update.dry_run_title')));
   for (const i of would) out.push(`${lead}${paint('newer', MARK.newer)} ${say('update.would_update', { name: paint('bold', i.name), from: i.from, to: i.to })}`);
-  for (const i of v.items.filter((i) => i.kind === 'updated')) out.push(`${lead}${paint('ok', MARK.ok)} ${say('update.updated', { name: paint('bold', i.name), from: i.from, to: i.to })}`);
+  for (const i of v.items.filter((i) => i.kind === 'updated')) {
+    out.push(`${lead}${paint('ok', MARK.ok)} ${say('update.updated', { name: paint('bold', i.name), from: i.from, to: i.to })}`);
+    if (i.kept !== undefined) out.push(`${m.kind === 'terminal' ? '    ' : '  '}${say('update.kept', { name: i.name, path: m.text(i.kept) })}`);
+  }
   // A pin is the person's own choice, not a question: a plain line, outside the box (review V3.1).
   for (const i of v.items.filter((i) => i.kind === 'held_pin')) {
     out.push(`${lead}${paint('newer', MARK.newer)} ${say('update.pinned', { name: paint('bold', i.name), from: i.from, to: i.to })}`);
@@ -157,6 +160,7 @@ function install({ s, say, m }: Ctx, v: InstallView | undefined): string | undef
   const d = v.done!;
   const doneWords = d.from === undefined ? 'install.done' : d.from > v.version ? 'install.done_older' : 'install.done_over';
   const out = [`${paint('ok', MARK.ok)} ${paint('bold', say(doneWords, at))}`, paint('dim', say('install.where', { path: m.text(d.path), policy: d.policy_words }))];
+  if (d.kept !== undefined) out.push(say('update.kept', { name: v.name, path: m.text(d.kept) }));
   if (d.older) out.push(paint('newer', `${MARK.newer} ${say(m.commands ? 'install.older' : 'install.older_reply', { name: v.name, latest: d.latest })}`));
   if (d.from === undefined) out.push('', say(d.new_folder ? 'install.live_new_folder' : 'install.live', at));
   return out.join('\n');

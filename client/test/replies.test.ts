@@ -310,6 +310,11 @@ describe('an installed copy edited by hand', () => {
     const { readFileSync } = await import('node:fs');
     expect(readFileSync(join(kept!, 'SKILL.md'), 'utf8')).toContain('My own edit.');
     expect(readFileSync(join(dest, 'SKILL.md'), 'utf8')).toContain('Body, v2.');
+    // The person's view names the kept copy too, in a terminal and in the reply (the B validator: it was the reply only).
+    const v = views(u, 'update_installed_skills');
+    const line = S.format(S.word('person.update.kept'), { name: 'sql-migration-helper', path: kept! });
+    expect(v.terminal).toContain(line);
+    expect(v.markdown).toContain('Your changed copy of sql-migration-helper is kept at');
   });
 });
 

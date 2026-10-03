@@ -542,7 +542,7 @@ const acceptCommand = (s: Words, name: string, target: Target) => [s.cli, ...['u
 // ---------- operations ----------
 
 /** An update's result as data, for a person's view (person/view.ts). An item's `lines` are the words the text gives it. */
-export type UpdateItem = { kind: 'updated' | 'would_update' | 'held_flagged' | 'held_notify' | 'held_pin' | 'held_other_catalog' | 'refused'; name: string; from: number; to: number; flags: RiskFlag[]; lines: string[] };
+export type UpdateItem = { kind: 'updated' | 'would_update' | 'held_flagged' | 'held_notify' | 'held_pin' | 'held_other_catalog' | 'refused'; name: string; from: number; to: number; flags: RiskFlag[]; lines: string[]; kept?: string };
 /** What a person reads about one install or one yes taken (a held install in its box, or what was installed and
  *  where), the CLI's and the reply's view (review V4.1, V3.2). */
 export type InstallView = {
@@ -550,7 +550,7 @@ export type InstallView = {
   name: string;
   version: number;
   held?: { reason: 'flagged' | 'pin' | 'notify' | 'other_catalog'; from?: number; flags: RiskFlag[]; command: string };
-  done?: { path: string; policy_words: string; from?: number; latest: number; older: boolean; new_folder?: boolean };
+  done?: { path: string; policy_words: string; from?: number; latest: number; older: boolean; new_folder?: boolean; kept?: string };
 };
 export type UpdateView = { kind: 'update'; checked: number; unchanged: number; dry_run: boolean; items: UpdateItem[] };
 /** The installed skills as data, for a person's view. */
@@ -648,7 +648,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   const replaced = over !== undefined && over > version ? '\n' + s.format(w.replaced_newer, { from: over }) : '';
   const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + replaced + keptLine(s, req.name, written.kept) + olderLine(s, entry, config, v.latest) + '\n' + liveLine(s, ctx, target, req.name, newFolder);
   const policy = policyOf(entry, config);
-  const view: InstallView = { kind: 'install', name: req.name, version, done: { path: dest, policy_words: policyWords(s, policy), ...(over !== undefined ? { from: over } : {}), latest: v.latest, older: version < v.latest && policy.policy === 'auto', new_folder: newFolder } };
+  const view: InstallView = { kind: 'install', name: req.name, version, done: { path: dest, policy_words: policyWords(s, policy), ...(over !== undefined ? { from: over } : {}), latest: v.latest, older: version < v.latest && policy.policy === 'auto', new_folder: newFolder, ...(written.kept !== undefined ? { kept: written.kept } : {}) } };
   return { text, target: `${req.name} v${version}`, result: log.result('install', 'installed'), outcome: 'installed', view };
 }
 
@@ -793,7 +793,7 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
         '\n' +
         liveLine(s, ctx, t.target, req.name, newFolder)) + keptLine(s, req.name, written.kept);
   const policy = policyOf(entry, config);
-  const view: InstallView = { kind: 'install', name: req.name, version: to.version, done: { path: dest, policy_words: policyWords(s, policy), ...(existing ? { from: existing.version } : {}), latest: t.latest, older: !existing && to.version < t.latest && policy.policy === 'auto', new_folder: newFolder } };
+  const view: InstallView = { kind: 'install', name: req.name, version: to.version, done: { path: dest, policy_words: policyWords(s, policy), ...(existing ? { from: existing.version } : {}), latest: t.latest, older: !existing && to.version < t.latest && policy.policy === 'auto', new_folder: newFolder, ...(written.kept !== undefined ? { kept: written.kept } : {}) } };
   return { text, target: `${req.name} v${to.version}`, result: logWords(s).result('accept'), outcome: existing ? 'updated' : 'installed', view };
 }
 
@@ -999,6 +999,8 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
         continue;
       }
       item('updated', { ...at, from: done.from }, done.d.risk_flags, s.format(w.updated, { ...at, from: done.from, changes: changesOf(s, done.d) }) + keptLine(s, e.name, done.written.kept));
+      // The copy changed here, kept aside, is named in the person's view too (review P11.2, the B validator).
+      if (done.written.kept !== undefined) items[items.length - 1]!.kept = done.written.kept;
       saw('updated');
     }
   } finally {
