@@ -22,6 +22,9 @@ export type SetupPlaces = {
   backups: string;
   record: string;
   lock: string;
+  /** The terminal's launcher setup may add, and its folder (a common place on PATH). */
+  command: string;
+  commandDir: string;
 };
 export type PlacesInput = {
   assistantHome: string;
@@ -126,6 +129,8 @@ export function checkPlaces({ assistantHome: A, skillsHome: H, env, uid, allowed
     backups: join(H, 'backups'),
     record: join(H, 'setup-record.json'),
     lock: join(H, 'setup.lock'),
+    command: join(home, '.local', 'bin', 'skills-catalog'),
+    commandDir: join(home, '.local', 'bin'),
   };
   const claudeDir = realFolder(places.claudeDir, uid);
   const backups = h ? realFolder(places.backups, uid) : true;

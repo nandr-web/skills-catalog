@@ -7,14 +7,15 @@
 // left in the assistant's folders over an hour ago are removed.
 
 import { createHash, randomBytes } from 'node:crypto';
-import { closeSync, constants, fchmodSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, unlinkSync, writeSync, type BigIntStats } from 'node:fs';
+import { closeSync, constants, fchmodSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, statSync, unlinkSync, writeSync, type BigIntStats } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { CatalogError } from '@skills-catalog/core';
 import { readJsonFile } from './json-file.ts';
 import { folderId, writeFileText } from './json-write.ts';
 import { readConfig, withLockFile, writeConfig, type Config } from './lock.ts';
-import { isPrivate } from './private.ts';
+import { isPrivate, writableOnlyAsPrivate } from './private.ts';
 import { planFile, planSetup, type FileKind, type FilePlan, type PlanInput, type SetupPlan } from './setup-plan.ts';
+import { commandLauncher } from './setup-values.ts';
 import { RECORD_CAP } from './setup-places.ts';
 import type { RecordEntry, SetupRecord } from './setup-record.ts';
 
@@ -23,10 +24,15 @@ export type RunInput = PlanInput & {
   config: Config;
   /** The clock: backups' names, the lock's wait and the sweep's age. */
   now: () => number;
+  /** Add the terminal's launcher (the setup command passes config terminal_command, on unless false). */
+  terminalCommand?: boolean;
   /** Test seams: after a file is read (before its backup and write), and after it's written and recorded. */
   seams?: { afterRead?: (path: string, attempt: number) => void; afterWrite?: (path: string) => void };
 };
-export type SetupResult = { plan: SetupPlan; written: string[]; backups: string[] };
+/** The launcher: added (or brought up to date), already there as setup made it, someone else's file left as it is, or
+ *  not added because others could change its folder. */
+export type CommandOutcome = 'added' | 'same' | 'taken' | 'unsafe';
+export type SetupResult = { plan: SetupPlan; written: string[]; backups: string[]; command?: CommandOutcome };
 
 const KINDS: readonly FileKind[] = ['claudeJson', 'settingsJson'];
 const BACKUP_SUFFIX: Record<FileKind, string> = { claudeJson: 'claude.json', settingsJson: 'settings.json' };
@@ -64,10 +70,10 @@ function makeFolder(path: string): void {
 }
 
 /** A new file of setup's own, made only where nothing stands (never through a link), 0600, synced; its identity. */
-function writeNew(path: string, bytes: Buffer | string): BigIntStats {
-  const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+function writeNew(path: string, bytes: Buffer | string, mode = 0o600): BigIntStats {
+  const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
   try {
-    fchmodSync(fd, 0o600);
+    fchmodSync(fd, mode);
     const b = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes, 'utf8');
     for (let at = 0; at < b.length; ) at += writeSync(fd, b, at);
     fsyncSync(fd);
@@ -172,12 +178,51 @@ function underLock(input: RunInput): SetupResult {
     saveRecord();
   }
 
+  let command: CommandOutcome | undefined;
+  if (input.terminalCommand) {
+    command = placeCommand(places, commandLauncher(plan.run), record);
+    if (command === 'added') saveRecord();
+  }
+
   for (const dir of [H, places.backups]) {
     const ignore = join(dir, '.gitignore');
     if (lstatOr(dir)?.isDirectory() && !lstatOr(ignore)) writeNew(ignore, '*\n');
   }
   sweep(places, input.now());
-  return { plan, written, backups };
+  return { plan, written, backups, ...(command ? { command } : {}) };
+}
+
+/** A folder for the launcher: absent (made 0700), or the person's own that no one else can write, followed if it's a
+ *  link (a dotfiles manager's ~/.local/bin often is). */
+function commandFolder(path: string): boolean {
+  const me = BigInt(process.getuid?.() ?? -1);
+  try {
+    const s = statSync(path, { bigint: true });
+    return s.isDirectory() && s.uid === me && writableOnlyAsPrivate(s);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') return false;
+    makeFolder(path);
+    return true;
+  }
+}
+
+/** The terminal's launcher, placed only where nothing stands, never over another file (setup build notes' "never
+ *  overwrite"): a launcher setup recorded and nobody changed is brought up to date (node or the script moved); a file
+ *  that isn't setup's is left and named. Recorded as a file setup created, so teardown removes it only while unchanged. */
+function placeCommand(places: SetupPlan['places'], text: string, record: SetupRecord): CommandOutcome {
+  if (!commandFolder(dirname(places.commandDir)) || !commandFolder(places.commandDir)) return 'unsafe';
+  const path = places.command;
+  const s = lstatOr(path);
+  const recorded = record.created_files.find((c) => c.file === path);
+  if (s) {
+    const mine = s.isFile() && s.nlink === 1n && s.uid === BigInt(process.getuid?.() ?? -1) && recorded !== undefined && sha256(readFileSync(path)) === recorded.sha256;
+    if (!mine) return 'taken';
+    if (recorded.sha256 === sha256(text)) return 'same';
+    unlinkSync(path);
+  }
+  writeNew(path, text, 0o755);
+  record.created_files = [...record.created_files.filter((c) => c.file !== path), { file: path, sha256: sha256(text) }];
+  return 'added';
 }
 
 // This runner's own temp files (json-write's names for the two files) left over an hour ago, in the two folders it

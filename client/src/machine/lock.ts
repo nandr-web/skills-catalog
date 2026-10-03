@@ -95,7 +95,7 @@ const narrowed = (x: unknown, held: readonly string[]): Refusal | undefined => {
   const added = (x as string[]).find((k) => !held.includes(k));
   return added === undefined ? undefined : { why: 'wrong_shape', key: added };
 };
-const CONFIG_KEYS: Record<string, (x: unknown, config: Record<string, unknown>) => Refusal | undefined> = {
+export const CONFIG_KEYS: Record<string, (x: unknown, config: Record<string, unknown>) => Refusal | undefined> = {
   hosting: (x) => (typeof x === 'string' && HOSTING.includes(x) ? undefined : 'wrong_shape'),
   catalog: (x) => (typeof x === 'string' && x !== '' ? undefined : 'wrong_shape'),
   update_policy: policyWhy,
@@ -123,6 +123,8 @@ const CONFIG_KEYS: Record<string, (x: unknown, config: Record<string, unknown>) 
   claude_config_dir: (x) => (typeof x === 'string' && isAbsolute(x) ? undefined : 'wrong_shape'),
   me: (x) => (isName(x) ? undefined : 'wrong_shape'),
   demo_developers: (x) => (Array.isArray(x) && x.every(isName) ? undefined : 'wrong_shape'),
+  // Setup's launcher for the person's terminal (<assistant home>/.local/bin/skills-catalog); on unless set to false.
+  terminal_command: (x) => (typeof x === 'boolean' ? undefined : 'wrong_shape'),
   // Only with hosting: aws; local is the default.
   aws: (x, config) => (isObject(x) && config['hosting'] === 'aws' ? undefined : 'wrong_shape'),
 };
@@ -130,7 +132,7 @@ const CONFIG_KEYS: Record<string, (x: unknown, config: Record<string, unknown>) 
 /** Why config.json is refused, if it is, naming the key (§9) so the person knows which line to fix: the first unknown
  *  key (in the order JSON.parse keeps, which puts integer-like keys first), else the first key whose value is wrong (the
  *  wrong shape before an unknown policy or a bad budget). */
-function configWhy(x: unknown): Refusal | undefined {
+export function configWhy(x: unknown): Refusal | undefined {
   if (!isObject(x)) return 'wrong_shape';
   const unknown = Object.keys(x).find((k) => !Object.hasOwn(CONFIG_KEYS, k));
   if (unknown !== undefined) return { why: 'wrong_shape', key: unknown };

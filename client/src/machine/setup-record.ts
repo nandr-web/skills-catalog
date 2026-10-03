@@ -71,18 +71,19 @@ export function recordWhy(x: unknown): 'wrong_shape' | undefined {
 }
 
 /** Where setup writes, rebuilt from its own settings, never taken from the record. */
-export type Places = { claudeJson: string; settingsJson: string; backups: string };
+export type Places = { claudeJson: string; settingsJson: string; backups: string; command: string };
 const FILE_OF: Record<EntryKind, keyof Places> = { mcp_entry: 'claudeJson', hook_group: 'settingsJson', allow_rule: 'settingsJson' };
 const BACKUP_NAME = /^\d{8}T\d{6}Z-[0-9a-f]{4}-(claude\.json|settings\.json)$/;
 
 /** Every path the record names outside setup's own places, in the record's order, once each: an entry in a file other
- *  than its kind's, a created file or a backup's original that isn't one of the two, a copy that isn't in the backups
+ *  than its kind's, a created file that isn't one of the two or the terminal's launcher, a backup's original that isn't
+ *  one of the two, a copy that isn't in the backups
  *  folder under the name setup gives it. Setup refuses such a record; teardown never opens or deletes those paths. */
 export function elsewhere(r: SetupRecord, p: Places): string[] {
   const files = [p.claudeJson, p.settingsJson];
   const out = [
     ...r.entries.filter((e) => e.file !== p[FILE_OF[e.kind]]).map((e) => e.file),
-    ...r.created_files.filter((f) => !files.includes(f.file)).map((f) => f.file),
+    ...r.created_files.filter((f) => !files.includes(f.file) && f.file !== p.command).map((f) => f.file),
     ...r.backups.filter((b) => !files.includes(b.file)).map((b) => b.file),
     ...r.backups.filter((b) => b.path !== join(p.backups, basename(b.path)) || !BACKUP_NAME.test(basename(b.path)) || !basename(b.path).endsWith(b.file === p.claudeJson ? '-claude.json' : '-settings.json')).map((b) => b.path),
   ];

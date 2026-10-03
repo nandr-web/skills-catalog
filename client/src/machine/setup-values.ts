@@ -29,6 +29,11 @@ export function hookLine(r: SetupRun): string {
   return `${words.join(' ')}${TAIL}`;
 }
 
+/** The terminal's launcher (<assistant home>/.local/bin/skills-catalog): node and the script by absolute path, each
+ *  single-quoted as on the hook's line, the setup id in a comment so no file of the person's equals it by chance. */
+export const commandLauncher = (r: SetupRun): string =>
+  `#!/bin/sh\n# skills-catalog, added by skills-catalog setup (${r.id}); skills-catalog teardown removes it.\nexec ${quote(r.node)} ${quote(r.script)} "$@"\n`;
+
 /** One matcher group of its own (no matcher: every source), with a timeout that caps a hang. */
 export const hookGroup = (r: SetupRun): Record<string, unknown> => ({ hooks: [{ type: 'command', command: hookLine(r), timeout: 10 }] });
 

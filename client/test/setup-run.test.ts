@@ -224,3 +224,56 @@ describe('setup\'s run', () => {
     expect(lstatSync(join(H, 'setup.lock')).isSymbolicLink()).toBe(true);
   });
 });
+
+describe('the terminal\'s launcher (P14.2: the product\'s messages tell the person to run skills-catalog)', () => {
+  const launcher = (A: string) => join(A, '.local', 'bin', 'skills-catalog');
+  it('added with consent: node and the script by absolute path, 0755, in a folder made private; recorded, so teardown can take it', async () => {
+    const { A, H, input } = world();
+    const r = await runSetup({ ...input, terminalCommand: true });
+    expect(r.command).toBe('added');
+    const text = readFileSync(launcher(A), 'utf8');
+    expect(text).toBe(`#!/bin/sh\n# skills-catalog, added by skills-catalog setup (${ID}); skills-catalog teardown removes it.\nexec '${r.plan.run.node}' '${r.plan.run.script}' "$@"\n`);
+    expect([mode(launcher(A)), mode(join(A, '.local', 'bin')), mode(join(A, '.local'))]).toEqual(['755', '700', '700']);
+    expect(record(H).created_files.map((f: { file: string }) => f.file)).toContain(launcher(A));
+  });
+
+  it('not asked for: no launcher, nothing under .local', async () => {
+    const { A, input } = world();
+    const r = await runSetup(input);
+    expect(r.command).toBeUndefined();
+    expect(existsSync(join(A, '.local'))).toBe(false);
+  });
+
+  it('a rerun leaves it as it is; node moved brings it up to date', async () => {
+    const { A, input } = world();
+    await runSetup({ ...input, terminalCommand: true });
+    const before = stamp(launcher(A));
+    expect((await runSetup({ ...input, terminalCommand: true })).command).toBe('same');
+    expect(stamp(launcher(A))).toBe(before);
+    const node2 = join(dirname(input.node), 'node2');
+    file(node2, '', 0o755);
+    const r = await runSetup({ ...input, node: node2, terminalCommand: true });
+    expect(r.command).toBe('added');
+    expect(readFileSync(launcher(A), 'utf8')).toContain(`exec '${r.plan.run.node}'`);
+  });
+
+  it('a file already there that isn\'t setup\'s is never overwritten, nor one setup made and the person changed', async () => {
+    const { A, input } = world();
+    file(launcher(A), '#!/bin/sh\necho mine\n', 0o755);
+    expect((await runSetup({ ...input, terminalCommand: true })).command).toBe('taken');
+    expect(readFileSync(launcher(A), 'utf8')).toBe('#!/bin/sh\necho mine\n');
+    const w = world();
+    await runSetup({ ...w.input, terminalCommand: true });
+    writeFileSync(launcher(w.A), '#!/bin/sh\necho edited\n');
+    expect((await runSetup({ ...w.input, terminalCommand: true })).command).toBe('taken');
+    expect(readFileSync(launcher(w.A), 'utf8')).toBe('#!/bin/sh\necho edited\n');
+  });
+
+  it('a folder others can write gets no launcher', async () => {
+    const { A, input } = world();
+    mkdirSync(join(A, '.local', 'bin'), { recursive: true });
+    chmodSync(join(A, '.local', 'bin'), 0o777);
+    expect((await runSetup({ ...input, terminalCommand: true })).command).toBe('unsafe');
+    expect(existsSync(launcher(A))).toBe(false);
+  });
+});

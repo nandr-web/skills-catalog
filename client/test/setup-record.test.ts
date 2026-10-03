@@ -106,8 +106,15 @@ describe('reading a hook line back', () => {
 });
 
 describe("the record's paths: only setup's own places, rebuilt from its settings", () => {
-  const places = { claudeJson: '/h/.claude.json', settingsJson: '/h/.claude/settings.json', backups: '/k/backups' };
+  const places = { claudeJson: '/h/.claude.json', settingsJson: '/h/.claude/settings.json', backups: '/k/backups', command: '/h/.local/bin/skills-catalog' };
   it('a record naming only those places has nothing elsewhere', () => expect(elsewhere(good() as SetupRecord, places)).toEqual([]));
+  it('the terminal\'s launcher is one of setup\'s places, as a created file only', () => {
+    const r = good();
+    r.created_files.push({ file: places.command, sha256: 'a'.repeat(64) });
+    expect(elsewhere(r as SetupRecord, places)).toEqual([]);
+    r.backups[0]!.file = places.command;
+    expect(elsewhere(r as SetupRecord, places)).toContain(places.command);
+  });
 
   const cases: [string, (r: Rec) => void, string][] = [
     ['an MCP entry in the settings file', (r) => (entry(r, 0)['file'] = '/h/.claude/settings.json'), '/h/.claude/settings.json'],

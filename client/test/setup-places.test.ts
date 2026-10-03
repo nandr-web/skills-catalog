@@ -49,6 +49,8 @@ describe('where setup works, checked before anything is made', () => {
       backups: join(H, 'backups'),
       record: join(H, 'setup-record.json'),
       lock: join(H, 'setup.lock'),
+      command: join(A, '.local', 'bin', 'skills-catalog'),
+      commandDir: join(A, '.local', 'bin'),
     });
     expect(r.missing).toEqual({ claudeDir: true, skillsHome: false, backups: true });
     expect(r.record).toBeUndefined();
