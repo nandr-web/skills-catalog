@@ -1,0 +1,10 @@
+id: skill-map-decisions
+title: "A part's decisions on the system map"
+phase: "2"
+source: "the owner"
+quote: "Other views would be, for example, decisions and alternatives (e.g. being able to click on a database component to see the different alternatives; the one selected if any, etc.)."
+want: "As the owner, I want to click a component (e.g. a database) and see its decisions: the alternatives and the one selected, if any, so I can understand why it's built this way."
+accept: "Clicking a part shows the decisions about it: what was chosen (or that it's still open), the alternatives, and why; docs/decisions.md is a fresh build of docs/decisions.yaml, and every part a decision names is on the map (the checks fail otherwise)."
+confirmed: true
+parts: [docs, qa]
+relates: [skill-map-structure, skill-map-drill-down]

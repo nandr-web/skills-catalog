@@ -108,6 +108,27 @@ parts:
     text: "Who may publish and read: GitHub logins (not ours). `skills-catalog login` signs in once per machine."
     code: [hosted/src/github.ts, client/src/cli/login.ts]
     tests: [hosted/test/**]
+  # Planned: drawn dashed and saying PLANNED, shown on the structure page when "planned" is on. Each names the
+  # requirements that would build it; the map check fails once it has code (then it's built: drop the status).
+  - id: assistants
+    label: other assistants
+    note: pi · Copilot · Codex
+    external: true
+    status: proposed
+    at: [2, 1]
+    zone: machine
+    views: {aws: {zone: m2}}
+    text: "pi next, then Copilot, Codex, Cursor and Gemini CLI (not ours). Each would reach skills-catalog the way Claude Code does, through its tools or the CLI, with the installer writing that assistant's skills folder; a risky update would wait for a yes on every one."
+    needs: [pi-agent, other-assistants]
+  - id: web
+    label: web page
+    note: browse · compare
+    status: proposed
+    at: [3, 1]
+    zone: machine
+    views: {aws: {zone: cloud, at: [1.5, 3]}}
+    text: "Browse skills, see what changed between versions, and update them, in a browser. The page isn't built yet: on one machine `skills-catalog serve` already gives its API on 127.0.0.1; in AWS, CloudFront and a bucket for its files are in place."
+    needs: [web-view-update, web-delta]
 
 links:
   - {from: dev1, to: cc1, label: asks}
@@ -119,6 +140,11 @@ links:
   - {from: sc1, to: catalog, label: publish}
   - {from: sc2, to: catalog, label: "find, fetch"}
   - {from: catalog, to: github, label: signs in, only: [aws]}
+  - {from: dev2, to: assistants, label: asks, status: proposed}
+  - {from: assistants, to: sc2, label: "MCP, CLI", status: proposed}
+  - {from: web, to: sc2, label: API, status: proposed, only: [local]}
+  - {from: web, to: catalog, label: API, status: proposed, only: [aws]}
+  - {from: dev2, to: web, label: browses, status: proposed}
 
 flows:
   - id: publish
@@ -211,3 +237,276 @@ left_out:
 # Source folders that aren't a part of the running system.
 not_on_map:
   - {glob: "qa/src/**", why: "the test and demo tools: they check the system, they aren't part of it"}
+
+# A page per part (docs/map/<id>.html): the boxes inside it, written by hand (names, places, which files or AWS
+# resources each holds). The lines between boxes are read from the code: the imports between their files, or in AWS the
+# stack's references and permissions (qa/src/map/pages.ts). A line here only gives words to one of those, or joins a
+# box to a part around it that the map above links to. Every file of the part is in exactly one box (or shared, with
+# why), and every resource of the stack in one box: the map check fails otherwise.
+pages:
+  - id: skills-catalog
+    parts: [sc1, sc2]
+    question: "What's inside skills-catalog, and which piece uses which?"
+    reads: imports
+    zone: skills-catalog
+    spacing: 1.6
+    context:
+      - {part: cc1, at: [0, 0], label: Claude Code}
+      - {part: dev1, at: [1, 0], label: Developer}
+      - {part: catalog, at: [2, 5]}
+    boxes:
+      - id: mcp
+        label: MCP server
+        note: tools for Claude Code
+        at: [0, 1]
+        text: "The tools Claude Code calls, over stdin and stdout. Each reply carries the words for the assistant and a part laid out for the Developer."
+        code: [client/src/mcp/**]
+        tests: [client/test/mcp.test.ts, client/test/perf-mcp.test.ts]
+      - id: cli
+        label: CLI
+        note: commands · setup · hook
+        at: [1, 1]
+        text: "The commands for a person at a terminal, including setup and teardown, and the session-start hook that says when an update waits."
+        code: [client/src/cli/**, client/src/cli.ts, client/src/main.ts, client/src/quiet-warnings.ts]
+        tests: [client/test/cli*.test.ts, client/test/setup-*.test.ts, client/test/teardown.test.ts, client/test/hook.test.ts, client/test/login.test.ts]
+      - id: serve
+        label: serve
+        note: the API on 127.0.0.1
+        at: [2, 1]
+        text: "`skills-catalog serve`: the API over HTTP on this machine, for the web page that's planned."
+        code: [client/src/web/**]
+        tests: [client/test/serve.test.ts, client/test/web-handler.test.ts]
+      - id: ops
+        label: operations
+        note: one runner, every face
+        at: [1, 2]
+        text: "Runs every operation the same way, whichever face asked (the tools, the CLI, serve), with the settings this machine was started with."
+        code: [client/src/operations.ts, client/src/settings.ts]
+        tests: [client/test/operations-seam.test.ts, client/test/operation-errors.test.ts]
+      - id: agent-reviewers
+        label: agent reviewers
+        note: quality, by agents
+        status: proposed
+        at: [0, 3]
+        text: "Pluggable reviewers that measure a skill's quality, next to the rules reviewer: grounded findings, and no comments when it's good."
+        needs: [quality-agent-reviews]
+      - id: person
+        label: the person's view
+        note: tables · short lines
+        at: [0, 2]
+        text: "Lays each result out for the Developer: in the terminal, and as the part of each MCP reply that Claude Code shows as it is."
+        code: [client/src/person/**]
+        tests: [client/test/person-*.test.ts, client/test/held-table.test.ts]
+      - id: installer
+        label: installer
+        note: install · update · hold
+        at: [1, 3]
+        text: "Writes skills into Claude Code's skills folder, keeps the list of what came from where, applies updates by each skill's policy, and holds a risky one for a yes. One writer at a time."
+        code: [client/src/machine/**]
+        tests: [client/test/install*.test.ts, client/test/installer*.test.ts, client/test/lock-*.test.ts, client/test/review-holds.test.ts]
+      - id: usage
+        label: usage
+        note: what holds cost
+        at: [2, 2]
+        text: "Counts what update holds cost the Developer (`skills-catalog stats`), and the demo's activity line."
+        code: [client/src/usage/**, client/src/activity.ts]
+        tests: [client/test/usage*.test.ts, client/test/activity.test.ts]
+      - id: api
+        label: the API
+        note: operations · words
+        foundation: true
+        at: [0, 4]
+        text: "Every operation defined once, with its input schema; the MCP tools, the CLI's commands, the HTTP routes and the published schema all come from it. Also every word Claude Code reads, and the errors."
+        code: [core/src/api.ts, core/src/api-doc.ts, core/src/openapi.ts, core/src/words.ts, core/src/words-file.ts, core/src/render.ts, core/src/errors.ts, core/src/internal-error.ts, core/src/index.ts, core/src/ports.ts]
+        tests: [core/test/api*.test.ts, core/test/openapi.test.ts, core/test/replies.test.ts]
+      - id: skill-checks
+        label: skill checks
+        note: format · rules reviewer
+        foundation: true
+        at: [1, 4]
+        text: "Reads a skill's folder, checks its SKILL.md, fingerprints its files, diffs two versions, and runs the rules reviewer: scripts, granted tools, text that steers the assistant, a new publisher."
+        code: [core/src/skill-tree/**]
+        tests: [core/test/rules-review.test.ts, core/test/reviewer.test.ts, core/test/risky-updates.test.ts]
+      - id: remote
+        label: catalog over HTTPS
+        note: for a catalog in AWS
+        at: [2, 4]
+        text: "The catalog's operations as calls to the AWS catalog's API, opened when SKILLS_CATALOG is an https:// address (on one machine it isn't used). Signs in with the token `skills-catalog login` keeps."
+        code: [core/src/remote/**]
+    lines:
+      - {from: cc1, to: mcp, label: MCP}
+      - {from: dev1, to: cli, label: commands}
+      - {from: ops, to: catalog, label: calls, only: [local]}
+      - {from: remote, to: catalog, label: HTTPS, over: HTTPS, only: [aws]}
+
+  - id: catalog
+    parts: [catalog]
+    view: local
+    title: the catalog, on one machine
+    question: "What's inside the catalog on one machine, and where does each thing live?"
+    reads: imports
+    zone: a folder on this machine
+    context:
+      - {part: sc1, at: [1, 0], label: skills-catalog}
+    boxes:
+      - id: catalog-rules
+        label: catalog rules
+        note: publish · find · fetch
+        at: [1, 1]
+        text: "The catalog's operations over its replaceable parts: who may publish, what a new version is, what search returns. The same rules run in AWS, over other parts."
+        code: [core/src/catalog.ts, core/src/open.ts]
+        tests: [core/test/catalog.test.ts, core/test/read-only-open.test.ts]
+      - id: http-routes
+        label: HTTP routes
+        note: for serve and AWS
+        at: [0, 1]
+        text: "The API over HTTP without a server: the routes, who's asking, the answers. `skills-catalog serve` and the AWS function both run it."
+        code: [core/src/http/**]
+        tests: [core/test/http*.test.ts]
+      - id: records
+        label: versions
+        kind: store
+        note: SQLite
+        at: [1, 2]
+        text: "Every skill's versions, owners and the latest pointer, in one SQLite file shared by every process on this machine."
+        code: [core/src/local/db.ts, core/src/local/storage.ts, core/src/local/metadata.ts, core/src/local/index.ts]
+      - id: local-sign-in
+        label: local sign-in
+        note: acting as a developer
+        at: [2, 2]
+        text: "No sign-in on one machine: the Developer acts as a named developer (the computer's login by default), labelled a local sign-in for demo purposes."
+        code: [core/src/local/identity.ts]
+        tests: [client/test/identity.test.ts]
+      - id: local-search
+        label: search
+        kind: store
+        note: SQLite full-text
+        at: [0, 3]
+        text: "Keyword search over each skill's name and description (SQLite FTS5), rebuilt from the stored versions."
+        code: [core/src/local/search-index.ts]
+        tests: [core/test/discovery.test.ts, core/test/memory-search-index.test.ts]
+      - id: local-files
+        label: files
+        kind: store
+        note: a folder, by fingerprint
+        at: [1, 3]
+        text: "Every file of every version, named by its fingerprint (sha256), written only if absent: a version's files never change."
+        code: [core/src/local/blobs.ts]
+        tests: [core/test/file*.test.ts]
+      - id: outbox
+        label: outbox
+        kind: queue
+        note: events
+        at: [2, 3]
+        text: "An event saved with each version, in the same transaction, then delivered to search."
+        code: [core/src/local/outbox.ts]
+    lines:
+      - {from: sc1, to: catalog-rules, label: calls}
+      - {from: sc1, to: http-routes, label: serve}
+
+  - id: catalog-aws
+    parts: [catalog]
+    view: aws
+    title: the catalog on AWS
+    question: "What is the catalog made of in AWS, and what talks to what?"
+    reads: aws
+    zone: the team's AWS account
+    context:
+      - {part: sc1, at: [1, 0], label: skills-catalog}
+      - {part: github, at: [2, 3]}
+    boxes:
+      - id: edge
+        label: CloudFront
+        note: edge · firewall
+        at: [1, 1]
+        text: "The one public address: CloudFront with a web firewall in front of the API and the page's files. It adds a secret header the API checks, so the API's own address is no way in."
+        resources: [SiteEdge*, SiteFirewall*, SiteDeepLinks*, SitePageHeaders*]
+        code: [infra/src/constructs/site.ts]
+      - id: page-files
+        label: page files
+        kind: store
+        note: S3 · page planned
+        at: [0, 1]
+        text: "A private bucket for the web page, served by CloudFront. In place; the page itself isn't built yet."
+        resources: [SitePages*]
+      - id: http-api
+        label: HTTP API
+        note: API Gateway
+        at: [1, 2]
+        text: "Turns each HTTPS request into a call of the API function: every operation at POST /api/v1/<operation>."
+        resources: [ApiHttp*, ApiStage*, ApiAccessLogs*]
+      - id: api-function
+        label: API function
+        note: Lambda
+        at: [1, 3]
+        text: "Runs the catalog's rules over DynamoDB and S3: who's asking (a GitHub sign-in or a token), publishing, search, files by short-lived links."
+        resources: [ApiHandler*, ApiRole*, ApiLogs*]
+        code: [hosted/src/api/**, hosted/src/entries/api.ts, hosted/src/tokens.ts, hosted/src/github.ts, hosted/src/links.ts, infra/src/entries/api.ts]
+        tests: [hosted/test/**]
+      - id: versions-table
+        label: versions
+        kind: store
+        note: DynamoDB
+        at: [0, 4]
+        text: "One table for versions, owners, events and tokens. Its stream carries each new version to the indexer."
+        resources: [StorageTable*]
+        code: [hosted/src/storage.ts, hosted/src/place.ts, infra/src/constructs/storage.ts]
+      - id: files-bucket
+        label: files
+        kind: store
+        note: S3 · by fingerprint
+        at: [2, 4]
+        text: "Every file of every version by its sha256, written only if absent, and the search file the indexer keeps."
+        resources: [StorageFiles*]
+        code: [hosted/src/blobs.ts]
+      - id: sweep
+        label: sweep
+        note: Lambda · on a schedule
+        at: [2, 5]
+        text: "Cleans up on a schedule: uploads that never became a version. The only role that may delete a file."
+        resources: [Sweep*]
+        code: [hosted/src/sweep.ts, hosted/src/entries/sweep.ts, infra/src/entries/sweep.ts]
+      - id: events
+        label: events
+        kind: queue
+        note: stream → queue
+        at: [0, 5]
+        text: "Each new version's event goes from the table's stream, through a pipe, into a queue; one that keeps failing lands in a dead-letter queue."
+        resources: [Events*]
+        code: [hosted/src/events.ts, hosted/src/entries/queue.ts, infra/src/constructs/events.ts]
+      - id: indexer
+        label: indexer
+        note: Lambda · search file
+        at: [1, 5]
+        text: "The one reader of the events queue: for each new version it rewrites the search file and notes which versions name each file."
+        resources: [Indexer*]
+        code: [hosted/src/entries/indexer.ts, hosted/src/search.ts, hosted/src/names.ts, infra/src/entries/indexer.ts]
+      - id: alarms
+        label: alarms
+        note: alerts · budget
+        at: [0, 6]
+        text: "Guard rails: an alarm when an event is lost or the pipe fails, a monthly budget, and a topic that emails the alerts."
+        resources: [Guardrails*]
+        code: [infra/src/constructs/guardrails.ts]
+    lines:
+      - {from: sc1, to: edge, label: HTTPS}
+      - {from: api-function, to: github, label: signs in}
+      - {from: edge, to: http-api, label: origin}
+      - {from: edge, to: page-files, label: origin}
+      - {from: http-api, to: api-function, label: invokes}
+      - {from: events, to: versions-table, label: reads its stream}
+      - {from: alarms, to: events, label: watches}
+    shared:
+      - {glob: "infra/src/{app,stack,config,code,nag,deploy-plan}.ts", why: "the stack itself: it builds every box on this page, deployed only by hand"}
+      - {glob: "infra/src/constructs/function{,s}.ts", why: "how the three functions are made, and what each may do"}
+      - {glob: "hosted/src/entries/{index,once,parameters,settings}.ts", why: "each function's start: its settings and secrets, opened once"}
+      - {glob: "hosted/src/index.ts", why: "the hosted adapters' index"}
+
+# The code's packages, and which uses which (read from the imports).
+code:
+  question: "How is the code laid out, and which package uses which?"
+  packages:
+    - {id: client, label: client, note: MCP server · CLI, at: [0, 0], text: "skills-catalog on each machine: the MCP server, the CLI, the installer, serve."}
+    - {id: hosted, label: hosted, note: AWS adapters, at: [1, 0], text: "The catalog in AWS: the API function, the indexer and the sweep, over DynamoDB and S3."}
+    - {id: infra, label: infra, note: the AWS stack, at: [2, 0], text: "The AWS stack in CDK (TypeScript): synthesized and checked in tests; deployed only by hand."}
+    - {id: core, label: core, note: the API · local catalog, at: [1, 1], text: "The API, the catalog's rules, the skill checks and the local catalog: the same code on each machine and in AWS."}

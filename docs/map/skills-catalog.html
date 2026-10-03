@@ -1,0 +1,1993 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>skills-catalog: Skills Catalog</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+.d { --d-page: #ECF0F3; --d-canvas: #F9FBFC; --d-ink: #13202A; --d-ink2: #3A4A56; --d-line: #B7C4CD; --d-grid: #D5DDE3; --d-shade: #E1E7EB; --d-accent: #137052; --d-accent-soft: #D9EDE3; --d-hot: #B23A0A; --d-hot-soft: #F8E2D5; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .d, svg.d:root { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+}
+:root[data-theme="dark"] .d { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+
+.d { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 12px; fill: var(--d-ink); }
+.d text { dominant-baseline: central; }
+.d-bg { fill: var(--d-canvas); }
+
+/* nodes */
+.d-node { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1.2; }
+.d-node--external { fill: var(--d-shade); stroke: var(--d-ink2); stroke-dasharray: 4 3; }
+.d-node--focus { fill: var(--d-accent-soft); stroke: var(--d-accent); stroke-width: 1.6; }
+.d-node--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); stroke-width: 1.6; }
+.d-node-detail { fill: none; stroke: var(--d-ink); stroke-width: 1; }
+.d-node--focus + .d-node-detail { stroke: var(--d-accent); }
+.d-node--alert + .d-node-detail { stroke: var(--d-hot); }
+.d-node--external + .d-node-detail { stroke: var(--d-ink2); }
+.d-node--proposed { stroke-width: 1.4; stroke-dasharray: 2 3; }
+.d-node--removed { fill: var(--d-canvas); stroke: var(--d-hot); stroke-width: 1.4; stroke-dasharray: 5 3; }
+.d-label { fill: var(--d-ink); text-anchor: middle; }
+.d-label--strong { font-weight: 600; }
+.d-label--removed { fill: var(--d-ink2); text-decoration: line-through; }
+.d-tag--proposed { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1; stroke-dasharray: 2 2; }
+.d-tag--removed { fill: var(--d-hot); stroke: var(--d-hot); stroke-width: 1; }
+.d-tag-text { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-anchor: middle; }
+.d-tag-text--proposed { fill: var(--d-ink); }
+.d-tag-text--removed { fill: var(--d-canvas); }
+.d-legend-text { font-size: 10.5px; fill: var(--d-ink2); }
+.d-compare-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; fill: var(--d-ink2); }
+.d-callout { fill: var(--d-ink); }
+.d-callout-text { font-size: 10px; font-weight: 600; fill: var(--d-canvas); text-anchor: middle; }
+.d-note { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle; }
+.d-note--focus { fill: var(--d-accent); }
+.d-note--alert { fill: var(--d-hot); }
+
+/* edges */
+.d-edge { fill: none; stroke: var(--d-ink); stroke-width: 1.3; stroke-linejoin: round; }
+.d-edge--async { stroke-dasharray: 5 4; }
+.d-edge--proposed { stroke-dasharray: 2 3; }
+.d-edge--removed { stroke: var(--d-hot); stroke-dasharray: 5 3; }
+.d-edge--return { stroke: var(--d-ink2); stroke-width: 1.1; stroke-dasharray: 4 3; }
+.d-edge--focus { stroke: var(--d-accent); stroke-width: 2; }
+.d-edge--alert { stroke: var(--d-hot); stroke-width: 2; }
+.d-edge-label { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle;
+  paint-order: stroke; stroke: var(--d-canvas); stroke-width: 4px; stroke-linejoin: round; }
+.d-edge-label--focus { fill: var(--d-accent); font-weight: 600; }
+.d-edge-label--alert { fill: var(--d-hot); font-weight: 600; }
+.d-arrow { fill: var(--d-ink); }
+.d-arrow--focus { fill: var(--d-accent); }
+.d-arrow--alert { fill: var(--d-hot); }
+.d-arrow--muted { fill: var(--d-ink2); }
+.d-arrow--open { fill: none; stroke: var(--d-ink); stroke-width: 1.4; stroke-linejoin: round; }
+.d-arrow--open.d-arrow--focus { stroke: var(--d-accent); }
+.d-arrow--open.d-arrow--alert { stroke: var(--d-hot); }
+.d-arrow--open.d-arrow--muted { stroke: var(--d-ink2); }
+
+/* sequence */
+.d-lifeline { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 3 4; }
+.d-activation { fill: var(--d-shade); stroke: var(--d-ink); stroke-width: 1; }
+.d-msg-label { font-size: 11px; fill: var(--d-ink); text-anchor: middle; }
+.d-msg-label--start { text-anchor: start; }
+.d-msg-label--return { fill: var(--d-ink2); }
+.d-msg-label--focus { fill: var(--d-accent); font-weight: 600; }
+.d-msg-label--alert { fill: var(--d-hot); font-weight: 600; }
+.d-memo { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1; }
+.d-memo--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); }
+.d-memo-text { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
+.d-frame { fill: none; stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-frame-tab { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-frame-kind { font-size: 10.5px; font-weight: 600; fill: var(--d-ink); }
+.d-frame-cond-bg { fill: var(--d-canvas); }
+.d-frame-cond { font-size: 10.5px; fill: var(--d-ink2); }
+.d-frame-sep { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+
+/* state */
+.d-pseudo { fill: var(--d-ink); }
+.d-choice-label { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
+.d-composite { fill: var(--d-grid); fill-opacity: 0.25; stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-composite-label { font-size: 11px; font-weight: 600; fill: var(--d-ink); }
+
+/* system map */
+.d-map-quiet { stroke: var(--d-ink2); stroke-width: 1; }
+.d-map-label--start { text-anchor: start; }
+.d-map-label--end { text-anchor: end; }
+.d-map-badge { fill: var(--d-accent); }
+.d-map-badge--alert { fill: var(--d-hot); }
+.d-map-badge--planned { fill: var(--d-canvas); stroke: var(--d-accent); stroke-width: 1.2; stroke-dasharray: 2 2; }
+.d-map-badge-text { font-size: 10.5px; font-weight: 600; fill: var(--d-canvas); text-anchor: middle; }
+.d-map-badge-text--planned { fill: var(--d-accent); }
+.d-map-rule { fill: none; stroke: var(--d-line); stroke-width: 1; }
+.d-map-legend-head { font-size: 11px; font-weight: 600; fill: var(--d-ink); }
+.d-map-legend-text { font-size: 11px; fill: var(--d-ink); }
+.d-map-legend-word { font-weight: 700; fill: var(--d-hot); }
+.d-map-legend-word--planned { fill: var(--d-accent); }
+.d-map-part[role="button"], a.d-map-part { cursor: pointer; }
+.d-map-part[role="button"]:focus, a.d-map-part:focus { outline: none; }
+.d-map-part[role="button"]:focus-visible > :first-child, a.d-map-part:focus-visible > :first-child, .d-map-part--picked > :first-child { stroke: var(--d-ink); stroke-width: 3; }
+a.d-map-part:hover > :first-child { stroke: var(--d-ink); stroke-width: 2; }
+.d-map-opens { font-size: 15px; font-weight: 700; fill: var(--d-ink2); text-anchor: middle; dominant-baseline: central; }
+
+/* groups (boundaries) */
+.d-group { fill: var(--d-grid); fill-opacity: 0.35; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+.d-group-label { font-size: 10.5px; fill: var(--d-ink2); letter-spacing: 0.06em; font-weight: 500; }
+
+:root { --page: #ECF0F3; --card: #F9FBFC; --ink: #13202A; --ink-2: #3A4A56; --line: #B7C4CD; --accent: #137052; --accent-soft: #D9EDE3; --hot: #B23A0A; --hot-soft: #F8E2D5; --even: #E4E9ED; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #0E1418; --card: #151D23; --ink: #E3EAEE; --ink-2: #AFBCC5; --line: #3A4A55;
+  --accent: #46C290; --accent-soft: #1C3A2F; --hot: #F08A50; --hot-soft: #4A2819; --even: #26313A; color-scheme: dark; } }
+:root[data-theme="dark"] { --page: #0E1418; --card: #151D23; --ink: #E3EAEE; --ink-2: #AFBCC5; --line: #3A4A55; --accent: #46C290; --accent-soft: #1C3A2F; --hot: #F08A50; --hot-soft: #4A2819; --even: #26313A; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--page); color: var(--ink); font: 16px/1.5 "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 0 20px 56px; }
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+h1, h2, h3 { font-family: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", sans-serif; margin: 0; text-wrap: balance; }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+code { font: 13px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; background: var(--page); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+nav.site { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; padding-top: 14px; }
+nav.site .brand { font: 600 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; }
+nav.site .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+nav.site .tabs a { font: 600 14px "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; color: var(--ink); text-decoration: none; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); }
+nav.site .tabs a[aria-current="page"] { background: var(--ink); color: var(--card); border-color: var(--ink); }
+.crumbs { margin: 0; font-size: 14px; color: var(--ink-2); }
+.crumbs a { font-weight: 600; }
+header.top { padding-block: 10px 12px; border-bottom: 1.5px solid var(--ink); display: grid; gap: 6px; }
+.eyebrow, .kicker { font: 600 11px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.05; font-weight: 700; letter-spacing: -0.02em; }
+.question { font-size: 18px; max-width: 62ch; margin: 0; }
+.lede { margin: 0; max-width: 70ch; color: var(--ink-2); }
+.controls { display: none; flex-wrap: wrap; gap: 10px 16px; align-items: center; position: sticky; top: 0; z-index: 2; background: var(--page); padding-block: 10px; border-bottom: 1px solid var(--line); }
+.js .controls { display: flex; }
+.controls button { font: 500 14px "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; min-height: 34px; }
+.controls button[aria-pressed="true"] { background: var(--ink); color: var(--card); border-color: var(--ink); font-weight: 600; }
+.controls .switch[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); border: 1.5px dashed var(--accent); }
+.seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.frame { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: grid; gap: 10px; }
+.js .frame { display: none; }
+.js .frame.on { display: grid; }
+.frame-title { font: 600 15px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--ink-2); letter-spacing: .02em; }
+.frame-grid { display: grid; grid-template-columns: minmax(0, max-content) minmax(240px, 1fr); gap: 20px; align-items: start; }
+.map-art { margin: 0; min-width: 0; width: var(--w); max-width: 100%; }
+.panel { display: grid; gap: 10px; font-size: 15px; align-content: start; }
+.panel h3 { font-size: 20px; font-weight: 600; }
+.panel p, .card p, .decision p { margin: 0; }
+.hint { color: var(--ink-2); font-size: 14px; font-style: italic; }
+.legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 14px; color: var(--ink-2); }
+.legend b { color: var(--ink); font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 13px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: grid; gap: 6px; align-content: start; font-size: 15px; min-width: 0; }
+.panel, .card > *, .decision, .decision > .body > *, .choice, details.aspect { min-width: 0; }
+.card h3 { font-size: 18px; font-weight: 600; }
+.card .note { color: var(--ink-2); font: 13px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+.card ul { margin: 0; padding-left: 18px; }
+.picked .card { position: relative; border: 2.5px solid var(--ink); padding-right: 92px; }
+.picked .close { position: absolute; top: 10px; right: 10px; font: 600 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--ink); background: var(--page); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.cards { display: grid; gap: 10px; }
+.cards > h2, section > h2 { font-size: 22px; font-weight: 600; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.js .cards.boxes { display: none; }
+.tag { font: 600 10.5px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; letter-spacing: .06em; text-transform: uppercase; border: 1px dashed var(--ink); border-radius: 3px; padding: 1px 5px; vertical-align: 2px; color: var(--ink); }
+.chosen-tag { border: 1.5px solid var(--accent); color: var(--accent); }
+.where-it-sits { display: grid; gap: 6px; }
+.locators { display: flex; flex-wrap: wrap; gap: 12px; }
+.locator { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.locator figcaption { font: 600 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--ink-2); }
+section { display: grid; gap: 10px; }
+section > *, .frame > *, .frame-grid > * { min-width: 0; }
+.steps-through { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.steps-through li { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: start; }
+.num { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--accent); color: var(--card); font: 600 11px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+.decisions { display: grid; gap: 6px; }
+.decision { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 6px; font-size: 15px; }
+.decision.decision-not-built { border-left-style: dashed; border-left-color: var(--ink-2); }
+.decision > summary { cursor: pointer; padding: 8px 12px; display: flex; gap: 10px; align-items: baseline; list-style: none; }
+.decision > summary::-webkit-details-marker { display: none; }
+.decision > summary::before { content: '▸'; color: var(--ink-2); font-size: 12px; }
+.decision[open] > summary::before { content: '▾'; }
+.decision > summary .what { flex: 1 1 auto; font-family: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", sans-serif; font-size: 17px; font-weight: 600; }
+.decision > .body { padding: 0 14px 12px 32px; display: grid; gap: 6px; }
+.decision:target { outline: 3px solid var(--accent); outline-offset: 2px; }
+.choice { display: grid; gap: 4px; border-top: 1px solid var(--line); padding-top: 6px; }
+.choice details.aspect { border-top: 0; padding-top: 0; }
+.pick { font-weight: 700; color: var(--accent); }
+.did { font: 600 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--ink-2); }
+.built { font: 600 10.5px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--line); color: var(--ink-2); }
+.built-built { border-color: var(--accent); color: var(--accent); }
+.built-not-built { border-style: dashed; border-color: var(--ink); color: var(--ink); }
+.built-partly { border-color: var(--accent); color: var(--ink); border-style: dashed; }
+.decision.not-built-yet { border-left-style: dashed; }
+.over .alt { display: inline-block; margin: 2px 6px 2px 0; padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink-2); text-decoration: line-through; text-decoration-color: var(--line); }
+.why { color: var(--ink); }
+.meta { color: var(--ink-2); font-size: 14px; }
+.about { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { font-size: 13px; font-weight: 600; text-decoration: none; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--ink); border: 1px solid var(--accent); }
+.chip:hover { text-decoration: underline; }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.open-questions { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.open-questions li { background: var(--card); border: 1px dashed var(--ink-2); border-radius: 6px; padding: 8px 12px; }
+.js .decisions .decision.out { display: none; }
+details.aspect { border-top: 1px solid var(--line); padding-top: 6px; }
+details.aspect summary { cursor: pointer; }
+.matrix-wrap { overflow-x: auto; margin-top: 8px; }
+table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
+.matrix th, .matrix td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+.matrix thead th { font-family: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", sans-serif; font-size: 14px; }
+.matrix .sub { display: block; font: 400 12px "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; color: var(--ink-2); }
+.matrix th.chosen, .matrix td.chosen { border-left: 2.5px solid var(--accent); border-right: 2.5px solid var(--accent); }
+.matrix thead th.chosen { border-top: 2.5px solid var(--accent); background: var(--accent-soft); }
+.matrix td.v-good { background: var(--accent-soft); }
+.matrix td.v-poor { background: var(--hot-soft); }
+.matrix td.v-even { background: var(--even); }
+.mark { font: 700 13px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+.legend-line { font-size: 13px; color: var(--ink-2); margin: 6px 0 0; }
+.aspect-note { margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--hot); background: var(--hot-soft); font-size: 14px; }
+.hide-planned .d-map-part--proposed, .hide-planned .d-edge--proposed, .hide-planned .d-edge-label--proposed, .hide-planned .planned-only { display: none; }
+@media (max-width: 760px) { .frame-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { body { padding-inline: 16px; font-size: 15px; } .frame { padding: 12px; } }
+
+.d-scroll { container-type: inline-size; }
+.d-scroll-art { overflow-x: auto; }
+.d-scroll-hint { display: none; margin: 0 0 6px; font: 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--d-ink2); text-align: right; }
+@container (max-width: 404.5px) { .d-scroll-hint[data-w="405"] { display: block; } }
+@container (max-width: 416.5px) { .d-scroll-hint[data-w="417"] { display: block; } }
+@container (max-width: 754.5px) { .d-scroll-hint[data-w="755"] { display: block; } }
+</style>
+<div class="wrap">
+<nav class="site" aria-label="The system map's pages">
+<a class="brand" href="index.html">Skills Catalog · system map</a>
+<span class="tabs"><a href="index.html">Use cases</a><a href="structure.html" aria-current="page">Structure</a><a href="decisions.html">Decisions</a></span>
+</nav>
+<p class="crumbs"><a href="structure.html">Structure</a> <span aria-hidden="true">›</span> <span aria-current="page">skills-catalog</span></p>
+<header class="top"><span class="eyebrow">System map · a part</span><h1>skills-catalog</h1>
+<p class="question">What's inside skills-catalog, and which piece uses which?</p>
+<p class="lede">One program on each machine: the MCP server Claude Code talks to, and the CLI for a person at a terminal. It sets itself up (<code>skills-catalog setup</code>, undone by <code>teardown</code>), publishes, searches, installs, and keeps installed skills up to date; its rules reviewer flags what a new version adds, and an update that could run something new waits for the person's yes.</p></header>
+<nav class="controls" aria-label="What the map shows">
+<div class="seg" role="group" aria-label="Where it runs"><button type="button" data-view="local">on one machine</button><button type="button" data-view="aws">in AWS</button></div>
+<button type="button" class="switch" data-planned aria-label="Show what's planned">+ planned</button>
+</nav>
+<main class="frames"><section class="frame" data-view="local">
+<h2 class="frame-title">Inside skills-catalog · on one machine</h2>
+<div class="frame-grid"><figure class="map-art" style="--w: 755px"><div class="d-scroll"><p class="d-scroll-hint" data-w="755" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 755 853" width="755" height="853" role="group" aria-label="What's inside skills-catalog, and which piece uses which?">
+<title>skills-catalog · on one machine</title>
+<defs><marker id="skills-catalog-local-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-local-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-local-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-local-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-local-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-local-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-local-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-local-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
+<rect class="d-group" x="22" y="171.3" width="716.7" height="525.4" rx="6"/>
+<text class="d-group-label" x="633.7" y="182.3">skills-catalog</text>
+<path class="d-edge" d="M469.6 219.8 L476.6 219.8 Q481.6 219.8 481.6 224.8 L481.6 508.4 Q481.6 513.4 476.6 513.4 L469.6 513.4" marker-end="url(#skills-catalog-local-arrow)" marker-start="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M292.6 219.8 L197 219.8" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M381.1 246.3 L381.1 340.1" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M388.1 246.3 L388.1 279.7 Q388.1 284.7 383.1 284.7 L119.5 284.7 Q114.5 284.7 114.5 289.7 L114.5 340.1" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M469.6 226.8 L568.7 226.8" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M374.1 246.3 L374.1 286.7 Q374.1 291.7 379.1 291.7 L642.7 291.7 Q647.7 291.7 647.7 296.7 L647.7 340.1" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M469.6 520.4 L642.7 520.4 Q647.7 520.4 647.7 515.4 L647.7 393.1" marker-end="url(#skills-catalog-local-arrow)" marker-start="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M114.5 246.3 L114.5 272.7 Q114.5 277.7 119.5 277.7 L390.1 277.7 Q395.1 277.7 395.1 282.7 L395.1 340.1" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M121.5 246.3 L121.5 340.1" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M381.1 393.1 L381.1 486.9" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M466.6 366.6 L584.2 366.6" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M568.7 219.8 L528.9 219.8 Q523.9 219.8 523.9 224.8 L523.9 501.4 Q523.9 506.4 518.9 506.4 L469.6 506.4" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M647.7 246.3 L647.7 272.7 Q647.7 277.7 642.7 277.7 L372.1 277.7 Q367.1 277.7 367.1 282.7 L367.1 340.1" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M114.5 99.5 L114.5 193.3" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M381.1 92 L381.1 193.3" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M466.6 373.6 L506.4 373.6 Q511.4 373.6 511.4 378.6 L511.4 802 Q511.4 807 516.4 807 L577.7 807" marker-end="url(#skills-catalog-local-arrow)"/>
+<g class="d-map-part" data-part="cc1" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
+<rect class="d-node d-node--external" x="58.5" y="46.5" width="112" height="53" rx="3"/>
+<text class="d-label" x="114.5" y="66">Claude Code</text>
+<text class="d-note" x="114.5" y="82">not ours</text>
+</g>
+<g class="d-map-part" data-part="dev1" tabindex="0" role="button" aria-label="Developer: what it is, its code and tests">
+<rect class="d-node" x="328.6" y="54" width="105" height="38" rx="19"/>
+<text class="d-label" x="381.1" y="73">Developer</text>
+</g>
+<a class="d-map-part d-map-part--opens" data-part="catalog" href="catalog.html" aria-label="catalog: open its page">
+<path class="d-node" d="M577.7 783.5 A70 6 0 0 1 717.7 783.5 V830.5 A70 6 0 0 1 577.7 830.5 Z"/>
+<path class="d-node-detail" d="M577.7 783.5 A70 6 0 0 0 717.7 783.5"/>
+<text class="d-label" x="647.7" y="803">catalog</text>
+<text class="d-note" x="647.7" y="819">skills · versions</text>
+<text class="d-map-opens" x="709.7" y="807" aria-hidden="true">›</text>
+</a>
+<g class="d-map-part" data-part="mcp" tabindex="0" role="button" aria-label="MCP server: what it is, its code and tests">
+<rect class="d-node" x="32" y="193.3" width="165" height="53" rx="3"/>
+<text class="d-label" x="114.5" y="212.8">MCP server</text>
+<text class="d-note" x="114.5" y="228.8">tools for Claude Code</text>
+</g>
+<g class="d-map-part" data-part="cli" tabindex="0" role="button" aria-label="CLI: what it is, its code and tests">
+<rect class="d-node" x="292.6" y="193.3" width="177" height="53" rx="3"/>
+<text class="d-label" x="381.1" y="212.8">CLI</text>
+<text class="d-note" x="381.1" y="228.8">commands · setup · hook</text>
+</g>
+<g class="d-map-part" data-part="serve" tabindex="0" role="button" aria-label="serve: what it is, its code and tests">
+<rect class="d-node" x="568.7" y="193.3" width="158" height="53" rx="3"/>
+<text class="d-label" x="647.7" y="212.8">serve</text>
+<text class="d-note" x="647.7" y="228.8">the API on 127.0.0.1</text>
+</g>
+<g class="d-map-part" data-part="ops" tabindex="0" role="button" aria-label="operations: what it is, its code and tests">
+<rect class="d-node" x="295.6" y="340.1" width="171" height="53" rx="3"/>
+<text class="d-label" x="381.1" y="359.6">operations</text>
+<text class="d-note" x="381.1" y="375.6">one runner, every face</text>
+</g>
+<g class="d-map-part d-map-part--proposed" data-part="agent-reviewers" tabindex="0" role="button" aria-label="agent reviewers: what it is, its code and tests">
+<rect class="d-node d-node--proposed" x="41.5" y="478.4" width="146" height="70" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="86.4" y="484.4" width="56.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="114.5" y="491.9">PLANNED</text>
+<text class="d-label" x="114.5" y="514.9">agent reviewers</text>
+<text class="d-note" x="114.5" y="530.9">quality, by agents</text>
+</g>
+<g class="d-map-part" data-part="person" tabindex="0" role="button" aria-label="the person's view: what it is, its code and tests">
+<rect class="d-node" x="35.5" y="340.1" width="158" height="53" rx="3"/>
+<text class="d-label" x="114.5" y="359.6">the person's view</text>
+<text class="d-note" x="114.5" y="375.6">tables · short lines</text>
+</g>
+<g class="d-map-part" data-part="installer" tabindex="0" role="button" aria-label="installer: what it is, its code and tests">
+<rect class="d-node" x="292.6" y="486.9" width="177" height="53" rx="3"/>
+<text class="d-label" x="381.1" y="506.4">installer</text>
+<text class="d-note" x="381.1" y="522.4">install · update · hold</text>
+</g>
+<g class="d-map-part" data-part="usage" tabindex="0" role="button" aria-label="usage: what it is, its code and tests">
+<rect class="d-node" x="584.2" y="340.1" width="127" height="53" rx="3"/>
+<text class="d-label" x="647.7" y="359.6">usage</text>
+<text class="d-note" x="647.7" y="375.6">what holds cost</text>
+</g>
+<g class="d-map-part" data-part="api" tabindex="0" role="button" aria-label="the API: what it is, its code and tests">
+<rect class="d-node" x="41.5" y="633.7" width="146" height="53" rx="3"/>
+<text class="d-label" x="114.5" y="653.2">the API</text>
+<text class="d-note" x="114.5" y="669.2">operations · words</text>
+</g>
+<g class="d-map-part" data-part="skill-checks" tabindex="0" role="button" aria-label="skill checks: what it is, its code and tests">
+<rect class="d-node" x="292.6" y="633.7" width="177" height="53" rx="3"/>
+<text class="d-label" x="381.1" y="653.2">skill checks</text>
+<text class="d-note" x="381.1" y="669.2">format · rules reviewer</text>
+</g>
+<g class="d-map-part" data-part="remote" tabindex="0" role="button" aria-label="catalog over HTTPS: what it is, its code and tests">
+<rect class="d-node" x="566.7" y="633.7" width="162" height="53" rx="3"/>
+<text class="d-label" x="647.7" y="653.2">catalog over HTTPS</text>
+<text class="d-note" x="647.7" y="669.2">for a catalog in AWS</text>
+</g>
+<text class="d-edge-label d-map-label--start" x="121.5" y="146.4">MCP</text>
+<text class="d-edge-label d-map-label--start" x="388.1" y="142.7">commands</text>
+<text class="d-edge-label d-map-label--start" x="518.4" y="590.3">calls</text>
+</svg></div></div></figure>
+<aside class="panel" aria-live="polite"><div class="picked" hidden></div>
+<h3>Click a box for what it is, its code and its decisions.</h3>
+<ul class="legend">
+<li><b>→</b> read from the imports: the box at its tail uses the one at its head</li>
+<li><b>No lines:</b> the API and skill checks, used by nearly every box (each says by which)</li>
+<li><b>Outside the boundary:</b> the parts around it; <b>›</b> opens their page</li>
+<li><b>- - -</b> dashed and <b>PLANNED</b>: not built yet (turn on “planned”)</li>
+</ul>
+</aside></div></section>
+<section class="frame" data-view="aws">
+<h2 class="frame-title">Inside skills-catalog · in AWS</h2>
+<div class="frame-grid"><figure class="map-art" style="--w: 755px"><div class="d-scroll"><p class="d-scroll-hint" data-w="755" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 755 853" width="755" height="853" role="group" aria-label="What's inside skills-catalog, and which piece uses which?">
+<title>skills-catalog · in AWS</title>
+<defs><marker id="skills-catalog-aws-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-aws-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-aws-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-aws-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-aws-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-aws-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-aws-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-aws-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
+<rect class="d-group" x="22" y="171.3" width="716.7" height="525.4" rx="6"/>
+<text class="d-group-label" x="633.7" y="182.3">skills-catalog</text>
+<path class="d-edge" d="M469.6 219.8 L476.6 219.8 Q481.6 219.8 481.6 224.8 L481.6 508.4 Q481.6 513.4 476.6 513.4 L469.6 513.4" marker-end="url(#skills-catalog-aws-arrow)" marker-start="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M292.6 219.8 L197 219.8" marker-end="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M381.1 246.3 L381.1 340.1" marker-end="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M388.1 246.3 L388.1 279.7 Q388.1 284.7 383.1 284.7 L119.5 284.7 Q114.5 284.7 114.5 289.7 L114.5 340.1" marker-end="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M469.6 226.8 L568.7 226.8" marker-end="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M374.1 246.3 L374.1 286.7 Q374.1 291.7 379.1 291.7 L642.7 291.7 Q647.7 291.7 647.7 296.7 L647.7 340.1" marker-end="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M469.6 520.4 L642.7 520.4 Q647.7 520.4 647.7 515.4 L647.7 393.1" marker-end="url(#skills-catalog-aws-arrow)" marker-start="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M114.5 246.3 L114.5 272.7 Q114.5 277.7 119.5 277.7 L390.1 277.7 Q395.1 277.7 395.1 282.7 L395.1 340.1" marker-end="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M121.5 246.3 L121.5 340.1" marker-end="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M381.1 393.1 L381.1 486.9" marker-end="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M466.6 366.6 L584.2 366.6" marker-end="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M568.7 219.8 L528.9 219.8 Q523.9 219.8 523.9 224.8 L523.9 501.4 Q523.9 506.4 518.9 506.4 L469.6 506.4" marker-end="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M647.7 246.3 L647.7 272.7 Q647.7 277.7 642.7 277.7 L372.1 277.7 Q367.1 277.7 367.1 282.7 L367.1 340.1" marker-end="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M114.5 99.5 L114.5 193.3" marker-end="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M381.1 92 L381.1 193.3" marker-end="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M647.7 686.7 L647.7 777.5" marker-end="url(#skills-catalog-aws-arrow)"/>
+<g class="d-map-part" data-part="cc1" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
+<rect class="d-node d-node--external" x="58.5" y="46.5" width="112" height="53" rx="3"/>
+<text class="d-label" x="114.5" y="66">Claude Code</text>
+<text class="d-note" x="114.5" y="82">not ours</text>
+</g>
+<g class="d-map-part" data-part="dev1" tabindex="0" role="button" aria-label="Developer: what it is, its code and tests">
+<rect class="d-node" x="328.6" y="54" width="105" height="38" rx="19"/>
+<text class="d-label" x="381.1" y="73">Developer</text>
+</g>
+<a class="d-map-part d-map-part--opens" data-part="catalog" href="catalog-aws.html" aria-label="catalog on AWS: open its page">
+<path class="d-node" d="M571.7 783.5 A76 6 0 0 1 723.7 783.5 V830.5 A76 6 0 0 1 571.7 830.5 Z"/>
+<path class="d-node-detail" d="M571.7 783.5 A76 6 0 0 0 723.7 783.5"/>
+<text class="d-label" x="647.7" y="803">catalog on AWS</text>
+<text class="d-note" x="647.7" y="819">API · DynamoDB · S3</text>
+<text class="d-map-opens" x="715.7" y="807" aria-hidden="true">›</text>
+</a>
+<g class="d-map-part" data-part="mcp" tabindex="0" role="button" aria-label="MCP server: what it is, its code and tests">
+<rect class="d-node" x="32" y="193.3" width="165" height="53" rx="3"/>
+<text class="d-label" x="114.5" y="212.8">MCP server</text>
+<text class="d-note" x="114.5" y="228.8">tools for Claude Code</text>
+</g>
+<g class="d-map-part" data-part="cli" tabindex="0" role="button" aria-label="CLI: what it is, its code and tests">
+<rect class="d-node" x="292.6" y="193.3" width="177" height="53" rx="3"/>
+<text class="d-label" x="381.1" y="212.8">CLI</text>
+<text class="d-note" x="381.1" y="228.8">commands · setup · hook</text>
+</g>
+<g class="d-map-part" data-part="serve" tabindex="0" role="button" aria-label="serve: what it is, its code and tests">
+<rect class="d-node" x="568.7" y="193.3" width="158" height="53" rx="3"/>
+<text class="d-label" x="647.7" y="212.8">serve</text>
+<text class="d-note" x="647.7" y="228.8">the API on 127.0.0.1</text>
+</g>
+<g class="d-map-part" data-part="ops" tabindex="0" role="button" aria-label="operations: what it is, its code and tests">
+<rect class="d-node" x="295.6" y="340.1" width="171" height="53" rx="3"/>
+<text class="d-label" x="381.1" y="359.6">operations</text>
+<text class="d-note" x="381.1" y="375.6">one runner, every face</text>
+</g>
+<g class="d-map-part d-map-part--proposed" data-part="agent-reviewers" tabindex="0" role="button" aria-label="agent reviewers: what it is, its code and tests">
+<rect class="d-node d-node--proposed" x="41.5" y="478.4" width="146" height="70" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="86.4" y="484.4" width="56.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="114.5" y="491.9">PLANNED</text>
+<text class="d-label" x="114.5" y="514.9">agent reviewers</text>
+<text class="d-note" x="114.5" y="530.9">quality, by agents</text>
+</g>
+<g class="d-map-part" data-part="person" tabindex="0" role="button" aria-label="the person's view: what it is, its code and tests">
+<rect class="d-node" x="35.5" y="340.1" width="158" height="53" rx="3"/>
+<text class="d-label" x="114.5" y="359.6">the person's view</text>
+<text class="d-note" x="114.5" y="375.6">tables · short lines</text>
+</g>
+<g class="d-map-part" data-part="installer" tabindex="0" role="button" aria-label="installer: what it is, its code and tests">
+<rect class="d-node" x="292.6" y="486.9" width="177" height="53" rx="3"/>
+<text class="d-label" x="381.1" y="506.4">installer</text>
+<text class="d-note" x="381.1" y="522.4">install · update · hold</text>
+</g>
+<g class="d-map-part" data-part="usage" tabindex="0" role="button" aria-label="usage: what it is, its code and tests">
+<rect class="d-node" x="584.2" y="340.1" width="127" height="53" rx="3"/>
+<text class="d-label" x="647.7" y="359.6">usage</text>
+<text class="d-note" x="647.7" y="375.6">what holds cost</text>
+</g>
+<g class="d-map-part" data-part="api" tabindex="0" role="button" aria-label="the API: what it is, its code and tests">
+<rect class="d-node" x="41.5" y="633.7" width="146" height="53" rx="3"/>
+<text class="d-label" x="114.5" y="653.2">the API</text>
+<text class="d-note" x="114.5" y="669.2">operations · words</text>
+</g>
+<g class="d-map-part" data-part="skill-checks" tabindex="0" role="button" aria-label="skill checks: what it is, its code and tests">
+<rect class="d-node" x="292.6" y="633.7" width="177" height="53" rx="3"/>
+<text class="d-label" x="381.1" y="653.2">skill checks</text>
+<text class="d-note" x="381.1" y="669.2">format · rules reviewer</text>
+</g>
+<g class="d-map-part" data-part="remote" tabindex="0" role="button" aria-label="catalog over HTTPS: what it is, its code and tests">
+<rect class="d-node" x="566.7" y="633.7" width="162" height="53" rx="3"/>
+<text class="d-label" x="647.7" y="653.2">catalog over HTTPS</text>
+<text class="d-note" x="647.7" y="669.2">for a catalog in AWS</text>
+</g>
+<text class="d-edge-label d-map-label--start" x="121.5" y="146.4">MCP</text>
+<text class="d-edge-label d-map-label--start" x="388.1" y="142.7">commands</text>
+<text class="d-edge-label d-map-label--start" x="654.7" y="732.1">HTTPS</text>
+</svg></div></div></figure>
+<aside class="panel" aria-live="polite"><div class="picked" hidden></div>
+<h3>Click a box for what it is, its code and its decisions.</h3>
+<ul class="legend">
+<li><b>→</b> read from the imports: the box at its tail uses the one at its head</li>
+<li><b>No lines:</b> the API and skill checks, used by nearly every box (each says by which)</li>
+<li><b>Outside the boundary:</b> the parts around it; <b>›</b> opens their page</li>
+<li><b>- - -</b> dashed and <b>PLANNED</b>: not built yet (turn on “planned”)</li>
+</ul>
+</aside></div></section></main>
+<section class="cards boxes"><h2>The boxes</h2><div class="card-grid"><article class="card" data-box="mcp" data-view="local" id="box-local-mcp">
+<h3>MCP server</h3>
+<p class="note">tools for Claude Code</p>
+<p>The tools Claude Code calls, over stdin and stdout. Each reply carries the words for the assistant and a part laid out for the Developer.</p>
+
+<p><span class="kicker">Uses</span> operations, the person's view</p>
+<p><span class="kicker">Used by</span> CLI</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/mcp"><code>client/src/mcp/**</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/mcp.test.ts"><code>client/test/mcp.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/perf-mcp.test.ts"><code>client/test/perf-mcp.test.ts</code></a></p>
+
+
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-built">
+<summary><span class="did">D1</span> <span class="what">Access is through an AI assistant</span> <span class="built built-built">built</span></summary>
+<div class="body">
+
+
+<p class="why"><span class="kicker">Why</span> Low-effort reuse is the point; the assistant is the access path</p>
+<p class="why"><span class="kicker">How the build honours it</span> Claude Code reaches the catalog through the MCP server's tools; the CLI does the same for the Developer at a terminal</p>
+<p class="meta">The PRD · 2026-07-23</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B11</span> <span class="what">One definition, every face</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>each operation is defined once; the MCP server's tools, the CLI, the HTTP routes, setup's allow list and a published schema come from it. &quot;The API&quot; names the list of operations; &quot;catalog&quot; names the shared skills and the service that keeps them.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">separate APIs per face</span></p>
+<p class="why"><span class="kicker">Why</span> Assistants can do everything a person can, and the faces can't drift apart; two names that sounded alike confused readers</p>
+
+<p class="meta">The owner · 2026-09-29</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B19</span> <span class="what">What the Developer reads</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the CLI speaks to a person; each MCP reply carries a part laid out for the Developer (tables, short lines, a box for what needs a yes); things are named by what the Developer will see happen</p>
+
+<p class="why"><span class="kicker">Why</span> Assistants and people read differently; the person's layer follows the owner's visual-first tenets</p>
+
+<p class="meta">The owner · 2026-09-30</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B25</span> <span class="what">Tool names</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>no tool is called &quot;get&quot;: <code>read_shared_skill</code> and <code>install_shared_skill</code>.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt"><code>get_skill</code></span></p>
+<p class="why"><span class="kicker">Why</span> In trials, people saying &quot;get me X&quot; meant install; renaming took success from 0/2 to 2/3</p>
+
+<p class="meta">The team · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B26</span> <span class="what">How the Assistant finds the catalog</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the MCP server's own instructions.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">tool names alone</span></p>
+<p class="why"><span class="kicker">Why</span> Without instructions, a small model answered &quot;no such skill&quot; without looking (0/3); with them, 3/3</p>
+
+<p class="meta">The team · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B28</span> <span class="what">Publishing</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>two steps: see what would be published (the files, the skipped files with a reason each, what changed), then confirm; at a terminal the CLI asks.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">one step</span></p>
+<p class="why"><span class="kicker">Why</span> The Assistant never publishes something the Developer didn't see</p>
+
+<p class="meta">The team · 2026-09-28</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card" data-box="cli" data-view="local" id="box-local-cli">
+<h3>CLI</h3>
+<p class="note">commands · setup · hook</p>
+<p>The commands for a person at a terminal, including setup and teardown, and the session-start hook that says when an update waits.</p>
+
+<p><span class="kicker">Uses</span> installer, MCP server, operations, the person's view, serve, usage</p>
+<p><span class="kicker">Used by</span> installer</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/cli"><code>client/src/cli/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/cli.ts"><code>client/src/cli.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/main.ts"><code>client/src/main.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/quiet-warnings.ts"><code>client/src/quiet-warnings.ts</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/cli"><code>client/test/cli*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/setup-"><code>client/test/setup-*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/teardown.test.ts"><code>client/test/teardown.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/hook.test.ts"><code>client/test/hook.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/login.test.ts"><code>client/test/login.test.ts</code></a></p>
+
+
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-built">
+<summary><span class="did">B2</span> <span class="what">Guided setup</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>one command (<code>skills-catalog setup</code>) that the Assistant can also run; it asks about auto-updates first, default yes; <code>--yes</code> or <code>--config &lt;file&gt;</code> for unattended setup; <code>teardown</code> undoes it.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">configuring by hand</span></p>
+<p class="why"><span class="kicker">Why</span> The owner's notes: a welcome, seamless setup, with no need to go into a file</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B11</span> <span class="what">One definition, every face</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>each operation is defined once; the MCP server's tools, the CLI, the HTTP routes, setup's allow list and a published schema come from it. &quot;The API&quot; names the list of operations; &quot;catalog&quot; names the shared skills and the service that keeps them.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">separate APIs per face</span></p>
+<p class="why"><span class="kicker">Why</span> Assistants can do everything a person can, and the faces can't drift apart; two names that sounded alike confused readers</p>
+
+<p class="meta">The owner · 2026-09-29</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B19</span> <span class="what">What the Developer reads</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the CLI speaks to a person; each MCP reply carries a part laid out for the Developer (tables, short lines, a box for what needs a yes); things are named by what the Developer will see happen</p>
+
+<p class="why"><span class="kicker">Why</span> Assistants and people read differently; the person's layer follows the owner's visual-first tenets</p>
+
+<p class="meta">The owner · 2026-09-30</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B28</span> <span class="what">Publishing</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>two steps: see what would be published (the files, the skipped files with a reason each, what changed), then confirm; at a terminal the CLI asks.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">one step</span></p>
+<p class="why"><span class="kicker">Why</span> The Assistant never publishes something the Developer didn't see</p>
+
+<p class="meta">The team · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B35</span> <span class="what">Setup adds the `skills-catalog` launcher by default</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>(in <code>~/.local/bin</code>, never overwriting a file there)</p>
+
+<p class="why"><span class="kicker">Why</span> The CLI's messages name <code>skills-catalog</code>, so it should run as named</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card" data-box="serve" data-view="local" id="box-local-serve">
+<h3>serve</h3>
+<p class="note">the API on 127.0.0.1</p>
+<p><code>skills-catalog serve</code>: the API over HTTP on this machine, for the web page that's planned.</p>
+
+<p><span class="kicker">Uses</span> installer, operations</p>
+<p><span class="kicker">Used by</span> CLI</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/web"><code>client/src/web/**</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/serve.test.ts"><code>client/test/serve.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/web-handler.test.ts"><code>client/test/web-handler.test.ts</code></a></p>
+
+
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-not-built">
+<summary><span class="did">B17</span> <span class="what">The web page</span> <span class="built built-not-built">not built yet</span></summary>
+<div class="body">
+<p>a local page in plain browser modules, from five approved mock-ups, with a view of what changed between versions; phase 2.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">React + Vite</span></p>
+<p class="why"><span class="kicker">Why</span> The owner's notes: viewing and updating skills, and a delta view, as a secondary priority</p>
+
+<p class="meta">The owner · 2026-09-29 · Not built yet (<code>serve</code> gives the API only)</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card" data-box="ops" data-view="local" id="box-local-ops">
+<h3>operations</h3>
+<p class="note">one runner, every face</p>
+<p>Runs every operation the same way, whichever face asked (the tools, the CLI, serve), with the settings this machine was started with.</p>
+
+<p><span class="kicker">Uses</span> installer, usage</p>
+<p><span class="kicker">Used by</span> CLI, MCP server, serve</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/operations.ts"><code>client/src/operations.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/settings.ts"><code>client/src/settings.ts</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/operations-seam.test.ts"><code>client/test/operations-seam.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/operation-errors.test.ts"><code>client/test/operation-errors.test.ts</code></a></p>
+
+
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-built">
+<summary><span class="did">B28</span> <span class="what">Publishing</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>two steps: see what would be published (the files, the skipped files with a reason each, what changed), then confirm; at a terminal the CLI asks.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">one step</span></p>
+<p class="why"><span class="kicker">Why</span> The Assistant never publishes something the Developer didn't see</p>
+
+<p class="meta">The team · 2026-09-28</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card planned-only" data-box="agent-reviewers" data-view="local" id="box-local-agent-reviewers">
+<h3>agent reviewers <span class="tag">planned</span></h3>
+<p class="note">quality, by agents</p>
+<p>Pluggable reviewers that measure a skill's quality, next to the rules reviewer: grounded findings, and no comments when it's good.</p>
+
+
+
+
+
+
+<p><span class="kicker">Would be built by</span> <code>quality-agent-reviews</code></p>
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-partly">
+<summary><span class="did">B5</span> <span class="what">Reviews</span> <span class="built built-partly">partly built</span></summary>
+<div class="body">
+<p>a rules reviewer reviews every publish; pluggable agent reviewers that measure quality come later; a clean skill shows nothing.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">reviews only later</span></p>
+<p class="why"><span class="kicker">Why</span> The owner asked for reviewer-based measurements, prompt-injection risk included; approving with no comments is a normal result</p>
+
+<p class="meta">The owner · 2026-09-28 · The rules reviewer, yes; agent reviewers, later</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card" data-box="person" data-view="local" id="box-local-person">
+<h3>the person's view</h3>
+<p class="note">tables · short lines</p>
+<p>Lays each result out for the Developer: in the terminal, and as the part of each MCP reply that Claude Code shows as it is.</p>
+
+
+<p><span class="kicker">Used by</span> CLI, MCP server</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/person"><code>client/src/person/**</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/person-"><code>client/test/person-*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/held-table.test.ts"><code>client/test/held-table.test.ts</code></a></p>
+
+
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-built">
+<summary><span class="did">B19</span> <span class="what">What the Developer reads</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the CLI speaks to a person; each MCP reply carries a part laid out for the Developer (tables, short lines, a box for what needs a yes); things are named by what the Developer will see happen</p>
+
+<p class="why"><span class="kicker">Why</span> Assistants and people read differently; the person's layer follows the owner's visual-first tenets</p>
+
+<p class="meta">The owner · 2026-09-30</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card" data-box="installer" data-view="local" id="box-local-installer">
+<h3>installer</h3>
+<p class="note">install · update · hold</p>
+<p>Writes skills into Claude Code's skills folder, keeps the list of what came from where, applies updates by each skill's policy, and holds a risky one for a yes. One writer at a time.</p>
+
+<p><span class="kicker">Uses</span> CLI, usage</p>
+<p><span class="kicker">Used by</span> CLI, usage, operations, serve</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/machine"><code>client/src/machine/**</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/install"><code>client/test/install*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/installer"><code>client/test/installer*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/lock-"><code>client/test/lock-*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/review-holds.test.ts"><code>client/test/review-holds.test.ts</code></a></p>
+
+
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-built">
+<summary><span class="did">B3</span> <span class="what">Risky updates wait for a yes</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>auto-updates are on by default; an update waits for the Developer's yes only when it could change what runs on the machine or the reviewer flagged it, on every surface. While the Assistant runs commands without asking, a newly added command in a skill's text is flagged too.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">applying every update silently</span><span class="alt">holding every update</span></p>
+<p class="why"><span class="kicker">Why</span> A skill is instructions the Assistant follows, so an update can change what runs; asking about every update trains people to say yes</p>
+
+<p class="meta">The owner · 2026-09-28, narrowed 2026-09-29</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B4</span> <span class="what">A pinned skill stays pinned</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>installing a newer version over a pinned or &quot;tell me first&quot; (notify) skill waits for the Developer's yes, as an update does</p>
+
+<p class="why"><span class="kicker">Why</span> The Developer's own setting for that skill decides, not the Assistant</p>
+
+<p class="meta">The owner · 2026-09-29</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B8</span> <span class="what">Where an installed skill's origin is kept</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the installer's own list (name, version, fingerprint, which catalog), by install location.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">metadata inside SKILL.md</span><span class="alt">a small file beside it</span></p>
+<p class="why"><span class="kicker">Why</span> The skill's files stay exactly as published, so &quot;complete and unchanged&quot; stays checkable</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B9</span> <span class="what">Local edits to an installed skill</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>an update replaces a copy the Developer changed, as most installed software does; local edits not shared upstream may be lost.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">warn, back up, or skip changed skills</span></p>
+<p class="why"><span class="kicker">Why</span> The owner's call, like most installed software</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-not-built">
+<summary><span class="did">B15</span> <span class="what">A wait on shared catalogs</span> <span class="built built-not-built">not built yet</span></summary>
+<div class="body">
+<p>on a shared or hosted catalog, a new version waits (about 3 days) before auto-update applies it, with a way to ask for the latest</p>
+
+<p class="why"><span class="kicker">Why</span> Auditors and security checkers who follow the latest get time to look first</p>
+
+<p class="meta">The owner · 2026-09-29 · Not built yet</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B24</span> <span class="what">Retrieve means install</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>written into Claude Code's skills folder and tracked.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">content returned into the conversation only (still there as <code>read</code>)</span></p>
+<p class="why"><span class="kicker">Why</span> &quot;Ready to use&quot;, and what makes updates and drift checks possible</p>
+
+<p class="meta">The team · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B38</span> <span class="what">A hand-edited copy is kept aside on update</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>before an update replaces a copy the Developer changed, the changed copy is kept aside and the result names where</p>
+
+<p class="why"><span class="kicker">Why</span> The owner's stance is that local edits may be lost; keeping them aside costs nothing and loses nothing. It came with the review fixes</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card" data-box="usage" data-view="local" id="box-local-usage">
+<h3>usage</h3>
+<p class="note">what holds cost</p>
+<p>Counts what update holds cost the Developer (<code>skills-catalog stats</code>), and the demo's activity line.</p>
+
+<p><span class="kicker">Uses</span> installer</p>
+<p><span class="kicker">Used by</span> CLI, installer, operations</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/usage"><code>client/src/usage/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/activity.ts"><code>client/src/activity.ts</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/usage"><code>client/test/usage*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/activity.test.ts"><code>client/test/activity.test.ts</code></a></p>
+
+
+
+
+</article>
+<article class="card" data-box="api" data-view="local" id="box-local-api">
+<h3>the API <span class="tag">foundation</span></h3>
+<p class="note">operations · words</p>
+<p>Every operation defined once, with its input schema; the MCP tools, the CLI's commands, the HTTP routes and the published schema all come from it. Also every word Claude Code reads, and the errors.</p>
+<p><span class="kicker">Used by</span> MCP server, CLI, serve, operations, the person's view, installer, usage, catalog over HTTPS</p>
+
+
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/api.ts"><code>core/src/api.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/api-doc.ts"><code>core/src/api-doc.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/openapi.ts"><code>core/src/openapi.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/words.ts"><code>core/src/words.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/words-file.ts"><code>core/src/words-file.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/render.ts"><code>core/src/render.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/errors.ts"><code>core/src/errors.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/internal-error.ts"><code>core/src/internal-error.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/index.ts"><code>core/src/index.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/ports.ts"><code>core/src/ports.ts</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/api"><code>core/test/api*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/openapi.test.ts"><code>core/test/openapi.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/replies.test.ts"><code>core/test/replies.test.ts</code></a></p>
+
+
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-built">
+<summary><span class="did">B10</span> <span class="what">Stay flexible</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>one API (List with filters, Get, and the rest), with storage and search behind replaceable parts.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">building straight on one backend</span></p>
+<p class="why"><span class="kicker">Why</span> The owner's notes: &quot;build the experience, interface and contracts without coupling ourselves with a specific choice&quot;</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B11</span> <span class="what">One definition, every face</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>each operation is defined once; the MCP server's tools, the CLI, the HTTP routes, setup's allow list and a published schema come from it. &quot;The API&quot; names the list of operations; &quot;catalog&quot; names the shared skills and the service that keeps them.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">separate APIs per face</span></p>
+<p class="why"><span class="kicker">Why</span> Assistants can do everything a person can, and the faces can't drift apart; two names that sounded alike confused readers</p>
+
+<p class="meta">The owner · 2026-09-29</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card" data-box="skill-checks" data-view="local" id="box-local-skill-checks">
+<h3>skill checks <span class="tag">foundation</span></h3>
+<p class="note">format · rules reviewer</p>
+<p>Reads a skill's folder, checks its SKILL.md, fingerprints its files, diffs two versions, and runs the rules reviewer: scripts, granted tools, text that steers the assistant, a new publisher.</p>
+<p><span class="kicker">Used by</span> CLI, serve, operations, the person's view, installer, the API, catalog over HTTPS</p>
+
+
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/skill-tree"><code>core/src/skill-tree/**</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/rules-review.test.ts"><code>core/test/rules-review.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/reviewer.test.ts"><code>core/test/reviewer.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/risky-updates.test.ts"><code>core/test/risky-updates.test.ts</code></a></p>
+
+
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-built">
+<summary><span class="did">D2</span> <span class="what">Versioning is in scope for the MVP</span> <span class="built built-built">built</span></summary>
+<div class="body">
+
+
+<p class="why"><span class="kicker">Why</span> Consistency over time, see changes, don't overwrite silently</p>
+<p class="why"><span class="kicker">How the build honours it</span> Every publish is a numbered version with a fingerprint; history, diffs and an earlier version on request</p>
+<p class="meta">The PRD · 2026-07-23</p>
+
+
+</div>
+</details>
+<details class="decision decision-partly">
+<summary><span class="did">B5</span> <span class="what">Reviews</span> <span class="built built-partly">partly built</span></summary>
+<div class="body">
+<p>a rules reviewer reviews every publish; pluggable agent reviewers that measure quality come later; a clean skill shows nothing.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">reviews only later</span></p>
+<p class="why"><span class="kicker">Why</span> The owner asked for reviewer-based measurements, prompt-injection risk included; approving with no comments is a normal result</p>
+
+<p class="meta">The owner · 2026-09-28 · The rules reviewer, yes; agent reviewers, later</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B22</span> <span class="what">Skill format</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the PRD's manifest is <code>SKILL.md</code>'s front matter in the Agent Skills format; tags in <code>metadata.tags</code>.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">a manifest format of our own</span></p>
+<p class="why"><span class="kicker">Why</span> A retrieved skill is drop-in for assistants that read the standard</p>
+
+<p class="meta">The team · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B23</span> <span class="what">What a version is</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>a number (the handle) plus a fingerprint of every file and whether it can run (the identity). Publishing files identical to the latest changes nothing; restoring an old version makes a new one.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">semantic versions</span></p>
+<p class="why"><span class="kicker">Why</span> Makes &quot;complete and unchanged&quot; and &quot;nothing silently overwritten&quot; checkable by anyone</p>
+
+<p class="meta">The team · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B30</span> <span class="what">Reviews are bounded</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>at most 3 findings of one kind per file and 20 in all, the rest counted; findings are measurements, with no score</p>
+
+<p class="why"><span class="kicker">Why</span> A review fits in one stored record and in a read's size budget; the rules reviewer gives measurements by name (estimated tokens), never a made-up score</p>
+
+<p class="meta">The team · 2026-10-02</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B36</span> <span class="what">File modes are kept as 0644 or 0755</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>File modes are kept as 0644 or 0755, and the publish preview names each file whose mode changes (0600 becomes 0644)</p>
+
+<p class="why"><span class="kicker">Why</span> Two modes are what every machine can reproduce; the Developer sees the change before saying yes</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B37</span> <span class="what">A warning in a skill's prose is advice</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the reviewer shows it, but it never holds an update</p>
+
+<p class="why"><span class="kicker">Why</span> Text that only warns about a pattern isn't the pattern; holding on it would train people to say yes</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card" data-box="remote" data-view="local" id="box-local-remote">
+<h3>catalog over HTTPS</h3>
+<p class="note">for a catalog in AWS</p>
+<p>The catalog's operations as calls to the AWS catalog's API, opened when SKILLS_CATALOG is an https:// address (on one machine it isn't used). Signs in with the token <code>skills-catalog login</code> keeps.</p>
+
+
+
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/remote"><code>core/src/remote/**</code></a></p>
+
+
+
+
+
+</article>
+<article class="card" data-box="mcp" data-view="aws" id="box-aws-mcp">
+<h3>MCP server</h3>
+<p class="note">tools for Claude Code</p>
+<p>The tools Claude Code calls, over stdin and stdout. Each reply carries the words for the assistant and a part laid out for the Developer.</p>
+
+<p><span class="kicker">Uses</span> operations, the person's view</p>
+<p><span class="kicker">Used by</span> CLI</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/mcp"><code>client/src/mcp/**</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/mcp.test.ts"><code>client/test/mcp.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/perf-mcp.test.ts"><code>client/test/perf-mcp.test.ts</code></a></p>
+
+
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-built">
+<summary><span class="did">D1</span> <span class="what">Access is through an AI assistant</span> <span class="built built-built">built</span></summary>
+<div class="body">
+
+
+<p class="why"><span class="kicker">Why</span> Low-effort reuse is the point; the assistant is the access path</p>
+<p class="why"><span class="kicker">How the build honours it</span> Claude Code reaches the catalog through the MCP server's tools; the CLI does the same for the Developer at a terminal</p>
+<p class="meta">The PRD · 2026-07-23</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B11</span> <span class="what">One definition, every face</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>each operation is defined once; the MCP server's tools, the CLI, the HTTP routes, setup's allow list and a published schema come from it. &quot;The API&quot; names the list of operations; &quot;catalog&quot; names the shared skills and the service that keeps them.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">separate APIs per face</span></p>
+<p class="why"><span class="kicker">Why</span> Assistants can do everything a person can, and the faces can't drift apart; two names that sounded alike confused readers</p>
+
+<p class="meta">The owner · 2026-09-29</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B19</span> <span class="what">What the Developer reads</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the CLI speaks to a person; each MCP reply carries a part laid out for the Developer (tables, short lines, a box for what needs a yes); things are named by what the Developer will see happen</p>
+
+<p class="why"><span class="kicker">Why</span> Assistants and people read differently; the person's layer follows the owner's visual-first tenets</p>
+
+<p class="meta">The owner · 2026-09-30</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B25</span> <span class="what">Tool names</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>no tool is called &quot;get&quot;: <code>read_shared_skill</code> and <code>install_shared_skill</code>.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt"><code>get_skill</code></span></p>
+<p class="why"><span class="kicker">Why</span> In trials, people saying &quot;get me X&quot; meant install; renaming took success from 0/2 to 2/3</p>
+
+<p class="meta">The team · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B26</span> <span class="what">How the Assistant finds the catalog</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the MCP server's own instructions.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">tool names alone</span></p>
+<p class="why"><span class="kicker">Why</span> Without instructions, a small model answered &quot;no such skill&quot; without looking (0/3); with them, 3/3</p>
+
+<p class="meta">The team · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B28</span> <span class="what">Publishing</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>two steps: see what would be published (the files, the skipped files with a reason each, what changed), then confirm; at a terminal the CLI asks.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">one step</span></p>
+<p class="why"><span class="kicker">Why</span> The Assistant never publishes something the Developer didn't see</p>
+
+<p class="meta">The team · 2026-09-28</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card" data-box="cli" data-view="aws" id="box-aws-cli">
+<h3>CLI</h3>
+<p class="note">commands · setup · hook</p>
+<p>The commands for a person at a terminal, including setup and teardown, and the session-start hook that says when an update waits.</p>
+
+<p><span class="kicker">Uses</span> installer, MCP server, operations, the person's view, serve, usage</p>
+<p><span class="kicker">Used by</span> installer</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/cli"><code>client/src/cli/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/cli.ts"><code>client/src/cli.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/main.ts"><code>client/src/main.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/quiet-warnings.ts"><code>client/src/quiet-warnings.ts</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/cli"><code>client/test/cli*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/setup-"><code>client/test/setup-*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/teardown.test.ts"><code>client/test/teardown.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/hook.test.ts"><code>client/test/hook.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/login.test.ts"><code>client/test/login.test.ts</code></a></p>
+
+
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-built">
+<summary><span class="did">B2</span> <span class="what">Guided setup</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>one command (<code>skills-catalog setup</code>) that the Assistant can also run; it asks about auto-updates first, default yes; <code>--yes</code> or <code>--config &lt;file&gt;</code> for unattended setup; <code>teardown</code> undoes it.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">configuring by hand</span></p>
+<p class="why"><span class="kicker">Why</span> The owner's notes: a welcome, seamless setup, with no need to go into a file</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B11</span> <span class="what">One definition, every face</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>each operation is defined once; the MCP server's tools, the CLI, the HTTP routes, setup's allow list and a published schema come from it. &quot;The API&quot; names the list of operations; &quot;catalog&quot; names the shared skills and the service that keeps them.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">separate APIs per face</span></p>
+<p class="why"><span class="kicker">Why</span> Assistants can do everything a person can, and the faces can't drift apart; two names that sounded alike confused readers</p>
+
+<p class="meta">The owner · 2026-09-29</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B19</span> <span class="what">What the Developer reads</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the CLI speaks to a person; each MCP reply carries a part laid out for the Developer (tables, short lines, a box for what needs a yes); things are named by what the Developer will see happen</p>
+
+<p class="why"><span class="kicker">Why</span> Assistants and people read differently; the person's layer follows the owner's visual-first tenets</p>
+
+<p class="meta">The owner · 2026-09-30</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B28</span> <span class="what">Publishing</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>two steps: see what would be published (the files, the skipped files with a reason each, what changed), then confirm; at a terminal the CLI asks.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">one step</span></p>
+<p class="why"><span class="kicker">Why</span> The Assistant never publishes something the Developer didn't see</p>
+
+<p class="meta">The team · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B35</span> <span class="what">Setup adds the `skills-catalog` launcher by default</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>(in <code>~/.local/bin</code>, never overwriting a file there)</p>
+
+<p class="why"><span class="kicker">Why</span> The CLI's messages name <code>skills-catalog</code>, so it should run as named</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card" data-box="serve" data-view="aws" id="box-aws-serve">
+<h3>serve</h3>
+<p class="note">the API on 127.0.0.1</p>
+<p><code>skills-catalog serve</code>: the API over HTTP on this machine, for the web page that's planned.</p>
+
+<p><span class="kicker">Uses</span> installer, operations</p>
+<p><span class="kicker">Used by</span> CLI</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/web"><code>client/src/web/**</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/serve.test.ts"><code>client/test/serve.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/web-handler.test.ts"><code>client/test/web-handler.test.ts</code></a></p>
+
+
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-not-built">
+<summary><span class="did">B17</span> <span class="what">The web page</span> <span class="built built-not-built">not built yet</span></summary>
+<div class="body">
+<p>a local page in plain browser modules, from five approved mock-ups, with a view of what changed between versions; phase 2.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">React + Vite</span></p>
+<p class="why"><span class="kicker">Why</span> The owner's notes: viewing and updating skills, and a delta view, as a secondary priority</p>
+
+<p class="meta">The owner · 2026-09-29 · Not built yet (<code>serve</code> gives the API only)</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card" data-box="ops" data-view="aws" id="box-aws-ops">
+<h3>operations</h3>
+<p class="note">one runner, every face</p>
+<p>Runs every operation the same way, whichever face asked (the tools, the CLI, serve), with the settings this machine was started with.</p>
+
+<p><span class="kicker">Uses</span> installer, usage</p>
+<p><span class="kicker">Used by</span> CLI, MCP server, serve</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/operations.ts"><code>client/src/operations.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/settings.ts"><code>client/src/settings.ts</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/operations-seam.test.ts"><code>client/test/operations-seam.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/operation-errors.test.ts"><code>client/test/operation-errors.test.ts</code></a></p>
+
+
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-built">
+<summary><span class="did">B28</span> <span class="what">Publishing</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>two steps: see what would be published (the files, the skipped files with a reason each, what changed), then confirm; at a terminal the CLI asks.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">one step</span></p>
+<p class="why"><span class="kicker">Why</span> The Assistant never publishes something the Developer didn't see</p>
+
+<p class="meta">The team · 2026-09-28</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card planned-only" data-box="agent-reviewers" data-view="aws" id="box-aws-agent-reviewers">
+<h3>agent reviewers <span class="tag">planned</span></h3>
+<p class="note">quality, by agents</p>
+<p>Pluggable reviewers that measure a skill's quality, next to the rules reviewer: grounded findings, and no comments when it's good.</p>
+
+
+
+
+
+
+<p><span class="kicker">Would be built by</span> <code>quality-agent-reviews</code></p>
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-partly">
+<summary><span class="did">B5</span> <span class="what">Reviews</span> <span class="built built-partly">partly built</span></summary>
+<div class="body">
+<p>a rules reviewer reviews every publish; pluggable agent reviewers that measure quality come later; a clean skill shows nothing.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">reviews only later</span></p>
+<p class="why"><span class="kicker">Why</span> The owner asked for reviewer-based measurements, prompt-injection risk included; approving with no comments is a normal result</p>
+
+<p class="meta">The owner · 2026-09-28 · The rules reviewer, yes; agent reviewers, later</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card" data-box="person" data-view="aws" id="box-aws-person">
+<h3>the person's view</h3>
+<p class="note">tables · short lines</p>
+<p>Lays each result out for the Developer: in the terminal, and as the part of each MCP reply that Claude Code shows as it is.</p>
+
+
+<p><span class="kicker">Used by</span> CLI, MCP server</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/person"><code>client/src/person/**</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/person-"><code>client/test/person-*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/held-table.test.ts"><code>client/test/held-table.test.ts</code></a></p>
+
+
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-built">
+<summary><span class="did">B19</span> <span class="what">What the Developer reads</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the CLI speaks to a person; each MCP reply carries a part laid out for the Developer (tables, short lines, a box for what needs a yes); things are named by what the Developer will see happen</p>
+
+<p class="why"><span class="kicker">Why</span> Assistants and people read differently; the person's layer follows the owner's visual-first tenets</p>
+
+<p class="meta">The owner · 2026-09-30</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card" data-box="installer" data-view="aws" id="box-aws-installer">
+<h3>installer</h3>
+<p class="note">install · update · hold</p>
+<p>Writes skills into Claude Code's skills folder, keeps the list of what came from where, applies updates by each skill's policy, and holds a risky one for a yes. One writer at a time.</p>
+
+<p><span class="kicker">Uses</span> CLI, usage</p>
+<p><span class="kicker">Used by</span> CLI, usage, operations, serve</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/machine"><code>client/src/machine/**</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/install"><code>client/test/install*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/installer"><code>client/test/installer*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/lock-"><code>client/test/lock-*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/review-holds.test.ts"><code>client/test/review-holds.test.ts</code></a></p>
+
+
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-built">
+<summary><span class="did">B3</span> <span class="what">Risky updates wait for a yes</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>auto-updates are on by default; an update waits for the Developer's yes only when it could change what runs on the machine or the reviewer flagged it, on every surface. While the Assistant runs commands without asking, a newly added command in a skill's text is flagged too.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">applying every update silently</span><span class="alt">holding every update</span></p>
+<p class="why"><span class="kicker">Why</span> A skill is instructions the Assistant follows, so an update can change what runs; asking about every update trains people to say yes</p>
+
+<p class="meta">The owner · 2026-09-28, narrowed 2026-09-29</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B4</span> <span class="what">A pinned skill stays pinned</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>installing a newer version over a pinned or &quot;tell me first&quot; (notify) skill waits for the Developer's yes, as an update does</p>
+
+<p class="why"><span class="kicker">Why</span> The Developer's own setting for that skill decides, not the Assistant</p>
+
+<p class="meta">The owner · 2026-09-29</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B8</span> <span class="what">Where an installed skill's origin is kept</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the installer's own list (name, version, fingerprint, which catalog), by install location.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">metadata inside SKILL.md</span><span class="alt">a small file beside it</span></p>
+<p class="why"><span class="kicker">Why</span> The skill's files stay exactly as published, so &quot;complete and unchanged&quot; stays checkable</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B9</span> <span class="what">Local edits to an installed skill</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>an update replaces a copy the Developer changed, as most installed software does; local edits not shared upstream may be lost.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">warn, back up, or skip changed skills</span></p>
+<p class="why"><span class="kicker">Why</span> The owner's call, like most installed software</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-not-built">
+<summary><span class="did">B15</span> <span class="what">A wait on shared catalogs</span> <span class="built built-not-built">not built yet</span></summary>
+<div class="body">
+<p>on a shared or hosted catalog, a new version waits (about 3 days) before auto-update applies it, with a way to ask for the latest</p>
+
+<p class="why"><span class="kicker">Why</span> Auditors and security checkers who follow the latest get time to look first</p>
+
+<p class="meta">The owner · 2026-09-29 · Not built yet</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B24</span> <span class="what">Retrieve means install</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>written into Claude Code's skills folder and tracked.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">content returned into the conversation only (still there as <code>read</code>)</span></p>
+<p class="why"><span class="kicker">Why</span> &quot;Ready to use&quot;, and what makes updates and drift checks possible</p>
+
+<p class="meta">The team · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B38</span> <span class="what">A hand-edited copy is kept aside on update</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>before an update replaces a copy the Developer changed, the changed copy is kept aside and the result names where</p>
+
+<p class="why"><span class="kicker">Why</span> The owner's stance is that local edits may be lost; keeping them aside costs nothing and loses nothing. It came with the review fixes</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card" data-box="usage" data-view="aws" id="box-aws-usage">
+<h3>usage</h3>
+<p class="note">what holds cost</p>
+<p>Counts what update holds cost the Developer (<code>skills-catalog stats</code>), and the demo's activity line.</p>
+
+<p><span class="kicker">Uses</span> installer</p>
+<p><span class="kicker">Used by</span> CLI, installer, operations</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/usage"><code>client/src/usage/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/activity.ts"><code>client/src/activity.ts</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/usage"><code>client/test/usage*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/activity.test.ts"><code>client/test/activity.test.ts</code></a></p>
+
+
+
+
+</article>
+<article class="card" data-box="api" data-view="aws" id="box-aws-api">
+<h3>the API <span class="tag">foundation</span></h3>
+<p class="note">operations · words</p>
+<p>Every operation defined once, with its input schema; the MCP tools, the CLI's commands, the HTTP routes and the published schema all come from it. Also every word Claude Code reads, and the errors.</p>
+<p><span class="kicker">Used by</span> MCP server, CLI, serve, operations, the person's view, installer, usage, catalog over HTTPS</p>
+
+
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/api.ts"><code>core/src/api.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/api-doc.ts"><code>core/src/api-doc.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/openapi.ts"><code>core/src/openapi.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/words.ts"><code>core/src/words.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/words-file.ts"><code>core/src/words-file.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/render.ts"><code>core/src/render.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/errors.ts"><code>core/src/errors.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/internal-error.ts"><code>core/src/internal-error.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/index.ts"><code>core/src/index.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/ports.ts"><code>core/src/ports.ts</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/api"><code>core/test/api*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/openapi.test.ts"><code>core/test/openapi.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/replies.test.ts"><code>core/test/replies.test.ts</code></a></p>
+
+
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-built">
+<summary><span class="did">B10</span> <span class="what">Stay flexible</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>one API (List with filters, Get, and the rest), with storage and search behind replaceable parts.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">building straight on one backend</span></p>
+<p class="why"><span class="kicker">Why</span> The owner's notes: &quot;build the experience, interface and contracts without coupling ourselves with a specific choice&quot;</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B11</span> <span class="what">One definition, every face</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>each operation is defined once; the MCP server's tools, the CLI, the HTTP routes, setup's allow list and a published schema come from it. &quot;The API&quot; names the list of operations; &quot;catalog&quot; names the shared skills and the service that keeps them.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">separate APIs per face</span></p>
+<p class="why"><span class="kicker">Why</span> Assistants can do everything a person can, and the faces can't drift apart; two names that sounded alike confused readers</p>
+
+<p class="meta">The owner · 2026-09-29</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card" data-box="skill-checks" data-view="aws" id="box-aws-skill-checks">
+<h3>skill checks <span class="tag">foundation</span></h3>
+<p class="note">format · rules reviewer</p>
+<p>Reads a skill's folder, checks its SKILL.md, fingerprints its files, diffs two versions, and runs the rules reviewer: scripts, granted tools, text that steers the assistant, a new publisher.</p>
+<p><span class="kicker">Used by</span> CLI, serve, operations, the person's view, installer, the API, catalog over HTTPS</p>
+
+
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/skill-tree"><code>core/src/skill-tree/**</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/rules-review.test.ts"><code>core/test/rules-review.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/reviewer.test.ts"><code>core/test/reviewer.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/risky-updates.test.ts"><code>core/test/risky-updates.test.ts</code></a></p>
+
+
+
+<div class="decisions"><span class="kicker">Decisions</span><details class="decision decision-built">
+<summary><span class="did">D2</span> <span class="what">Versioning is in scope for the MVP</span> <span class="built built-built">built</span></summary>
+<div class="body">
+
+
+<p class="why"><span class="kicker">Why</span> Consistency over time, see changes, don't overwrite silently</p>
+<p class="why"><span class="kicker">How the build honours it</span> Every publish is a numbered version with a fingerprint; history, diffs and an earlier version on request</p>
+<p class="meta">The PRD · 2026-07-23</p>
+
+
+</div>
+</details>
+<details class="decision decision-partly">
+<summary><span class="did">B5</span> <span class="what">Reviews</span> <span class="built built-partly">partly built</span></summary>
+<div class="body">
+<p>a rules reviewer reviews every publish; pluggable agent reviewers that measure quality come later; a clean skill shows nothing.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">reviews only later</span></p>
+<p class="why"><span class="kicker">Why</span> The owner asked for reviewer-based measurements, prompt-injection risk included; approving with no comments is a normal result</p>
+
+<p class="meta">The owner · 2026-09-28 · The rules reviewer, yes; agent reviewers, later</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B22</span> <span class="what">Skill format</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the PRD's manifest is <code>SKILL.md</code>'s front matter in the Agent Skills format; tags in <code>metadata.tags</code>.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">a manifest format of our own</span></p>
+<p class="why"><span class="kicker">Why</span> A retrieved skill is drop-in for assistants that read the standard</p>
+
+<p class="meta">The team · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B23</span> <span class="what">What a version is</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>a number (the handle) plus a fingerprint of every file and whether it can run (the identity). Publishing files identical to the latest changes nothing; restoring an old version makes a new one.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">semantic versions</span></p>
+<p class="why"><span class="kicker">Why</span> Makes &quot;complete and unchanged&quot; and &quot;nothing silently overwritten&quot; checkable by anyone</p>
+
+<p class="meta">The team · 2026-09-28</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B30</span> <span class="what">Reviews are bounded</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>at most 3 findings of one kind per file and 20 in all, the rest counted; findings are measurements, with no score</p>
+
+<p class="why"><span class="kicker">Why</span> A review fits in one stored record and in a read's size budget; the rules reviewer gives measurements by name (estimated tokens), never a made-up score</p>
+
+<p class="meta">The team · 2026-10-02</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B36</span> <span class="what">File modes are kept as 0644 or 0755</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>File modes are kept as 0644 or 0755, and the publish preview names each file whose mode changes (0600 becomes 0644)</p>
+
+<p class="why"><span class="kicker">Why</span> Two modes are what every machine can reproduce; the Developer sees the change before saying yes</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+
+
+</div>
+</details>
+<details class="decision decision-built">
+<summary><span class="did">B37</span> <span class="what">A warning in a skill's prose is advice</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the reviewer shows it, but it never holds an update</p>
+
+<p class="why"><span class="kicker">Why</span> Text that only warns about a pattern isn't the pattern; holding on it would train people to say yes</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+
+
+</div>
+</details></div>
+</article>
+<article class="card" data-box="remote" data-view="aws" id="box-aws-remote">
+<h3>catalog over HTTPS</h3>
+<p class="note">for a catalog in AWS</p>
+<p>The catalog's operations as calls to the AWS catalog's API, opened when SKILLS_CATALOG is an https:// address (on one machine it isn't used). Signs in with the token <code>skills-catalog login</code> keeps.</p>
+
+
+
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/remote"><code>core/src/remote/**</code></a></p>
+
+
+
+
+
+</article></div></section>
+<section id="decisions"><h2>Decisions about skills-catalog</h2>
+<div class="decisions"><details class="decision decision-built" id="decision-D1">
+<summary><span class="did">D1</span> <span class="what">Access is through an AI assistant</span> <span class="built built-built">built</span></summary>
+<div class="body">
+
+
+<p class="why"><span class="kicker">Why</span> Low-effort reuse is the point; the assistant is the access path</p>
+<p class="why"><span class="kicker">How the build honours it</span> Claude Code reaches the catalog through the MCP server's tools; the CLI does the same for the Developer at a terminal</p>
+<p class="meta">The PRD · 2026-07-23</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="structure.html#part=cc1">Claude Code</a> <a class="chip" href="skills-catalog.html#box=mcp">MCP server (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-D2">
+<summary><span class="did">D2</span> <span class="what">Versioning is in scope for the MVP</span> <span class="built built-built">built</span></summary>
+<div class="body">
+
+
+<p class="why"><span class="kicker">Why</span> Consistency over time, see changes, don't overwrite silently</p>
+<p class="why"><span class="kicker">How the build honours it</span> Every publish is a numbered version with a fingerprint; history, diffs and an earlier version on request</p>
+<p class="meta">The PRD · 2026-07-23</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="catalog.html">catalog</a> <a class="chip" href="skills-catalog.html#box=skill-checks">skill checks (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B2">
+<summary><span class="did">B2</span> <span class="what">Guided setup</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>one command (<code>skills-catalog setup</code>) that the Assistant can also run; it asks about auto-updates first, default yes; <code>--yes</code> or <code>--config &lt;file&gt;</code> for unattended setup; <code>teardown</code> undoes it.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">configuring by hand</span></p>
+<p class="why"><span class="kicker">Why</span> The owner's notes: a welcome, seamless setup, with no need to go into a file</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=cli">CLI (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B3">
+<summary><span class="did">B3</span> <span class="what">Risky updates wait for a yes</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>auto-updates are on by default; an update waits for the Developer's yes only when it could change what runs on the machine or the reviewer flagged it, on every surface. While the Assistant runs commands without asking, a newly added command in a skill's text is flagged too.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">applying every update silently</span><span class="alt">holding every update</span></p>
+<p class="why"><span class="kicker">Why</span> A skill is instructions the Assistant follows, so an update can change what runs; asking about every update trains people to say yes</p>
+
+<p class="meta">The owner · 2026-09-28, narrowed 2026-09-29</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=installer">installer (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B4">
+<summary><span class="did">B4</span> <span class="what">A pinned skill stays pinned</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>installing a newer version over a pinned or &quot;tell me first&quot; (notify) skill waits for the Developer's yes, as an update does</p>
+
+<p class="why"><span class="kicker">Why</span> The Developer's own setting for that skill decides, not the Assistant</p>
+
+<p class="meta">The owner · 2026-09-29</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=installer">installer (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-partly" id="decision-B5">
+<summary><span class="did">B5</span> <span class="what">Reviews</span> <span class="built built-partly">partly built</span></summary>
+<div class="body">
+<p>a rules reviewer reviews every publish; pluggable agent reviewers that measure quality come later; a clean skill shows nothing.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">reviews only later</span></p>
+<p class="why"><span class="kicker">Why</span> The owner asked for reviewer-based measurements, prompt-injection risk included; approving with no comments is a normal result</p>
+
+<p class="meta">The owner · 2026-09-28 · The rules reviewer, yes; agent reviewers, later</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=skill-checks">skill checks (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=agent-reviewers">agent reviewers (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B8">
+<summary><span class="did">B8</span> <span class="what">Where an installed skill's origin is kept</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the installer's own list (name, version, fingerprint, which catalog), by install location.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">metadata inside SKILL.md</span><span class="alt">a small file beside it</span></p>
+<p class="why"><span class="kicker">Why</span> The skill's files stay exactly as published, so &quot;complete and unchanged&quot; stays checkable</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=installer">installer (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B9">
+<summary><span class="did">B9</span> <span class="what">Local edits to an installed skill</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>an update replaces a copy the Developer changed, as most installed software does; local edits not shared upstream may be lost.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">warn, back up, or skip changed skills</span></p>
+<p class="why"><span class="kicker">Why</span> The owner's call, like most installed software</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=installer">installer (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B10">
+<summary><span class="did">B10</span> <span class="what">Stay flexible</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>one API (List with filters, Get, and the rest), with storage and search behind replaceable parts.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">building straight on one backend</span></p>
+<p class="why"><span class="kicker">Why</span> The owner's notes: &quot;build the experience, interface and contracts without coupling ourselves with a specific choice&quot;</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=api">the API (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B11">
+<summary><span class="did">B11</span> <span class="what">One definition, every face</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>each operation is defined once; the MCP server's tools, the CLI, the HTTP routes, setup's allow list and a published schema come from it. &quot;The API&quot; names the list of operations; &quot;catalog&quot; names the shared skills and the service that keeps them.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">separate APIs per face</span></p>
+<p class="why"><span class="kicker">Why</span> Assistants can do everything a person can, and the faces can't drift apart; two names that sounded alike confused readers</p>
+
+<p class="meta">The owner · 2026-09-29</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=api">the API (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=mcp">MCP server (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=cli">CLI (skills-catalog)</a> <a class="chip" href="catalog.html#box=http-routes">HTTP routes (the catalog, on one machine)</a></p>
+
+</div>
+</details>
+<details class="decision decision-not-built" id="decision-B15">
+<summary><span class="did">B15</span> <span class="what">A wait on shared catalogs</span> <span class="built built-not-built">not built yet</span></summary>
+<div class="body">
+<p>on a shared or hosted catalog, a new version waits (about 3 days) before auto-update applies it, with a way to ask for the latest</p>
+
+<p class="why"><span class="kicker">Why</span> Auditors and security checkers who follow the latest get time to look first</p>
+
+<p class="meta">The owner · 2026-09-29 · Not built yet</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=installer">installer (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-not-built" id="decision-B17">
+<summary><span class="did">B17</span> <span class="what">The web page</span> <span class="built built-not-built">not built yet</span></summary>
+<div class="body">
+<p>a local page in plain browser modules, from five approved mock-ups, with a view of what changed between versions; phase 2.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">React + Vite</span></p>
+<p class="why"><span class="kicker">Why</span> The owner's notes: viewing and updating skills, and a delta view, as a secondary priority</p>
+
+<p class="meta">The owner · 2026-09-29 · Not built yet (<code>serve</code> gives the API only)</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="structure.html#part=web">web page</a> <a class="chip" href="skills-catalog.html#box=serve">serve (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B19">
+<summary><span class="did">B19</span> <span class="what">What the Developer reads</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the CLI speaks to a person; each MCP reply carries a part laid out for the Developer (tables, short lines, a box for what needs a yes); things are named by what the Developer will see happen</p>
+
+<p class="why"><span class="kicker">Why</span> Assistants and people read differently; the person's layer follows the owner's visual-first tenets</p>
+
+<p class="meta">The owner · 2026-09-30</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=person">the person's view (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=mcp">MCP server (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=cli">CLI (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B22">
+<summary><span class="did">B22</span> <span class="what">Skill format</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the PRD's manifest is <code>SKILL.md</code>'s front matter in the Agent Skills format; tags in <code>metadata.tags</code>.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">a manifest format of our own</span></p>
+<p class="why"><span class="kicker">Why</span> A retrieved skill is drop-in for assistants that read the standard</p>
+
+<p class="meta">The team · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=skill-checks">skill checks (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B23">
+<summary><span class="did">B23</span> <span class="what">What a version is</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>a number (the handle) plus a fingerprint of every file and whether it can run (the identity). Publishing files identical to the latest changes nothing; restoring an old version makes a new one.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">semantic versions</span></p>
+<p class="why"><span class="kicker">Why</span> Makes &quot;complete and unchanged&quot; and &quot;nothing silently overwritten&quot; checkable by anyone</p>
+
+<p class="meta">The team · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=skill-checks">skill checks (skills-catalog)</a> <a class="chip" href="catalog.html#box=catalog-rules">catalog rules (the catalog, on one machine)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B24">
+<summary><span class="did">B24</span> <span class="what">Retrieve means install</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>written into Claude Code's skills folder and tracked.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">content returned into the conversation only (still there as <code>read</code>)</span></p>
+<p class="why"><span class="kicker">Why</span> &quot;Ready to use&quot;, and what makes updates and drift checks possible</p>
+
+<p class="meta">The team · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=installer">installer (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B25">
+<summary><span class="did">B25</span> <span class="what">Tool names</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>no tool is called &quot;get&quot;: <code>read_shared_skill</code> and <code>install_shared_skill</code>.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt"><code>get_skill</code></span></p>
+<p class="why"><span class="kicker">Why</span> In trials, people saying &quot;get me X&quot; meant install; renaming took success from 0/2 to 2/3</p>
+
+<p class="meta">The team · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=mcp">MCP server (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B26">
+<summary><span class="did">B26</span> <span class="what">How the Assistant finds the catalog</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the MCP server's own instructions.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">tool names alone</span></p>
+<p class="why"><span class="kicker">Why</span> Without instructions, a small model answered &quot;no such skill&quot; without looking (0/3); with them, 3/3</p>
+
+<p class="meta">The team · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=mcp">MCP server (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B28">
+<summary><span class="did">B28</span> <span class="what">Publishing</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>two steps: see what would be published (the files, the skipped files with a reason each, what changed), then confirm; at a terminal the CLI asks.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">one step</span></p>
+<p class="why"><span class="kicker">Why</span> The Assistant never publishes something the Developer didn't see</p>
+
+<p class="meta">The team · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=ops">operations (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=mcp">MCP server (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=cli">CLI (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B30">
+<summary><span class="did">B30</span> <span class="what">Reviews are bounded</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>at most 3 findings of one kind per file and 20 in all, the rest counted; findings are measurements, with no score</p>
+
+<p class="why"><span class="kicker">Why</span> A review fits in one stored record and in a read's size budget; the rules reviewer gives measurements by name (estimated tokens), never a made-up score</p>
+
+<p class="meta">The team · 2026-10-02</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=skill-checks">skill checks (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B35">
+<summary><span class="did">B35</span> <span class="what">Setup adds the `skills-catalog` launcher by default</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>(in <code>~/.local/bin</code>, never overwriting a file there)</p>
+
+<p class="why"><span class="kicker">Why</span> The CLI's messages name <code>skills-catalog</code>, so it should run as named</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=cli">CLI (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B36">
+<summary><span class="did">B36</span> <span class="what">File modes are kept as 0644 or 0755</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>File modes are kept as 0644 or 0755, and the publish preview names each file whose mode changes (0600 becomes 0644)</p>
+
+<p class="why"><span class="kicker">Why</span> Two modes are what every machine can reproduce; the Developer sees the change before saying yes</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=skill-checks">skill checks (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B37">
+<summary><span class="did">B37</span> <span class="what">A warning in a skill's prose is advice</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the reviewer shows it, but it never holds an update</p>
+
+<p class="why"><span class="kicker">Why</span> Text that only warns about a pattern isn't the pattern; holding on it would train people to say yes</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=skill-checks">skill checks (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B38">
+<summary><span class="did">B38</span> <span class="what">A hand-edited copy is kept aside on update</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>before an update replaces a copy the Developer changed, the changed copy is kept aside and the result names where</p>
+
+<p class="why"><span class="kicker">Why</span> The owner's stance is that local edits may be lost; keeping them aside costs nothing and loses nothing. It came with the review fixes</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=installer">installer (skills-catalog)</a></p>
+
+</div>
+</details></div></section>
+<section><h2>Use-case steps through skills-catalog</h2>
+<ol class="steps-through"><li><span class="num">1</span><span><a href="index.html#step=1"><strong>publish</strong></a>, step 2: Claude Code calls <code>publish_skill_to_catalog</code>, which shows a preview first: the files it would send, any it skips, and what the rules reviewer flags</span></li><li><span class="num">1</span><span><a href="index.html#step=1"><strong>publish</strong></a>, step 4: Or Developer 1 publishes from a terminal: <code>skills-catalog publish</code>, which previews and asks</span></li><li><span class="num">1</span><span><a href="index.html#step=1"><strong>publish</strong></a>, step 5: v1 goes into the catalog, with its fingerprint and its review; a skill missing a name, description or body is refused, and nothing is stored</span></li><li><span class="num">2</span><span><a href="index.html#step=2"><strong>discover</strong></a>, step 2: Claude Code calls <code>search_shared_skills</code></span></li><li><span class="num">2</span><span><a href="index.html#step=2"><strong>discover</strong></a>, step 3: The catalog finds release-note-draft; when nothing fits, it says so, and shows the closest only as close</span></li><li><span class="num">3</span><span><a href="index.html#step=3"><strong>retrieve</strong></a>, step 2: Claude Code calls <code>read_shared_skill</code>, then <code>install_shared_skill</code></span></li><li><span class="num">3</span><span><a href="index.html#step=3"><strong>retrieve</strong></a>, step 3: Every file of v1 is fetched, and checked against its fingerprint</span></li><li><span class="num">3</span><span><a href="index.html#step=3"><strong>retrieve</strong></a>, step 4: The skill lands in <code>.claude/skills</code>, byte for byte as published, ready to use</span></li><li><span class="num">4</span><span><a href="index.html#step=4"><strong>version</strong></a>, step 2: Claude Code calls <code>publish_skill_to_catalog</code>: the preview names the new script</span></li><li><span class="num">4</span><span><a href="index.html#step=4"><strong>version</strong></a>, step 3: The rules reviewer flags the new script (<code>skills-catalog review</code> reruns the reviews of a local catalog)</span></li><li><span class="num">4</span><span><a href="index.html#step=4"><strong>version</strong></a>, step 4: v2 is stored; v1 stays, and the history shows both</span></li><li><span class="num">4</span><span><a href="index.html#step=4"><strong>version</strong></a>, step 5: Developer 2's list shows ↑ v2 available</span></li><li><span class="num">5</span><span><a href="index.html#step=5"><strong>held update</strong></a>, step 2: Claude Code calls <code>update_installed_skills</code></span></li><li><span class="num">5</span><span><a href="index.html#step=5"><strong>held update</strong></a>, step 3: v2 is fetched</span></li><li><span class="num">5</span><span><a href="index.html#step=5"><strong>held update</strong></a>, step 4: v2 adds a script that can run on this machine: held</span></li><li><span class="num">5</span><span><a href="index.html#step=5"><strong>held update</strong></a>, step 5: Claude Code shows the held update and asks one question</span></li><li><span class="num">5</span><span><a href="index.html#step=5"><strong>held update</strong></a>, step 6: In a terminal, Developer 2 looks at the change (<code>skills-catalog diff</code>) and takes it (<code>update --accept</code>); or says yes to Claude Code</span></li><li><span class="num">6</span><span><a href="index.html#step=6"><strong>setup</strong></a>, step 1: <code>skills-catalog setup</code>: a welcome, then one question, auto-updates on? (yes by default); <code>--yes</code> or <code>--config</code> for no questions</span></li><li><span class="num">6</span><span><a href="index.html#step=6"><strong>setup</strong></a>, step 2: Claude Code gets the MCP server (<code>skills-catalog mcp</code>) and a session-start hook</span></li><li><span class="num">6</span><span><a href="index.html#step=6"><strong>setup</strong></a>, step 3: In AWS: <code>skills-catalog login</code> signs in with GitHub once (on one machine there is nothing to sign in to)</span></li><li><span class="num">6</span><span><a href="index.html#step=6"><strong>setup</strong></a>, step 4: <code>skills-catalog teardown</code> undoes everything setup wrote</span></li></ol></section>
+<section class="where-it-sits"><h2>Where it sits</h2><p class="lede">The whole system, with skills-catalog in green. Click a part with › to go to its page.</p><div class="locators"><figure class="locator"><figcaption>on one machine</figcaption><figure class="map-art" style="--w: 405px"><div class="d-scroll"><p class="d-scroll-hint" data-w="405" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 405 474" width="405" height="474" role="group" aria-label="How does a skill go from one developer to another, and where does each step happen?">
+<title>Skills Catalog · on one machine</title>
+<defs><marker id="skills-catalog-where-local-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-where-local-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-where-local-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-where-local-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-where-local-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-where-local-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-where-local-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-where-local-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
+<rect class="d-group" x="16" y="26.5" width="373" height="431.5" rx="6"/>
+<text class="d-group-label" x="24" y="37.5">one machine</text>
+<path class="d-edge" d="M104.5 86.5 L104.5 158"/>
+<path class="d-edge" d="M300.5 86.5 L300.5 158"/>
+<path class="d-edge" d="M104.5 211 L104.5 275"/>
+<path class="d-edge" d="M300.5 211 L300.5 275"/>
+<path class="d-edge" d="M44.5 67.5 L31 67.5 Q26 67.5 26 72.5 L26 296.5 Q26 301.5 31 301.5 L38 301.5"/>
+<path class="d-edge" d="M360.5 67.5 L374 67.5 Q379 67.5 379 72.5 L379 296.5 Q379 301.5 374 301.5 L367 301.5"/>
+<path class="d-edge" d="M151.8 328 L151.8 389"/>
+<path class="d-edge" d="M253.3 328 L253.3 389"/>
+<g class="d-map-part" data-part="dev1" tabindex="0" role="button" aria-label="Developer 1: what it is, its code and tests">
+<rect class="d-node" x="44.5" y="48.5" width="120" height="38" rx="19"/>
+<text class="d-label" x="104.5" y="67.5">Developer 1</text>
+</g>
+<g class="d-map-part" data-part="dev2" tabindex="0" role="button" aria-label="Developer 2: what it is, its code and tests">
+<rect class="d-node" x="240.5" y="48.5" width="120" height="38" rx="19"/>
+<text class="d-label" x="300.5" y="67.5">Developer 2</text>
+</g>
+<g class="d-map-part" data-part="cc1" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
+<rect class="d-node d-node--external" x="48.5" y="158" width="112" height="53" rx="3"/>
+<text class="d-label" x="104.5" y="177.5">Claude Code</text>
+<text class="d-note" x="104.5" y="193.5">not ours</text>
+</g>
+<g class="d-map-part" data-part="cc2" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
+<rect class="d-node d-node--external" x="244.5" y="158" width="112" height="53" rx="3"/>
+<text class="d-label" x="300.5" y="177.5">Claude Code</text>
+<text class="d-note" x="300.5" y="193.5">not ours</text>
+</g>
+<a class="d-map-part d-map-part--opens" data-part="sc1" href="skills-catalog.html" aria-label="skills-catalog: open its page">
+<rect class="d-node d-node--focus" x="38" y="275" width="133" height="53" rx="3"/>
+<text class="d-label d-label--strong" x="104.5" y="294.5">skills-catalog</text>
+<text class="d-note d-note--focus" x="104.5" y="310.5">MCP server · CLI</text>
+<text class="d-map-opens" x="163" y="301.5" aria-hidden="true">›</text>
+</a>
+<a class="d-map-part d-map-part--opens" data-part="sc2" href="skills-catalog.html" aria-label="skills-catalog: open its page">
+<rect class="d-node d-node--focus" x="234" y="275" width="133" height="53" rx="3"/>
+<text class="d-label d-label--strong" x="300.5" y="294.5">skills-catalog</text>
+<text class="d-note d-note--focus" x="300.5" y="310.5">MCP server · CLI</text>
+<text class="d-map-opens" x="359" y="301.5" aria-hidden="true">›</text>
+</a>
+<a class="d-map-part d-map-part--opens" data-part="catalog" href="catalog.html" aria-label="catalog: open its page">
+<path class="d-node" d="M132.5 395 A70 6 0 0 1 272.5 395 V442 A70 6 0 0 1 132.5 442 Z"/>
+<path class="d-node-detail" d="M132.5 395 A70 6 0 0 0 272.5 395"/>
+<text class="d-label" x="202.5" y="414.5">catalog</text>
+<text class="d-note" x="202.5" y="430.5">skills · versions</text>
+<text class="d-map-opens" x="264.5" y="418.5" aria-hidden="true">›</text>
+</a>
+<text class="d-edge-label d-map-label--start" x="111.5" y="122.3">asks</text>
+<text class="d-edge-label d-map-label--start" x="307.5" y="122.3">asks</text>
+<text class="d-edge-label d-map-label--start" x="111.5" y="243">MCP</text>
+<text class="d-edge-label d-map-label--start" x="307.5" y="243">MCP</text>
+<text class="d-edge-label d-map-label--start" x="33" y="149.4">CLI</text>
+<text class="d-edge-label d-map-label--end" x="372" y="149.4">CLI</text>
+<text class="d-edge-label d-map-label--start" x="158.8" y="358.5">publish</text>
+<text class="d-edge-label d-map-label--start" x="260.3" y="358.5">find, fetch</text>
+</svg></div></div></figure></figure><figure class="locator"><figcaption>in AWS</figcaption><figure class="map-art" style="--w: 417px"><div class="d-scroll"><p class="d-scroll-hint" data-w="417" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 417 578" width="417" height="578" role="group" aria-label="How does a skill go from one developer to another, and where does each step happen?">
+<title>Skills Catalog · in AWS</title>
+<defs><marker id="skills-catalog-where-aws-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-where-aws-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-where-aws-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-where-aws-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-where-aws-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-where-aws-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-where-aws-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-where-aws-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
+<rect class="d-group" x="16" y="26.5" width="165" height="311.5" rx="6"/>
+<text class="d-group-label" x="24" y="37.5">Developer 1's machine</text>
+<rect class="d-group" x="236" y="26.5" width="165" height="311.5" rx="6"/>
+<text class="d-group-label" x="244" y="37.5">Developer 2's machine</text>
+<rect class="d-group" x="122.5" y="367" width="172" height="91" rx="6"/>
+<text class="d-group-label" x="130.5" y="378">AWS</text>
+<path class="d-edge" d="M104.5 86.5 L104.5 158"/>
+<path class="d-edge" d="M312.5 86.5 L312.5 158"/>
+<path class="d-edge" d="M104.5 211 L104.5 275"/>
+<path class="d-edge" d="M312.5 211 L312.5 275"/>
+<path class="d-edge" d="M44.5 67.5 L31 67.5 Q26 67.5 26 72.5 L26 296.5 Q26 301.5 31 301.5 L38 301.5"/>
+<path class="d-edge" d="M372.5 67.5 L386 67.5 Q391 67.5 391 72.5 L391 296.5 Q391 301.5 386 301.5 L379 301.5"/>
+<path class="d-edge" d="M151.8 328 L151.8 389"/>
+<path class="d-edge" d="M265.3 328 L265.3 389"/>
+<path class="d-edge" d="M208.5 448 L208.5 509"/>
+<g class="d-map-part" data-part="dev1" tabindex="0" role="button" aria-label="Developer 1: what it is, its code and tests">
+<rect class="d-node" x="44.5" y="48.5" width="120" height="38" rx="19"/>
+<text class="d-label" x="104.5" y="67.5">Developer 1</text>
+</g>
+<g class="d-map-part" data-part="dev2" tabindex="0" role="button" aria-label="Developer 2: what it is, its code and tests">
+<rect class="d-node" x="252.5" y="48.5" width="120" height="38" rx="19"/>
+<text class="d-label" x="312.5" y="67.5">Developer 2</text>
+</g>
+<g class="d-map-part" data-part="cc1" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
+<rect class="d-node d-node--external" x="48.5" y="158" width="112" height="53" rx="3"/>
+<text class="d-label" x="104.5" y="177.5">Claude Code</text>
+<text class="d-note" x="104.5" y="193.5">not ours</text>
+</g>
+<g class="d-map-part" data-part="cc2" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
+<rect class="d-node d-node--external" x="256.5" y="158" width="112" height="53" rx="3"/>
+<text class="d-label" x="312.5" y="177.5">Claude Code</text>
+<text class="d-note" x="312.5" y="193.5">not ours</text>
+</g>
+<a class="d-map-part d-map-part--opens" data-part="sc1" href="skills-catalog.html" aria-label="skills-catalog: open its page">
+<rect class="d-node d-node--focus" x="38" y="275" width="133" height="53" rx="3"/>
+<text class="d-label d-label--strong" x="104.5" y="294.5">skills-catalog</text>
+<text class="d-note d-note--focus" x="104.5" y="310.5">MCP server · CLI</text>
+<text class="d-map-opens" x="163" y="301.5" aria-hidden="true">›</text>
+</a>
+<a class="d-map-part d-map-part--opens" data-part="sc2" href="skills-catalog.html" aria-label="skills-catalog: open its page">
+<rect class="d-node d-node--focus" x="246" y="275" width="133" height="53" rx="3"/>
+<text class="d-label d-label--strong" x="312.5" y="294.5">skills-catalog</text>
+<text class="d-note d-note--focus" x="312.5" y="310.5">MCP server · CLI</text>
+<text class="d-map-opens" x="371" y="301.5" aria-hidden="true">›</text>
+</a>
+<a class="d-map-part d-map-part--opens" data-part="catalog" href="catalog-aws.html" aria-label="catalog on AWS: open its page">
+<path class="d-node" d="M132.5 395 A76 6 0 0 1 284.5 395 V442 A76 6 0 0 1 132.5 442 Z"/>
+<path class="d-node-detail" d="M132.5 395 A76 6 0 0 0 284.5 395"/>
+<text class="d-label" x="208.5" y="414.5">catalog on AWS</text>
+<text class="d-note" x="208.5" y="430.5">API · DynamoDB · S3</text>
+<text class="d-map-opens" x="276.5" y="418.5" aria-hidden="true">›</text>
+</a>
+<g class="d-map-part" data-part="github" tabindex="0" role="button" aria-label="GitHub sign-in: what it is, its code and tests">
+<rect class="d-node d-node--external" x="142" y="509" width="133" height="53" rx="3"/>
+<text class="d-label" x="208.5" y="528.5">GitHub sign-in</text>
+<text class="d-note" x="208.5" y="544.5">not ours</text>
+</g>
+<text class="d-edge-label d-map-label--start" x="111.5" y="122.3">asks</text>
+<text class="d-edge-label d-map-label--start" x="319.5" y="122.3">asks</text>
+<text class="d-edge-label d-map-label--start" x="111.5" y="243">MCP</text>
+<text class="d-edge-label d-map-label--start" x="319.5" y="243">MCP</text>
+<text class="d-edge-label d-map-label--start" x="33" y="149.4">CLI</text>
+<text class="d-edge-label d-map-label--end" x="384" y="149.4">CLI</text>
+<text class="d-edge-label d-map-label--start" x="158.8" y="349.4">publish</text>
+<text class="d-edge-label d-map-label--start" x="272.3" y="349.4">find, fetch</text>
+<text class="d-edge-label d-map-label--start" x="215.5" y="478.5">signs in</text>
+</svg></div></div></figure></figure></div></section>
+<section><h2>Code and tests</h2>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src"><code>client/src/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/api.ts"><code>core/src/api.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/api-doc.ts"><code>core/src/api-doc.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/openapi.ts"><code>core/src/openapi.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/words.ts"><code>core/src/words.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/words-file.ts"><code>core/src/words-file.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/render.ts"><code>core/src/render.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/errors.ts"><code>core/src/errors.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/internal-error.ts"><code>core/src/internal-error.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/index.ts"><code>core/src/index.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/ports.ts"><code>core/src/ports.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/skill-tree"><code>core/src/skill-tree/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/remote"><code>core/src/remote/**</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test"><code>client/test/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test"><code>core/test/**</code></a></p>
+
+</section>
+</div>
+<script type="application/json" id="page-data">{"views":["local","aws"],"svs":[""]}</script>
+<script>(() => {
+  const root = document.documentElement, data = JSON.parse(document.getElementById('page-data').textContent);
+  root.classList.add('js');
+  const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const state = { view: data.views[0], sv: data.svs[0], planned: false, box: '' };
+  const card = (box) => document.querySelector('.cards.boxes .card[data-box="' + box + '"][data-view="' + state.view + '"]')
+    || document.querySelector('.cards.boxes .card[data-box="' + box + '"]');
+  function read() {
+    const h = new URLSearchParams(location.hash.slice(1));
+    if (data.views.includes(h.get('view'))) state.view = h.get('view');
+    if (data.svs.includes(h.get('sv'))) state.sv = h.get('sv');
+    state.planned = h.get('planned') === '1';
+    const box = h.get('box') || h.get('part') || '';
+    state.box = box && card(box) ? box : '';
+    if (state.box && data.svOf && data.svOf[state.box]) state.sv = data.svOf[state.box];
+  }
+  function write() {
+    const h = new URLSearchParams();
+    if (state.view !== data.views[0]) h.set('view', state.view);
+    if (state.sv !== data.svs[0]) h.set('sv', state.sv);
+    if (state.planned) h.set('planned', '1');
+    if (state.box) h.set('box', state.box);
+    const s = h.toString();
+    history.replaceState(null, '', s ? '#' + s : location.pathname + location.search);
+  }
+  function show() {
+    root.classList.toggle('hide-planned', !state.planned);
+    let active = null;
+    for (const f of $$('.frame')) {
+      const on = (!f.dataset.view || f.dataset.view === state.view) && (!f.dataset.sv || f.dataset.sv === state.sv)
+        && (!f.dataset.planned || f.dataset.planned === (state.planned ? '1' : '0'));
+      f.classList.toggle('on', on);
+      if (on && !active) active = f;
+      const slot = f.querySelector('.picked');
+      if (slot) { slot.hidden = true; slot.replaceChildren(); }
+    }
+    for (const b of $$('.controls [data-view]')) { b.setAttribute('aria-pressed', String(b.dataset.view === state.view)); b.hidden = !!(b.dataset.forSv && b.dataset.forSv !== state.sv); }
+    for (const b of $$('.controls [data-sv]')) b.setAttribute('aria-pressed', String(b.dataset.sv === state.sv));
+    for (const b of $$('.controls [data-planned]')) { b.setAttribute('aria-pressed', String(state.planned)); b.hidden = !!(b.dataset.forSv && b.dataset.forSv !== state.sv); }
+    for (const g of $$('.d-map-part')) g.classList.toggle('d-map-part--picked', !!state.box && g.dataset.part === state.box);
+    const src = state.box && card(state.box);
+    if (src && active) {
+      const slot = active.querySelector('.picked');
+      const c = src.cloneNode(true);
+      c.removeAttribute('id');
+      const close = document.createElement('button');
+      close.type = 'button'; close.className = 'close'; close.textContent = 'Close ✕'; close.setAttribute('aria-label', 'Close');
+      close.addEventListener('click', () => go({ box: '' }));
+      c.prepend(close);
+      slot.append(c); slot.hidden = false;
+    }
+  }
+  function go(change) { Object.assign(state, change); write(); show(); }
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('.controls [data-view], .controls [data-sv], .controls [data-planned], .d-map-part[role="button"]');
+    if (!t) return;
+    if (t.matches('.d-map-part')) return go({ box: state.box === t.dataset.part ? '' : t.dataset.part });
+    e.preventDefault();
+    if (t.dataset.sv !== undefined) return go({ sv: t.dataset.sv, box: '' });
+    if (t.dataset.view !== undefined) return go({ view: t.dataset.view });
+    if (t.dataset.planned !== undefined) return go({ planned: !state.planned });
+  });
+  document.addEventListener('keydown', (e) => {
+    const part = e.target && e.target.closest && e.target.closest('.d-map-part[role="button"]');
+    if (part && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); return go({ box: part.dataset.part }); }
+    if (e.key === 'Escape' && state.box) go({ box: '' });
+  });
+  window.addEventListener('hashchange', () => { read(); show(); });
+  read(); show();
+})();</script>

@@ -1,0 +1,773 @@
+# The decision log as data. docs/decisions.md is built from this file (npm run map in qa/): don't edit the page.
+# Each decision names the parts of the system map it's about (parts:, by the map's ids: a part in docs/map/map.yaml or a
+# box on a part's page), so the map shows it beside them. Where options were weighed side by side, an aspect carries
+# them: the options, the one chosen, and what drives the choice (each option's cell: the fact, and good, even or poor).
+intro: "The decision log, in the PRD's format: what was decided, why, when and by whom, and whether it is built. D1–D3 are the PRD's own; B1 onward were decided while building it. \"The owner\" is the person this was built for; \"the team\" is the architects, QA and agent-experience work behind the design. Details live in [architecture.md](architecture.md) and [contract.md](contract.md); the owner's words on the PRD are in [prd/notes.md](prd/notes.md). This page is built from [decisions.yaml](decisions.yaml); [the system map](map/decisions.html) shows each decision beside the parts it's about, with the options weighed where there were several."
+groups:
+  - id: prd
+    heading: From the PRD
+    tally: The PRD
+    glance: from the PRD
+  - id: owner
+    heading: Decided by the owner
+    tally: The owner
+    glance: by the owner
+  - id: team
+    heading: Decided by the team
+    tally: The team
+    glance: by the team
+  - id: defaults
+    heading: Defaults awaiting the owner
+    tally: Defaults awaiting the owner
+    glance: defaults awaiting the owner
+    note: Taken during the review fixes because each was the recommended, reversible option; each is built and on the owner's list.
+decisions:
+  - id: D1
+    group: prd
+    text: Access is through an AI assistant
+    rationale: Low-effort reuse is the point; the assistant is the access path
+    date: 2026-07-23
+    by: The PRD
+    honours: Claude Code reaches the catalog through the MCP server's tools; the CLI does the same for the Developer at a terminal
+    built: Yes
+    parts: [ cc1, mcp ]
+  - id: D2
+    group: prd
+    text: Versioning is in scope for the MVP
+    rationale: Consistency over time, see changes, don't overwrite silently
+    date: 2026-07-23
+    by: The PRD
+    honours: Every publish is a numbered version with a fingerprint; history, diffs and an earlier version on request
+    built: Yes
+    parts: [ catalog, skill-checks ]
+  - id: D3
+    group: prd
+    text: Authentication and de-duplication are out of scope
+    rationale: Not needed to prove low-effort, consistent reuse
+    date: 2026-07-23
+    by: The PRD
+    honours: "The local catalog needs no sign-in: it takes the computer's login as the Developer's name, labelled a local sign-in for demo purposes. De-duplication is not built. Extended with the owner's yes (B6): the opt-in hosted catalog signs people in, because a catalog on the internet must know who changes a skill"
+    built: Yes
+    parts: [ local-sign-in, github ]
+  - id: B1
+    group: owner
+    title: "What ships first:"
+    text: everything runs locally by default; AWS is opt-in, off by default.
+    over: [ building the web UI and AWS hosting first ]
+    rationale: "The PRD's time box and \"run on a reviewer's machine from a short README\": no account, no server"
+    date: 2026-09-28
+    by: The owner
+    built: Yes
+    parts: [ catalog ]
+  - id: B2
+    group: owner
+    title: "Guided setup:"
+    text: one command (`skills-catalog setup`) that the Assistant can also run; it asks about auto-updates first, default yes; `--yes` or `--config <file>` for unattended setup; `teardown` undoes it.
+    over: [ configuring by hand ]
+    rationale: "The owner's notes: a welcome, seamless setup, with no need to go into a file"
+    date: 2026-09-28
+    by: The owner
+    built: Yes
+    parts: [ cli ]
+  - id: B3
+    group: owner
+    title: "Risky updates wait for a yes:"
+    text: auto-updates are on by default; an update waits for the Developer's yes only when it could change what runs on the machine or the reviewer flagged it, on every surface. While the Assistant runs commands without asking, a newly added command in a skill's text is flagged too.
+    over: [ applying every update silently, holding every update ]
+    rationale: A skill is instructions the Assistant follows, so an update can change what runs; asking about every update trains people to say yes
+    date: 2026-09-28, narrowed 2026-09-29
+    by: The owner
+    built: Yes
+    parts: [ installer ]
+  - id: B4
+    group: owner
+    title: "A pinned skill stays pinned:"
+    text: installing a newer version over a pinned or "tell me first" (notify) skill waits for the Developer's yes, as an update does
+    rationale: The Developer's own setting for that skill decides, not the Assistant
+    date: 2026-09-29
+    by: The owner
+    built: Yes
+    parts: [ installer ]
+  - id: B5
+    group: owner
+    title: "Reviews:"
+    text: a rules reviewer reviews every publish; pluggable agent reviewers that measure quality come later; a clean skill shows nothing.
+    over: [ reviews only later ]
+    rationale: The owner asked for reviewer-based measurements, prompt-injection risk included; approving with no comments is a normal result
+    date: 2026-09-28
+    by: The owner
+    built: The rules reviewer, yes; agent reviewers, later
+    parts: [ skill-checks, agent-reviewers ]
+  - id: B6
+    group: owner
+    title: "Who may publish:"
+    text: "only a skill's owners (its first publisher, plus maintainers later). Hosted: everyone signs in, even to read. Locally, a simplified sign-in: the Developer acts as a named developer, labelled for demo purposes."
+    over: [ anyone signed in publishes ]
+    rationale: Signing in isn't permission to change someone else's skill; locally, sign-in must not block publishing
+    date: 2026-09-28, simplified locally 2026-10-02
+    by: The owner
+    built: Yes
+    parts: [ catalog-rules, local-sign-in, api-function ]
+  - id: B7
+    group: owner
+    title: "Search to start with:"
+    text: keyword search built in, upgraded when measurement says so (recall on a golden query set, speed).
+    over: [ a search service by meaning from day one ]
+    rationale: Nothing to run or pay for; the index is rebuilt from stored versions, so switching later needs no migration
+    date: 2026-09-28
+    by: The owner
+    built: Yes
+    parts: [ local-search, indexer ]
+  - id: B8
+    group: owner
+    title: "Where an installed skill's origin is kept:"
+    text: the installer's own list (name, version, fingerprint, which catalog), by install location.
+    over: [ metadata inside SKILL.md, a small file beside it ]
+    rationale: The skill's files stay exactly as published, so "complete and unchanged" stays checkable
+    date: 2026-09-28
+    by: The owner
+    built: Yes
+    parts: [ installer ]
+  - id: B9
+    group: owner
+    title: "Local edits to an installed skill:"
+    text: an update replaces a copy the Developer changed, as most installed software does; local edits not shared upstream may be lost.
+    over: [ "warn, back up, or skip changed skills" ]
+    rationale: The owner's call, like most installed software
+    date: 2026-09-28
+    by: The owner
+    built: Yes
+    parts: [ installer ]
+  - id: B10
+    group: owner
+    title: "Stay flexible:"
+    text: one API (List with filters, Get, and the rest), with storage and search behind replaceable parts.
+    over: [ building straight on one backend ]
+    rationale: "The owner's notes: \"build the experience, interface and contracts without coupling ourselves with a specific choice\""
+    date: 2026-09-28
+    by: The owner
+    built: Yes
+    parts: [ api ]
+  - id: B11
+    group: owner
+    title: "One definition, every face:"
+    text: each operation is defined once; the MCP server's tools, the CLI, the HTTP routes, setup's allow list and a published schema come from it. "The API" names the list of operations; "catalog" names the shared skills and the service that keeps them.
+    over: [ separate APIs per face ]
+    rationale: Assistants can do everything a person can, and the faces can't drift apart; two names that sounded alike confused readers
+    date: 2026-09-29
+    by: The owner
+    built: Yes
+    parts: [ api, mcp, cli, http-routes ]
+  - id: B12
+    group: owner
+    title: "Architecture:"
+    text: a local-first core with replaceable storage, search and identity; the same tests run against every backend (moved from the team to the owner).
+    over: [ AWS from day one, a git repository as the catalog, plugin marketplaces as the backend, a hosted MCP server only ]
+    rationale: Runs anywhere in minutes, and keeps every one of those as a later option or an export
+    date: 2026-09-29
+    by: The owner
+    built: Yes
+    parts: [ catalog ]
+  - id: B13
+    group: owner
+    title: "Hosted technologies:"
+    text: Lambda + HTTP API with files by short-lived S3 links; DynamoDB + S3; a search file in S3 (OpenSearch Serverless to be re-assessed in phase 3); sign-in with GitHub; events by a DynamoDB stream to a queue; the web page on CloudFront + S3; TypeScript on Node; a hand-written MCP server; install and update always on the Developer's machine. The full table is in [architecture.md](architecture.md)
+    rationale: "Serverless: nothing to pay or patch while idle; each element picked from an options explainer"
+    date: 2026-09-29
+    by: The owner
+    built: Yes, except the web page
+    parts: [ catalog ]
+    aspects:
+      - id: skills-store
+        title: "Skills store: versions + files"
+        parts: [ versions-table, files-bucket ]
+        options:
+          - { id: today, label: SQLite + a folder, sub: "built today, on one machine" }
+          - { id: ddb, label: DynamoDB + S3, sub: on demand; create-only files }
+          - { id: pg, label: Postgres + S3, sub: Aurora Serverless v2 }
+          - { id: dsql, label: Aurora DSQL + S3, sub: "serverless, Postgres-like" }
+          - { id: vm, label: SQLite + a folder, sub: today's store on one small machine }
+        chosen: ddb
+        drivers:
+          - name: Cost when idle
+            toward: ddb
+            cells:
+              today: { t: $0 }
+              ddb: { t: "$0: no hourly charge; 25 GB free", v: good }
+              pg: { t: storage only while paused, v: even }
+              dsql: { t: "$0: 100k DPUs and 1 GB free", v: good }
+              vm: { t: "$5/month, always on", v: even }
+          - name: Cost at 100k skills
+            toward: ddb
+            cells:
+              today: { t: $0 }
+              ddb: { t: ≈$0 records; files ≈$0.14/month, v: good }
+              pg: { t: cents paused; $43.80 kept warm, v: even }
+              dsql: { t: $8 per million DPUs past free, v: even }
+              vm: { t: $5; 20 GB disk, v: even }
+          - name: Publish is all or nothing
+            toward: none
+            cells:
+              today: { t: one transaction }
+              ddb: { t: "one transaction: 100 writes, 4 MB", v: good }
+              pg: { t: one transaction, v: good }
+              dsql: { t: "retry on conflict; 3,000 rows", v: even }
+              vm: { t: one transaction, v: good }
+          - name: Files written only if absent
+            toward: none
+            cells:
+              today: { t: "temp name, then rename" }
+              ddb: { t: "S3 If-None-Match, forced by a bucket rule", v: good }
+              pg: { t: the same S3 rule, v: good }
+              dsql: { t: the same S3 rule, v: good }
+              vm: { t: as today, v: good }
+          - name: First request after idle
+            toward: ddb
+            cells:
+              today: { t: instant }
+              ddb: { t: no resume step, v: good }
+              pg: { t: "≈15 s, longer after 24 h", v: poor }
+              dsql: { t: no instance to wake, v: good }
+              vm: { t: always on, v: good }
+          - name: Same tests as local
+            toward: vm
+            cells:
+              today: { t: the tests }
+              ddb: { t: a new adapter, v: poor }
+              pg: { t: a new SQL adapter, v: even }
+              dsql: { t: a new adapter; SQL subset, v: poor }
+              vm: { t: the same code, v: good }
+          - name: Lock-in
+            toward: pg
+            cells:
+              today: { t: none }
+              ddb: { t: "AWS API; open twin Alternator; files: any S3 API", v: even }
+              pg: { t: Postgres and the S3 API run anywhere, v: good }
+              dsql: { t: "no extensions, triggers or full-text", v: poor }
+              vm: { t: none, v: good }
+          - name: The work to run it
+            toward: ddb
+            cells:
+              today: { t: none }
+              ddb: { t: "none: managed", v: good }
+              pg: { t: a VPC or the Data API; 15 s timeouts, v: even }
+              dsql: { t: "none: managed", v: good }
+              vm: { t: "patching, TLS, backups", v: poor }
+      - id: search
+        title: Search
+        parts: [ indexer ]
+        options:
+          - { id: today, label: SQLite full-text, sub: "any-word, ranked" }
+          - { id: file, label: Search file in S3, sub: ranked in the function }
+          - { id: oss, label: OpenSearch, sub: "Serverless, new generation" }
+          - { id: pg, label: Postgres, sub: full-text + pgvector }
+          - { id: s3v, label: S3 Vectors, sub: "for meaning, later" }
+        chosen: file
+        drivers:
+          - name: Cost when idle
+            toward: file
+            cells:
+              today: { t: $0 }
+              file: { t: $0, v: good }
+              oss: { t: "$0: scales to zero after 10 idle min", v: good }
+              pg: { t: "paused, or $43.80 warm", v: even }
+              s3v: { t: $0.06/GB-month storage, v: good }
+          - name: Fits 100k skills
+            toward: none
+            cells:
+              today: { t: "10k measured: 6.5 ms" }
+              file: { t: ≈50 MB index fits in memory, v: good }
+              oss: { t: a search service, v: good }
+              pg: { t: yes, v: good }
+              s3v: { t: yes, v: good }
+          - name: First search after idle
+            toward: s3v
+            cells:
+              today: { t: instant }
+              file: { t: "cold load of 5–50 MB: measure", v: unknown }
+              oss: { t: 10–30 s after scaling to zero, v: unknown }
+              pg: { t: ≈15 s resume, v: poor }
+              s3v: { t: under a second, v: good }
+          - name: Search by meaning later
+            toward: pg
+            cells:
+              today: { t: no }
+              file: { t: no, v: poor }
+              oss: { t: yes, v: good }
+              pg: { t: pgvector with HNSW, v: good }
+              s3v: { t: "yes: that's what it is", v: good }
+          - name: Lock-in
+            toward: pg
+            cells:
+              today: { t: none }
+              file: { t: our own format, v: good }
+              oss: { t: OpenSearch open; Serverless AWS only, v: even }
+              pg: { t: Postgres runs anywhere, v: good }
+              s3v: { t: AWS only, v: poor }
+      - id: compute
+        title: Compute
+        parts: [ api-function, http-api ]
+        options:
+          - { id: today, label: The Developer's machine, sub: "CLI, Assistant, serve" }
+          - { id: lambda, label: Lambda + HTTP API, sub: API Gateway }
+          - { id: url, label: Lambda URL, sub: behind CloudFront }
+          - { id: fargate, label: Fargate + ALB, sub: a container }
+          - { id: vm, label: One small machine, sub: Lightsail }
+        chosen: lambda
+        drivers:
+          - name: Cost when idle
+            toward: lambda
+            cells:
+              today: { t: $0 }
+              lambda: { t: $0; 1M requests free a month, v: good }
+              url: { t: $0, v: good }
+              fargate: { t: "≈$24/month, always on", v: poor }
+              vm: { t: $5/month, v: even }
+          - name: Cost at 10k calls a month
+            toward: lambda
+            cells:
+              today: { t: $0 }
+              lambda: { t: ≈$0.01, v: good }
+              url: { t: "≈$0: no API charge", v: good }
+              fargate: { t: ≈$24, v: poor }
+              vm: { t: $5, v: even }
+          - name: A whole skill (≈6.7 MB) in one request
+            toward: vm
+            cells:
+              today: { t: no limit }
+              lambda: { t: "no: 6 MB each way; files by presigned link", v: poor }
+              url: { t: 6 MB in; 200 MB out if streamed, v: unknown }
+              fargate: { t: no limit found, v: unknown }
+              vm: { t: "yes: we set the limit", v: good }
+          - name: The work to run it
+            toward: lambda
+            cells:
+              today: { t: none }
+              lambda: { t: none, v: good }
+              url: { t: callers send the body's SHA-256, v: even }
+              fargate: { t: a task and a load balancer, v: even }
+              vm: { t: "patching, TLS, restarts", v: poor }
+          - name: Longest request
+            toward: none
+            cells:
+              today: { t: no limit }
+              lambda: { t: "30 s, fixed", v: even }
+              url: { t: Lambda's own timeout, v: good }
+              fargate: { t: no fixed cap, v: good }
+              vm: { t: no fixed cap, v: good }
+      - id: events
+        title: Events
+        parts: [ events ]
+        options:
+          - { id: today, label: Outbox table, sub: delivered by the next run }
+          - { id: stream, label: DynamoDB stream, sub: → Pipes → a queue }
+          - { id: eb, label: EventBridge, sub: custom events }
+          - { id: poll, label: "Outbox, polled", sub: a scheduled function }
+        chosen: stream
+        drivers:
+          - name: Cost when idle
+            toward: none
+            cells:
+              today: { t: $0 }
+              stream: { t: $0; ≈$0 at 1k publishes, v: good }
+              eb: { t: $1 per million events, v: good }
+              poll: { t: "1 run a minute: inside 14M free", v: good }
+          - name: Never lost if the publish commits
+            toward: stream
+            cells:
+              today: { t: same transaction }
+              stream: { t: written by the database itself, v: good }
+              eb: { t: a second call after commit, v: poor }
+              poll: { t: "same transaction, as today", v: good }
+          - name: Delay to the search index
+            toward: stream
+            cells:
+              today: { t: the next run }
+              stream: { t: seconds, v: good }
+              eb: { t: seconds, v: good }
+              poll: { t: up to the poll interval (1 min), v: even }
+          - name: Kept while a listener is down
+            toward: poll
+            cells:
+              today: { t: until delivered }
+              stream: { t: 24 h in the stream; then the queue, v: even }
+              eb: { t: not in today's facts, v: unknown }
+              poll: { t: until delivered, v: good }
+          - name: Lock-in
+            toward: poll
+            cells:
+              today: { t: none }
+              stream: { t: "Streams and Pipes: AWS only", v: poor }
+              eb: { t: AWS only, v: poor }
+              poll: { t: the same design anywhere, v: good }
+      - id: sign-in
+        title: Sign-in and tokens
+        parts: [ github ]
+        options:
+          - { id: today, label: Act as, sub: "a demo label, no sign-in" }
+          - { id: cognito, label: Cognito, sub: a user pool }
+          - { id: github, label: Sign in with GitHub, sub: an OAuth app }
+          - { id: idc, label: IAM Identity Center, sub: a company's SSO }
+        chosen: github
+        drivers:
+          - name: Cost for a team
+            toward: cognito
+            cells:
+              today: { t: $0 }
+              cognito: { t: "$0 up to 10,000 people a month", v: good }
+              github: { t: no price listed, v: unknown }
+              idc: { t: not confirmed today, v: unknown }
+          - name: Sign-in from the CLI and the Assistant
+            toward: github
+            cells:
+              today: { t: none needed }
+              cognito: { t: "no device sign-in: build our own", v: poor }
+              github: { t: device sign-in built in, v: good }
+              idc: { t: not in today's facts, v: unknown }
+          - name: Sign-in on the web page
+            toward: none
+            cells:
+              today: { t: a pairing link }
+              cognito: { t: managed login (Essentials), v: good }
+              github: { t: the web flow, v: good }
+              idc: { t: SAML or OAuth apps, v: good }
+          - name: Token lifetime
+            toward: github
+            cells:
+              today: { t: none }
+              cognito: { t: standard OIDC tokens, v: good }
+              github: { t: "8 h access, 6-month refresh", v: good }
+              idc: { t: not in today's facts, v: unknown }
+          - name: Lock-in
+            toward: none
+            cells:
+              today: { t: none }
+              cognito: { t: OIDC; user data AWS only, v: even }
+              github: { t: people need a GitHub account, v: even }
+              idc: { t: AWS; the company's own directory, v: even }
+      - id: web-hosting
+        title: Web UI hosting
+        parts: [ edge, page-files, web ]
+        note: "This was weighed on CloudFront's flat-rate Free plan. At the first deploy AWS refused that plan for this stack's web firewall, so CloudFront is pay-as-you-go (B31): the cells about the Free plan are as they were then."
+        options:
+          - { id: today, label: serve, sub: "127.0.0.1, planned" }
+          - { id: cf, label: CloudFront + S3, sub: pay-as-you-go }
+          - { id: amplify, label: Amplify Hosting, sub: managed builds }
+          - { id: compute, label: The compute, sub: the API serves the page too }
+        chosen: cf
+        drivers:
+          - name: Cost when idle
+            toward: none
+            cells:
+              today: { t: $0 }
+              cf: { t: $0 on the Free plan, v: good }
+              amplify: { t: $0.023/GB stored, v: good }
+              compute: { t: the compute's own, v: good }
+          - name: Cost per use
+            toward: cf
+            cells:
+              today: { t: $0 }
+              cf: { t: "1M requests, 100 GB included", v: good }
+              amplify: { t: $0.15/GB served, v: even }
+              compute: { t: every page load is an API call; no edge cache, v: even }
+          - name: A web firewall
+            toward: cf
+            cells:
+              today: { t: 127.0.0.1 only }
+              cf: { t: included; its limits not re-read, v: unknown }
+              amplify: { t: $15/month extra, v: poor }
+              compute: { t: none at the edge, v: poor }
+          - name: The work to set it up
+            toward: cf
+            cells:
+              today: { t: built into serve }
+              cf: { t: plan subscribed by API (CDK), v: good }
+              amplify: { t: builds at $0.01 a minute, v: even }
+              compute: { t: nothing extra, v: good }
+      - id: whole-shape
+        title: "AWS only or portable: the whole shape"
+        parts: [ catalog ]
+        options:
+          - { id: today, label: Built today, sub: on this machine }
+          - { id: a, label: A · AWS serverless, sub: "DynamoDB, S3, Lambda" }
+          - { id: b, label: B · One Postgres, sub: Aurora Serverless v2 }
+          - { id: c, label: C · One machine, sub: "today's catalog, hosted" }
+        chosen: a
+        drivers:
+          - name: Cost when idle
+            toward: a
+            cells:
+              today: { t: "$0: the Developer's machine" }
+              a: { t: "$0: nothing runs", v: good }
+              b: { t: storage only when paused; $43.80/month kept warm, v: even }
+              c: { t: "$5/month, always on", v: even }
+          - name: First request after a quiet night
+            toward: c
+            cells:
+              today: { t: instant }
+              a: { t: a cold function start, v: even }
+              b: { t: "≈15 s to resume, longer after 24 h", v: poor }
+              c: { t: "instant: always on", v: good }
+          - name: Same tests as local
+            toward: c
+            cells:
+              today: { t: the tests }
+              a: { t: new adapters for every store, v: poor }
+              b: { t: "one SQL adapter, close to today's", v: even }
+              c: { t: the same code, v: good }
+          - name: The work to run it
+            toward: a
+            cells:
+              today: { t: none }
+              a: { t: no machine to patch, v: good }
+              b: { t: a VPC or Data API; 15 s timeouts, v: even }
+              c: { t: "patching, TLS, restarts, restores", v: poor }
+          - name: Lock-in
+            toward: b
+            cells:
+              today: { t: none }
+              a: { t: "Streams, Pipes, flat-rate plan: AWS only", v: poor }
+              b: { t: Postgres + S3 API run anywhere, v: good }
+              c: { t: runs anywhere, v: good }
+          - name: Time to build
+            toward: c
+            cells:
+              today: { t: built }
+              a: { t: "most: 4 stores, presigned links, CDK", v: poor }
+              b: { t: "middle: one database adapter", v: even }
+              c: { t: "least: sign-in, TLS, backups", v: good }
+  - id: B14
+    group: owner
+    title: "The AWS setup:"
+    text: written in AWS CDK (TypeScript), by agents; deployed only after a second go from the owner
+    rationale: One language for the product and its infrastructure, and tests that run offline
+    date: 2026-09-29, deployed 2026-09-30
+    by: The owner
+    built: Yes
+    parts: [ catalog ]
+  - id: B15
+    group: owner
+    title: "A wait on shared catalogs:"
+    text: on a shared or hosted catalog, a new version waits (about 3 days) before auto-update applies it, with a way to ask for the latest
+    rationale: Auditors and security checkers who follow the latest get time to look first
+    date: 2026-09-29
+    by: The owner
+    built: Not built yet
+    parts: [ installer ]
+  - id: B16
+    group: owner
+    title: "Other assistants:"
+    text: pi in phase 2; Copilot, Codex, Cursor and Gemini CLI in phase 3, not started without the owner's approval; risky updates wait for a yes on every assistant
+    rationale: Claude Code first; the MCP server is not tied to it, but the installer writes Claude Code's skills folder
+    date: 2026-09-29
+    by: The owner
+    built: Not built yet
+    parts: [ assistants, cc1 ]
+  - id: B17
+    group: owner
+    title: "The web page:"
+    text: a local page in plain browser modules, from five approved mock-ups, with a view of what changed between versions; phase 2.
+    over: [ React + Vite ]
+    rationale: "The owner's notes: viewing and updating skills, and a delta view, as a secondary priority"
+    date: 2026-09-29
+    by: The owner
+    built: Not built yet (`serve` gives the API only)
+    parts: [ web, serve ]
+  - id: B18
+    group: owner
+    title: Bundles of skills
+    text: ", with community feedback such as votes; later"
+    rationale: The owner's notes; after the core loop
+    date: 2026-09-28
+    by: The owner
+    built: Not built yet
+    parts: [ catalog ]
+  - id: B19
+    group: owner
+    title: "What the Developer reads:"
+    text: the CLI speaks to a person; each MCP reply carries a part laid out for the Developer (tables, short lines, a box for what needs a yes); things are named by what the Developer will see happen
+    rationale: Assistants and people read differently; the person's layer follows the owner's visual-first tenets
+    date: 2026-09-30
+    by: The owner
+    built: Yes
+    parts: [ person, mcp, cli ]
+  - id: B20
+    group: owner
+    title: "Testing:"
+    text: QA first; reproducible runs that clean up after themselves; the Assistant's experience tested first; our own test runner improved rather than a framework adopted
+    rationale: "The owner's notes on the PRD: \"a QA-first mentality\""
+    date: 2026-09-28, runner 2026-09-30
+    by: The owner
+    built: Yes; agent-level runs are not scheduled, and 17 of their checks are still manual
+  - id: B21
+    group: owner
+    title: "The time box:"
+    text: the PRD's ~4 hours is a soft target, not a hard limit
+    rationale: The owner's answer when asked
+    date: 2026-09-29
+    by: The owner
+    built: —
+  - id: B22
+    group: team
+    title: "Skill format:"
+    text: the PRD's manifest is `SKILL.md`'s front matter in the Agent Skills format; tags in `metadata.tags`.
+    over: [ a manifest format of our own ]
+    rationale: A retrieved skill is drop-in for assistants that read the standard
+    date: 2026-09-28
+    by: The team
+    built: Yes
+    parts: [ skill-checks ]
+  - id: B23
+    group: team
+    title: "What a version is:"
+    text: a number (the handle) plus a fingerprint of every file and whether it can run (the identity). Publishing files identical to the latest changes nothing; restoring an old version makes a new one.
+    over: [ semantic versions ]
+    rationale: Makes "complete and unchanged" and "nothing silently overwritten" checkable by anyone
+    date: 2026-09-28
+    by: The team
+    built: Yes
+    parts: [ skill-checks, catalog-rules ]
+  - id: B24
+    group: team
+    title: "Retrieve means install:"
+    text: written into Claude Code's skills folder and tracked.
+    over: [ content returned into the conversation only (still there as `read`) ]
+    rationale: '"Ready to use", and what makes updates and drift checks possible'
+    date: 2026-09-28
+    by: The team
+    built: Yes
+    parts: [ installer ]
+  - id: B25
+    group: team
+    title: "Tool names:"
+    text: 'no tool is called "get": `read_shared_skill` and `install_shared_skill`.'
+    over: [ "`get_skill`" ]
+    rationale: In trials, people saying "get me X" meant install; renaming took success from 0/2 to 2/3
+    date: 2026-09-28
+    by: The team
+    built: Yes
+    parts: [ mcp ]
+  - id: B26
+    group: team
+    title: "How the Assistant finds the catalog:"
+    text: the MCP server's own instructions.
+    over: [ tool names alone ]
+    rationale: Without instructions, a small model answered "no such skill" without looking (0/3); with them, 3/3
+    date: 2026-09-28
+    by: The team
+    built: Yes
+    parts: [ mcp ]
+  - id: B27
+    group: team
+    title: "Search matching:"
+    text: a search ranks by any word; skills that match every word are listed as matches, and skills that share only some words are listed apart, under "Not matches"; common words of an ask are ignored, a small list of synonyms is in the configuration, and words in a skill's name count more.
+    over: [ every word must match ]
+    rationale: The Assistant sends several words at once; requiring all made it loop 3–13 times, while listing partial matches apart keeps "nothing matches" honest
+    date: 2026-09-28, refined 2026-10-02
+    by: The team
+    built: Yes
+    parts: [ local-search, indexer ]
+  - id: B28
+    group: team
+    title: "Publishing:"
+    text: "two steps: see what would be published (the files, the skipped files with a reason each, what changed), then confirm; at a terminal the CLI asks."
+    over: [ one step ]
+    rationale: The Assistant never publishes something the Developer didn't see
+    date: 2026-09-28
+    by: The team
+    built: Yes
+    parts: [ ops, mcp, cli ]
+  - id: B29
+    group: team
+    title: "A hosted publish is checked before any upload:"
+    text: the hosted catalog checks `SKILL.md` before files go to S3, and indexes the version at publish, so search finds it at once
+    rationale: A refused publish leaves nothing behind, as it does locally
+    date: 2026-10-02
+    by: The team
+    built: Yes
+    parts: [ api-function ]
+  - id: B30
+    group: team
+    title: "Reviews are bounded:"
+    text: at most 3 findings of one kind per file and 20 in all, the rest counted; findings are measurements, with no score
+    rationale: A review fits in one stored record and in a read's size budget; the rules reviewer gives measurements by name (estimated tokens), never a made-up score
+    date: 2026-10-02
+    by: The team
+    built: Yes
+    parts: [ skill-checks ]
+  - id: B31
+    group: team
+    title: "CloudFront pricing:"
+    text: pay-as-you-go.
+    over: [ the flat-rate Free plan ]
+    rationale: AWS refused the Free tier for this stack's web firewall on the first deploy ("not eligible for this subscription tier"); pay-as-you-go costs cents at demo scale, and the firewall stays
+    date: 2026-09-29
+    by: The team
+    built: Yes
+    parts: [ edge ]
+  - id: B32
+    group: team
+    title: "Tokens without GitHub:"
+    text: a personal token, issued by whoever holds the AWS account (`npm run issue-token`), only its hash stored.
+    over: [ only GitHub sign-in ]
+    rationale: CI and people outside the sign-in list still need a way in; the account holder already controls everything the token could reach
+    date: 2026-09-29
+    by: The team
+    built: Yes
+    parts: [ api-function ]
+  - id: B33
+    group: defaults
+    title: The local sign-in takes the computer's login
+    text: (`USER`) as the Developer's name, when neither `SKILLS_AS` nor setup's name is set
+    rationale: Publishing works on the README's install with no sign-in step
+    date: 2026-10-02
+    by: The team (default, awaiting the owner)
+    built: Yes
+    parts: [ local-sign-in ]
+  - id: B34
+    group: defaults
+    title: That local sign-in applies only on the default local catalog
+    text: ; any other catalog needs a name or a sign-in
+    rationale: A shared or hosted catalog must not trust a computer's login
+    date: 2026-10-02
+    by: The team (default, awaiting the owner)
+    built: Yes
+    parts: [ local-sign-in ]
+  - id: B35
+    group: defaults
+    title: Setup adds the `skills-catalog` launcher by default
+    text: (in `~/.local/bin`, never overwriting a file there)
+    rationale: The CLI's messages name `skills-catalog`, so it should run as named
+    date: 2026-10-02
+    by: The team (default, awaiting the owner)
+    built: Yes
+    parts: [ cli ]
+  - id: B36
+    group: defaults
+    title: File modes are kept as 0644 or 0755
+    text: ", and the publish preview names each file whose mode changes (0600 becomes 0644)"
+    rationale: Two modes are what every machine can reproduce; the Developer sees the change before saying yes
+    date: 2026-10-02
+    by: The team (default, awaiting the owner)
+    built: Yes
+    parts: [ skill-checks ]
+  - id: B37
+    group: defaults
+    title: "A warning in a skill's prose is advice:"
+    text: the reviewer shows it, but it never holds an update
+    rationale: Text that only warns about a pattern isn't the pattern; holding on it would train people to say yes
+    date: 2026-10-02
+    by: The team (default, awaiting the owner)
+    built: Yes
+    parts: [ skill-checks ]
+  - id: B38
+    group: defaults
+    title: "A hand-edited copy is kept aside on update:"
+    text: before an update replaces a copy the Developer changed, the changed copy is kept aside and the result names where
+    rationale: The owner's stance is that local edits may be lost; keeping them aside costs nothing and loses nothing. It came with the review fixes
+    date: 2026-10-02
+    by: The team (default, awaiting the owner)
+    built: Yes
+    parts: [ installer ]
+open:
+  - { id: Q1, question: What are the most valuable additions once the core loop works? (the PRD's), owner: The owner, due: Phase 2 }

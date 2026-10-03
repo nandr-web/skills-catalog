@@ -1,0 +1,10 @@
+id: skill-map-structure
+title: "The system map's structure views"
+phase: "2"
+source: "the owner"
+quote: "I'd also expect to see other views, like architectural view, potentially with toggles like drift / planned, etc"
+want: "As the owner, I want several views of the system's architecture (what exists and what talks to what, on one machine and in AWS), with a toggle that shows what's planned, so I can understand the system's structure at a glance."
+accept: "The map page has a Structure tab with at least two views of the architecture (the running parts, on one machine and in AWS; the code's packages), each line read from the code (imports, the AWS template) or checked against it, and a toggle that shows or hides what's planned; the map check fails when a line has nothing in the code behind it."
+confirmed: true
+parts: [docs, qa]
+relates: [skill-map-drill-down, skill-map-decisions, skill-readme-visual]

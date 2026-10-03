@@ -25,7 +25,11 @@ describe('the system map', () => {
   it('is on disk exactly as a fresh build makes it (run npm run map in qa/ after changing the map or the code)', async () => {
     const built = await buildMap();
     expect(built.problems).toEqual([]);
-    expect([...built.files.keys()].sort()).toEqual(['docs/map/index.html', 'docs/pictures/map-aws.svg', 'docs/pictures/map-held-update.svg', 'docs/pictures/map-local.svg']);
+    expect([...built.files.keys()].sort()).toEqual([
+      'docs/decisions.md',
+      'docs/map/catalog-aws.html', 'docs/map/catalog.html', 'docs/map/decisions.html', 'docs/map/index.html', 'docs/map/skills-catalog.html', 'docs/map/structure.html',
+      'docs/pictures/map-aws.svg', 'docs/pictures/map-held-update.svg', 'docs/pictures/map-local.svg',
+    ]);
     for (const [path, text] of built.files) expect(readFileSync(join(ROOT, path), 'utf8'), `${path} is stale: run npm run map in qa/`).toBe(text);
   }, 60_000);
 
@@ -72,7 +76,7 @@ describe('the map check catches each kind of drift', () => {
   it('a stale page or picture on disk', async () => {
     const m = source();
     m.title = 'Skills Catalog, renamed';
-    const built = await buildMap(ROOT, m);
+    const built = await buildMap(ROOT, { map: m });
     expect(built.files.get('docs/map/index.html')).not.toBe(readFileSync(join(ROOT, 'docs/map/index.html'), 'utf8'));
   }, 60_000);
 });
@@ -82,7 +86,9 @@ describe('neutral names', () => {
   const TOOL = new RegExp(['sten', 'cil'].join(''), 'i');
   it('the generated files, the renderer and every picture use the d- classes and never name the drawing tool', () => {
     const pictures = readdirSync(join(ROOT, 'docs/pictures')).filter((f) => f.endsWith('.svg')).map((f) => `docs/pictures/${f}`);
-    for (const path of ['docs/map/index.html', 'qa/src/map/renderer.js', ...pictures]) {
+    const pages = readdirSync(join(ROOT, 'docs/map')).filter((f) => f.endsWith('.html')).map((f) => `docs/map/${f}`);
+    expect(pages.length).toBeGreaterThan(5);
+    for (const path of [...pages, 'docs/decisions.md', 'docs/decisions.yaml', 'qa/src/map/renderer.js', ...pictures]) {
       const text = readFileSync(join(ROOT, path), 'utf8');
       expect(text, path).not.toMatch(TOOL);
       expect(text, path).not.toMatch(/\bst-[a-z]/);

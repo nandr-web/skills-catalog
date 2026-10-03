@@ -1,7 +1,8 @@
 // The system map's source (docs/map/map.yaml): what's written by hand, how it is checked against the code (facts.ts),
 // and how it becomes the spec the renderer draws. Each problem names its rule, so a test can plant one of each.
 import { matchesGlob, posix } from 'node:path';
-import type { Facts } from './facts.ts';
+import { PACKAGES, type Facts } from './facts.ts';
+import { checkCodeView, checkPages, pageOf, type CodeView, type Page } from './pages.ts';
 
 type Link = { label: string; href: string };
 type Override = { label?: string; note?: string; at?: [number, number]; zone?: string; external?: boolean; text?: string; code?: string[]; tests?: string[] };
@@ -9,6 +10,8 @@ export type Part = {
   id: string; label: string; note?: string; kind?: string; external?: boolean; status?: 'existing' | 'proposed';
   at: [number, number]; zone?: string; only?: string[]; views?: Record<string, Override>;
   text?: string; code?: string[]; tests?: string[]; links?: Link[];
+  /** A planned part: the requirements that would build it. */
+  needs?: string[];
 };
 export type Step = {
   from: string; to?: string; label: string; emphasis?: 'alert'; status?: 'existing' | 'proposed'; only?: string[];
@@ -27,13 +30,22 @@ export type MapSource = {
   parts: Part[]; links?: { from: string; to: string; label?: string; status?: string; only?: string[] }[]; flows: Flow[];
   left_out?: { tools?: Record<string, string>; commands?: Record<string, string>; operations?: Record<string, string> };
   not_on_map?: { glob: string; why: string }[];
+  /** A page per part: the boxes inside it (pages.ts). */
+  pages?: Page[];
+  /** The code's packages and what uses what between them. */
+  code?: CodeView;
 };
 
 export type Rule =
   | 'glob-matches-nothing' | 'file-in-no-part' | 'planned-part-has-code' | 'unknown-tool' | 'unknown-command'
   | 'unknown-operation' | 'unknown-requirement' | 'tool-in-no-step' | 'command-in-no-step' | 'operation-in-no-step'
   | 'unknown-view' | 'left-out-without-why'
-  | 'missing-screen' | 'banned-word' | 'unknown-flow' | 'unreadable-on-phone';
+  | 'missing-screen' | 'banned-word' | 'unknown-flow' | 'unreadable-on-phone'
+  // pages.ts: a page per part, and the Code view
+  | 'unknown-part' | 'duplicate-id' | 'planned-needs-nothing' | 'file-in-no-box' | 'file-in-two-boxes' | 'box-file-outside-part'
+  | 'resource-in-no-box' | 'resource-in-two-boxes' | 'line-not-in-code' | 'line-not-on-map' | 'too-dense' | 'package-not-shown'
+  // decisions.ts: decisions as data
+  | 'decision-unknown-part' | 'chosen-not-an-option' | 'unknown-decision';
 export type Problem = { rule: Rule; message: string };
 
 /** Words the map never uses (review V5.4, V5.6, V6.4; the owner's names): each with what to say instead. */
@@ -71,6 +83,11 @@ export function checkMap(m: MapSource, facts: Facts, exists: (path: string) => b
     if (x.kind === 'code') owned.push(x.glob);
     if (x.kind === 'code' && p.status === 'proposed' && found.length)
       add('planned-part-has-code', `${x.where}: "${p.label}" is planned, but "${x.glob}" has code (${found[0]}): it's built, so drop status: proposed`);
+  }
+  // A planned part names the requirements that would build it.
+  for (const p of m.parts) {
+    if (p.status === 'proposed' && !p.needs?.length) add('planned-needs-nothing', `parts.${p.id}: a planned part names the requirements that would build it (needs:)`);
+    for (const r of p.needs ?? []) if (!facts.requirements.has(r)) add('unknown-requirement', `parts.${p.id}.needs: no requirement "${r}" in qa/traceability.yaml`);
   }
   for (const o of m.not_on_map ?? []) {
     if (!o.why?.trim()) add('left-out-without-why', `not_on_map: "${o.glob}" says no why`);
@@ -115,6 +132,9 @@ export function checkMap(m: MapSource, facts: Facts, exists: (path: string) => b
     if (kind === 'operations' && !facts.operations.has(name)) add('unknown-operation', `left_out.operations: no operation "${name}" in core/src/api.ts`);
   }
 
+  // The pages inside the parts, and the Code view.
+  problems.push(...checkPages(m, facts), ...checkCodeView(m.code, PACKAGES));
+
   // Words: what a reader sees never uses the banned ones.
   for (const [where, text] of shownText(m)) for (const [re, instead] of BANNED) {
     const hit = text.match(re);
@@ -137,6 +157,16 @@ function shownText(m: MapSource): [string, string][] {
     out.push([`flows.${f.id}`, [f.label, f.who, f.says, f.wait?.title, f.wait?.text].filter(Boolean).join(' ')]);
     f.steps.forEach((s, i) => out.push([`flows.${f.id}.steps.${i + 1}`, s.label]));
   }
+  for (const pg of m.pages ?? []) {
+    out.push([`pages.${pg.id}`, [pg.title, pg.question, pg.zone, ...(pg.context ?? []).map((c) => c.label)].filter(Boolean).join(' ')]);
+    for (const b of pg.boxes) out.push([`pages.${pg.id}.boxes.${b.id}`, [b.label, b.note, b.text].filter(Boolean).join(' ')]);
+    for (const l of pg.lines ?? []) if (l.label) out.push([`pages.${pg.id}.lines`, l.label]);
+    for (const s of pg.shared ?? []) out.push([`pages.${pg.id}.shared`, s.why]);
+  }
+  if (m.code) {
+    out.push(['code', m.code.question]);
+    for (const p of m.code.packages) out.push([`code.packages.${p.id}`, [p.label, p.note, p.text].filter(Boolean).join(' ')]);
+  }
   return out;
 }
 
@@ -144,15 +174,19 @@ function shownText(m: MapSource): [string, string][] {
 export function toSpec(m: MapSource, facts: Facts, pageDir: string): Record<string, unknown> {
   const detail = (p: { text?: string; code?: string[]; tests?: string[] }, links?: Link[]) =>
     p.text ? { text: p.text, code: p.code ?? [], tests: p.tests ?? [], links: links ?? [] } : undefined;
-  const parts = m.parts.map(({ text, code, tests, links, views, ...p }) => ({
-    ...p,
-    detail: detail({ text, code, tests }, links),
-    views: Object.fromEntries(Object.entries(views ?? {}).map(([v, o]) => {
+  // A part with a page of its own in a view (pages.ts) links to it there: one page per part, or per view.
+  const viewIds = (m.views ?? []).map((v) => v.id);
+  const hrefs = (id: string) => Object.fromEntries(viewIds.map((v) => [v, pageOf(m, id, v)]).filter(([, pg]) => pg).map(([v, pg]) => [v, `${(pg as Page).id}.html`]));
+  const parts = m.parts.map(({ text, code, tests, links, views, needs: _n, ...p }) => {
+    const pages = hrefs(p.id);
+    const vs: Record<string, Record<string, unknown>> = Object.fromEntries(Object.entries(views ?? {}).map(([v, o]) => {
       const { text: t, code: c, tests: ts, ...rest } = o;
       const own = t !== undefined || c !== undefined || ts !== undefined;
       return [v, own ? { ...rest, detail: detail({ text: t ?? text, code: c ?? code, tests: ts ?? tests }, links) } : rest];
-    })),
-  }));
+    }));
+    for (const [v, href] of Object.entries(pages)) vs[v] = { ...(vs[v] ?? {}), href };
+    return { ...p, detail: detail({ text, code, tests }, links), views: vs };
+  });
   const flows = m.flows.map(({ screens, checks, steps, ...f }) => ({
     ...f,
     steps: steps.map(({ tools: _t, commands: _c, operations: _o, ...s }) => s),
@@ -165,6 +199,6 @@ export function toSpec(m: MapSource, facts: Facts, pageDir: string): Record<stri
       return r ? { id, text: r.text, href: `${m.codeBase}qa/traceability.yaml#L${r.line}` } : id;
     }),
   }));
-  const { left_out: _l, not_on_map: _n, ...rest } = m;
+  const { left_out: _l, not_on_map: _n, pages: _p, code: _c, ...rest } = m;
   return { kind: 'system-map', ...rest, parts, flows };
 }

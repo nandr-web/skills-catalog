@@ -1,6 +1,6 @@
 # Decisions
 
-The decision log, in the PRD's format: what was decided, why, when and by whom, and whether it is built. D1–D3 are the PRD's own; B1 onward were decided while building it. "The owner" is the person this was built for; "the team" is the architects, QA and agent-experience work behind the design. Details live in [architecture.md](architecture.md) and [contract.md](contract.md); the owner's words on the PRD are in [prd/notes.md](prd/notes.md).
+The decision log, in the PRD's format: what was decided, why, when and by whom, and whether it is built. D1–D3 are the PRD's own; B1 onward were decided while building it. "The owner" is the person this was built for; "the team" is the architects, QA and agent-experience work behind the design. Details live in [architecture.md](architecture.md) and [contract.md](contract.md); the owner's words on the PRD are in [prd/notes.md](prd/notes.md). This page is built from [decisions.yaml](decisions.yaml); [the system map](map/decisions.html) shows each decision beside the parts it's about, with the options weighed where there were several.
 
 **At a glance:** 41 decisions: 3 from the PRD, 21 by the owner, 11 by the team, 6 defaults awaiting the owner.
 

@@ -1,0 +1,862 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skills Catalog: structure</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+.d { --d-page: #ECF0F3; --d-canvas: #F9FBFC; --d-ink: #13202A; --d-ink2: #3A4A56; --d-line: #B7C4CD; --d-grid: #D5DDE3; --d-shade: #E1E7EB; --d-accent: #137052; --d-accent-soft: #D9EDE3; --d-hot: #B23A0A; --d-hot-soft: #F8E2D5; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .d, svg.d:root { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+}
+:root[data-theme="dark"] .d { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+
+.d { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 12px; fill: var(--d-ink); }
+.d text { dominant-baseline: central; }
+.d-bg { fill: var(--d-canvas); }
+
+/* nodes */
+.d-node { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1.2; }
+.d-node--external { fill: var(--d-shade); stroke: var(--d-ink2); stroke-dasharray: 4 3; }
+.d-node--focus { fill: var(--d-accent-soft); stroke: var(--d-accent); stroke-width: 1.6; }
+.d-node--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); stroke-width: 1.6; }
+.d-node-detail { fill: none; stroke: var(--d-ink); stroke-width: 1; }
+.d-node--focus + .d-node-detail { stroke: var(--d-accent); }
+.d-node--alert + .d-node-detail { stroke: var(--d-hot); }
+.d-node--external + .d-node-detail { stroke: var(--d-ink2); }
+.d-node--proposed { stroke-width: 1.4; stroke-dasharray: 2 3; }
+.d-node--removed { fill: var(--d-canvas); stroke: var(--d-hot); stroke-width: 1.4; stroke-dasharray: 5 3; }
+.d-label { fill: var(--d-ink); text-anchor: middle; }
+.d-label--strong { font-weight: 600; }
+.d-label--removed { fill: var(--d-ink2); text-decoration: line-through; }
+.d-tag--proposed { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1; stroke-dasharray: 2 2; }
+.d-tag--removed { fill: var(--d-hot); stroke: var(--d-hot); stroke-width: 1; }
+.d-tag-text { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-anchor: middle; }
+.d-tag-text--proposed { fill: var(--d-ink); }
+.d-tag-text--removed { fill: var(--d-canvas); }
+.d-legend-text { font-size: 10.5px; fill: var(--d-ink2); }
+.d-compare-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; fill: var(--d-ink2); }
+.d-callout { fill: var(--d-ink); }
+.d-callout-text { font-size: 10px; font-weight: 600; fill: var(--d-canvas); text-anchor: middle; }
+.d-note { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle; }
+.d-note--focus { fill: var(--d-accent); }
+.d-note--alert { fill: var(--d-hot); }
+
+/* edges */
+.d-edge { fill: none; stroke: var(--d-ink); stroke-width: 1.3; stroke-linejoin: round; }
+.d-edge--async { stroke-dasharray: 5 4; }
+.d-edge--proposed { stroke-dasharray: 2 3; }
+.d-edge--removed { stroke: var(--d-hot); stroke-dasharray: 5 3; }
+.d-edge--return { stroke: var(--d-ink2); stroke-width: 1.1; stroke-dasharray: 4 3; }
+.d-edge--focus { stroke: var(--d-accent); stroke-width: 2; }
+.d-edge--alert { stroke: var(--d-hot); stroke-width: 2; }
+.d-edge-label { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle;
+  paint-order: stroke; stroke: var(--d-canvas); stroke-width: 4px; stroke-linejoin: round; }
+.d-edge-label--focus { fill: var(--d-accent); font-weight: 600; }
+.d-edge-label--alert { fill: var(--d-hot); font-weight: 600; }
+.d-arrow { fill: var(--d-ink); }
+.d-arrow--focus { fill: var(--d-accent); }
+.d-arrow--alert { fill: var(--d-hot); }
+.d-arrow--muted { fill: var(--d-ink2); }
+.d-arrow--open { fill: none; stroke: var(--d-ink); stroke-width: 1.4; stroke-linejoin: round; }
+.d-arrow--open.d-arrow--focus { stroke: var(--d-accent); }
+.d-arrow--open.d-arrow--alert { stroke: var(--d-hot); }
+.d-arrow--open.d-arrow--muted { stroke: var(--d-ink2); }
+
+/* sequence */
+.d-lifeline { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 3 4; }
+.d-activation { fill: var(--d-shade); stroke: var(--d-ink); stroke-width: 1; }
+.d-msg-label { font-size: 11px; fill: var(--d-ink); text-anchor: middle; }
+.d-msg-label--start { text-anchor: start; }
+.d-msg-label--return { fill: var(--d-ink2); }
+.d-msg-label--focus { fill: var(--d-accent); font-weight: 600; }
+.d-msg-label--alert { fill: var(--d-hot); font-weight: 600; }
+.d-memo { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1; }
+.d-memo--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); }
+.d-memo-text { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
+.d-frame { fill: none; stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-frame-tab { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-frame-kind { font-size: 10.5px; font-weight: 600; fill: var(--d-ink); }
+.d-frame-cond-bg { fill: var(--d-canvas); }
+.d-frame-cond { font-size: 10.5px; fill: var(--d-ink2); }
+.d-frame-sep { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+
+/* state */
+.d-pseudo { fill: var(--d-ink); }
+.d-choice-label { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
+.d-composite { fill: var(--d-grid); fill-opacity: 0.25; stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-composite-label { font-size: 11px; font-weight: 600; fill: var(--d-ink); }
+
+/* system map */
+.d-map-quiet { stroke: var(--d-ink2); stroke-width: 1; }
+.d-map-label--start { text-anchor: start; }
+.d-map-label--end { text-anchor: end; }
+.d-map-badge { fill: var(--d-accent); }
+.d-map-badge--alert { fill: var(--d-hot); }
+.d-map-badge--planned { fill: var(--d-canvas); stroke: var(--d-accent); stroke-width: 1.2; stroke-dasharray: 2 2; }
+.d-map-badge-text { font-size: 10.5px; font-weight: 600; fill: var(--d-canvas); text-anchor: middle; }
+.d-map-badge-text--planned { fill: var(--d-accent); }
+.d-map-rule { fill: none; stroke: var(--d-line); stroke-width: 1; }
+.d-map-legend-head { font-size: 11px; font-weight: 600; fill: var(--d-ink); }
+.d-map-legend-text { font-size: 11px; fill: var(--d-ink); }
+.d-map-legend-word { font-weight: 700; fill: var(--d-hot); }
+.d-map-legend-word--planned { fill: var(--d-accent); }
+.d-map-part[role="button"], a.d-map-part { cursor: pointer; }
+.d-map-part[role="button"]:focus, a.d-map-part:focus { outline: none; }
+.d-map-part[role="button"]:focus-visible > :first-child, a.d-map-part:focus-visible > :first-child, .d-map-part--picked > :first-child { stroke: var(--d-ink); stroke-width: 3; }
+a.d-map-part:hover > :first-child { stroke: var(--d-ink); stroke-width: 2; }
+.d-map-opens { font-size: 15px; font-weight: 700; fill: var(--d-ink2); text-anchor: middle; dominant-baseline: central; }
+
+/* groups (boundaries) */
+.d-group { fill: var(--d-grid); fill-opacity: 0.35; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+.d-group-label { font-size: 10.5px; fill: var(--d-ink2); letter-spacing: 0.06em; font-weight: 500; }
+
+:root { --page: #ECF0F3; --card: #F9FBFC; --ink: #13202A; --ink-2: #3A4A56; --line: #B7C4CD; --accent: #137052; --accent-soft: #D9EDE3; --hot: #B23A0A; --hot-soft: #F8E2D5; --even: #E4E9ED; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #0E1418; --card: #151D23; --ink: #E3EAEE; --ink-2: #AFBCC5; --line: #3A4A55;
+  --accent: #46C290; --accent-soft: #1C3A2F; --hot: #F08A50; --hot-soft: #4A2819; --even: #26313A; color-scheme: dark; } }
+:root[data-theme="dark"] { --page: #0E1418; --card: #151D23; --ink: #E3EAEE; --ink-2: #AFBCC5; --line: #3A4A55; --accent: #46C290; --accent-soft: #1C3A2F; --hot: #F08A50; --hot-soft: #4A2819; --even: #26313A; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--page); color: var(--ink); font: 16px/1.5 "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 0 20px 56px; }
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+h1, h2, h3 { font-family: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", sans-serif; margin: 0; text-wrap: balance; }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+code { font: 13px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; background: var(--page); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+nav.site { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; padding-top: 14px; }
+nav.site .brand { font: 600 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; }
+nav.site .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+nav.site .tabs a { font: 600 14px "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; color: var(--ink); text-decoration: none; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); }
+nav.site .tabs a[aria-current="page"] { background: var(--ink); color: var(--card); border-color: var(--ink); }
+.crumbs { margin: 0; font-size: 14px; color: var(--ink-2); }
+.crumbs a { font-weight: 600; }
+header.top { padding-block: 10px 12px; border-bottom: 1.5px solid var(--ink); display: grid; gap: 6px; }
+.eyebrow, .kicker { font: 600 11px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.05; font-weight: 700; letter-spacing: -0.02em; }
+.question { font-size: 18px; max-width: 62ch; margin: 0; }
+.lede { margin: 0; max-width: 70ch; color: var(--ink-2); }
+.controls { display: none; flex-wrap: wrap; gap: 10px 16px; align-items: center; position: sticky; top: 0; z-index: 2; background: var(--page); padding-block: 10px; border-bottom: 1px solid var(--line); }
+.js .controls { display: flex; }
+.controls button { font: 500 14px "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; min-height: 34px; }
+.controls button[aria-pressed="true"] { background: var(--ink); color: var(--card); border-color: var(--ink); font-weight: 600; }
+.controls .switch[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); border: 1.5px dashed var(--accent); }
+.seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.frame { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: grid; gap: 10px; }
+.js .frame { display: none; }
+.js .frame.on { display: grid; }
+.frame-title { font: 600 15px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--ink-2); letter-spacing: .02em; }
+.frame-grid { display: grid; grid-template-columns: minmax(0, max-content) minmax(240px, 1fr); gap: 20px; align-items: start; }
+.map-art { margin: 0; min-width: 0; width: var(--w); max-width: 100%; }
+.panel { display: grid; gap: 10px; font-size: 15px; align-content: start; }
+.panel h3 { font-size: 20px; font-weight: 600; }
+.panel p, .card p, .decision p { margin: 0; }
+.hint { color: var(--ink-2); font-size: 14px; font-style: italic; }
+.legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 14px; color: var(--ink-2); }
+.legend b { color: var(--ink); font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 13px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: grid; gap: 6px; align-content: start; font-size: 15px; min-width: 0; }
+.panel, .card > *, .decision, .decision > .body > *, .choice, details.aspect { min-width: 0; }
+.card h3 { font-size: 18px; font-weight: 600; }
+.card .note { color: var(--ink-2); font: 13px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+.card ul { margin: 0; padding-left: 18px; }
+.picked .card { position: relative; border: 2.5px solid var(--ink); padding-right: 92px; }
+.picked .close { position: absolute; top: 10px; right: 10px; font: 600 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--ink); background: var(--page); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.cards { display: grid; gap: 10px; }
+.cards > h2, section > h2 { font-size: 22px; font-weight: 600; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.js .cards.boxes { display: none; }
+.tag { font: 600 10.5px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; letter-spacing: .06em; text-transform: uppercase; border: 1px dashed var(--ink); border-radius: 3px; padding: 1px 5px; vertical-align: 2px; color: var(--ink); }
+.chosen-tag { border: 1.5px solid var(--accent); color: var(--accent); }
+.where-it-sits { display: grid; gap: 6px; }
+.locators { display: flex; flex-wrap: wrap; gap: 12px; }
+.locator { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.locator figcaption { font: 600 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--ink-2); }
+section { display: grid; gap: 10px; }
+section > *, .frame > *, .frame-grid > * { min-width: 0; }
+.steps-through { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.steps-through li { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: start; }
+.num { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--accent); color: var(--card); font: 600 11px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+.decisions { display: grid; gap: 6px; }
+.decision { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 6px; font-size: 15px; }
+.decision.decision-not-built { border-left-style: dashed; border-left-color: var(--ink-2); }
+.decision > summary { cursor: pointer; padding: 8px 12px; display: flex; gap: 10px; align-items: baseline; list-style: none; }
+.decision > summary::-webkit-details-marker { display: none; }
+.decision > summary::before { content: '▸'; color: var(--ink-2); font-size: 12px; }
+.decision[open] > summary::before { content: '▾'; }
+.decision > summary .what { flex: 1 1 auto; font-family: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", sans-serif; font-size: 17px; font-weight: 600; }
+.decision > .body { padding: 0 14px 12px 32px; display: grid; gap: 6px; }
+.decision:target { outline: 3px solid var(--accent); outline-offset: 2px; }
+.choice { display: grid; gap: 4px; border-top: 1px solid var(--line); padding-top: 6px; }
+.choice details.aspect { border-top: 0; padding-top: 0; }
+.pick { font-weight: 700; color: var(--accent); }
+.did { font: 600 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--ink-2); }
+.built { font: 600 10.5px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--line); color: var(--ink-2); }
+.built-built { border-color: var(--accent); color: var(--accent); }
+.built-not-built { border-style: dashed; border-color: var(--ink); color: var(--ink); }
+.built-partly { border-color: var(--accent); color: var(--ink); border-style: dashed; }
+.decision.not-built-yet { border-left-style: dashed; }
+.over .alt { display: inline-block; margin: 2px 6px 2px 0; padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink-2); text-decoration: line-through; text-decoration-color: var(--line); }
+.why { color: var(--ink); }
+.meta { color: var(--ink-2); font-size: 14px; }
+.about { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { font-size: 13px; font-weight: 600; text-decoration: none; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--ink); border: 1px solid var(--accent); }
+.chip:hover { text-decoration: underline; }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.open-questions { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.open-questions li { background: var(--card); border: 1px dashed var(--ink-2); border-radius: 6px; padding: 8px 12px; }
+.js .decisions .decision.out { display: none; }
+details.aspect { border-top: 1px solid var(--line); padding-top: 6px; }
+details.aspect summary { cursor: pointer; }
+.matrix-wrap { overflow-x: auto; margin-top: 8px; }
+table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
+.matrix th, .matrix td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+.matrix thead th { font-family: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", sans-serif; font-size: 14px; }
+.matrix .sub { display: block; font: 400 12px "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; color: var(--ink-2); }
+.matrix th.chosen, .matrix td.chosen { border-left: 2.5px solid var(--accent); border-right: 2.5px solid var(--accent); }
+.matrix thead th.chosen { border-top: 2.5px solid var(--accent); background: var(--accent-soft); }
+.matrix td.v-good { background: var(--accent-soft); }
+.matrix td.v-poor { background: var(--hot-soft); }
+.matrix td.v-even { background: var(--even); }
+.mark { font: 700 13px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+.legend-line { font-size: 13px; color: var(--ink-2); margin: 6px 0 0; }
+.aspect-note { margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--hot); background: var(--hot-soft); font-size: 14px; }
+.hide-planned .d-map-part--proposed, .hide-planned .d-edge--proposed, .hide-planned .d-edge-label--proposed, .hide-planned .planned-only { display: none; }
+@media (max-width: 760px) { .frame-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { body { padding-inline: 16px; font-size: 15px; } .frame { padding: 12px; } }
+
+.d-scroll { container-type: inline-size; }
+.d-scroll-art { overflow-x: auto; }
+.d-scroll-hint { display: none; margin: 0 0 6px; font: 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--d-ink2); text-align: right; }
+@container (max-width: 404.5px) { .d-scroll-hint[data-w="405"] { display: block; } }
+@container (max-width: 416.5px) { .d-scroll-hint[data-w="417"] { display: block; } }
+@container (max-width: 643.5px) { .d-scroll-hint[data-w="644"] { display: block; } }
+@container (max-width: 757.5px) { .d-scroll-hint[data-w="758"] { display: block; } }
+@container (max-width: 839.5px) { .d-scroll-hint[data-w="840"] { display: block; } }
+</style>
+<div class="wrap">
+<nav class="site" aria-label="The system map's pages">
+<a class="brand" href="index.html">Skills Catalog · system map</a>
+<span class="tabs"><a href="index.html">Use cases</a><a href="structure.html" aria-current="page">Structure</a><a href="decisions.html">Decisions</a></span>
+</nav>
+<header class="top"><span class="eyebrow">System map · structure</span><h1>Skills Catalog</h1>
+<p class="question">What is the system made of, and what talks to what?</p></header>
+<nav class="controls" aria-label="What the map shows">
+<div class="seg" role="group" aria-label="View"><button type="button" data-sv="running">Running parts</button><button type="button" data-sv="code">Code</button></div>
+<div class="seg" role="group" aria-label="Where it runs"><button type="button" data-view="local" data-for-sv="running">on one machine</button><button type="button" data-view="aws" data-for-sv="running">in AWS</button></div>
+<button type="button" class="switch" data-planned data-for-sv="running" aria-label="Show what's planned">+ planned</button>
+</nav>
+<main class="frames"><section class="frame" data-sv="running" data-view="local" data-planned="0">
+<h2 class="frame-title">The running parts · on one machine</h2>
+<div class="frame-grid"><figure class="map-art" style="--w: 405px"><div class="d-scroll"><p class="d-scroll-hint" data-w="405" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 405 474" width="405" height="474" role="group" aria-label="How does a skill go from one developer to another, and where does each step happen?">
+<title>Skills Catalog · on one machine</title>
+<defs><marker id="structure-local-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="structure-local-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-local-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="structure-local-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-local-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="structure-local-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-local-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="structure-local-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
+<rect class="d-group" x="16" y="26.5" width="373" height="431.5" rx="6"/>
+<text class="d-group-label" x="24" y="37.5">one machine</text>
+<path class="d-edge" d="M104.5 86.5 L104.5 158"/>
+<path class="d-edge" d="M300.5 86.5 L300.5 158"/>
+<path class="d-edge" d="M104.5 211 L104.5 275"/>
+<path class="d-edge" d="M300.5 211 L300.5 275"/>
+<path class="d-edge" d="M44.5 67.5 L31 67.5 Q26 67.5 26 72.5 L26 296.5 Q26 301.5 31 301.5 L38 301.5"/>
+<path class="d-edge" d="M360.5 67.5 L374 67.5 Q379 67.5 379 72.5 L379 296.5 Q379 301.5 374 301.5 L367 301.5"/>
+<path class="d-edge" d="M151.8 328 L151.8 389"/>
+<path class="d-edge" d="M253.3 328 L253.3 389"/>
+<g class="d-map-part" data-part="dev1" tabindex="0" role="button" aria-label="Developer 1: what it is, its code and tests">
+<rect class="d-node" x="44.5" y="48.5" width="120" height="38" rx="19"/>
+<text class="d-label" x="104.5" y="67.5">Developer 1</text>
+</g>
+<g class="d-map-part" data-part="dev2" tabindex="0" role="button" aria-label="Developer 2: what it is, its code and tests">
+<rect class="d-node" x="240.5" y="48.5" width="120" height="38" rx="19"/>
+<text class="d-label" x="300.5" y="67.5">Developer 2</text>
+</g>
+<g class="d-map-part" data-part="cc1" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
+<rect class="d-node d-node--external" x="48.5" y="158" width="112" height="53" rx="3"/>
+<text class="d-label" x="104.5" y="177.5">Claude Code</text>
+<text class="d-note" x="104.5" y="193.5">not ours</text>
+</g>
+<g class="d-map-part" data-part="cc2" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
+<rect class="d-node d-node--external" x="244.5" y="158" width="112" height="53" rx="3"/>
+<text class="d-label" x="300.5" y="177.5">Claude Code</text>
+<text class="d-note" x="300.5" y="193.5">not ours</text>
+</g>
+<a class="d-map-part d-map-part--opens" data-part="sc1" href="skills-catalog.html" aria-label="skills-catalog: open its page">
+<rect class="d-node" x="38" y="275" width="133" height="53" rx="3"/>
+<text class="d-label" x="104.5" y="294.5">skills-catalog</text>
+<text class="d-note" x="104.5" y="310.5">MCP server · CLI</text>
+<text class="d-map-opens" x="163" y="301.5" aria-hidden="true">›</text>
+</a>
+<a class="d-map-part d-map-part--opens" data-part="sc2" href="skills-catalog.html" aria-label="skills-catalog: open its page">
+<rect class="d-node" x="234" y="275" width="133" height="53" rx="3"/>
+<text class="d-label" x="300.5" y="294.5">skills-catalog</text>
+<text class="d-note" x="300.5" y="310.5">MCP server · CLI</text>
+<text class="d-map-opens" x="359" y="301.5" aria-hidden="true">›</text>
+</a>
+<a class="d-map-part d-map-part--opens" data-part="catalog" href="catalog.html" aria-label="catalog: open its page">
+<path class="d-node" d="M132.5 395 A70 6 0 0 1 272.5 395 V442 A70 6 0 0 1 132.5 442 Z"/>
+<path class="d-node-detail" d="M132.5 395 A70 6 0 0 0 272.5 395"/>
+<text class="d-label" x="202.5" y="414.5">catalog</text>
+<text class="d-note" x="202.5" y="430.5">skills · versions</text>
+<text class="d-map-opens" x="264.5" y="418.5" aria-hidden="true">›</text>
+</a>
+<text class="d-edge-label d-map-label--start" x="111.5" y="122.3">asks</text>
+<text class="d-edge-label d-map-label--start" x="307.5" y="122.3">asks</text>
+<text class="d-edge-label d-map-label--start" x="111.5" y="243">MCP</text>
+<text class="d-edge-label d-map-label--start" x="307.5" y="243">MCP</text>
+<text class="d-edge-label d-map-label--start" x="33" y="149.4">CLI</text>
+<text class="d-edge-label d-map-label--end" x="372" y="149.4">CLI</text>
+<text class="d-edge-label d-map-label--start" x="158.8" y="358.5">publish</text>
+<text class="d-edge-label d-map-label--start" x="260.3" y="358.5">find, fetch</text>
+</svg></div></div></figure>
+<aside class="panel" aria-live="polite"><div class="picked" hidden></div>
+<h3>What runs where, and what talks to what.</h3>
+<p>Everything on one machine: the catalog is a folder there, and the two developers are two demo users (ana and bob in the screens).</p>
+<ul class="legend"><li><b>›</b> opens the part's own page: what's inside it</li><li>Click any other part for what it is</li><li><b>- - -</b> dashed and <b>PLANNED</b>: not built yet (turn on “planned”)</li><li>Shaded, <b>not ours</b>: another company's part</li></ul>
+</aside></div></section>
+<section class="frame" data-sv="running" data-view="local" data-planned="1">
+<h2 class="frame-title">The running parts · on one machine · with what's planned</h2>
+<div class="frame-grid"><figure class="map-art" style="--w: 840px"><div class="d-scroll"><p class="d-scroll-hint" data-w="840" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 840 513" width="840" height="513" role="group" aria-label="How does a skill go from one developer to another, and where does each step happen?">
+<title>Skills Catalog · on one machine</title>
+<defs><marker id="structure-local-planned-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="structure-local-planned-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-local-planned-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="structure-local-planned-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-local-planned-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="structure-local-planned-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-local-planned-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="structure-local-planned-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
+<rect class="d-group" x="16.5" y="32" width="807" height="464.5" rx="6"/>
+<text class="d-group-label" x="24.5" y="43">one machine</text>
+<path class="d-edge" d="M105 92 L105 174.5"/>
+<path class="d-edge" d="M319 92 L319 174.5"/>
+<path class="d-edge" d="M105 227.5 L105 302.5"/>
+<path class="d-edge" d="M319 227.5 L319 302.5"/>
+<path class="d-edge" d="M45 73 L31.5 73 Q26.5 73 26.5 78 L26.5 324 Q26.5 329 31.5 329 L38.5 329"/>
+<path class="d-edge" d="M259 73 L245.5 73 Q240.5 73 240.5 78 L240.5 324 Q240.5 329 245.5 329 L252.5 329"/>
+<path class="d-edge" d="M156.8 355.5 L156.8 427.5"/>
+<path class="d-edge" d="M267.3 355.5 L267.3 427.5"/>
+<path class="d-edge d-edge--proposed" d="M379 73 L528 73 Q533 73 533 78 L533 166"/>
+<path class="d-edge d-edge--proposed" d="M533 236 L533 324 Q533 329 528 329 L385.5 329"/>
+<path class="d-edge d-edge--proposed" d="M747 236 L747 331 Q747 336 742 336 L385.5 336"/>
+<path class="d-edge d-edge--proposed" d="M379 80 L742 80 Q747 80 747 85 L747 166"/>
+<g class="d-map-part" data-part="dev1" tabindex="0" role="button" aria-label="Developer 1: what it is, its code and tests">
+<rect class="d-node" x="45" y="54" width="120" height="38" rx="19"/>
+<text class="d-label" x="105" y="73">Developer 1</text>
+</g>
+<g class="d-map-part" data-part="dev2" tabindex="0" role="button" aria-label="Developer 2: what it is, its code and tests">
+<rect class="d-node" x="259" y="54" width="120" height="38" rx="19"/>
+<text class="d-label" x="319" y="73">Developer 2</text>
+</g>
+<g class="d-map-part" data-part="cc1" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
+<rect class="d-node d-node--external" x="49" y="174.5" width="112" height="53" rx="3"/>
+<text class="d-label" x="105" y="194">Claude Code</text>
+<text class="d-note" x="105" y="210">not ours</text>
+</g>
+<g class="d-map-part" data-part="cc2" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
+<rect class="d-node d-node--external" x="263" y="174.5" width="112" height="53" rx="3"/>
+<text class="d-label" x="319" y="194">Claude Code</text>
+<text class="d-note" x="319" y="210">not ours</text>
+</g>
+<a class="d-map-part d-map-part--opens" data-part="sc1" href="skills-catalog.html" aria-label="skills-catalog: open its page">
+<rect class="d-node" x="38.5" y="302.5" width="133" height="53" rx="3"/>
+<text class="d-label" x="105" y="322">skills-catalog</text>
+<text class="d-note" x="105" y="338">MCP server · CLI</text>
+<text class="d-map-opens" x="163.5" y="329" aria-hidden="true">›</text>
+</a>
+<a class="d-map-part d-map-part--opens" data-part="sc2" href="skills-catalog.html" aria-label="skills-catalog: open its page">
+<rect class="d-node" x="252.5" y="302.5" width="133" height="53" rx="3"/>
+<text class="d-label" x="319" y="322">skills-catalog</text>
+<text class="d-note" x="319" y="338">MCP server · CLI</text>
+<text class="d-map-opens" x="377.5" y="329" aria-hidden="true">›</text>
+</a>
+<a class="d-map-part d-map-part--opens" data-part="catalog" href="catalog.html" aria-label="catalog: open its page">
+<path class="d-node" d="M142 433.5 A70 6 0 0 1 282 433.5 V480.5 A70 6 0 0 1 142 480.5 Z"/>
+<path class="d-node-detail" d="M142 433.5 A70 6 0 0 0 282 433.5"/>
+<text class="d-label" x="212" y="453">catalog</text>
+<text class="d-note" x="212" y="469">skills · versions</text>
+<text class="d-map-opens" x="274" y="457" aria-hidden="true">›</text>
+</a>
+<g class="d-map-part d-map-part--proposed" data-part="assistants" tabindex="0" role="button" aria-label="other assistants: what it is, its code and tests">
+<rect class="d-node d-node--external d-node--proposed" x="454" y="166" width="158" height="70" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="504.9" y="172" width="56.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="533" y="179.5">PLANNED</text>
+<text class="d-label" x="533" y="202.5">other assistants</text>
+<text class="d-note" x="533" y="218.5">pi · Copilot · Codex</text>
+</g>
+<g class="d-map-part d-map-part--proposed" data-part="web" tabindex="0" role="button" aria-label="web page: what it is, its code and tests">
+<rect class="d-node d-node--proposed" x="680.5" y="166" width="133" height="70" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="718.9" y="172" width="56.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="747" y="179.5">PLANNED</text>
+<text class="d-label" x="747" y="202.5">web page</text>
+<text class="d-note" x="747" y="218.5">browse · compare</text>
+</g>
+<text class="d-edge-label d-map-label--start" x="112" y="133.3">asks</text>
+<text class="d-edge-label d-map-label--start" x="326" y="133.3">asks</text>
+<text class="d-edge-label d-map-label--start" x="112" y="265">MCP</text>
+<text class="d-edge-label d-map-label--start" x="326" y="265">MCP</text>
+<text class="d-edge-label d-map-label--start" x="33.5" y="162.6">CLI</text>
+<text class="d-edge-label d-map-label--end" x="233.5" y="201">CLI</text>
+<text class="d-edge-label d-map-label--start" x="163.8" y="391.5">publish</text>
+<text class="d-edge-label d-map-label--start" x="274.3" y="391.5">find, fetch</text>
+<text class="d-edge-label d-edge-label--proposed" x="456" y="64">asks (planned)</text>
+<text class="d-edge-label d-edge-label--proposed" x="459.3" y="320">MCP, CLI (planned)</text>
+<text class="d-edge-label d-edge-label--proposed" x="566.3" y="345">API (planned)</text>
+<text class="d-edge-label d-edge-label--proposed" x="618.2" y="71">browses (planned)</text>
+</svg></div></div></figure>
+<aside class="panel" aria-live="polite"><div class="picked" hidden></div>
+<h3>What runs where, and what talks to what.</h3>
+<p>Everything on one machine: the catalog is a folder there, and the two developers are two demo users (ana and bob in the screens).</p>
+<ul class="legend"><li><b>›</b> opens the part's own page: what's inside it</li><li>Click any other part for what it is</li><li><b>- - -</b> dashed and <b>PLANNED</b>: not built yet (turn on “planned”)</li><li>Shaded, <b>not ours</b>: another company's part</li></ul>
+</aside></div></section>
+<section class="frame" data-sv="running" data-view="aws" data-planned="0">
+<h2 class="frame-title">The running parts · in AWS</h2>
+<div class="frame-grid"><figure class="map-art" style="--w: 417px"><div class="d-scroll"><p class="d-scroll-hint" data-w="417" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 417 578" width="417" height="578" role="group" aria-label="How does a skill go from one developer to another, and where does each step happen?">
+<title>Skills Catalog · in AWS</title>
+<defs><marker id="structure-aws-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="structure-aws-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-aws-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="structure-aws-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-aws-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="structure-aws-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-aws-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="structure-aws-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
+<rect class="d-group" x="16" y="26.5" width="165" height="311.5" rx="6"/>
+<text class="d-group-label" x="24" y="37.5">Developer 1's machine</text>
+<rect class="d-group" x="236" y="26.5" width="165" height="311.5" rx="6"/>
+<text class="d-group-label" x="244" y="37.5">Developer 2's machine</text>
+<rect class="d-group" x="122.5" y="367" width="172" height="91" rx="6"/>
+<text class="d-group-label" x="130.5" y="378">AWS</text>
+<path class="d-edge" d="M104.5 86.5 L104.5 158"/>
+<path class="d-edge" d="M312.5 86.5 L312.5 158"/>
+<path class="d-edge" d="M104.5 211 L104.5 275"/>
+<path class="d-edge" d="M312.5 211 L312.5 275"/>
+<path class="d-edge" d="M44.5 67.5 L31 67.5 Q26 67.5 26 72.5 L26 296.5 Q26 301.5 31 301.5 L38 301.5"/>
+<path class="d-edge" d="M372.5 67.5 L386 67.5 Q391 67.5 391 72.5 L391 296.5 Q391 301.5 386 301.5 L379 301.5"/>
+<path class="d-edge" d="M151.8 328 L151.8 389"/>
+<path class="d-edge" d="M265.3 328 L265.3 389"/>
+<path class="d-edge" d="M208.5 448 L208.5 509"/>
+<g class="d-map-part" data-part="dev1" tabindex="0" role="button" aria-label="Developer 1: what it is, its code and tests">
+<rect class="d-node" x="44.5" y="48.5" width="120" height="38" rx="19"/>
+<text class="d-label" x="104.5" y="67.5">Developer 1</text>
+</g>
+<g class="d-map-part" data-part="dev2" tabindex="0" role="button" aria-label="Developer 2: what it is, its code and tests">
+<rect class="d-node" x="252.5" y="48.5" width="120" height="38" rx="19"/>
+<text class="d-label" x="312.5" y="67.5">Developer 2</text>
+</g>
+<g class="d-map-part" data-part="cc1" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
+<rect class="d-node d-node--external" x="48.5" y="158" width="112" height="53" rx="3"/>
+<text class="d-label" x="104.5" y="177.5">Claude Code</text>
+<text class="d-note" x="104.5" y="193.5">not ours</text>
+</g>
+<g class="d-map-part" data-part="cc2" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
+<rect class="d-node d-node--external" x="256.5" y="158" width="112" height="53" rx="3"/>
+<text class="d-label" x="312.5" y="177.5">Claude Code</text>
+<text class="d-note" x="312.5" y="193.5">not ours</text>
+</g>
+<a class="d-map-part d-map-part--opens" data-part="sc1" href="skills-catalog.html" aria-label="skills-catalog: open its page">
+<rect class="d-node" x="38" y="275" width="133" height="53" rx="3"/>
+<text class="d-label" x="104.5" y="294.5">skills-catalog</text>
+<text class="d-note" x="104.5" y="310.5">MCP server · CLI</text>
+<text class="d-map-opens" x="163" y="301.5" aria-hidden="true">›</text>
+</a>
+<a class="d-map-part d-map-part--opens" data-part="sc2" href="skills-catalog.html" aria-label="skills-catalog: open its page">
+<rect class="d-node" x="246" y="275" width="133" height="53" rx="3"/>
+<text class="d-label" x="312.5" y="294.5">skills-catalog</text>
+<text class="d-note" x="312.5" y="310.5">MCP server · CLI</text>
+<text class="d-map-opens" x="371" y="301.5" aria-hidden="true">›</text>
+</a>
+<a class="d-map-part d-map-part--opens" data-part="catalog" href="catalog-aws.html" aria-label="catalog on AWS: open its page">
+<path class="d-node" d="M132.5 395 A76 6 0 0 1 284.5 395 V442 A76 6 0 0 1 132.5 442 Z"/>
+<path class="d-node-detail" d="M132.5 395 A76 6 0 0 0 284.5 395"/>
+<text class="d-label" x="208.5" y="414.5">catalog on AWS</text>
+<text class="d-note" x="208.5" y="430.5">API · DynamoDB · S3</text>
+<text class="d-map-opens" x="276.5" y="418.5" aria-hidden="true">›</text>
+</a>
+<g class="d-map-part" data-part="github" tabindex="0" role="button" aria-label="GitHub sign-in: what it is, its code and tests">
+<rect class="d-node d-node--external" x="142" y="509" width="133" height="53" rx="3"/>
+<text class="d-label" x="208.5" y="528.5">GitHub sign-in</text>
+<text class="d-note" x="208.5" y="544.5">not ours</text>
+</g>
+<text class="d-edge-label d-map-label--start" x="111.5" y="122.3">asks</text>
+<text class="d-edge-label d-map-label--start" x="319.5" y="122.3">asks</text>
+<text class="d-edge-label d-map-label--start" x="111.5" y="243">MCP</text>
+<text class="d-edge-label d-map-label--start" x="319.5" y="243">MCP</text>
+<text class="d-edge-label d-map-label--start" x="33" y="149.4">CLI</text>
+<text class="d-edge-label d-map-label--end" x="384" y="149.4">CLI</text>
+<text class="d-edge-label d-map-label--start" x="158.8" y="349.4">publish</text>
+<text class="d-edge-label d-map-label--start" x="272.3" y="349.4">find, fetch</text>
+<text class="d-edge-label d-map-label--start" x="215.5" y="478.5">signs in</text>
+</svg></div></div></figure>
+<aside class="panel" aria-live="polite"><div class="picked" hidden></div>
+<h3>What runs where, and what talks to what.</h3>
+<p>Each developer on their own machine, sharing a catalog in the team's AWS account. They sign in with GitHub.</p>
+<ul class="legend"><li><b>›</b> opens the part's own page: what's inside it</li><li>Click any other part for what it is</li><li><b>- - -</b> dashed and <b>PLANNED</b>: not built yet (turn on “planned”)</li><li>Shaded, <b>not ours</b>: another company's part</li></ul>
+</aside></div></section>
+<section class="frame" data-sv="running" data-view="aws" data-planned="1">
+<h2 class="frame-title">The running parts · in AWS · with what's planned</h2>
+<div class="frame-grid"><figure class="map-art" style="--w: 758px"><div class="d-scroll"><p class="d-scroll-hint" data-w="758" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 758 628" width="758" height="628" role="group" aria-label="How does a skill go from one developer to another, and where does each step happen?">
+<title>Skills Catalog · in AWS</title>
+<defs><marker id="structure-aws-planned-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="structure-aws-planned-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-aws-planned-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="structure-aws-planned-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-aws-planned-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="structure-aws-planned-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-aws-planned-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="structure-aws-planned-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
+<rect class="d-group" x="16.5" y="32" width="165" height="333.5" rx="6"/>
+<text class="d-group-label" x="24.5" y="43">Developer 1's machine</text>
+<rect class="d-group" x="302.4" y="32" width="439.4" height="333.5" rx="6"/>
+<text class="d-group-label" x="310.4" y="43">Developer 2's machine</text>
+<rect class="d-group" x="156" y="400" width="436.4" height="102" rx="6"/>
+<text class="d-group-label" x="164" y="411">AWS</text>
+<path class="d-edge" d="M105 92 L105 174.5"/>
+<path class="d-edge" d="M378.9 92 L378.9 174.5"/>
+<path class="d-edge" d="M105 227.5 L105 302.5"/>
+<path class="d-edge" d="M378.9 227.5 L378.9 302.5"/>
+<path class="d-edge" d="M45 73 L31.5 73 Q26.5 73 26.5 78 L26.5 324 Q26.5 329 31.5 329 L38.5 329"/>
+<path class="d-edge" d="M438.9 73 L452.4 73 Q457.4 73 457.4 78 L457.4 324 Q457.4 329 452.4 329 L445.4 329"/>
+<path class="d-edge" d="M105 355.5 L105 452 Q105 457 110 457 L166 457"/>
+<path class="d-edge" d="M378.9 355.5 L378.9 452 Q378.9 457 373.9 457 L318 457"/>
+<path class="d-edge" d="M242 486.5 L242 558.5"/>
+<path class="d-edge d-edge--proposed" d="M438.9 80 L647.8 80 Q652.8 80 652.8 85 L652.8 166"/>
+<path class="d-edge d-edge--proposed" d="M652.8 236 L652.8 331 Q652.8 336 647.8 336 L445.4 336"/>
+<path class="d-edge d-edge--proposed" d="M449.3 464 L318 464"/>
+<path class="d-edge d-edge--proposed" d="M438.9 66 L510.8 66 Q515.8 66 515.8 71 L515.8 422"/>
+<g class="d-map-part" data-part="dev1" tabindex="0" role="button" aria-label="Developer 1: what it is, its code and tests">
+<rect class="d-node" x="45" y="54" width="120" height="38" rx="19"/>
+<text class="d-label" x="105" y="73">Developer 1</text>
+</g>
+<g class="d-map-part" data-part="dev2" tabindex="0" role="button" aria-label="Developer 2: what it is, its code and tests">
+<rect class="d-node" x="318.9" y="54" width="120" height="38" rx="19"/>
+<text class="d-label" x="378.9" y="73">Developer 2</text>
+</g>
+<g class="d-map-part" data-part="cc1" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
+<rect class="d-node d-node--external" x="49" y="174.5" width="112" height="53" rx="3"/>
+<text class="d-label" x="105" y="194">Claude Code</text>
+<text class="d-note" x="105" y="210">not ours</text>
+</g>
+<g class="d-map-part" data-part="cc2" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
+<rect class="d-node d-node--external" x="322.9" y="174.5" width="112" height="53" rx="3"/>
+<text class="d-label" x="378.9" y="194">Claude Code</text>
+<text class="d-note" x="378.9" y="210">not ours</text>
+</g>
+<a class="d-map-part d-map-part--opens" data-part="sc1" href="skills-catalog.html" aria-label="skills-catalog: open its page">
+<rect class="d-node" x="38.5" y="302.5" width="133" height="53" rx="3"/>
+<text class="d-label" x="105" y="322">skills-catalog</text>
+<text class="d-note" x="105" y="338">MCP server · CLI</text>
+<text class="d-map-opens" x="163.5" y="329" aria-hidden="true">›</text>
+</a>
+<a class="d-map-part d-map-part--opens" data-part="sc2" href="skills-catalog.html" aria-label="skills-catalog: open its page">
+<rect class="d-node" x="312.4" y="302.5" width="133" height="53" rx="3"/>
+<text class="d-label" x="378.9" y="322">skills-catalog</text>
+<text class="d-note" x="378.9" y="338">MCP server · CLI</text>
+<text class="d-map-opens" x="437.4" y="329" aria-hidden="true">›</text>
+</a>
+<a class="d-map-part d-map-part--opens" data-part="catalog" href="catalog-aws.html" aria-label="catalog on AWS: open its page">
+<path class="d-node" d="M166 433.5 A76 6 0 0 1 318 433.5 V480.5 A76 6 0 0 1 166 480.5 Z"/>
+<path class="d-node-detail" d="M166 433.5 A76 6 0 0 0 318 433.5"/>
+<text class="d-label" x="242" y="453">catalog on AWS</text>
+<text class="d-note" x="242" y="469">API · DynamoDB · S3</text>
+<text class="d-map-opens" x="310" y="457" aria-hidden="true">›</text>
+</a>
+<g class="d-map-part" data-part="github" tabindex="0" role="button" aria-label="GitHub sign-in: what it is, its code and tests">
+<rect class="d-node d-node--external" x="175.5" y="558.5" width="133" height="53" rx="3"/>
+<text class="d-label" x="242" y="578">GitHub sign-in</text>
+<text class="d-note" x="242" y="594">not ours</text>
+</g>
+<g class="d-map-part d-map-part--proposed" data-part="assistants" tabindex="0" role="button" aria-label="other assistants: what it is, its code and tests">
+<rect class="d-node d-node--external d-node--proposed" x="573.8" y="166" width="158" height="70" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="624.7" y="172" width="56.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="652.8" y="179.5">PLANNED</text>
+<text class="d-label" x="652.8" y="202.5">other assistants</text>
+<text class="d-note" x="652.8" y="218.5">pi · Copilot · Codex</text>
+</g>
+<g class="d-map-part d-map-part--proposed" data-part="web" tabindex="0" role="button" aria-label="web page: what it is, its code and tests">
+<rect class="d-node d-node--proposed" x="449.3" y="422" width="133" height="70" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="487.7" y="428" width="56.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="515.8" y="435.5">PLANNED</text>
+<text class="d-label" x="515.8" y="458.5">web page</text>
+<text class="d-note" x="515.8" y="474.5">browse · compare</text>
+</g>
+<text class="d-edge-label d-map-label--start" x="112" y="133.3">asks</text>
+<text class="d-edge-label d-map-label--start" x="385.9" y="133.3">asks</text>
+<text class="d-edge-label d-map-label--start" x="112" y="265">MCP</text>
+<text class="d-edge-label d-map-label--start" x="385.9" y="265">MCP</text>
+<text class="d-edge-label d-map-label--start" x="33.5" y="162.6">CLI</text>
+<text class="d-edge-label d-map-label--start" x="464.4" y="201">CLI</text>
+<text class="d-edge-label d-map-label--end" x="98" y="406.3">publish</text>
+<text class="d-edge-label d-map-label--start" x="385.9" y="375.8">find, fetch</text>
+<text class="d-edge-label d-map-label--start" x="249" y="522.5">signs in</text>
+<text class="d-edge-label d-edge-label--proposed" x="577.9" y="71">asks (planned)</text>
+<text class="d-edge-label d-edge-label--proposed" x="580.2" y="327">MCP, CLI (planned)</text>
+<text class="d-edge-label d-edge-label--proposed" x="383.7" y="473">API (planned)</text>
+<text class="d-edge-label d-map-label--start d-edge-label--proposed" x="522.8" y="244">browses (planned)</text>
+</svg></div></div></figure>
+<aside class="panel" aria-live="polite"><div class="picked" hidden></div>
+<h3>What runs where, and what talks to what.</h3>
+<p>Each developer on their own machine, sharing a catalog in the team's AWS account. They sign in with GitHub.</p>
+<ul class="legend"><li><b>›</b> opens the part's own page: what's inside it</li><li>Click any other part for what it is</li><li><b>- - -</b> dashed and <b>PLANNED</b>: not built yet (turn on “planned”)</li><li>Shaded, <b>not ours</b>: another company's part</li></ul>
+</aside></div></section>
+<section class="frame" data-sv="code">
+<h2 class="frame-title">The code · its packages</h2>
+<div class="frame-grid"><figure class="map-art" style="--w: 644px"><div class="d-scroll"><p class="d-scroll-hint" data-w="644" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 644 186" width="644" height="186" role="group" aria-label="How is the code laid out, and which package uses which?">
+<title>The code</title>
+<defs><marker id="structure-code-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="structure-code-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-code-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="structure-code-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-code-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="structure-code-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-code-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="structure-code-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
+<path class="d-edge" d="M104.5 69 L104.5 138.5 Q104.5 143.5 109.5 143.5 L249 143.5" marker-end="url(#structure-code-arrow)"/>
+<path class="d-edge" d="M337.5 69 L337.5 117" marker-end="url(#structure-code-arrow)"/>
+<path class="d-edge" d="M570.5 69 L570.5 138.5 Q570.5 143.5 565.5 143.5 L426 143.5" marker-end="url(#structure-code-arrow)"/>
+<path class="d-edge" d="M513.5 42.5 L391.5 42.5" marker-end="url(#structure-code-arrow)"/>
+<g class="d-map-part" data-part="client" tabindex="0" role="button" aria-label="client: what it is, its code and tests">
+<rect class="d-node" x="38" y="16" width="133" height="53" rx="3"/>
+<text class="d-label" x="104.5" y="35.5">client</text>
+<text class="d-note" x="104.5" y="51.5">MCP server · CLI</text>
+</g>
+<g class="d-map-part" data-part="hosted" tabindex="0" role="button" aria-label="hosted: what it is, its code and tests">
+<rect class="d-node" x="283.5" y="16" width="108" height="53" rx="3"/>
+<text class="d-label" x="337.5" y="35.5">hosted</text>
+<text class="d-note" x="337.5" y="51.5">AWS adapters</text>
+</g>
+<g class="d-map-part" data-part="infra" tabindex="0" role="button" aria-label="infra: what it is, its code and tests">
+<rect class="d-node" x="513.5" y="16" width="114" height="53" rx="3"/>
+<text class="d-label" x="570.5" y="35.5">infra</text>
+<text class="d-note" x="570.5" y="51.5">the AWS stack</text>
+</g>
+<g class="d-map-part" data-part="core" tabindex="0" role="button" aria-label="core: what it is, its code and tests">
+<rect class="d-node" x="249" y="117" width="177" height="53" rx="3"/>
+<text class="d-label" x="337.5" y="136.5">core</text>
+<text class="d-note" x="337.5" y="152.5">the API · local catalog</text>
+</g>
+<text class="d-edge-label" x="176.8" y="134.5">uses</text>
+<text class="d-edge-label d-map-label--start" x="344.5" y="93">uses</text>
+<text class="d-edge-label" x="498.3" y="134.5">uses</text>
+<text class="d-edge-label" x="452.5" y="33.5">uses</text>
+</svg></div></div></figure>
+<aside class="panel" aria-live="polite"><div class="picked" hidden></div>
+<h3>How is the code laid out, and which package uses which?</h3>
+<p>Each arrow is read from the imports: the package at its tail uses the one at its head. Click a package for what's in it and which running parts its code is in.</p>
+</aside></div></section></main>
+<section class="cards boxes"><h2>The parts and the packages</h2><div class="card-grid"><article class="card" data-box="dev1" data-view="local">
+<h3>Developer 1</h3>
+
+<p>Has a skill worth sharing and publishes it once. ana in the screens.</p>
+
+
+
+</article>
+<article class="card" data-box="dev2" data-view="local">
+<h3>Developer 2</h3>
+
+<p>Needs a skill for a task: asks for one, installs it, and stays up to date. bob in the screens.</p>
+
+
+
+</article>
+<article class="card" data-box="cc1" data-view="local">
+<h3>Claude Code <span class="tag">not ours</span></h3>
+<p class="note">not ours</p>
+<p>The assistant (not ours). It reaches skills-catalog's tools over MCP, and loads installed skills from <code>.claude/skills</code>.</p>
+
+
+<p><span class="kicker">Decisions</span> <a href="decisions.html#decision-D1">D1</a> · <a href="decisions.html#decision-B16">B16 Other assistants</a></p>
+</article>
+<article class="card" data-box="cc2" data-view="local">
+<h3>Claude Code <span class="tag">not ours</span></h3>
+<p class="note">not ours</p>
+<p>The assistant (not ours). It reaches skills-catalog's tools over MCP, and loads installed skills from <code>.claude/skills</code>.</p>
+
+
+
+</article>
+<article class="card" data-box="sc1" data-view="local">
+<h3>skills-catalog</h3>
+<p class="note">MCP server · CLI</p>
+<p>One program on each machine: the MCP server Claude Code talks to, and the CLI for a person at a terminal. It sets itself up (<code>skills-catalog setup</code>, undone by <code>teardown</code>), publishes, searches, installs, and keeps installed skills up to date; its rules reviewer flags what a new version adds, and an update that could run something new waits for the person's yes.</p>
+<p><a href="skills-catalog.html"><strong>Inside skills-catalog ›</strong></a></p>
+
+
+</article>
+<article class="card" data-box="sc2" data-view="local">
+<h3>skills-catalog</h3>
+<p class="note">MCP server · CLI</p>
+<p>One program on each machine: the MCP server Claude Code talks to, and the CLI for a person at a terminal. It sets itself up (<code>skills-catalog setup</code>, undone by <code>teardown</code>), publishes, searches, installs, and keeps installed skills up to date; its rules reviewer flags what a new version adds, and an update that could run something new waits for the person's yes.</p>
+<p><a href="skills-catalog.html"><strong>Inside skills-catalog ›</strong></a></p>
+
+
+</article>
+<article class="card" data-box="catalog" data-view="local">
+<h3>catalog</h3>
+<p class="note">skills · versions</p>
+<p>Every published skill and all its versions, each with its fingerprint and its review. On one machine it is a folder: a SQLite file and the skills' files.</p>
+<p><a href="catalog.html"><strong>Inside catalog ›</strong></a></p>
+
+<p><span class="kicker">Decisions</span> <a href="decisions.html#decision-D2">D2</a> · <a href="decisions.html#decision-B1">B1 What ships first</a> · <a href="decisions.html#decision-B12">B12 Architecture</a> · <a href="decisions.html#decision-B13">B13 Hosted technologies</a> · <a href="decisions.html#decision-B14">B14 The AWS setup</a> · <a href="decisions.html#decision-B18">B18 Bundles of skills</a></p>
+</article>
+<article class="card" data-box="assistants" data-view="local">
+<h3>other assistants <span class="tag">planned</span> <span class="tag">not ours</span></h3>
+<p class="note">pi · Copilot · Codex</p>
+<p>pi next, then Copilot, Codex, Cursor and Gemini CLI (not ours). Each would reach skills-catalog the way Claude Code does, through its tools or the CLI, with the installer writing that assistant's skills folder; a risky update would wait for a yes on every one.</p>
+
+<p><span class="kicker">Would be built by</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/qa/traceability.yaml#L573" title="From pi, a developer finds, installs and updates skills through the CLI pi runs; installed skills land where pi reads them."><code>pi-agent</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/qa/traceability.yaml#L591" title="From Copilot, Codex, Cursor and Gemini CLI, a developer finds, installs and updates skills; not started without the owner's approval."><code>other-assistants</code></a></p>
+<p><span class="kicker">Decisions</span> <a href="decisions.html#decision-B16">B16 Other assistants</a></p>
+</article>
+<article class="card" data-box="web" data-view="local">
+<h3>web page <span class="tag">planned</span></h3>
+<p class="note">browse · compare</p>
+<p>Browse skills, see what changed between versions, and update them, in a browser. The page isn't built yet: on one machine <code>skills-catalog serve</code> already gives its API on 127.0.0.1; in AWS, CloudFront and a bucket for its files are in place.</p>
+
+<p><span class="kicker">Would be built by</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/qa/traceability.yaml#L454" title="View and update skills from a web UI (served locally)."><code>web-view-update</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/qa/traceability.yaml#L464" title="A delta view of changes across revisions."><code>web-delta</code></a></p>
+<p><span class="kicker">Decisions</span> <a href="decisions.html#decision-B13">B13 Hosted technologies</a> · <a href="decisions.html#decision-B17">B17 The web page</a></p>
+</article>
+<article class="card" data-box="dev1" data-view="aws">
+<h3>Developer 1</h3>
+
+<p>Has a skill worth sharing and publishes it once. ana in the screens.</p>
+
+
+
+</article>
+<article class="card" data-box="dev2" data-view="aws">
+<h3>Developer 2</h3>
+
+<p>Needs a skill for a task: asks for one, installs it, and stays up to date. bob in the screens.</p>
+
+
+
+</article>
+<article class="card" data-box="cc1" data-view="aws">
+<h3>Claude Code <span class="tag">not ours</span></h3>
+<p class="note">not ours</p>
+<p>The assistant (not ours). It reaches skills-catalog's tools over MCP, and loads installed skills from <code>.claude/skills</code>.</p>
+
+
+<p><span class="kicker">Decisions</span> <a href="decisions.html#decision-D1">D1</a> · <a href="decisions.html#decision-B16">B16 Other assistants</a></p>
+</article>
+<article class="card" data-box="cc2" data-view="aws">
+<h3>Claude Code <span class="tag">not ours</span></h3>
+<p class="note">not ours</p>
+<p>The assistant (not ours). It reaches skills-catalog's tools over MCP, and loads installed skills from <code>.claude/skills</code>.</p>
+
+
+
+</article>
+<article class="card" data-box="sc1" data-view="aws">
+<h3>skills-catalog</h3>
+<p class="note">MCP server · CLI</p>
+<p>One program on each machine: the MCP server Claude Code talks to, and the CLI for a person at a terminal. It sets itself up (<code>skills-catalog setup</code>, undone by <code>teardown</code>), publishes, searches, installs, and keeps installed skills up to date; its rules reviewer flags what a new version adds, and an update that could run something new waits for the person's yes.</p>
+<p><a href="skills-catalog.html"><strong>Inside skills-catalog ›</strong></a></p>
+
+
+</article>
+<article class="card" data-box="sc2" data-view="aws">
+<h3>skills-catalog</h3>
+<p class="note">MCP server · CLI</p>
+<p>One program on each machine: the MCP server Claude Code talks to, and the CLI for a person at a terminal. It sets itself up (<code>skills-catalog setup</code>, undone by <code>teardown</code>), publishes, searches, installs, and keeps installed skills up to date; its rules reviewer flags what a new version adds, and an update that could run something new waits for the person's yes.</p>
+<p><a href="skills-catalog.html"><strong>Inside skills-catalog ›</strong></a></p>
+
+
+</article>
+<article class="card" data-box="catalog" data-view="aws">
+<h3>catalog on AWS</h3>
+<p class="note">API · DynamoDB · S3</p>
+<p>The shared catalog in the team's AWS account: the API on Lambda behind CloudFront, versions in DynamoDB, files in S3, a search file kept up to date by an indexer. Each version is reviewed as it is published. Only the GitHub logins the deployment lists may sign in.</p>
+<p><a href="catalog-aws.html"><strong>Inside catalog on AWS ›</strong></a></p>
+
+<p><span class="kicker">Decisions</span> <a href="decisions.html#decision-D2">D2</a> · <a href="decisions.html#decision-B1">B1 What ships first</a> · <a href="decisions.html#decision-B12">B12 Architecture</a> · <a href="decisions.html#decision-B13">B13 Hosted technologies</a> · <a href="decisions.html#decision-B14">B14 The AWS setup</a> · <a href="decisions.html#decision-B18">B18 Bundles of skills</a></p>
+</article>
+<article class="card" data-box="github" data-view="aws">
+<h3>GitHub sign-in <span class="tag">not ours</span></h3>
+<p class="note">not ours</p>
+<p>Who may publish and read: GitHub logins (not ours). <code>skills-catalog login</code> signs in once per machine.</p>
+
+
+<p><span class="kicker">Decisions</span> <a href="decisions.html#decision-D3">D3</a> · <a href="decisions.html#decision-B13">B13 Hosted technologies</a></p>
+</article>
+<article class="card" data-box="assistants" data-view="aws">
+<h3>other assistants <span class="tag">planned</span> <span class="tag">not ours</span></h3>
+<p class="note">pi · Copilot · Codex</p>
+<p>pi next, then Copilot, Codex, Cursor and Gemini CLI (not ours). Each would reach skills-catalog the way Claude Code does, through its tools or the CLI, with the installer writing that assistant's skills folder; a risky update would wait for a yes on every one.</p>
+
+<p><span class="kicker">Would be built by</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/qa/traceability.yaml#L573" title="From pi, a developer finds, installs and updates skills through the CLI pi runs; installed skills land where pi reads them."><code>pi-agent</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/qa/traceability.yaml#L591" title="From Copilot, Codex, Cursor and Gemini CLI, a developer finds, installs and updates skills; not started without the owner's approval."><code>other-assistants</code></a></p>
+<p><span class="kicker">Decisions</span> <a href="decisions.html#decision-B16">B16 Other assistants</a></p>
+</article>
+<article class="card" data-box="web" data-view="aws">
+<h3>web page <span class="tag">planned</span></h3>
+<p class="note">browse · compare</p>
+<p>Browse skills, see what changed between versions, and update them, in a browser. The page isn't built yet: on one machine <code>skills-catalog serve</code> already gives its API on 127.0.0.1; in AWS, CloudFront and a bucket for its files are in place.</p>
+
+<p><span class="kicker">Would be built by</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/qa/traceability.yaml#L454" title="View and update skills from a web UI (served locally)."><code>web-view-update</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/qa/traceability.yaml#L464" title="A delta view of changes across revisions."><code>web-delta</code></a></p>
+<p><span class="kicker">Decisions</span> <a href="decisions.html#decision-B13">B13 Hosted technologies</a> · <a href="decisions.html#decision-B17">B17 The web page</a></p>
+</article>
+<article class="card" data-box="client">
+<h3>client</h3><p class="note">MCP server · CLI</p>
+<p>skills-catalog on each machine: the MCP server, the CLI, the installer, serve.</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src"><code>client/src/</code></a> · 56 files</p>
+<p><span class="kicker">Runs in</span> skills-catalog (on one machine), skills-catalog (in AWS), GitHub sign-in (in AWS)</p>
+</article>
+<article class="card" data-box="hosted">
+<h3>hosted</h3><p class="note">AWS adapters</p>
+<p>The catalog in AWS: the API function, the indexer and the sweep, over DynamoDB and S3.</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/hosted/src"><code>hosted/src/</code></a> · 24 files</p>
+<p><span class="kicker">Runs in</span> catalog on AWS (in AWS), GitHub sign-in (in AWS)</p>
+</article>
+<article class="card" data-box="infra">
+<h3>infra</h3><p class="note">the AWS stack</p>
+<p>The AWS stack in CDK (TypeScript): synthesized and checked in tests; deployed only by hand.</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/infra/src"><code>infra/src/</code></a> · 15 files</p>
+<p><span class="kicker">Runs in</span> catalog on AWS (in AWS)</p>
+</article>
+<article class="card" data-box="core">
+<h3>core</h3><p class="note">the API · local catalog</p>
+<p>The API, the catalog's rules, the skill checks and the local catalog: the same code on each machine and in AWS.</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src"><code>core/src/</code></a> · 33 files</p>
+<p><span class="kicker">Runs in</span> skills-catalog (on one machine), catalog (on one machine), skills-catalog (in AWS)</p>
+</article></div></section>
+</div>
+<script type="application/json" id="page-data">{"views":["local","aws"],"svs":["running","code"],"svOf":{"client":"code","hosted":"code","infra":"code","core":"code"}}</script>
+<script>(() => {
+  const root = document.documentElement, data = JSON.parse(document.getElementById('page-data').textContent);
+  root.classList.add('js');
+  const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const state = { view: data.views[0], sv: data.svs[0], planned: false, box: '' };
+  const card = (box) => document.querySelector('.cards.boxes .card[data-box="' + box + '"][data-view="' + state.view + '"]')
+    || document.querySelector('.cards.boxes .card[data-box="' + box + '"]');
+  function read() {
+    const h = new URLSearchParams(location.hash.slice(1));
+    if (data.views.includes(h.get('view'))) state.view = h.get('view');
+    if (data.svs.includes(h.get('sv'))) state.sv = h.get('sv');
+    state.planned = h.get('planned') === '1';
+    const box = h.get('box') || h.get('part') || '';
+    state.box = box && card(box) ? box : '';
+    if (state.box && data.svOf && data.svOf[state.box]) state.sv = data.svOf[state.box];
+  }
+  function write() {
+    const h = new URLSearchParams();
+    if (state.view !== data.views[0]) h.set('view', state.view);
+    if (state.sv !== data.svs[0]) h.set('sv', state.sv);
+    if (state.planned) h.set('planned', '1');
+    if (state.box) h.set('box', state.box);
+    const s = h.toString();
+    history.replaceState(null, '', s ? '#' + s : location.pathname + location.search);
+  }
+  function show() {
+    root.classList.toggle('hide-planned', !state.planned);
+    let active = null;
+    for (const f of $$('.frame')) {
+      const on = (!f.dataset.view || f.dataset.view === state.view) && (!f.dataset.sv || f.dataset.sv === state.sv)
+        && (!f.dataset.planned || f.dataset.planned === (state.planned ? '1' : '0'));
+      f.classList.toggle('on', on);
+      if (on && !active) active = f;
+      const slot = f.querySelector('.picked');
+      if (slot) { slot.hidden = true; slot.replaceChildren(); }
+    }
+    for (const b of $$('.controls [data-view]')) { b.setAttribute('aria-pressed', String(b.dataset.view === state.view)); b.hidden = !!(b.dataset.forSv && b.dataset.forSv !== state.sv); }
+    for (const b of $$('.controls [data-sv]')) b.setAttribute('aria-pressed', String(b.dataset.sv === state.sv));
+    for (const b of $$('.controls [data-planned]')) { b.setAttribute('aria-pressed', String(state.planned)); b.hidden = !!(b.dataset.forSv && b.dataset.forSv !== state.sv); }
+    for (const g of $$('.d-map-part')) g.classList.toggle('d-map-part--picked', !!state.box && g.dataset.part === state.box);
+    const src = state.box && card(state.box);
+    if (src && active) {
+      const slot = active.querySelector('.picked');
+      const c = src.cloneNode(true);
+      c.removeAttribute('id');
+      const close = document.createElement('button');
+      close.type = 'button'; close.className = 'close'; close.textContent = 'Close ✕'; close.setAttribute('aria-label', 'Close');
+      close.addEventListener('click', () => go({ box: '' }));
+      c.prepend(close);
+      slot.append(c); slot.hidden = false;
+    }
+  }
+  function go(change) { Object.assign(state, change); write(); show(); }
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('.controls [data-view], .controls [data-sv], .controls [data-planned], .d-map-part[role="button"]');
+    if (!t) return;
+    if (t.matches('.d-map-part')) return go({ box: state.box === t.dataset.part ? '' : t.dataset.part });
+    e.preventDefault();
+    if (t.dataset.sv !== undefined) return go({ sv: t.dataset.sv, box: '' });
+    if (t.dataset.view !== undefined) return go({ view: t.dataset.view });
+    if (t.dataset.planned !== undefined) return go({ planned: !state.planned });
+  });
+  document.addEventListener('keydown', (e) => {
+    const part = e.target && e.target.closest && e.target.closest('.d-map-part[role="button"]');
+    if (part && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); return go({ box: part.dataset.part }); }
+    if (e.key === 'Escape' && state.box) go({ box: '' });
+  });
+  window.addEventListener('hashchange', () => { read(); show(); });
+  read(); show();
+})();</script>

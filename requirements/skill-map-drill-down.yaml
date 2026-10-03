@@ -1,0 +1,10 @@
+id: skill-map-drill-down
+title: "A page for each part of the system map"
+phase: "2"
+source: "the owner"
+quote: "other views would also take me from top level to a subcomponent (e.g. clicking on one of them helps me visualize the insides of a given component through a dedicated view; likely by simply redirecting me to another, dedicated page)"
+want: "As the owner, I want to click a component and be redirected to a dedicated page that visualizes its insides, so I can go from the top level down to any subcomponent."
+accept: "Clicking a part with insides opens its own page, which shows the part's insides as a map, where it sits one level up, and a way back; every source file and AWS resource of the part is in exactly one box on that page (the map check fails otherwise)."
+confirmed: true
+parts: [docs, qa]
+relates: [skill-map-structure, skill-map-decisions]

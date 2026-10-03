@@ -96,9 +96,11 @@
 .d-map-legend-text { font-size: 11px; fill: var(--d-ink); }
 .d-map-legend-word { font-weight: 700; fill: var(--d-hot); }
 .d-map-legend-word--planned { fill: var(--d-accent); }
-.d-map-part[role="button"] { cursor: pointer; }
-.d-map-part[role="button"]:focus { outline: none; }
-.d-map-part[role="button"]:focus-visible > :first-child, .d-map-part--picked > :first-child { stroke: var(--d-ink); stroke-width: 3; }
+.d-map-part[role="button"], a.d-map-part { cursor: pointer; }
+.d-map-part[role="button"]:focus, a.d-map-part:focus { outline: none; }
+.d-map-part[role="button"]:focus-visible > :first-child, a.d-map-part:focus-visible > :first-child, .d-map-part--picked > :first-child { stroke: var(--d-ink); stroke-width: 3; }
+a.d-map-part:hover > :first-child { stroke: var(--d-ink); stroke-width: 2; }
+.d-map-opens { font-size: 15px; font-weight: 700; fill: var(--d-ink2); text-anchor: middle; dominant-baseline: central; }
 
 /* groups (boundaries) */
 .d-group { fill: var(--d-grid); fill-opacity: 0.35; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }

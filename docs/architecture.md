@@ -6,7 +6,7 @@ What runs on the Developer's machine, what runs in the team's AWS account, and w
 
 ![The parts on one machine: the Developer runs the CLI and setup, the Assistant (Claude Code) calls the MCP server, both go through the core to the local catalog, and the installer writes checked skills into the skills folder, holding a risky update for a yes](pictures/map-local.svg)
 
-<sub>Step through the core loop on [the system map](map/index.html) (download and open it: it is one self-contained page). It is drawn from `docs/map/map.yaml` and checked against the code on every `npm run check`.</sub>
+<sub>The system map shows more than this picture: [the use cases](map/index.html), step by step; [the structure](map/structure.html), on one machine and in AWS, with what's planned on a toggle and the code's packages; a page for each part, with what's inside it ([skills-catalog](map/skills-catalog.html), [the catalog on one machine](map/catalog.html), [the catalog on AWS](map/catalog-aws.html)); and [the decisions](map/decisions.html), with the options weighed. Each page is self-contained (download and open it). They are built from `docs/map/map.yaml` and `docs/decisions.yaml`, and checked against the code on every `npm run check`: the lines inside a part are read from its imports, and in AWS from the stack's template.</sub>
 
 **Built.** The core, the local catalog, the MCP server (the Assistant's tools), the installer (it holds a risky update until the Developer says yes), the CLI with every catalog command, and the guided setup. All of them use one API ([api.md](api.md)).
 

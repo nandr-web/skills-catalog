@@ -3,6 +3,8 @@
 import { globSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
+import { readAws, type AwsFacts } from './aws.ts';
+import { readImports, type ImportGraph } from './imports.ts';
 import { OPERATIONS } from '../../../core/src/api.ts';
 import { Words } from '../../../core/src/words-file.ts';
 import { SERVED } from '../../../client/src/cli/run.ts';
@@ -23,6 +25,10 @@ export type Facts = {
   sources: string[];
   /** Does a path or glob (relative to the repo) match any file? */
   matches: (pattern: string) => string[];
+  /** What uses what: every import between the source files (imports.ts). */
+  imports: ImportGraph;
+  /** The AWS stack's resources and their wiring, from the template infra's tests pin (aws.ts). */
+  aws: AwsFacts;
 };
 
 /** The packages whose src/ folders the map must account for, file by file. */
@@ -40,13 +46,16 @@ export function readFacts(root: string): Facts {
     requirements.set(r.id, { line, text: r.text });
   }
   const served = Words.load().toolDefs().filter((d) => RUNS[d.op]);
+  const sources = PACKAGES.flatMap((p) => files(root, `${p}/src/**/*`));
   return {
     tools: new Set(served.map((d) => d.name)),
     toolOps: new Map(served.map((d) => [d.name, d.op])),
     commands: new Set(SERVED),
     operations: new Set(Object.keys(OPERATIONS)),
     requirements,
-    sources: PACKAGES.flatMap((p) => files(root, `${p}/src/**/*`)),
+    sources,
     matches: (pattern) => files(root, pattern),
+    imports: readImports(root, PACKAGES, sources),
+    aws: readAws(root),
   };
 }

@@ -1,0 +1,761 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skills Catalog: decisions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+.d { --d-page: #ECF0F3; --d-canvas: #F9FBFC; --d-ink: #13202A; --d-ink2: #3A4A56; --d-line: #B7C4CD; --d-grid: #D5DDE3; --d-shade: #E1E7EB; --d-accent: #137052; --d-accent-soft: #D9EDE3; --d-hot: #B23A0A; --d-hot-soft: #F8E2D5; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .d, svg.d:root { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+}
+:root[data-theme="dark"] .d { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+
+.d { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 12px; fill: var(--d-ink); }
+.d text { dominant-baseline: central; }
+.d-bg { fill: var(--d-canvas); }
+
+/* nodes */
+.d-node { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1.2; }
+.d-node--external { fill: var(--d-shade); stroke: var(--d-ink2); stroke-dasharray: 4 3; }
+.d-node--focus { fill: var(--d-accent-soft); stroke: var(--d-accent); stroke-width: 1.6; }
+.d-node--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); stroke-width: 1.6; }
+.d-node-detail { fill: none; stroke: var(--d-ink); stroke-width: 1; }
+.d-node--focus + .d-node-detail { stroke: var(--d-accent); }
+.d-node--alert + .d-node-detail { stroke: var(--d-hot); }
+.d-node--external + .d-node-detail { stroke: var(--d-ink2); }
+.d-node--proposed { stroke-width: 1.4; stroke-dasharray: 2 3; }
+.d-node--removed { fill: var(--d-canvas); stroke: var(--d-hot); stroke-width: 1.4; stroke-dasharray: 5 3; }
+.d-label { fill: var(--d-ink); text-anchor: middle; }
+.d-label--strong { font-weight: 600; }
+.d-label--removed { fill: var(--d-ink2); text-decoration: line-through; }
+.d-tag--proposed { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1; stroke-dasharray: 2 2; }
+.d-tag--removed { fill: var(--d-hot); stroke: var(--d-hot); stroke-width: 1; }
+.d-tag-text { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-anchor: middle; }
+.d-tag-text--proposed { fill: var(--d-ink); }
+.d-tag-text--removed { fill: var(--d-canvas); }
+.d-legend-text { font-size: 10.5px; fill: var(--d-ink2); }
+.d-compare-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; fill: var(--d-ink2); }
+.d-callout { fill: var(--d-ink); }
+.d-callout-text { font-size: 10px; font-weight: 600; fill: var(--d-canvas); text-anchor: middle; }
+.d-note { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle; }
+.d-note--focus { fill: var(--d-accent); }
+.d-note--alert { fill: var(--d-hot); }
+
+/* edges */
+.d-edge { fill: none; stroke: var(--d-ink); stroke-width: 1.3; stroke-linejoin: round; }
+.d-edge--async { stroke-dasharray: 5 4; }
+.d-edge--proposed { stroke-dasharray: 2 3; }
+.d-edge--removed { stroke: var(--d-hot); stroke-dasharray: 5 3; }
+.d-edge--return { stroke: var(--d-ink2); stroke-width: 1.1; stroke-dasharray: 4 3; }
+.d-edge--focus { stroke: var(--d-accent); stroke-width: 2; }
+.d-edge--alert { stroke: var(--d-hot); stroke-width: 2; }
+.d-edge-label { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle;
+  paint-order: stroke; stroke: var(--d-canvas); stroke-width: 4px; stroke-linejoin: round; }
+.d-edge-label--focus { fill: var(--d-accent); font-weight: 600; }
+.d-edge-label--alert { fill: var(--d-hot); font-weight: 600; }
+.d-arrow { fill: var(--d-ink); }
+.d-arrow--focus { fill: var(--d-accent); }
+.d-arrow--alert { fill: var(--d-hot); }
+.d-arrow--muted { fill: var(--d-ink2); }
+.d-arrow--open { fill: none; stroke: var(--d-ink); stroke-width: 1.4; stroke-linejoin: round; }
+.d-arrow--open.d-arrow--focus { stroke: var(--d-accent); }
+.d-arrow--open.d-arrow--alert { stroke: var(--d-hot); }
+.d-arrow--open.d-arrow--muted { stroke: var(--d-ink2); }
+
+/* sequence */
+.d-lifeline { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 3 4; }
+.d-activation { fill: var(--d-shade); stroke: var(--d-ink); stroke-width: 1; }
+.d-msg-label { font-size: 11px; fill: var(--d-ink); text-anchor: middle; }
+.d-msg-label--start { text-anchor: start; }
+.d-msg-label--return { fill: var(--d-ink2); }
+.d-msg-label--focus { fill: var(--d-accent); font-weight: 600; }
+.d-msg-label--alert { fill: var(--d-hot); font-weight: 600; }
+.d-memo { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1; }
+.d-memo--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); }
+.d-memo-text { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
+.d-frame { fill: none; stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-frame-tab { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-frame-kind { font-size: 10.5px; font-weight: 600; fill: var(--d-ink); }
+.d-frame-cond-bg { fill: var(--d-canvas); }
+.d-frame-cond { font-size: 10.5px; fill: var(--d-ink2); }
+.d-frame-sep { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+
+/* state */
+.d-pseudo { fill: var(--d-ink); }
+.d-choice-label { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
+.d-composite { fill: var(--d-grid); fill-opacity: 0.25; stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-composite-label { font-size: 11px; font-weight: 600; fill: var(--d-ink); }
+
+/* system map */
+.d-map-quiet { stroke: var(--d-ink2); stroke-width: 1; }
+.d-map-label--start { text-anchor: start; }
+.d-map-label--end { text-anchor: end; }
+.d-map-badge { fill: var(--d-accent); }
+.d-map-badge--alert { fill: var(--d-hot); }
+.d-map-badge--planned { fill: var(--d-canvas); stroke: var(--d-accent); stroke-width: 1.2; stroke-dasharray: 2 2; }
+.d-map-badge-text { font-size: 10.5px; font-weight: 600; fill: var(--d-canvas); text-anchor: middle; }
+.d-map-badge-text--planned { fill: var(--d-accent); }
+.d-map-rule { fill: none; stroke: var(--d-line); stroke-width: 1; }
+.d-map-legend-head { font-size: 11px; font-weight: 600; fill: var(--d-ink); }
+.d-map-legend-text { font-size: 11px; fill: var(--d-ink); }
+.d-map-legend-word { font-weight: 700; fill: var(--d-hot); }
+.d-map-legend-word--planned { fill: var(--d-accent); }
+.d-map-part[role="button"], a.d-map-part { cursor: pointer; }
+.d-map-part[role="button"]:focus, a.d-map-part:focus { outline: none; }
+.d-map-part[role="button"]:focus-visible > :first-child, a.d-map-part:focus-visible > :first-child, .d-map-part--picked > :first-child { stroke: var(--d-ink); stroke-width: 3; }
+a.d-map-part:hover > :first-child { stroke: var(--d-ink); stroke-width: 2; }
+.d-map-opens { font-size: 15px; font-weight: 700; fill: var(--d-ink2); text-anchor: middle; dominant-baseline: central; }
+
+/* groups (boundaries) */
+.d-group { fill: var(--d-grid); fill-opacity: 0.35; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+.d-group-label { font-size: 10.5px; fill: var(--d-ink2); letter-spacing: 0.06em; font-weight: 500; }
+
+:root { --page: #ECF0F3; --card: #F9FBFC; --ink: #13202A; --ink-2: #3A4A56; --line: #B7C4CD; --accent: #137052; --accent-soft: #D9EDE3; --hot: #B23A0A; --hot-soft: #F8E2D5; --even: #E4E9ED; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #0E1418; --card: #151D23; --ink: #E3EAEE; --ink-2: #AFBCC5; --line: #3A4A55;
+  --accent: #46C290; --accent-soft: #1C3A2F; --hot: #F08A50; --hot-soft: #4A2819; --even: #26313A; color-scheme: dark; } }
+:root[data-theme="dark"] { --page: #0E1418; --card: #151D23; --ink: #E3EAEE; --ink-2: #AFBCC5; --line: #3A4A55; --accent: #46C290; --accent-soft: #1C3A2F; --hot: #F08A50; --hot-soft: #4A2819; --even: #26313A; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--page); color: var(--ink); font: 16px/1.5 "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 0 20px 56px; }
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+h1, h2, h3 { font-family: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", sans-serif; margin: 0; text-wrap: balance; }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+code { font: 13px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; background: var(--page); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+nav.site { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; padding-top: 14px; }
+nav.site .brand { font: 600 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; }
+nav.site .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+nav.site .tabs a { font: 600 14px "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; color: var(--ink); text-decoration: none; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); }
+nav.site .tabs a[aria-current="page"] { background: var(--ink); color: var(--card); border-color: var(--ink); }
+.crumbs { margin: 0; font-size: 14px; color: var(--ink-2); }
+.crumbs a { font-weight: 600; }
+header.top { padding-block: 10px 12px; border-bottom: 1.5px solid var(--ink); display: grid; gap: 6px; }
+.eyebrow, .kicker { font: 600 11px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.05; font-weight: 700; letter-spacing: -0.02em; }
+.question { font-size: 18px; max-width: 62ch; margin: 0; }
+.lede { margin: 0; max-width: 70ch; color: var(--ink-2); }
+.controls { display: none; flex-wrap: wrap; gap: 10px 16px; align-items: center; position: sticky; top: 0; z-index: 2; background: var(--page); padding-block: 10px; border-bottom: 1px solid var(--line); }
+.js .controls { display: flex; }
+.controls button { font: 500 14px "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; min-height: 34px; }
+.controls button[aria-pressed="true"] { background: var(--ink); color: var(--card); border-color: var(--ink); font-weight: 600; }
+.controls .switch[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); border: 1.5px dashed var(--accent); }
+.seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.frame { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: grid; gap: 10px; }
+.js .frame { display: none; }
+.js .frame.on { display: grid; }
+.frame-title { font: 600 15px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--ink-2); letter-spacing: .02em; }
+.frame-grid { display: grid; grid-template-columns: minmax(0, max-content) minmax(240px, 1fr); gap: 20px; align-items: start; }
+.map-art { margin: 0; min-width: 0; width: var(--w); max-width: 100%; }
+.panel { display: grid; gap: 10px; font-size: 15px; align-content: start; }
+.panel h3 { font-size: 20px; font-weight: 600; }
+.panel p, .card p, .decision p { margin: 0; }
+.hint { color: var(--ink-2); font-size: 14px; font-style: italic; }
+.legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 14px; color: var(--ink-2); }
+.legend b { color: var(--ink); font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 13px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: grid; gap: 6px; align-content: start; font-size: 15px; min-width: 0; }
+.panel, .card > *, .decision, .decision > .body > *, .choice, details.aspect { min-width: 0; }
+.card h3 { font-size: 18px; font-weight: 600; }
+.card .note { color: var(--ink-2); font: 13px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+.card ul { margin: 0; padding-left: 18px; }
+.picked .card { position: relative; border: 2.5px solid var(--ink); padding-right: 92px; }
+.picked .close { position: absolute; top: 10px; right: 10px; font: 600 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--ink); background: var(--page); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.cards { display: grid; gap: 10px; }
+.cards > h2, section > h2 { font-size: 22px; font-weight: 600; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.js .cards.boxes { display: none; }
+.tag { font: 600 10.5px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; letter-spacing: .06em; text-transform: uppercase; border: 1px dashed var(--ink); border-radius: 3px; padding: 1px 5px; vertical-align: 2px; color: var(--ink); }
+.chosen-tag { border: 1.5px solid var(--accent); color: var(--accent); }
+.where-it-sits { display: grid; gap: 6px; }
+.locators { display: flex; flex-wrap: wrap; gap: 12px; }
+.locator { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.locator figcaption { font: 600 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--ink-2); }
+section { display: grid; gap: 10px; }
+section > *, .frame > *, .frame-grid > * { min-width: 0; }
+.steps-through { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.steps-through li { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: start; }
+.num { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--accent); color: var(--card); font: 600 11px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+.decisions { display: grid; gap: 6px; }
+.decision { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 6px; font-size: 15px; }
+.decision.decision-not-built { border-left-style: dashed; border-left-color: var(--ink-2); }
+.decision > summary { cursor: pointer; padding: 8px 12px; display: flex; gap: 10px; align-items: baseline; list-style: none; }
+.decision > summary::-webkit-details-marker { display: none; }
+.decision > summary::before { content: '▸'; color: var(--ink-2); font-size: 12px; }
+.decision[open] > summary::before { content: '▾'; }
+.decision > summary .what { flex: 1 1 auto; font-family: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", sans-serif; font-size: 17px; font-weight: 600; }
+.decision > .body { padding: 0 14px 12px 32px; display: grid; gap: 6px; }
+.decision:target { outline: 3px solid var(--accent); outline-offset: 2px; }
+.choice { display: grid; gap: 4px; border-top: 1px solid var(--line); padding-top: 6px; }
+.choice details.aspect { border-top: 0; padding-top: 0; }
+.pick { font-weight: 700; color: var(--accent); }
+.did { font: 600 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--ink-2); }
+.built { font: 600 10.5px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--line); color: var(--ink-2); }
+.built-built { border-color: var(--accent); color: var(--accent); }
+.built-not-built { border-style: dashed; border-color: var(--ink); color: var(--ink); }
+.built-partly { border-color: var(--accent); color: var(--ink); border-style: dashed; }
+.decision.not-built-yet { border-left-style: dashed; }
+.over .alt { display: inline-block; margin: 2px 6px 2px 0; padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink-2); text-decoration: line-through; text-decoration-color: var(--line); }
+.why { color: var(--ink); }
+.meta { color: var(--ink-2); font-size: 14px; }
+.about { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { font-size: 13px; font-weight: 600; text-decoration: none; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--ink); border: 1px solid var(--accent); }
+.chip:hover { text-decoration: underline; }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.open-questions { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.open-questions li { background: var(--card); border: 1px dashed var(--ink-2); border-radius: 6px; padding: 8px 12px; }
+.js .decisions .decision.out { display: none; }
+details.aspect { border-top: 1px solid var(--line); padding-top: 6px; }
+details.aspect summary { cursor: pointer; }
+.matrix-wrap { overflow-x: auto; margin-top: 8px; }
+table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
+.matrix th, .matrix td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+.matrix thead th { font-family: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", sans-serif; font-size: 14px; }
+.matrix .sub { display: block; font: 400 12px "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; color: var(--ink-2); }
+.matrix th.chosen, .matrix td.chosen { border-left: 2.5px solid var(--accent); border-right: 2.5px solid var(--accent); }
+.matrix thead th.chosen { border-top: 2.5px solid var(--accent); background: var(--accent-soft); }
+.matrix td.v-good { background: var(--accent-soft); }
+.matrix td.v-poor { background: var(--hot-soft); }
+.matrix td.v-even { background: var(--even); }
+.mark { font: 700 13px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+.legend-line { font-size: 13px; color: var(--ink-2); margin: 6px 0 0; }
+.aspect-note { margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--hot); background: var(--hot-soft); font-size: 14px; }
+.hide-planned .d-map-part--proposed, .hide-planned .d-edge--proposed, .hide-planned .d-edge-label--proposed, .hide-planned .planned-only { display: none; }
+@media (max-width: 760px) { .frame-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { body { padding-inline: 16px; font-size: 15px; } .frame { padding: 12px; } }
+
+
+</style>
+<div class="wrap">
+<nav class="site" aria-label="The system map's pages">
+<a class="brand" href="index.html">Skills Catalog · system map</a>
+<span class="tabs"><a href="index.html">Use cases</a><a href="structure.html">Structure</a><a href="decisions.html" aria-current="page">Decisions</a></span>
+</nav>
+<header class="top"><span class="eyebrow">System map · decisions</span><h1>Skills Catalog</h1>
+<p class="question">What was decided, over what, and about which part?</p>
+<p class="lede">41 decisions, 4 not built yet. Each names the parts it's about: a part's page shows its decisions beside its boxes. Where several options were weighed, the decision opens to show them side by side. The same log, as a table: <a href="../decisions.md">docs/decisions.md</a>, built from <a href="../decisions.yaml">docs/decisions.yaml</a>.</p></header>
+<nav class="filters" aria-label="Decisions about a part"><span class="kicker">Jump to a part</span> <a class="chip" href="structure.html#part=cc1">Claude Code</a> <a class="chip" href="catalog.html">catalog</a> <a class="chip" href="structure.html#part=github">GitHub sign-in</a> <a class="chip" href="structure.html#part=assistants">other assistants</a> <a class="chip" href="structure.html#part=web">web page</a> <a class="chip" href="skills-catalog.html#box=mcp">MCP server (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=cli">CLI (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=serve">serve (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=ops">operations (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=agent-reviewers">agent reviewers (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=person">the person's view (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=installer">installer (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=api">the API (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=skill-checks">skill checks (skills-catalog)</a> <a class="chip" href="catalog.html#box=catalog-rules">catalog rules (the catalog, on one machine)</a> <a class="chip" href="catalog.html#box=http-routes">HTTP routes (the catalog, on one machine)</a> <a class="chip" href="catalog.html#box=local-sign-in">local sign-in (the catalog, on one machine)</a> <a class="chip" href="catalog.html#box=local-search">search (the catalog, on one machine)</a> <a class="chip" href="catalog-aws.html#box=edge">CloudFront (the catalog on AWS)</a> <a class="chip" href="catalog-aws.html#box=page-files">page files (the catalog on AWS)</a> <a class="chip" href="catalog-aws.html#box=http-api">HTTP API (the catalog on AWS)</a> <a class="chip" href="catalog-aws.html#box=api-function">API function (the catalog on AWS)</a> <a class="chip" href="catalog-aws.html#box=versions-table">versions (the catalog on AWS)</a> <a class="chip" href="catalog-aws.html#box=files-bucket">files (the catalog on AWS)</a> <a class="chip" href="catalog-aws.html#box=events">events (the catalog on AWS)</a> <a class="chip" href="catalog-aws.html#box=indexer">indexer (the catalog on AWS)</a></nav>
+<section class="group"><h2>From the PRD</h2><div class="decisions"><details class="decision decision-built" id="decision-D1">
+<summary><span class="did">D1</span> <span class="what">Access is through an AI assistant</span> <span class="built built-built">built</span></summary>
+<div class="body">
+
+
+<p class="why"><span class="kicker">Why</span> Low-effort reuse is the point; the assistant is the access path</p>
+<p class="why"><span class="kicker">How the build honours it</span> Claude Code reaches the catalog through the MCP server's tools; the CLI does the same for the Developer at a terminal</p>
+<p class="meta">The PRD · 2026-07-23</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="structure.html#part=cc1">Claude Code</a> <a class="chip" href="skills-catalog.html#box=mcp">MCP server (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-D2">
+<summary><span class="did">D2</span> <span class="what">Versioning is in scope for the MVP</span> <span class="built built-built">built</span></summary>
+<div class="body">
+
+
+<p class="why"><span class="kicker">Why</span> Consistency over time, see changes, don't overwrite silently</p>
+<p class="why"><span class="kicker">How the build honours it</span> Every publish is a numbered version with a fingerprint; history, diffs and an earlier version on request</p>
+<p class="meta">The PRD · 2026-07-23</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="catalog.html">catalog</a> <a class="chip" href="skills-catalog.html#box=skill-checks">skill checks (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-D3">
+<summary><span class="did">D3</span> <span class="what">Authentication and de-duplication are out of scope</span> <span class="built built-built">built</span></summary>
+<div class="body">
+
+
+<p class="why"><span class="kicker">Why</span> Not needed to prove low-effort, consistent reuse</p>
+<p class="why"><span class="kicker">How the build honours it</span> The local catalog needs no sign-in: it takes the computer's login as the Developer's name, labelled a local sign-in for demo purposes. De-duplication is not built. Extended with the owner's yes (B6): the opt-in hosted catalog signs people in, because a catalog on the internet must know who changes a skill</p>
+<p class="meta">The PRD · 2026-07-23</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="catalog.html#box=local-sign-in">local sign-in (the catalog, on one machine)</a> <a class="chip" href="structure.html#part=github">GitHub sign-in</a></p>
+
+</div>
+</details></div></section>
+<section class="group"><h2>Decided by the owner</h2><div class="decisions"><details class="decision decision-built" id="decision-B1">
+<summary><span class="did">B1</span> <span class="what">What ships first</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>everything runs locally by default; AWS is opt-in, off by default.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">building the web UI and AWS hosting first</span></p>
+<p class="why"><span class="kicker">Why</span> The PRD's time box and &quot;run on a reviewer's machine from a short README&quot;: no account, no server</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="catalog.html">catalog</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B2">
+<summary><span class="did">B2</span> <span class="what">Guided setup</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>one command (<code>skills-catalog setup</code>) that the Assistant can also run; it asks about auto-updates first, default yes; <code>--yes</code> or <code>--config &lt;file&gt;</code> for unattended setup; <code>teardown</code> undoes it.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">configuring by hand</span></p>
+<p class="why"><span class="kicker">Why</span> The owner's notes: a welcome, seamless setup, with no need to go into a file</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=cli">CLI (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B3">
+<summary><span class="did">B3</span> <span class="what">Risky updates wait for a yes</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>auto-updates are on by default; an update waits for the Developer's yes only when it could change what runs on the machine or the reviewer flagged it, on every surface. While the Assistant runs commands without asking, a newly added command in a skill's text is flagged too.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">applying every update silently</span><span class="alt">holding every update</span></p>
+<p class="why"><span class="kicker">Why</span> A skill is instructions the Assistant follows, so an update can change what runs; asking about every update trains people to say yes</p>
+
+<p class="meta">The owner · 2026-09-28, narrowed 2026-09-29</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=installer">installer (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B4">
+<summary><span class="did">B4</span> <span class="what">A pinned skill stays pinned</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>installing a newer version over a pinned or &quot;tell me first&quot; (notify) skill waits for the Developer's yes, as an update does</p>
+
+<p class="why"><span class="kicker">Why</span> The Developer's own setting for that skill decides, not the Assistant</p>
+
+<p class="meta">The owner · 2026-09-29</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=installer">installer (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-partly" id="decision-B5">
+<summary><span class="did">B5</span> <span class="what">Reviews</span> <span class="built built-partly">partly built</span></summary>
+<div class="body">
+<p>a rules reviewer reviews every publish; pluggable agent reviewers that measure quality come later; a clean skill shows nothing.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">reviews only later</span></p>
+<p class="why"><span class="kicker">Why</span> The owner asked for reviewer-based measurements, prompt-injection risk included; approving with no comments is a normal result</p>
+
+<p class="meta">The owner · 2026-09-28 · The rules reviewer, yes; agent reviewers, later</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=skill-checks">skill checks (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=agent-reviewers">agent reviewers (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B6">
+<summary><span class="did">B6</span> <span class="what">Who may publish</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>only a skill's owners (its first publisher, plus maintainers later). Hosted: everyone signs in, even to read. Locally, a simplified sign-in: the Developer acts as a named developer, labelled for demo purposes.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">anyone signed in publishes</span></p>
+<p class="why"><span class="kicker">Why</span> Signing in isn't permission to change someone else's skill; locally, sign-in must not block publishing</p>
+
+<p class="meta">The owner · 2026-09-28, simplified locally 2026-10-02</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="catalog.html#box=catalog-rules">catalog rules (the catalog, on one machine)</a> <a class="chip" href="catalog.html#box=local-sign-in">local sign-in (the catalog, on one machine)</a> <a class="chip" href="catalog-aws.html#box=api-function">API function (the catalog on AWS)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B7">
+<summary><span class="did">B7</span> <span class="what">Search to start with</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>keyword search built in, upgraded when measurement says so (recall on a golden query set, speed).</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">a search service by meaning from day one</span></p>
+<p class="why"><span class="kicker">Why</span> Nothing to run or pay for; the index is rebuilt from stored versions, so switching later needs no migration</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="catalog.html#box=local-search">search (the catalog, on one machine)</a> <a class="chip" href="catalog-aws.html#box=indexer">indexer (the catalog on AWS)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B8">
+<summary><span class="did">B8</span> <span class="what">Where an installed skill's origin is kept</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the installer's own list (name, version, fingerprint, which catalog), by install location.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">metadata inside SKILL.md</span><span class="alt">a small file beside it</span></p>
+<p class="why"><span class="kicker">Why</span> The skill's files stay exactly as published, so &quot;complete and unchanged&quot; stays checkable</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=installer">installer (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B9">
+<summary><span class="did">B9</span> <span class="what">Local edits to an installed skill</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>an update replaces a copy the Developer changed, as most installed software does; local edits not shared upstream may be lost.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">warn, back up, or skip changed skills</span></p>
+<p class="why"><span class="kicker">Why</span> The owner's call, like most installed software</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=installer">installer (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B10">
+<summary><span class="did">B10</span> <span class="what">Stay flexible</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>one API (List with filters, Get, and the rest), with storage and search behind replaceable parts.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">building straight on one backend</span></p>
+<p class="why"><span class="kicker">Why</span> The owner's notes: &quot;build the experience, interface and contracts without coupling ourselves with a specific choice&quot;</p>
+
+<p class="meta">The owner · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=api">the API (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B11">
+<summary><span class="did">B11</span> <span class="what">One definition, every face</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>each operation is defined once; the MCP server's tools, the CLI, the HTTP routes, setup's allow list and a published schema come from it. &quot;The API&quot; names the list of operations; &quot;catalog&quot; names the shared skills and the service that keeps them.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">separate APIs per face</span></p>
+<p class="why"><span class="kicker">Why</span> Assistants can do everything a person can, and the faces can't drift apart; two names that sounded alike confused readers</p>
+
+<p class="meta">The owner · 2026-09-29</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=api">the API (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=mcp">MCP server (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=cli">CLI (skills-catalog)</a> <a class="chip" href="catalog.html#box=http-routes">HTTP routes (the catalog, on one machine)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B12">
+<summary><span class="did">B12</span> <span class="what">Architecture</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>a local-first core with replaceable storage, search and identity; the same tests run against every backend (moved from the team to the owner).</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">AWS from day one</span><span class="alt">a git repository as the catalog</span><span class="alt">plugin marketplaces as the backend</span><span class="alt">a hosted MCP server only</span></p>
+<p class="why"><span class="kicker">Why</span> Runs anywhere in minutes, and keeps every one of those as a later option or an export</p>
+
+<p class="meta">The owner · 2026-09-29</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="catalog.html">catalog</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B13">
+<summary><span class="did">B13</span> <span class="what">Hosted technologies</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>Lambda + HTTP API with files by short-lived S3 links; DynamoDB + S3; a search file in S3 (OpenSearch Serverless to be re-assessed in phase 3); sign-in with GitHub; events by a DynamoDB stream to a queue; the web page on CloudFront + S3; TypeScript on Node; a hand-written MCP server; install and update always on the Developer's machine. The full table is in <a href="../architecture.md">architecture.md</a></p>
+
+<p class="why"><span class="kicker">Why</span> Serverless: nothing to pay or patch while idle; each element picked from an options explainer</p>
+
+<p class="meta">The owner · 2026-09-29 · Yes, except the web page</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="catalog.html">catalog</a></p>
+<details class="aspect"><summary><strong>Skills store: versions + files</strong>: <span class="pick">DynamoDB + S3</span>, chosen over Postgres + S3, Aurora DSQL + S3, SQLite + a folder</summary>
+
+<div class="matrix-wrap"><table class="matrix"><thead><tr><th scope="col">What drives it</th><th scope="col" class="">SQLite + a folder<span class="sub">built today, on one machine</span></th><th scope="col" class="chosen">DynamoDB + S3 <span class="tag chosen-tag">chosen</span><span class="sub">on demand; create-only files</span></th><th scope="col" class="">Postgres + S3<span class="sub">Aurora Serverless v2</span></th><th scope="col" class="">Aurora DSQL + S3<span class="sub">serverless, Postgres-like</span></th><th scope="col" class="">SQLite + a folder<span class="sub">today's store on one small machine</span></th></tr></thead><tbody><tr><th scope="row">Cost when idle<span class="sub">favours DynamoDB + S3</span></th><td class="">$0</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0: no hourly charge; 25 GB free</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> storage only while paused</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0: 100k DPUs and 1 GB free</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> $5/month, always on</td></tr><tr><th scope="row">Cost at 100k skills<span class="sub">favours DynamoDB + S3</span></th><td class="">$0</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> ≈$0 records; files ≈$0.14/month</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> cents paused; $43.80 kept warm</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> $8 per million DPUs past free</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> $5; 20 GB disk</td></tr><tr><th scope="row">Publish is all or nothing</th><td class="">one transaction</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> one transaction: 100 writes, 4 MB</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> one transaction</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> retry on conflict; 3,000 rows</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> one transaction</td></tr><tr><th scope="row">Files written only if absent</th><td class="">temp name, then rename</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> S3 If-None-Match, forced by a bucket rule</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> the same S3 rule</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> the same S3 rule</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> as today</td></tr><tr><th scope="row">First request after idle<span class="sub">favours DynamoDB + S3</span></th><td class="">instant</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> no resume step</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> ≈15 s, longer after 24 h</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> no instance to wake</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> always on</td></tr><tr><th scope="row">Same tests as local<span class="sub">favours SQLite + a folder</span></th><td class="">the tests</td><td class="v-poor chosen"><span class="mark" title="counts against it" aria-label="counts against it">−</span> a new adapter</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> a new SQL adapter</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> a new adapter; SQL subset</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> the same code</td></tr><tr><th scope="row">Lock-in<span class="sub">favours Postgres + S3</span></th><td class="">none</td><td class="v-even chosen"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> AWS API; open twin Alternator; files: any S3 API</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> Postgres and the S3 API run anywhere</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> no extensions, triggers or full-text</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> none</td></tr><tr><th scope="row">The work to run it<span class="sub">favours DynamoDB + S3</span></th><td class="">none</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> none: managed</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> a VPC or the Data API; 15 s timeouts</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> none: managed</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> patching, TLS, backups</td></tr></tbody></table></div>
+<p class="legend-line"><span class="mark">+</span> counts for it · <span class="mark">=</span> neither · <span class="mark">−</span> counts against it</p></details>
+<details class="aspect"><summary><strong>Search</strong>: <span class="pick">Search file in S3</span>, chosen over OpenSearch, Postgres, S3 Vectors</summary>
+
+<div class="matrix-wrap"><table class="matrix"><thead><tr><th scope="col">What drives it</th><th scope="col" class="">SQLite full-text<span class="sub">any-word, ranked</span></th><th scope="col" class="chosen">Search file in S3 <span class="tag chosen-tag">chosen</span><span class="sub">ranked in the function</span></th><th scope="col" class="">OpenSearch<span class="sub">Serverless, new generation</span></th><th scope="col" class="">Postgres<span class="sub">full-text + pgvector</span></th><th scope="col" class="">S3 Vectors<span class="sub">for meaning, later</span></th></tr></thead><tbody><tr><th scope="row">Cost when idle<span class="sub">favours Search file in S3</span></th><td class="">$0</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0: scales to zero after 10 idle min</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> paused, or $43.80 warm</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0.06/GB-month storage</td></tr><tr><th scope="row">Fits 100k skills</th><td class="">10k measured: 6.5 ms</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> ≈50 MB index fits in memory</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> a search service</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> yes</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> yes</td></tr><tr><th scope="row">First search after idle<span class="sub">favours S3 Vectors</span></th><td class="">instant</td><td class="v-unknown chosen"><span class="mark" title="not known when it was weighed" aria-label="not known when it was weighed">?</span> cold load of 5–50 MB: measure</td><td class="v-unknown"><span class="mark" title="not known when it was weighed" aria-label="not known when it was weighed">?</span> 10–30 s after scaling to zero</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> ≈15 s resume</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> under a second</td></tr><tr><th scope="row">Search by meaning later<span class="sub">favours Postgres</span></th><td class="">no</td><td class="v-poor chosen"><span class="mark" title="counts against it" aria-label="counts against it">−</span> no</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> yes</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> pgvector with HNSW</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> yes: that's what it is</td></tr><tr><th scope="row">Lock-in<span class="sub">favours Postgres</span></th><td class="">none</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> our own format</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> OpenSearch open; Serverless AWS only</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> Postgres runs anywhere</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> AWS only</td></tr></tbody></table></div>
+<p class="legend-line"><span class="mark">+</span> counts for it · <span class="mark">=</span> neither · <span class="mark">−</span> counts against it · <span class="mark">?</span> not known when it was weighed</p></details>
+<details class="aspect"><summary><strong>Compute</strong>: <span class="pick">Lambda + HTTP API</span>, chosen over Lambda URL, Fargate + ALB, One small machine</summary>
+
+<div class="matrix-wrap"><table class="matrix"><thead><tr><th scope="col">What drives it</th><th scope="col" class="">The Developer's machine<span class="sub">CLI, Assistant, serve</span></th><th scope="col" class="chosen">Lambda + HTTP API <span class="tag chosen-tag">chosen</span><span class="sub">API Gateway</span></th><th scope="col" class="">Lambda URL<span class="sub">behind CloudFront</span></th><th scope="col" class="">Fargate + ALB<span class="sub">a container</span></th><th scope="col" class="">One small machine<span class="sub">Lightsail</span></th></tr></thead><tbody><tr><th scope="row">Cost when idle<span class="sub">favours Lambda + HTTP API</span></th><td class="">$0</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0; 1M requests free a month</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> ≈$24/month, always on</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> $5/month</td></tr><tr><th scope="row">Cost at 10k calls a month<span class="sub">favours Lambda + HTTP API</span></th><td class="">$0</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> ≈$0.01</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> ≈$0: no API charge</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> ≈$24</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> $5</td></tr><tr><th scope="row">A whole skill (≈6.7 MB) in one request<span class="sub">favours One small machine</span></th><td class="">no limit</td><td class="v-poor chosen"><span class="mark" title="counts against it" aria-label="counts against it">−</span> no: 6 MB each way; files by presigned link</td><td class="v-unknown"><span class="mark" title="not known when it was weighed" aria-label="not known when it was weighed">?</span> 6 MB in; 200 MB out if streamed</td><td class="v-unknown"><span class="mark" title="not known when it was weighed" aria-label="not known when it was weighed">?</span> no limit found</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> yes: we set the limit</td></tr><tr><th scope="row">The work to run it<span class="sub">favours Lambda + HTTP API</span></th><td class="">none</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> none</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> callers send the body's SHA-256</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> a task and a load balancer</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> patching, TLS, restarts</td></tr><tr><th scope="row">Longest request</th><td class="">no limit</td><td class="v-even chosen"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> 30 s, fixed</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> Lambda's own timeout</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> no fixed cap</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> no fixed cap</td></tr></tbody></table></div>
+<p class="legend-line"><span class="mark">+</span> counts for it · <span class="mark">=</span> neither · <span class="mark">−</span> counts against it · <span class="mark">?</span> not known when it was weighed</p></details>
+<details class="aspect"><summary><strong>Events</strong>: <span class="pick">DynamoDB stream</span>, chosen over EventBridge, Outbox, polled</summary>
+
+<div class="matrix-wrap"><table class="matrix"><thead><tr><th scope="col">What drives it</th><th scope="col" class="">Outbox table<span class="sub">delivered by the next run</span></th><th scope="col" class="chosen">DynamoDB stream <span class="tag chosen-tag">chosen</span><span class="sub">→ Pipes → a queue</span></th><th scope="col" class="">EventBridge<span class="sub">custom events</span></th><th scope="col" class="">Outbox, polled<span class="sub">a scheduled function</span></th></tr></thead><tbody><tr><th scope="row">Cost when idle</th><td class="">$0</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0; ≈$0 at 1k publishes</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $1 per million events</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> 1 run a minute: inside 14M free</td></tr><tr><th scope="row">Never lost if the publish commits<span class="sub">favours DynamoDB stream</span></th><td class="">same transaction</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> written by the database itself</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> a second call after commit</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> same transaction, as today</td></tr><tr><th scope="row">Delay to the search index<span class="sub">favours DynamoDB stream</span></th><td class="">the next run</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> seconds</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> seconds</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> up to the poll interval (1 min)</td></tr><tr><th scope="row">Kept while a listener is down<span class="sub">favours Outbox, polled</span></th><td class="">until delivered</td><td class="v-even chosen"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> 24 h in the stream; then the queue</td><td class="v-unknown"><span class="mark" title="not known when it was weighed" aria-label="not known when it was weighed">?</span> not in today's facts</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> until delivered</td></tr><tr><th scope="row">Lock-in<span class="sub">favours Outbox, polled</span></th><td class="">none</td><td class="v-poor chosen"><span class="mark" title="counts against it" aria-label="counts against it">−</span> Streams and Pipes: AWS only</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> AWS only</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> the same design anywhere</td></tr></tbody></table></div>
+<p class="legend-line"><span class="mark">+</span> counts for it · <span class="mark">=</span> neither · <span class="mark">−</span> counts against it · <span class="mark">?</span> not known when it was weighed</p></details>
+<details class="aspect"><summary><strong>Sign-in and tokens</strong>: <span class="pick">Sign in with GitHub</span>, chosen over Cognito, IAM Identity Center</summary>
+
+<div class="matrix-wrap"><table class="matrix"><thead><tr><th scope="col">What drives it</th><th scope="col" class="">Act as<span class="sub">a demo label, no sign-in</span></th><th scope="col" class="">Cognito<span class="sub">a user pool</span></th><th scope="col" class="chosen">Sign in with GitHub <span class="tag chosen-tag">chosen</span><span class="sub">an OAuth app</span></th><th scope="col" class="">IAM Identity Center<span class="sub">a company's SSO</span></th></tr></thead><tbody><tr><th scope="row">Cost for a team<span class="sub">favours Cognito</span></th><td class="">$0</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0 up to 10,000 people a month</td><td class="v-unknown chosen"><span class="mark" title="not known when it was weighed" aria-label="not known when it was weighed">?</span> no price listed</td><td class="v-unknown"><span class="mark" title="not known when it was weighed" aria-label="not known when it was weighed">?</span> not confirmed today</td></tr><tr><th scope="row">Sign-in from the CLI and the Assistant<span class="sub">favours Sign in with GitHub</span></th><td class="">none needed</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> no device sign-in: build our own</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> device sign-in built in</td><td class="v-unknown"><span class="mark" title="not known when it was weighed" aria-label="not known when it was weighed">?</span> not in today's facts</td></tr><tr><th scope="row">Sign-in on the web page</th><td class="">a pairing link</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> managed login (Essentials)</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> the web flow</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> SAML or OAuth apps</td></tr><tr><th scope="row">Token lifetime<span class="sub">favours Sign in with GitHub</span></th><td class="">none</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> standard OIDC tokens</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> 8 h access, 6-month refresh</td><td class="v-unknown"><span class="mark" title="not known when it was weighed" aria-label="not known when it was weighed">?</span> not in today's facts</td></tr><tr><th scope="row">Lock-in</th><td class="">none</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> OIDC; user data AWS only</td><td class="v-even chosen"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> people need a GitHub account</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> AWS; the company's own directory</td></tr></tbody></table></div>
+<p class="legend-line"><span class="mark">+</span> counts for it · <span class="mark">=</span> neither · <span class="mark">−</span> counts against it · <span class="mark">?</span> not known when it was weighed</p></details>
+<details class="aspect"><summary><strong>Web UI hosting</strong>: <span class="pick">CloudFront + S3</span>, chosen over Amplify Hosting, The compute</summary>
+<p class="aspect-note"><span class="kicker">Since</span> This was weighed on CloudFront's flat-rate Free plan. At the first deploy AWS refused that plan for this stack's web firewall, so CloudFront is pay-as-you-go (B31): the cells about the Free plan are as they were then.</p>
+<div class="matrix-wrap"><table class="matrix"><thead><tr><th scope="col">What drives it</th><th scope="col" class="">serve<span class="sub">127.0.0.1, planned</span></th><th scope="col" class="chosen">CloudFront + S3 <span class="tag chosen-tag">chosen</span><span class="sub">pay-as-you-go</span></th><th scope="col" class="">Amplify Hosting<span class="sub">managed builds</span></th><th scope="col" class="">The compute<span class="sub">the API serves the page too</span></th></tr></thead><tbody><tr><th scope="row">Cost when idle</th><td class="">$0</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0 on the Free plan</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0.023/GB stored</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> the compute's own</td></tr><tr><th scope="row">Cost per use<span class="sub">favours CloudFront + S3</span></th><td class="">$0</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> 1M requests, 100 GB included</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> $0.15/GB served</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> every page load is an API call; no edge cache</td></tr><tr><th scope="row">A web firewall<span class="sub">favours CloudFront + S3</span></th><td class="">127.0.0.1 only</td><td class="v-unknown chosen"><span class="mark" title="not known when it was weighed" aria-label="not known when it was weighed">?</span> included; its limits not re-read</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> $15/month extra</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> none at the edge</td></tr><tr><th scope="row">The work to set it up<span class="sub">favours CloudFront + S3</span></th><td class="">built into serve</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> plan subscribed by API (CDK)</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> builds at $0.01 a minute</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> nothing extra</td></tr></tbody></table></div>
+<p class="legend-line"><span class="mark">+</span> counts for it · <span class="mark">=</span> neither · <span class="mark">−</span> counts against it · <span class="mark">?</span> not known when it was weighed</p></details>
+<details class="aspect"><summary><strong>AWS only or portable: the whole shape</strong>: <span class="pick">A · AWS serverless</span>, chosen over B · One Postgres, C · One machine</summary>
+
+<div class="matrix-wrap"><table class="matrix"><thead><tr><th scope="col">What drives it</th><th scope="col" class="">Built today<span class="sub">on this machine</span></th><th scope="col" class="chosen">A · AWS serverless <span class="tag chosen-tag">chosen</span><span class="sub">DynamoDB, S3, Lambda</span></th><th scope="col" class="">B · One Postgres<span class="sub">Aurora Serverless v2</span></th><th scope="col" class="">C · One machine<span class="sub">today's catalog, hosted</span></th></tr></thead><tbody><tr><th scope="row">Cost when idle<span class="sub">favours A · AWS serverless</span></th><td class="">$0: the Developer's machine</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0: nothing runs</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> storage only when paused; $43.80/month kept warm</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> $5/month, always on</td></tr><tr><th scope="row">First request after a quiet night<span class="sub">favours C · One machine</span></th><td class="">instant</td><td class="v-even chosen"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> a cold function start</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> ≈15 s to resume, longer after 24 h</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> instant: always on</td></tr><tr><th scope="row">Same tests as local<span class="sub">favours C · One machine</span></th><td class="">the tests</td><td class="v-poor chosen"><span class="mark" title="counts against it" aria-label="counts against it">−</span> new adapters for every store</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> one SQL adapter, close to today's</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> the same code</td></tr><tr><th scope="row">The work to run it<span class="sub">favours A · AWS serverless</span></th><td class="">none</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> no machine to patch</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> a VPC or Data API; 15 s timeouts</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> patching, TLS, restarts, restores</td></tr><tr><th scope="row">Lock-in<span class="sub">favours B · One Postgres</span></th><td class="">none</td><td class="v-poor chosen"><span class="mark" title="counts against it" aria-label="counts against it">−</span> Streams, Pipes, flat-rate plan: AWS only</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> Postgres + S3 API run anywhere</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> runs anywhere</td></tr><tr><th scope="row">Time to build<span class="sub">favours C · One machine</span></th><td class="">built</td><td class="v-poor chosen"><span class="mark" title="counts against it" aria-label="counts against it">−</span> most: 4 stores, presigned links, CDK</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> middle: one database adapter</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> least: sign-in, TLS, backups</td></tr></tbody></table></div>
+<p class="legend-line"><span class="mark">+</span> counts for it · <span class="mark">=</span> neither · <span class="mark">−</span> counts against it</p></details>
+</div>
+</details>
+<details class="decision decision-built" id="decision-B14">
+<summary><span class="did">B14</span> <span class="what">The AWS setup</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>written in AWS CDK (TypeScript), by agents; deployed only after a second go from the owner</p>
+
+<p class="why"><span class="kicker">Why</span> One language for the product and its infrastructure, and tests that run offline</p>
+
+<p class="meta">The owner · 2026-09-29, deployed 2026-09-30</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="catalog.html">catalog</a></p>
+
+</div>
+</details>
+<details class="decision decision-not-built" id="decision-B15">
+<summary><span class="did">B15</span> <span class="what">A wait on shared catalogs</span> <span class="built built-not-built">not built yet</span></summary>
+<div class="body">
+<p>on a shared or hosted catalog, a new version waits (about 3 days) before auto-update applies it, with a way to ask for the latest</p>
+
+<p class="why"><span class="kicker">Why</span> Auditors and security checkers who follow the latest get time to look first</p>
+
+<p class="meta">The owner · 2026-09-29 · Not built yet</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=installer">installer (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-not-built" id="decision-B16">
+<summary><span class="did">B16</span> <span class="what">Other assistants</span> <span class="built built-not-built">not built yet</span></summary>
+<div class="body">
+<p>pi in phase 2; Copilot, Codex, Cursor and Gemini CLI in phase 3, not started without the owner's approval; risky updates wait for a yes on every assistant</p>
+
+<p class="why"><span class="kicker">Why</span> Claude Code first; the MCP server is not tied to it, but the installer writes Claude Code's skills folder</p>
+
+<p class="meta">The owner · 2026-09-29 · Not built yet</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="structure.html#part=assistants">other assistants</a> <a class="chip" href="structure.html#part=cc1">Claude Code</a></p>
+
+</div>
+</details>
+<details class="decision decision-not-built" id="decision-B17">
+<summary><span class="did">B17</span> <span class="what">The web page</span> <span class="built built-not-built">not built yet</span></summary>
+<div class="body">
+<p>a local page in plain browser modules, from five approved mock-ups, with a view of what changed between versions; phase 2.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">React + Vite</span></p>
+<p class="why"><span class="kicker">Why</span> The owner's notes: viewing and updating skills, and a delta view, as a secondary priority</p>
+
+<p class="meta">The owner · 2026-09-29 · Not built yet (<code>serve</code> gives the API only)</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="structure.html#part=web">web page</a> <a class="chip" href="skills-catalog.html#box=serve">serve (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-not-built" id="decision-B18">
+<summary><span class="did">B18</span> <span class="what">Bundles of skills</span> <span class="built built-not-built">not built yet</span></summary>
+<div class="body">
+<p>Bundles of skills, with community feedback such as votes; later</p>
+
+<p class="why"><span class="kicker">Why</span> The owner's notes; after the core loop</p>
+
+<p class="meta">The owner · 2026-09-28 · Not built yet</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="catalog.html">catalog</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B19">
+<summary><span class="did">B19</span> <span class="what">What the Developer reads</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the CLI speaks to a person; each MCP reply carries a part laid out for the Developer (tables, short lines, a box for what needs a yes); things are named by what the Developer will see happen</p>
+
+<p class="why"><span class="kicker">Why</span> Assistants and people read differently; the person's layer follows the owner's visual-first tenets</p>
+
+<p class="meta">The owner · 2026-09-30</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=person">the person's view (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=mcp">MCP server (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=cli">CLI (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B20">
+<summary><span class="did">B20</span> <span class="what">Testing</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>QA first; reproducible runs that clean up after themselves; the Assistant's experience tested first; our own test runner improved rather than a framework adopted</p>
+
+<p class="why"><span class="kicker">Why</span> The owner's notes on the PRD: &quot;a QA-first mentality&quot;</p>
+
+<p class="meta">The owner · 2026-09-28, runner 2026-09-30</p>
+
+
+</div>
+</details>
+<details class="decision decision-other" id="decision-B21">
+<summary><span class="did">B21</span> <span class="what">The time box</span> <span class="built built-other">nothing to build</span></summary>
+<div class="body">
+<p>the PRD's ~4 hours is a soft target, not a hard limit</p>
+
+<p class="why"><span class="kicker">Why</span> The owner's answer when asked</p>
+
+<p class="meta">The owner · 2026-09-29 · —</p>
+
+
+</div>
+</details></div></section>
+<section class="group"><h2>Decided by the team</h2><div class="decisions"><details class="decision decision-built" id="decision-B22">
+<summary><span class="did">B22</span> <span class="what">Skill format</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the PRD's manifest is <code>SKILL.md</code>'s front matter in the Agent Skills format; tags in <code>metadata.tags</code>.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">a manifest format of our own</span></p>
+<p class="why"><span class="kicker">Why</span> A retrieved skill is drop-in for assistants that read the standard</p>
+
+<p class="meta">The team · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=skill-checks">skill checks (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B23">
+<summary><span class="did">B23</span> <span class="what">What a version is</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>a number (the handle) plus a fingerprint of every file and whether it can run (the identity). Publishing files identical to the latest changes nothing; restoring an old version makes a new one.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">semantic versions</span></p>
+<p class="why"><span class="kicker">Why</span> Makes &quot;complete and unchanged&quot; and &quot;nothing silently overwritten&quot; checkable by anyone</p>
+
+<p class="meta">The team · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=skill-checks">skill checks (skills-catalog)</a> <a class="chip" href="catalog.html#box=catalog-rules">catalog rules (the catalog, on one machine)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B24">
+<summary><span class="did">B24</span> <span class="what">Retrieve means install</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>written into Claude Code's skills folder and tracked.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">content returned into the conversation only (still there as <code>read</code>)</span></p>
+<p class="why"><span class="kicker">Why</span> &quot;Ready to use&quot;, and what makes updates and drift checks possible</p>
+
+<p class="meta">The team · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=installer">installer (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B25">
+<summary><span class="did">B25</span> <span class="what">Tool names</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>no tool is called &quot;get&quot;: <code>read_shared_skill</code> and <code>install_shared_skill</code>.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt"><code>get_skill</code></span></p>
+<p class="why"><span class="kicker">Why</span> In trials, people saying &quot;get me X&quot; meant install; renaming took success from 0/2 to 2/3</p>
+
+<p class="meta">The team · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=mcp">MCP server (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B26">
+<summary><span class="did">B26</span> <span class="what">How the Assistant finds the catalog</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the MCP server's own instructions.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">tool names alone</span></p>
+<p class="why"><span class="kicker">Why</span> Without instructions, a small model answered &quot;no such skill&quot; without looking (0/3); with them, 3/3</p>
+
+<p class="meta">The team · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=mcp">MCP server (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B27">
+<summary><span class="did">B27</span> <span class="what">Search matching</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>a search ranks by any word; skills that match every word are listed as matches, and skills that share only some words are listed apart, under &quot;Not matches&quot;; common words of an ask are ignored, a small list of synonyms is in the configuration, and words in a skill's name count more.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">every word must match</span></p>
+<p class="why"><span class="kicker">Why</span> The Assistant sends several words at once; requiring all made it loop 3–13 times, while listing partial matches apart keeps &quot;nothing matches&quot; honest</p>
+
+<p class="meta">The team · 2026-09-28, refined 2026-10-02</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="catalog.html#box=local-search">search (the catalog, on one machine)</a> <a class="chip" href="catalog-aws.html#box=indexer">indexer (the catalog on AWS)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B28">
+<summary><span class="did">B28</span> <span class="what">Publishing</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>two steps: see what would be published (the files, the skipped files with a reason each, what changed), then confirm; at a terminal the CLI asks.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">one step</span></p>
+<p class="why"><span class="kicker">Why</span> The Assistant never publishes something the Developer didn't see</p>
+
+<p class="meta">The team · 2026-09-28</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=ops">operations (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=mcp">MCP server (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=cli">CLI (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B29">
+<summary><span class="did">B29</span> <span class="what">A hosted publish is checked before any upload</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the hosted catalog checks <code>SKILL.md</code> before files go to S3, and indexes the version at publish, so search finds it at once</p>
+
+<p class="why"><span class="kicker">Why</span> A refused publish leaves nothing behind, as it does locally</p>
+
+<p class="meta">The team · 2026-10-02</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="catalog-aws.html#box=api-function">API function (the catalog on AWS)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B30">
+<summary><span class="did">B30</span> <span class="what">Reviews are bounded</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>at most 3 findings of one kind per file and 20 in all, the rest counted; findings are measurements, with no score</p>
+
+<p class="why"><span class="kicker">Why</span> A review fits in one stored record and in a read's size budget; the rules reviewer gives measurements by name (estimated tokens), never a made-up score</p>
+
+<p class="meta">The team · 2026-10-02</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=skill-checks">skill checks (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B31">
+<summary><span class="did">B31</span> <span class="what">CloudFront pricing</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>pay-as-you-go.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">the flat-rate Free plan</span></p>
+<p class="why"><span class="kicker">Why</span> AWS refused the Free tier for this stack's web firewall on the first deploy (&quot;not eligible for this subscription tier&quot;); pay-as-you-go costs cents at demo scale, and the firewall stays</p>
+
+<p class="meta">The team · 2026-09-29</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="catalog-aws.html#box=edge">CloudFront (the catalog on AWS)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B32">
+<summary><span class="did">B32</span> <span class="what">Tokens without GitHub</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>a personal token, issued by whoever holds the AWS account (<code>npm run issue-token</code>), only its hash stored.</p>
+<p class="over"><span class="kicker">Chosen over</span> <span class="alt">only GitHub sign-in</span></p>
+<p class="why"><span class="kicker">Why</span> CI and people outside the sign-in list still need a way in; the account holder already controls everything the token could reach</p>
+
+<p class="meta">The team · 2026-09-29</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="catalog-aws.html#box=api-function">API function (the catalog on AWS)</a></p>
+
+</div>
+</details></div></section>
+<section class="group"><h2>Defaults awaiting the owner</h2><p class="lede">Taken during the review fixes because each was the recommended, reversible option; each is built and on the owner's list.</p><div class="decisions"><details class="decision decision-built" id="decision-B33">
+<summary><span class="did">B33</span> <span class="what">The local sign-in takes the computer's login</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>(<code>USER</code>) as the Developer's name, when neither <code>SKILLS_AS</code> nor setup's name is set</p>
+
+<p class="why"><span class="kicker">Why</span> Publishing works on the README's install with no sign-in step</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="catalog.html#box=local-sign-in">local sign-in (the catalog, on one machine)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B34">
+<summary><span class="did">B34</span> <span class="what">That local sign-in applies only on the default local catalog</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>That local sign-in applies only on the default local catalog; any other catalog needs a name or a sign-in</p>
+
+<p class="why"><span class="kicker">Why</span> A shared or hosted catalog must not trust a computer's login</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="catalog.html#box=local-sign-in">local sign-in (the catalog, on one machine)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B35">
+<summary><span class="did">B35</span> <span class="what">Setup adds the `skills-catalog` launcher by default</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>(in <code>~/.local/bin</code>, never overwriting a file there)</p>
+
+<p class="why"><span class="kicker">Why</span> The CLI's messages name <code>skills-catalog</code>, so it should run as named</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=cli">CLI (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B36">
+<summary><span class="did">B36</span> <span class="what">File modes are kept as 0644 or 0755</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>File modes are kept as 0644 or 0755, and the publish preview names each file whose mode changes (0600 becomes 0644)</p>
+
+<p class="why"><span class="kicker">Why</span> Two modes are what every machine can reproduce; the Developer sees the change before saying yes</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=skill-checks">skill checks (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B37">
+<summary><span class="did">B37</span> <span class="what">A warning in a skill's prose is advice</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>the reviewer shows it, but it never holds an update</p>
+
+<p class="why"><span class="kicker">Why</span> Text that only warns about a pattern isn't the pattern; holding on it would train people to say yes</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=skill-checks">skill checks (skills-catalog)</a></p>
+
+</div>
+</details>
+<details class="decision decision-built" id="decision-B38">
+<summary><span class="did">B38</span> <span class="what">A hand-edited copy is kept aside on update</span> <span class="built built-built">built</span></summary>
+<div class="body">
+<p>before an update replaces a copy the Developer changed, the changed copy is kept aside and the result names where</p>
+
+<p class="why"><span class="kicker">Why</span> The owner's stance is that local edits may be lost; keeping them aside costs nothing and loses nothing. It came with the review fixes</p>
+
+<p class="meta">The team (default, awaiting the owner) · 2026-10-02</p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=installer">installer (skills-catalog)</a></p>
+
+</div>
+</details></div></section>
+<section><h2>Open</h2><ul class="open-questions"><li><span class="did">Q1</span> <strong>What are the most valuable additions once the core loop works? (the PRD's)</strong> <span class="meta">The owner · Phase 2</span></li></ul></section>
+</div>
+<script>(() => {
+  const open = () => { const d = location.hash.startsWith('#decision-') && document.getElementById(location.hash.slice(1)); if (d) d.open = true; };
+  window.addEventListener('hashchange', open); open();
+})();</script>
