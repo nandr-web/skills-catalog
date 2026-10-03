@@ -1,7 +1,7 @@
 // The ports (contract §7): where a choice can change. Every port is async, so a hosted adapter (DynamoDB and S3,
 // a remote index, a sign-in) drops in behind the same interfaces. Phase 1 has the local adapters (src/local/).
 
-import type { FileEntry } from './skill-tree/index.ts';
+import type { FileEntry, Review } from './skill-tree/index.ts';
 
 export interface SkillRecord {
   name: string;
@@ -22,7 +22,9 @@ export interface VersionRecord {
   frontmatter: Record<string, unknown>;
 }
 
-export type NewVersion = Omit<VersionRecord, 'version'>;
+// A new version as the publish hands it to storage: its record, plus the reviews run on it (contract §10), which storage
+// keeps as their own records with that version, in the same commit, and never inside the version record.
+export type NewVersion = Omit<VersionRecord, 'version'> & { reviews?: readonly Review[] | undefined };
 
 export interface VersionPublished {
   type: 'version_published';
@@ -69,6 +71,10 @@ export interface Storage {
     cond: { expectedLatest?: number | undefined },
     event: (version: number) => VersionPublished,
   ): Promise<CommitResult>;
+  // A version's reviews (contract §10), one per reviewer: a commit stores the ones its NewVersion carries; a reviewer run
+  // again later (an offline sweep) replaces its own. Listed by reviewer id; none for a version or skill that isn't there.
+  putReview(name: string, version: number, review: Review): Promise<void>;
+  reviews(name: string, version: number): Promise<Review[]>;
 }
 
 export interface SearchCard {

@@ -6,6 +6,7 @@
 //   v#<name> / <version, 10 digits>      data (the version's record as JSON), fingerprint
 //   fp#<fingerprint> / <name>#<version>  one per version, so the first by name and version answers a fingerprint
 //   events / <at>#<name>#<version>       event (JSON), delivered (true once handed to the index)
+//   r#<name> / <version>#<reviewer>      data (one reviewer's review of that version as JSON, contract §10)
 //   file#<sha256> / <name>#<version>     one per file of a version, written by the indexer after the publish
 //   token#<hash> / token, tokens#<owner> / <id>   a Bearer token by its hash, and under its owner by its public id
 //   login#<login> / github               github_id: GitHub's numeric id, recorded at the login's first sign-in
@@ -24,6 +25,8 @@ export const SEARCH_KEY = 'search/cards.json';
 export const EVENTS_PK = 'events';
 export const blobKey = (sha256: string) => `${BLOB_PREFIX}${sha256}`;
 export const versionSk = (version: number) => String(version).padStart(10, '0');
+/** Where one reviewer's review of a version is kept: beside the version, never in its record, so it can be run again. */
+export const reviewKey = (name: string, version: number, reviewer: string) => ({ pk: `r#${name}`, sk: `${versionSk(version)}#${reviewer}` });
 
 /** The table and bucket, made empty: for tests on the stand-in (the stack makes them in AWS). */
 export async function createStores(ddb: DynamoDBClient, s3: S3Client, place: Place): Promise<void> {

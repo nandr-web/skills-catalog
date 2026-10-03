@@ -2,6 +2,7 @@
 // Synchronous, used only inside the local Storage adapter (storage.ts); `append` is the publish's commit point.
 
 import type { CommitResult, NewVersion, SkillRecord, VersionPublished, VersionRecord } from '../ports.ts';
+import type { Review } from '../skill-tree/index.ts';
 import type { LocalDb } from './db.ts';
 
 interface VersionRow {
@@ -39,9 +40,14 @@ export class SqliteMetadataStore {
   // of a catalog from before it looks through the versions instead.
   private readonly indexed: boolean;
 
+  // Whether the catalog has the reviews table: a writing open always makes it; a read-only open of a catalog from before
+  // it has no reviews.
+  private readonly reviewed: boolean;
+
   constructor(local: LocalDb) {
     this.local = local;
     this.indexed = local.hasTable('version_files');
+    this.reviewed = local.hasTable('reviews');
   }
 
   private get db() {
@@ -117,11 +123,36 @@ export class SqliteMetadataStore {
     return (this.db.prepare('SELECT sha256 FROM pending_blobs WHERE at < ? ORDER BY sha256').all(at) as { sha256: string }[]).map((r) => r.sha256);
   }
 
+  // A version's reviews (contract §10), by reviewer id. A row that isn't JSON is skipped: the file is someone else's input.
+  reviews(name: string, version: number): Review[] {
+    if (!this.reviewed) return [];
+    const rows = this.db.prepare('SELECT data FROM reviews WHERE name = ? AND version = ? ORDER BY reviewer').all(name, version) as { data: string }[];
+    const out: Review[] = [];
+    for (const r of rows) {
+      try {
+        out.push(JSON.parse(r.data) as Review);
+      } catch {
+        // unreadable: as if never reviewed
+      }
+    }
+    return out;
+  }
+
+  putReview(name: string, version: number, review: Review): void {
+    this.local.immediate(() => this.insertReview(name, version, review));
+  }
+
+  private insertReview(name: string, version: number, review: Review): void {
+    this.db.prepare('INSERT OR REPLACE INTO reviews (name, version, reviewer, data) VALUES (?, ?, ?, ?)').run(name, version, review.reviewer, JSON.stringify(review));
+  }
+
   withWriteLock<T>(fn: () => T): T {
     return this.local.immediate(fn);
   }
 
-  append(v: NewVersion, cond: { expectedLatest?: number | undefined }, event: (version: number) => VersionPublished): CommitResult {
+  append(given: NewVersion, cond: { expectedLatest?: number | undefined }, event: (version: number) => VersionPublished): CommitResult {
+    // The reviews are kept beside the version, never in its record.
+    const { reviews = [], ...v } = given;
     return this.local.immediate((): CommitResult => {
       const s = this.skill(v.name);
       if (s && !s.owners.includes(v.publisher)) return { kind: 'not_owner', owners: s.owners };
@@ -141,6 +172,7 @@ export class SqliteMetadataStore {
       for (const sha of new Set(v.files.map((f) => f.sha256))) named.run(sha, v.name, version);
       if (s) this.db.prepare('UPDATE skills SET latest = ? WHERE name = ?').run(version, v.name);
       else this.db.prepare('INSERT INTO skills (name, owners, latest) VALUES (?, ?, ?)').run(v.name, JSON.stringify([v.publisher]), version);
+      for (const r of reviews) this.insertReview(v.name, version, r);
       this.db.prepare('INSERT INTO outbox (event) VALUES (?)').run(JSON.stringify(event(version)));
       return { kind: 'created', record: { ...v, version } };
     });

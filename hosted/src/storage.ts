@@ -6,6 +6,7 @@
 
 import {
   GetItemCommand,
+  PutItemCommand,
   QueryCommand,
   TransactWriteItemsCommand,
   type AttributeValue,
@@ -14,10 +15,11 @@ import {
 } from '@aws-sdk/client-dynamodb';
 import { GetObjectCommand, type S3Client } from '@aws-sdk/client-s3';
 import type { Clock, CommitResult, NewVersion, SkillRecord, Storage, VersionPublished, VersionRecord } from '@skills-catalog/core';
+import type { Review } from '@skills-catalog/core/skill-tree';
 import { committable, glance, inspect } from './blobs.ts';
 import { fileState, type FileState } from './api/files.ts';
 import { isNamed } from './names.ts';
-import { blobKey, EVENTS_PK, versionSk, type Place } from './place.ts';
+import { blobKey, EVENTS_PK, reviewKey, versionSk, type Place } from './place.ts';
 
 const S = (s: string): AttributeValue => ({ S: s });
 const N = (n: number): AttributeValue => ({ N: String(n) });
@@ -109,12 +111,38 @@ export class HostedStorage implements Storage {
     }
   }
 
+  /** A version's reviews (contract §10), by reviewer id: one query on the skill's reviews, from that version's key on. */
+  async reviews(name: string, version: number): Promise<Review[]> {
+    const out: Review[] = [];
+    let start: Record<string, AttributeValue> | undefined;
+    do {
+      const r = await this.p.ddb.send(
+        new QueryCommand({
+          TableName: this.table,
+          KeyConditionExpression: 'pk = :pk AND begins_with(sk, :v)',
+          ExpressionAttributeValues: { ':pk': S(`r#${name}`), ':v': S(`${versionSk(version)}#`) },
+          ExclusiveStartKey: start,
+          ConsistentRead: true,
+        }),
+      );
+      for (const i of r.Items ?? []) out.push(JSON.parse(i['data']!.S!) as Review);
+      start = r.LastEvaluatedKey;
+    } while (start);
+    return out;
+  }
+
+  async putReview(name: string, version: number, review: Review): Promise<void> {
+    await this.p.ddb.send(new PutItemCommand({ TableName: this.table, Item: reviewItem(name, version, review) }));
+  }
+
   async commit(
-    v: NewVersion,
+    given: NewVersion,
     files: readonly { sha256: string; bytes?: Uint8Array | undefined }[],
     cond: { expectedLatest?: number | undefined },
     event: (version: number) => VersionPublished,
   ): Promise<CommitResult> {
+    // The reviews are written beside the version, in the same transaction, never in its record.
+    const { reviews = [], ...v } = given;
     // One way in: files go up through their links first, so the commit never carries bytes.
     if (files.some((f) => f.bytes !== undefined)) throw new Error('the hosted commit takes files by sha256 alone; upload them through their links first');
     // Each named file is checked once, after the owner, conflict and identical answers (the refusal order): its bytes
@@ -159,6 +187,7 @@ export class HostedStorage implements Storage {
           : { Put: { TableName: this.table, Item: { pk: S('skills'), sk: S(v.name), owners: { L: [S(v.publisher)] }, latest: N(version) }, ConditionExpression: 'attribute_not_exists(pk)' } },
         { Put: { TableName: this.table, Item: { pk: S(`fp#${v.fingerprint}`), sk: S(`${v.name}#${versionSk(version)}`) } } },
         { Put: { TableName: this.table, Item: { pk: S(EVENTS_PK), sk: S(`${e.at}#${v.name}#${versionSk(version)}`), event: S(JSON.stringify(e)), delivered: { BOOL: false } } } },
+        ...reviews.map((r): TransactWriteItem => ({ Put: { TableName: this.table, Item: reviewItem(v.name, version, r) } })),
       ];
       try {
         await this.p.ddb.send(new TransactWriteItemsCommand({ TransactItems: items }));
@@ -170,4 +199,9 @@ export class HostedStorage implements Storage {
       }
     }
   }
+}
+
+function reviewItem(name: string, version: number, review: Review): Record<string, AttributeValue> {
+  const { pk, sk } = reviewKey(name, version, review.reviewer);
+  return { pk: S(pk), sk: S(sk), data: S(JSON.stringify(review)) };
 }
