@@ -1,135 +1,135 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="d d-architecture" viewBox="0 0 711 868" width="711" height="868" role="img" aria-label="What are the parts on the developer's machine, and what talks to what?">
+<svg xmlns="http://www.w3.org/2000/svg" class="st st-architecture" viewBox="0 0 756 868" width="756" height="868" role="img" aria-label="What are the parts on the developer's machine, and what talks to what?">
 <title>What runs on the developer's machine</title>
-<style>.d { --d-page: #ECF0F3; --d-canvas: #F9FBFC; --d-ink: #13202A; --d-ink2: #3A4A56; --d-line: #B7C4CD; --d-grid: #D5DDE3; --d-shade: #E1E7EB; --d-accent: #137052; --d-accent-soft: #D9EDE3; --d-hot: #B23A0A; --d-hot-soft: #F8E2D5; }
+<style>.st { --st-page: #ECF0F3; --st-canvas: #F9FBFC; --st-ink: #13202A; --st-ink2: #3A4A56; --st-line: #B7C4CD; --st-grid: #D5DDE3; --st-shade: #E1E7EB; --st-accent: #137052; --st-accent-soft: #D9EDE3; --st-hot: #B23A0A; --st-hot-soft: #F8E2D5; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .d, svg.d:root { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+  :root:not([data-theme="light"]) .st, svg.st:root { --st-page: #0E1418; --st-canvas: #151D23; --st-ink: #E3EAEE; --st-ink2: #AFBCC5; --st-line: #3A4A55; --st-grid: #25313A; --st-shade: #1C262D; --st-accent: #46C290; --st-accent-soft: #1C3A2F; --st-hot: #F08A50; --st-hot-soft: #4A2819; color-scheme: dark; }
 }
-:root[data-theme="dark"] .d { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+:root[data-theme="dark"] .st { --st-page: #0E1418; --st-canvas: #151D23; --st-ink: #E3EAEE; --st-ink2: #AFBCC5; --st-line: #3A4A55; --st-grid: #25313A; --st-shade: #1C262D; --st-accent: #46C290; --st-accent-soft: #1C3A2F; --st-hot: #F08A50; --st-hot-soft: #4A2819; color-scheme: dark; }
 
-.d { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 12px; fill: var(--d-ink); }
-.d text { dominant-baseline: central; }
-.d-bg { fill: var(--d-canvas); }
+.st { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 12px; fill: var(--st-ink); }
+.st text { dominant-baseline: central; }
+.st-bg { fill: var(--st-canvas); }
 
 /* nodes */
-.d-node { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1.2; }
-.d-node--external { fill: var(--d-shade); stroke: var(--d-ink2); stroke-dasharray: 4 3; }
-.d-node--focus { fill: var(--d-accent-soft); stroke: var(--d-accent); stroke-width: 1.6; }
-.d-node--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); stroke-width: 1.6; }
-.d-node-detail { fill: none; stroke: var(--d-ink); stroke-width: 1; }
-.d-node--focus + .d-node-detail { stroke: var(--d-accent); }
-.d-node--alert + .d-node-detail { stroke: var(--d-hot); }
-.d-node--external + .d-node-detail { stroke: var(--d-ink2); }
+.d-node { fill: var(--st-canvas); stroke: var(--st-ink); stroke-width: 1.2; }
+.d-node--external { fill: var(--st-shade); stroke: var(--st-ink2); stroke-dasharray: 4 3; }
+.d-node--focus { fill: var(--st-accent-soft); stroke: var(--st-accent); stroke-width: 1.6; }
+.d-node--alert { fill: var(--st-hot-soft); stroke: var(--st-hot); stroke-width: 1.6; }
+.d-node-detail { fill: none; stroke: var(--st-ink); stroke-width: 1; }
+.d-node--focus + .d-node-detail { stroke: var(--st-accent); }
+.d-node--alert + .d-node-detail { stroke: var(--st-hot); }
+.d-node--external + .d-node-detail { stroke: var(--st-ink2); }
 .d-node--proposed { stroke-width: 1.4; stroke-dasharray: 2 3; }
-.d-node--removed { fill: var(--d-canvas); stroke: var(--d-hot); stroke-width: 1.4; stroke-dasharray: 5 3; }
-.d-label { fill: var(--d-ink); text-anchor: middle; }
+.d-node--removed { fill: var(--st-canvas); stroke: var(--st-hot); stroke-width: 1.4; stroke-dasharray: 5 3; }
+.d-label { fill: var(--st-ink); text-anchor: middle; }
 .d-label--strong { font-weight: 600; }
-.d-label--removed { fill: var(--d-ink2); text-decoration: line-through; }
-.d-tag--proposed { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1; stroke-dasharray: 2 2; }
-.d-tag--removed { fill: var(--d-hot); stroke: var(--d-hot); stroke-width: 1; }
-.d-tag-text { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-anchor: middle; }
-.d-tag-text--proposed { fill: var(--d-ink); }
-.d-tag-text--removed { fill: var(--d-canvas); }
-.d-legend-text { font-size: 10.5px; fill: var(--d-ink2); }
-.d-compare-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; fill: var(--d-ink2); }
-.d-callout { fill: var(--d-ink); }
-.d-callout-text { font-size: 10px; font-weight: 600; fill: var(--d-canvas); text-anchor: middle; }
-.d-note { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle; }
-.d-note--focus { fill: var(--d-accent); }
-.d-note--alert { fill: var(--d-hot); }
+.d-label--removed { fill: var(--st-ink2); text-decoration: line-through; }
+.st-tag--proposed { fill: var(--st-canvas); stroke: var(--st-ink); stroke-width: 1; stroke-dasharray: 2 2; }
+.st-tag--removed { fill: var(--st-hot); stroke: var(--st-hot); stroke-width: 1; }
+.st-tag-text { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-anchor: middle; }
+.st-tag-text--proposed { fill: var(--st-ink); }
+.st-tag-text--removed { fill: var(--st-canvas); }
+.st-legend-text { font-size: 10.5px; fill: var(--st-ink2); }
+.st-compare-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; fill: var(--st-ink2); }
+.st-callout { fill: var(--st-ink); }
+.st-callout-text { font-size: 10px; font-weight: 600; fill: var(--st-canvas); text-anchor: middle; }
+.st-note { font-size: 10.5px; fill: var(--st-ink2); text-anchor: middle; }
+.st-note--focus { fill: var(--st-accent); }
+.st-note--alert { fill: var(--st-hot); }
 
 /* edges */
-.d-edge { fill: none; stroke: var(--d-ink); stroke-width: 1.3; stroke-linejoin: round; }
+.d-edge { fill: none; stroke: var(--st-ink); stroke-width: 1.3; stroke-linejoin: round; }
 .d-edge--async { stroke-dasharray: 5 4; }
 .d-edge--proposed { stroke-dasharray: 2 3; }
-.d-edge--removed { stroke: var(--d-hot); stroke-dasharray: 5 3; }
-.d-edge--return { stroke: var(--d-ink2); stroke-width: 1.1; stroke-dasharray: 4 3; }
-.d-edge--focus { stroke: var(--d-accent); stroke-width: 2; }
-.d-edge--alert { stroke: var(--d-hot); stroke-width: 2; }
-.d-edge-label { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle;
-  paint-order: stroke; stroke: var(--d-canvas); stroke-width: 4px; stroke-linejoin: round; }
-.d-edge-label--focus { fill: var(--d-accent); font-weight: 600; }
-.d-edge-label--alert { fill: var(--d-hot); font-weight: 600; }
-.d-arrow { fill: var(--d-ink); }
-.d-arrow--focus { fill: var(--d-accent); }
-.d-arrow--alert { fill: var(--d-hot); }
-.d-arrow--muted { fill: var(--d-ink2); }
-.d-arrow--open { fill: none; stroke: var(--d-ink); stroke-width: 1.4; stroke-linejoin: round; }
-.d-arrow--open.d-arrow--focus { stroke: var(--d-accent); }
-.d-arrow--open.d-arrow--alert { stroke: var(--d-hot); }
-.d-arrow--open.d-arrow--muted { stroke: var(--d-ink2); }
+.d-edge--removed { stroke: var(--st-hot); stroke-dasharray: 5 3; }
+.d-edge--return { stroke: var(--st-ink2); stroke-width: 1.1; stroke-dasharray: 4 3; }
+.d-edge--focus { stroke: var(--st-accent); stroke-width: 2; }
+.d-edge--alert { stroke: var(--st-hot); stroke-width: 2; }
+.d-edge-label { font-size: 10.5px; fill: var(--st-ink2); text-anchor: middle;
+  paint-order: stroke; stroke: var(--st-canvas); stroke-width: 4px; stroke-linejoin: round; }
+.d-edge-label--focus { fill: var(--st-accent); font-weight: 600; }
+.d-edge-label--alert { fill: var(--st-hot); font-weight: 600; }
+.d-arrow { fill: var(--st-ink); }
+.d-arrow--focus { fill: var(--st-accent); }
+.d-arrow--alert { fill: var(--st-hot); }
+.d-arrow--muted { fill: var(--st-ink2); }
+.d-arrow--open { fill: none; stroke: var(--st-ink); stroke-width: 1.4; stroke-linejoin: round; }
+.d-arrow--open.d-arrow--focus { stroke: var(--st-accent); }
+.d-arrow--open.d-arrow--alert { stroke: var(--st-hot); }
+.d-arrow--open.d-arrow--muted { stroke: var(--st-ink2); }
 
 /* sequence */
-.d-lifeline { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 3 4; }
-.d-activation { fill: var(--d-shade); stroke: var(--d-ink); stroke-width: 1; }
-.d-msg-label { font-size: 11px; fill: var(--d-ink); text-anchor: middle; }
-.d-msg-label--start { text-anchor: start; }
-.d-msg-label--return { fill: var(--d-ink2); }
-.d-msg-label--focus { fill: var(--d-accent); font-weight: 600; }
-.d-msg-label--alert { fill: var(--d-hot); font-weight: 600; }
-.d-memo { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1; }
-.d-memo--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); }
-.d-memo-text { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
-.d-frame { fill: none; stroke: var(--d-ink2); stroke-width: 1.1; }
-.d-frame-tab { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1.1; }
-.d-frame-kind { font-size: 10.5px; font-weight: 600; fill: var(--d-ink); }
-.d-frame-cond-bg { fill: var(--d-canvas); }
-.d-frame-cond { font-size: 10.5px; fill: var(--d-ink2); }
-.d-frame-sep { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+.st-lifeline { fill: none; stroke: var(--st-ink2); stroke-width: 1; stroke-dasharray: 3 4; }
+.st-activation { fill: var(--st-shade); stroke: var(--st-ink); stroke-width: 1; }
+.st-msg-label { font-size: 11px; fill: var(--st-ink); text-anchor: middle; }
+.st-msg-label--start { text-anchor: start; }
+.st-msg-label--return { fill: var(--st-ink2); }
+.st-msg-label--focus { fill: var(--st-accent); font-weight: 600; }
+.st-msg-label--alert { fill: var(--st-hot); font-weight: 600; }
+.st-memo { fill: var(--st-shade); stroke: var(--st-ink2); stroke-width: 1; }
+.st-memo--alert { fill: var(--st-hot-soft); stroke: var(--st-hot); }
+.st-memo-text { font-size: 10.5px; fill: var(--st-ink); text-anchor: middle; }
+.st-frame { fill: none; stroke: var(--st-ink2); stroke-width: 1.1; }
+.st-frame-tab { fill: var(--st-shade); stroke: var(--st-ink2); stroke-width: 1.1; }
+.st-frame-kind { font-size: 10.5px; font-weight: 600; fill: var(--st-ink); }
+.st-frame-cond-bg { fill: var(--st-canvas); }
+.st-frame-cond { font-size: 10.5px; fill: var(--st-ink2); }
+.st-frame-sep { fill: none; stroke: var(--st-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
 
 /* state */
-.d-pseudo { fill: var(--d-ink); }
-.d-choice-label { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
-.d-composite { fill: var(--d-grid); fill-opacity: 0.25; stroke: var(--d-ink2); stroke-width: 1.1; }
-.d-composite-label { font-size: 11px; font-weight: 600; fill: var(--d-ink); }
+.st-pseudo { fill: var(--st-ink); }
+.st-choice-label { font-size: 10.5px; fill: var(--st-ink); text-anchor: middle; }
+.st-composite { fill: var(--st-grid); fill-opacity: 0.25; stroke: var(--st-ink2); stroke-width: 1.1; }
+.st-composite-label { font-size: 11px; font-weight: 600; fill: var(--st-ink); }
 
 /* groups (boundaries) */
-.d-group { fill: var(--d-grid); fill-opacity: 0.35; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
-.d-group-label { font-size: 10.5px; fill: var(--d-ink2); letter-spacing: 0.06em; font-weight: 500; }</style>
+.st-group { fill: var(--st-grid); fill-opacity: 0.35; stroke: var(--st-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+.st-group-label { font-size: 10.5px; fill: var(--st-ink2); letter-spacing: 0.06em; font-weight: 500; }</style>
 <defs><marker id="what-runs-on-the-developer-s-mac-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="what-runs-on-the-developer-s-mac-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="what-runs-on-the-developer-s-mac-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="what-runs-on-the-developer-s-mac-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="what-runs-on-the-developer-s-mac-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="what-runs-on-the-developer-s-mac-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="what-runs-on-the-developer-s-mac-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="what-runs-on-the-developer-s-mac-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
-<rect class="d-bg" width="711" height="868"/>
-<rect class="d-group" x="233" y="20" width="321.5" height="288" rx="6"/>
-<text class="d-group-label" x="238" y="32.5">THE DEVELOPER'S SIDE</text>
-<rect class="d-group" x="20" y="358" width="670.5" height="388" rx="6"/>
-<text class="d-group-label" x="25" y="370.5">SKILLS-CATALOG</text>
-<path class="d-edge" d="M464.5 112 L464.5 182" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
-<path class="d-edge" d="M464.5 220 L465 310 Q465 315 465 320 L465 412" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
-<path class="d-edge" d="M429.5 112 L429.5 159 Q429.5 164 424.5 164 L398 164 Q393 164 393 169 L393 328 Q393 333 388 333 L227 333 Q222 333 221.9 338 L221.6 346 Q221.5 351 221.5 356 L221.5 427" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
-<path class="d-edge" d="M492.5 465 L492.5 658" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
-<path class="d-edge" d="M437.5 465 L437.5 512 Q437.5 517 432.5 517 L277.2 517 Q272.2 517 272.2 522 L272.2 535" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
-<path class="d-edge" d="M221.5 480 L221.5 535" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
-<path class="d-edge" d="M272.2 588 L272.2 635 Q272.2 640 277.2 640 L428.5 640 Q433.5 640 433.5 645 L433.5 658" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
-<path class="d-edge" d="M463 711 L463 789" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
-<path class="d-edge" d="M221.5 588 L222 748 Q222 753 222 758 L222 789" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
-<rect class="d-node" x="394.5" y="74" width="105" height="38" rx="19"/>
-<text class="d-label" x="447" y="93">Developer</text>
-<rect class="d-node" x="412" y="182" width="105" height="38" rx="19"/>
-<text class="d-label" x="464.5" y="201">Assistant</text>
-<rect class="d-node" x="382.5" y="412" width="165" height="53" rx="3"/>
-<text class="d-label" x="465" y="431.5">MCP server</text>
-<text class="d-note" x="465" y="447.5">the Assistant's tools</text>
-<rect class="d-node" x="139" y="427" width="165" height="53" rx="3"/>
-<text class="d-label" x="221.5" y="446.5">CLI</text>
-<text class="d-note" x="221.5" y="462.5">install, list, update</text>
-<rect class="d-node d-node--focus" x="374.5" y="658" width="177" height="53" rx="3"/>
-<text class="d-label d-label--strong" x="463" y="677.5">core</text>
-<text class="d-note d-note--focus" x="463" y="693.5">checks, versions, diffs</text>
-<rect class="d-node" x="170.8" y="535" width="152" height="53" rx="3"/>
-<text class="d-label" x="246.8" y="554.5">installer</text>
-<text class="d-note" x="246.8" y="570.5">holds risky updates</text>
-<path class="d-node" d="M402 795 A60.5 6 0 0 1 523 795 V842 A60.5 6 0 0 1 402 842 Z"/>
-<path class="d-node-detail" d="M402 795 A60.5 6 0 0 0 523 795"/>
-<text class="d-label" x="462.5" y="814.5">Catalog</text>
-<text class="d-note" x="462.5" y="830.5">SQLite + files</text>
-<path class="d-node" d="M159 795 A63 6 0 0 1 285 795 V827 A63 6 0 0 1 159 827 Z"/>
-<path class="d-node-detail" d="M159 795 A63 6 0 0 0 285 795"/>
-<text class="d-label" x="222" y="814">skills folder</text>
-<text class="d-edge-label" x="484.5" y="147">asks</text>
-<text class="d-edge-label" x="503.3" y="267.5">tool calls</text>
-<text class="d-edge-label" x="398.5" y="153.5">commands</text>
-<text class="d-edge-label" x="585" y="561.5">publish, discover, retrieve</text>
-<text class="d-edge-label" x="354.8" y="506.5">install, update</text>
-<text class="d-edge-label" x="285.5" y="490.5">accept held change</text>
-<text class="d-edge-label" x="323.7" y="614">fetch versions</text>
-<text class="d-edge-label" x="511" y="734.4">reads, writes</text>
-<text class="d-edge-label" x="291.8" y="670.5">writes checked files</text>
+<rect class="st-bg" width="756" height="868"/>
+<rect class="st-group" x="279" y="20" width="321.5" height="288" rx="6"/>
+<text class="st-group-label" x="284" y="32.5">THE DEVELOPER'S SIDE</text>
+<rect class="st-group" x="20" y="358" width="716" height="388" rx="6"/>
+<text class="st-group-label" x="25" y="370.5">SKILLS-CATALOG</text>
+<path class="d-edge" d="M510.5 112 L510.5 182" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
+<path class="d-edge" d="M510.5 220 L511 310 Q511 315 510.9 320 L510.6 346 Q510.5 351 510.5 356 L510.5 412" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
+<path class="d-edge" d="M475.5 112 L475.5 159 Q475.5 164 470.5 164 L444 164 Q439 164 439 169 L439 328 Q439 333 434 333 L271 333 Q266 333 265.9 338 L265.6 346 Q265.5 351 265.5 356 L265.5 427" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
+<path class="d-edge" d="M538 465 L538 658" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
+<path class="d-edge" d="M483 465 L483 512 Q483 517 478 517 L321.2 517 Q316.2 517 316.2 522 L316.2 535" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
+<path class="d-edge" d="M265.5 480 L265.5 535" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
+<path class="d-edge" d="M316.2 588 L316.2 635 Q316.2 640 321.2 640 L474 640 Q479 640 479 645 L479 658" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
+<path class="d-edge" d="M508.5 711 L508.9 748 Q509 753 509 758 L509 789" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
+<path class="d-edge" d="M265.5 588 L266 748 Q266 753 266 758 L266 789" marker-end="url(#what-runs-on-the-developer-s-mac-arrow)"/>
+<rect class="d-node" x="440.5" y="74" width="105" height="38" rx="19"/>
+<text class="d-label" x="493" y="93">Developer</text>
+<rect class="d-node" x="458" y="182" width="105" height="38" rx="19"/>
+<text class="d-label" x="510.5" y="201">Assistant</text>
+<rect class="d-node" x="428" y="412" width="165" height="53" rx="3"/>
+<text class="d-label" x="510.5" y="431.5">MCP server</text>
+<text class="st-note" x="510.5" y="447.5">the Assistant's tools</text>
+<rect class="d-node" x="139" y="427" width="253" height="53" rx="3"/>
+<text class="d-label" x="265.5" y="446.5">CLI</text>
+<text class="st-note" x="265.5" y="462.5">search, publish, install, update, …</text>
+<rect class="d-node d-node--focus" x="420" y="658" width="177" height="53" rx="3"/>
+<text class="d-label d-label--strong" x="508.5" y="677.5">core</text>
+<text class="st-note st-note--focus" x="508.5" y="693.5">checks, versions, diffs</text>
+<rect class="d-node" x="214.8" y="535" width="152" height="53" rx="3"/>
+<text class="d-label" x="290.8" y="554.5">installer</text>
+<text class="st-note" x="290.8" y="570.5">holds risky updates</text>
+<path class="d-node" d="M417 795 A92 6 0 0 1 601 795 V842 A92 6 0 0 1 417 842 Z"/>
+<path class="d-node-detail" d="M417 795 A92 6 0 0 0 601 795"/>
+<text class="d-label" x="509" y="814.5">Catalog</text>
+<text class="st-note" x="509" y="830.5">a folder here, or hosted</text>
+<path class="d-node" d="M203 795 A63 6 0 0 1 329 795 V827 A63 6 0 0 1 203 827 Z"/>
+<path class="d-node-detail" d="M203 795 A63 6 0 0 0 329 795"/>
+<text class="d-label" x="266" y="814">skills folder</text>
+<text class="d-edge-label" x="530.5" y="147">asks</text>
+<text class="d-edge-label" x="549.3" y="267.5">tool calls</text>
+<text class="d-edge-label" x="444.5" y="153.5">commands</text>
+<text class="d-edge-label" x="630.5" y="561.5">publish, discover, retrieve</text>
+<text class="d-edge-label" x="399.6" y="506.5">install, update</text>
+<text class="d-edge-label" x="329.5" y="490.5">accept held change</text>
+<text class="d-edge-label" x="367.7" y="614">fetch versions</text>
+<text class="d-edge-label" x="556.8" y="732">reads, writes</text>
+<text class="d-edge-label" x="335.8" y="670.5">writes checked files</text>
 </svg>

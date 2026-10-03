@@ -1,149 +1,149 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="d d-sequence" viewBox="0 0 917 616" width="917" height="616" role="img" aria-label="What happens, in order, when Developer 2's Assistant retrieves Developer 1's skill, and Developer 1 then changes it?">
+<svg xmlns="http://www.w3.org/2000/svg" class="st st-sequence" viewBox="0 0 960 616" width="960" height="616" role="img" aria-label="What happens, in order, when Developer 2's Assistant retrieves Developer 1's skill, and Developer 1 then changes it?">
 <title>Two developers, one catalog</title>
-<style>.d { --d-page: #ECF0F3; --d-canvas: #F9FBFC; --d-ink: #13202A; --d-ink2: #3A4A56; --d-line: #B7C4CD; --d-grid: #D5DDE3; --d-shade: #E1E7EB; --d-accent: #137052; --d-accent-soft: #D9EDE3; --d-hot: #B23A0A; --d-hot-soft: #F8E2D5; }
+<style>.st { --st-page: #ECF0F3; --st-canvas: #F9FBFC; --st-ink: #13202A; --st-ink2: #3A4A56; --st-line: #B7C4CD; --st-grid: #D5DDE3; --st-shade: #E1E7EB; --st-accent: #137052; --st-accent-soft: #D9EDE3; --st-hot: #B23A0A; --st-hot-soft: #F8E2D5; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .d, svg.d:root { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+  :root:not([data-theme="light"]) .st, svg.st:root { --st-page: #0E1418; --st-canvas: #151D23; --st-ink: #E3EAEE; --st-ink2: #AFBCC5; --st-line: #3A4A55; --st-grid: #25313A; --st-shade: #1C262D; --st-accent: #46C290; --st-accent-soft: #1C3A2F; --st-hot: #F08A50; --st-hot-soft: #4A2819; color-scheme: dark; }
 }
-:root[data-theme="dark"] .d { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+:root[data-theme="dark"] .st { --st-page: #0E1418; --st-canvas: #151D23; --st-ink: #E3EAEE; --st-ink2: #AFBCC5; --st-line: #3A4A55; --st-grid: #25313A; --st-shade: #1C262D; --st-accent: #46C290; --st-accent-soft: #1C3A2F; --st-hot: #F08A50; --st-hot-soft: #4A2819; color-scheme: dark; }
 
-.d { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 12px; fill: var(--d-ink); }
-.d text { dominant-baseline: central; }
-.d-bg { fill: var(--d-canvas); }
+.st { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 12px; fill: var(--st-ink); }
+.st text { dominant-baseline: central; }
+.st-bg { fill: var(--st-canvas); }
 
 /* nodes */
-.d-node { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1.2; }
-.d-node--external { fill: var(--d-shade); stroke: var(--d-ink2); stroke-dasharray: 4 3; }
-.d-node--focus { fill: var(--d-accent-soft); stroke: var(--d-accent); stroke-width: 1.6; }
-.d-node--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); stroke-width: 1.6; }
-.d-node-detail { fill: none; stroke: var(--d-ink); stroke-width: 1; }
-.d-node--focus + .d-node-detail { stroke: var(--d-accent); }
-.d-node--alert + .d-node-detail { stroke: var(--d-hot); }
-.d-node--external + .d-node-detail { stroke: var(--d-ink2); }
+.d-node { fill: var(--st-canvas); stroke: var(--st-ink); stroke-width: 1.2; }
+.d-node--external { fill: var(--st-shade); stroke: var(--st-ink2); stroke-dasharray: 4 3; }
+.d-node--focus { fill: var(--st-accent-soft); stroke: var(--st-accent); stroke-width: 1.6; }
+.d-node--alert { fill: var(--st-hot-soft); stroke: var(--st-hot); stroke-width: 1.6; }
+.d-node-detail { fill: none; stroke: var(--st-ink); stroke-width: 1; }
+.d-node--focus + .d-node-detail { stroke: var(--st-accent); }
+.d-node--alert + .d-node-detail { stroke: var(--st-hot); }
+.d-node--external + .d-node-detail { stroke: var(--st-ink2); }
 .d-node--proposed { stroke-width: 1.4; stroke-dasharray: 2 3; }
-.d-node--removed { fill: var(--d-canvas); stroke: var(--d-hot); stroke-width: 1.4; stroke-dasharray: 5 3; }
-.d-label { fill: var(--d-ink); text-anchor: middle; }
+.d-node--removed { fill: var(--st-canvas); stroke: var(--st-hot); stroke-width: 1.4; stroke-dasharray: 5 3; }
+.d-label { fill: var(--st-ink); text-anchor: middle; }
 .d-label--strong { font-weight: 600; }
-.d-label--removed { fill: var(--d-ink2); text-decoration: line-through; }
-.d-tag--proposed { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1; stroke-dasharray: 2 2; }
-.d-tag--removed { fill: var(--d-hot); stroke: var(--d-hot); stroke-width: 1; }
-.d-tag-text { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-anchor: middle; }
-.d-tag-text--proposed { fill: var(--d-ink); }
-.d-tag-text--removed { fill: var(--d-canvas); }
-.d-legend-text { font-size: 10.5px; fill: var(--d-ink2); }
-.d-compare-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; fill: var(--d-ink2); }
-.d-callout { fill: var(--d-ink); }
-.d-callout-text { font-size: 10px; font-weight: 600; fill: var(--d-canvas); text-anchor: middle; }
-.d-note { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle; }
-.d-note--focus { fill: var(--d-accent); }
-.d-note--alert { fill: var(--d-hot); }
+.d-label--removed { fill: var(--st-ink2); text-decoration: line-through; }
+.st-tag--proposed { fill: var(--st-canvas); stroke: var(--st-ink); stroke-width: 1; stroke-dasharray: 2 2; }
+.st-tag--removed { fill: var(--st-hot); stroke: var(--st-hot); stroke-width: 1; }
+.st-tag-text { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-anchor: middle; }
+.st-tag-text--proposed { fill: var(--st-ink); }
+.st-tag-text--removed { fill: var(--st-canvas); }
+.st-legend-text { font-size: 10.5px; fill: var(--st-ink2); }
+.st-compare-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; fill: var(--st-ink2); }
+.st-callout { fill: var(--st-ink); }
+.st-callout-text { font-size: 10px; font-weight: 600; fill: var(--st-canvas); text-anchor: middle; }
+.st-note { font-size: 10.5px; fill: var(--st-ink2); text-anchor: middle; }
+.st-note--focus { fill: var(--st-accent); }
+.st-note--alert { fill: var(--st-hot); }
 
 /* edges */
-.d-edge { fill: none; stroke: var(--d-ink); stroke-width: 1.3; stroke-linejoin: round; }
+.d-edge { fill: none; stroke: var(--st-ink); stroke-width: 1.3; stroke-linejoin: round; }
 .d-edge--async { stroke-dasharray: 5 4; }
 .d-edge--proposed { stroke-dasharray: 2 3; }
-.d-edge--removed { stroke: var(--d-hot); stroke-dasharray: 5 3; }
-.d-edge--return { stroke: var(--d-ink2); stroke-width: 1.1; stroke-dasharray: 4 3; }
-.d-edge--focus { stroke: var(--d-accent); stroke-width: 2; }
-.d-edge--alert { stroke: var(--d-hot); stroke-width: 2; }
-.d-edge-label { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle;
-  paint-order: stroke; stroke: var(--d-canvas); stroke-width: 4px; stroke-linejoin: round; }
-.d-edge-label--focus { fill: var(--d-accent); font-weight: 600; }
-.d-edge-label--alert { fill: var(--d-hot); font-weight: 600; }
-.d-arrow { fill: var(--d-ink); }
-.d-arrow--focus { fill: var(--d-accent); }
-.d-arrow--alert { fill: var(--d-hot); }
-.d-arrow--muted { fill: var(--d-ink2); }
-.d-arrow--open { fill: none; stroke: var(--d-ink); stroke-width: 1.4; stroke-linejoin: round; }
-.d-arrow--open.d-arrow--focus { stroke: var(--d-accent); }
-.d-arrow--open.d-arrow--alert { stroke: var(--d-hot); }
-.d-arrow--open.d-arrow--muted { stroke: var(--d-ink2); }
+.d-edge--removed { stroke: var(--st-hot); stroke-dasharray: 5 3; }
+.d-edge--return { stroke: var(--st-ink2); stroke-width: 1.1; stroke-dasharray: 4 3; }
+.d-edge--focus { stroke: var(--st-accent); stroke-width: 2; }
+.d-edge--alert { stroke: var(--st-hot); stroke-width: 2; }
+.d-edge-label { font-size: 10.5px; fill: var(--st-ink2); text-anchor: middle;
+  paint-order: stroke; stroke: var(--st-canvas); stroke-width: 4px; stroke-linejoin: round; }
+.d-edge-label--focus { fill: var(--st-accent); font-weight: 600; }
+.d-edge-label--alert { fill: var(--st-hot); font-weight: 600; }
+.d-arrow { fill: var(--st-ink); }
+.d-arrow--focus { fill: var(--st-accent); }
+.d-arrow--alert { fill: var(--st-hot); }
+.d-arrow--muted { fill: var(--st-ink2); }
+.d-arrow--open { fill: none; stroke: var(--st-ink); stroke-width: 1.4; stroke-linejoin: round; }
+.d-arrow--open.d-arrow--focus { stroke: var(--st-accent); }
+.d-arrow--open.d-arrow--alert { stroke: var(--st-hot); }
+.d-arrow--open.d-arrow--muted { stroke: var(--st-ink2); }
 
 /* sequence */
-.d-lifeline { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 3 4; }
-.d-activation { fill: var(--d-shade); stroke: var(--d-ink); stroke-width: 1; }
-.d-msg-label { font-size: 11px; fill: var(--d-ink); text-anchor: middle; }
-.d-msg-label--start { text-anchor: start; }
-.d-msg-label--return { fill: var(--d-ink2); }
-.d-msg-label--focus { fill: var(--d-accent); font-weight: 600; }
-.d-msg-label--alert { fill: var(--d-hot); font-weight: 600; }
-.d-memo { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1; }
-.d-memo--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); }
-.d-memo-text { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
-.d-frame { fill: none; stroke: var(--d-ink2); stroke-width: 1.1; }
-.d-frame-tab { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1.1; }
-.d-frame-kind { font-size: 10.5px; font-weight: 600; fill: var(--d-ink); }
-.d-frame-cond-bg { fill: var(--d-canvas); }
-.d-frame-cond { font-size: 10.5px; fill: var(--d-ink2); }
-.d-frame-sep { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+.st-lifeline { fill: none; stroke: var(--st-ink2); stroke-width: 1; stroke-dasharray: 3 4; }
+.st-activation { fill: var(--st-shade); stroke: var(--st-ink); stroke-width: 1; }
+.st-msg-label { font-size: 11px; fill: var(--st-ink); text-anchor: middle; }
+.st-msg-label--start { text-anchor: start; }
+.st-msg-label--return { fill: var(--st-ink2); }
+.st-msg-label--focus { fill: var(--st-accent); font-weight: 600; }
+.st-msg-label--alert { fill: var(--st-hot); font-weight: 600; }
+.st-memo { fill: var(--st-shade); stroke: var(--st-ink2); stroke-width: 1; }
+.st-memo--alert { fill: var(--st-hot-soft); stroke: var(--st-hot); }
+.st-memo-text { font-size: 10.5px; fill: var(--st-ink); text-anchor: middle; }
+.st-frame { fill: none; stroke: var(--st-ink2); stroke-width: 1.1; }
+.st-frame-tab { fill: var(--st-shade); stroke: var(--st-ink2); stroke-width: 1.1; }
+.st-frame-kind { font-size: 10.5px; font-weight: 600; fill: var(--st-ink); }
+.st-frame-cond-bg { fill: var(--st-canvas); }
+.st-frame-cond { font-size: 10.5px; fill: var(--st-ink2); }
+.st-frame-sep { fill: none; stroke: var(--st-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
 
 /* state */
-.d-pseudo { fill: var(--d-ink); }
-.d-choice-label { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
-.d-composite { fill: var(--d-grid); fill-opacity: 0.25; stroke: var(--d-ink2); stroke-width: 1.1; }
-.d-composite-label { font-size: 11px; font-weight: 600; fill: var(--d-ink); }
+.st-pseudo { fill: var(--st-ink); }
+.st-choice-label { font-size: 10.5px; fill: var(--st-ink); text-anchor: middle; }
+.st-composite { fill: var(--st-grid); fill-opacity: 0.25; stroke: var(--st-ink2); stroke-width: 1.1; }
+.st-composite-label { font-size: 11px; font-weight: 600; fill: var(--st-ink); }
 
 /* groups (boundaries) */
-.d-group { fill: var(--d-grid); fill-opacity: 0.35; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
-.d-group-label { font-size: 10.5px; fill: var(--d-ink2); letter-spacing: 0.06em; font-weight: 500; }</style>
+.st-group { fill: var(--st-grid); fill-opacity: 0.35; stroke: var(--st-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+.st-group-label { font-size: 10.5px; fill: var(--st-ink2); letter-spacing: 0.06em; font-weight: 500; }</style>
 <defs><marker id="two-developers-one-catalog-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="two-developers-one-catalog-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="two-developers-one-catalog-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="two-developers-one-catalog-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="two-developers-one-catalog-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="two-developers-one-catalog-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="two-developers-one-catalog-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="two-developers-one-catalog-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
-<rect class="d-bg" width="917" height="616"/>
-<rect class="d-frame" x="416.8" y="420" width="446" height="162" rx="3"/>
-<path class="d-frame-sep" d="M416.8 484H862.8"/>
-<path class="d-lifeline" d="M76 58V596"/>
-<path class="d-lifeline" d="M283.6 64V596"/>
-<path class="d-lifeline" d="M438.8 58V596"/>
-<path class="d-lifeline" d="M633.2 58V596"/>
-<path class="d-lifeline" d="M840.8 58V596"/>
-<rect class="d-activation" x="279.6" y="96" width="8" height="24"/>
-<rect class="d-activation" x="629.2" y="130" width="8" height="246"/>
-<rect class="d-activation" x="283.6" y="164" width="8" height="42"/>
-<rect class="d-activation" x="434.8" y="232" width="8" height="300"/>
-<rect class="d-activation" x="283.6" y="266" width="8" height="24"/>
-<rect class="d-activation" x="287.6" y="334" width="8" height="24"/>
-<rect class="d-activation" x="438.8" y="368" width="8" height="106"/>
-<rect class="d-activation" x="291.6" y="402" width="8" height="24"/>
-<rect class="d-activation" x="434.8" y="558" width="8" height="24"/>
-<path class="d-edge" d="M76 100 L279.6 100" marker-end="url(#two-developers-one-catalog-arrow)"/>
-<path class="d-edge" d="M840.8 134 L637.2 134" marker-end="url(#two-developers-one-catalog-arrow)"/>
-<path class="d-edge" d="M629.2 168 L291.6 168" marker-end="url(#two-developers-one-catalog-arrow)"/>
-<path class="d-edge d-edge--return" d="M291.6 202 L629.2 202" marker-end="url(#two-developers-one-catalog-arrow-muted)"/>
-<path class="d-edge" d="M629.2 236 L442.8 236" marker-end="url(#two-developers-one-catalog-arrow)"/>
-<path class="d-edge" d="M434.8 270 L291.6 270" marker-end="url(#two-developers-one-catalog-arrow)"/>
-<path class="d-edge" d="M76 338 L287.6 338" marker-end="url(#two-developers-one-catalog-arrow)"/>
-<path class="d-edge" d="M629.2 372 L446.8 372" marker-end="url(#two-developers-one-catalog-arrow)"/>
-<path class="d-edge" d="M438.8 406 L299.6 406" marker-end="url(#two-developers-one-catalog-arrow)"/>
-<path class="d-edge d-edge--return" d="M446.8 470 L633.2 470" marker-end="url(#two-developers-one-catalog-arrow-muted)"/>
-<path class="d-edge d-edge--return d-edge--alert" d="M442.8 528 L633.2 528" marker-end="url(#two-developers-one-catalog-arrow-alert)"/>
-<path class="d-edge" d="M840.8 562 L442.8 562" marker-end="url(#two-developers-one-catalog-arrow)"/>
-<rect class="d-node" x="20" y="20" width="112" height="38" rx="3"/>
-<text class="d-label" x="76" y="39">Developer 1</text>
-<path class="d-node" d="M239.6 26 A44 6 0 0 1 327.6 26 V58 A44 6 0 0 1 239.6 58 Z"/>
-<path class="d-node-detail" d="M239.6 26 A44 6 0 0 0 327.6 26"/>
-<text class="d-label" x="283.6" y="45">Catalog</text>
-<rect class="d-node" x="390.3" y="20" width="97" height="38" rx="3"/>
-<text class="d-label" x="438.8" y="39">installer</text>
-<rect class="d-node" x="584.7" y="20" width="97" height="38" rx="3"/>
-<text class="d-label" x="633.2" y="39">Assistant</text>
-<rect class="d-node" x="784.8" y="20" width="112" height="38" rx="3"/>
-<text class="d-label" x="840.8" y="39">Developer 2</text>
-<path class="d-memo" d="M299.6 286H571.9L577.9 292V310H299.6Z"/>
-<text class="d-memo-text" x="438.8" y="298">text only: v1 goes into the skills folder</text>
-<path class="d-frame-tab" d="M416.8 420H449.7V432L444.7 437H416.8Z"/>
-<text class="d-frame-kind" x="423.8" y="428.5">alt</text>
-<rect class="d-frame-cond-bg" x="452.7" y="422" width="75.3" height="13"/>
-<text class="d-frame-cond" x="455.7" y="428.5">[text only]</text>
-<rect class="d-frame-cond-bg" x="421.8" y="486" width="144.6" height="13"/>
-<text class="d-frame-cond" x="424.8" y="492.5">[v2 can run something]</text>
-<text class="d-msg-label" x="179.8" y="86.5">publish v1</text>
-<text class="d-msg-label" x="737" y="120.5">a skill for release notes?</text>
-<text class="d-msg-label" x="536" y="154.5">discover</text>
-<text class="d-msg-label d-msg-label--return" x="361.2" y="188.5">release-note-draft</text>
-<text class="d-msg-label" x="536" y="222.5">retrieve</text>
-<text class="d-msg-label" x="361.2" y="256.5">fetch v1</text>
-<text class="d-msg-label" x="179.8" y="324.5">publish v2 (adds a script)</text>
-<text class="d-msg-label" x="535.9" y="358.5">update</text>
-<text class="d-msg-label" x="361.2" y="392.5">fetch v2</text>
-<text class="d-msg-label d-msg-label--return" x="536" y="456.5">updated to v2</text>
-<text class="d-msg-label d-msg-label--alert" x="536" y="514.5">held: shows what changed</text>
-<text class="d-msg-label" x="737" y="548.5">accept (in a terminal)</text>
+<rect class="st-bg" width="960" height="616"/>
+<rect class="st-frame" x="438.3" y="420" width="446" height="162" rx="3"/>
+<path class="st-frame-sep" d="M438.3 484H884.3"/>
+<path class="st-lifeline" d="M97.5 58V596"/>
+<path class="st-lifeline" d="M305.1 64V596"/>
+<path class="st-lifeline" d="M460.3 58V596"/>
+<path class="st-lifeline" d="M654.7 58V596"/>
+<path class="st-lifeline" d="M862.3 58V596"/>
+<rect class="st-activation" x="301.1" y="96" width="8" height="24"/>
+<rect class="st-activation" x="650.7" y="130" width="8" height="246"/>
+<rect class="st-activation" x="305.1" y="164" width="8" height="42"/>
+<rect class="st-activation" x="456.3" y="232" width="8" height="300"/>
+<rect class="st-activation" x="305.1" y="266" width="8" height="24"/>
+<rect class="st-activation" x="309.1" y="334" width="8" height="24"/>
+<rect class="st-activation" x="460.3" y="368" width="8" height="106"/>
+<rect class="st-activation" x="313.1" y="402" width="8" height="24"/>
+<rect class="st-activation" x="456.3" y="558" width="8" height="24"/>
+<path class="d-edge" d="M97.5 100 L301.1 100" marker-end="url(#two-developers-one-catalog-arrow)"/>
+<path class="d-edge" d="M862.3 134 L658.7 134" marker-end="url(#two-developers-one-catalog-arrow)"/>
+<path class="d-edge" d="M650.7 168 L313.1 168" marker-end="url(#two-developers-one-catalog-arrow)"/>
+<path class="d-edge d-edge--return" d="M313.1 202 L650.7 202" marker-end="url(#two-developers-one-catalog-arrow-muted)"/>
+<path class="d-edge" d="M650.7 236 L464.3 236" marker-end="url(#two-developers-one-catalog-arrow)"/>
+<path class="d-edge" d="M456.3 270 L313.1 270" marker-end="url(#two-developers-one-catalog-arrow)"/>
+<path class="d-edge" d="M97.5 338 L309.1 338" marker-end="url(#two-developers-one-catalog-arrow)"/>
+<path class="d-edge" d="M650.7 372 L468.3 372" marker-end="url(#two-developers-one-catalog-arrow)"/>
+<path class="d-edge" d="M460.3 406 L321.1 406" marker-end="url(#two-developers-one-catalog-arrow)"/>
+<path class="d-edge d-edge--return" d="M468.3 470 L654.7 470" marker-end="url(#two-developers-one-catalog-arrow-muted)"/>
+<path class="d-edge d-edge--return d-edge--alert" d="M464.3 528 L654.7 528" marker-end="url(#two-developers-one-catalog-arrow-alert)"/>
+<path class="d-edge" d="M862.3 562 L464.3 562" marker-end="url(#two-developers-one-catalog-arrow)"/>
+<rect class="d-node" x="20" y="20" width="155" height="38" rx="3"/>
+<text class="d-label" x="97.5" y="39">Developer 1 · ana</text>
+<path class="d-node" d="M261.1 26 A44 6 0 0 1 349.1 26 V58 A44 6 0 0 1 261.1 58 Z"/>
+<path class="d-node-detail" d="M261.1 26 A44 6 0 0 0 349.1 26"/>
+<text class="d-label" x="305.1" y="45">Catalog</text>
+<rect class="d-node" x="411.8" y="20" width="97" height="38" rx="3"/>
+<text class="d-label" x="460.3" y="39">installer</text>
+<rect class="d-node" x="606.2" y="20" width="97" height="38" rx="3"/>
+<text class="d-label" x="654.7" y="39">Assistant</text>
+<rect class="d-node" x="784.8" y="20" width="155" height="38" rx="3"/>
+<text class="d-label" x="862.3" y="39">Developer 2 · bob</text>
+<path class="st-memo" d="M321.1 286H593.4L599.4 292V310H321.1Z"/>
+<text class="st-memo-text" x="460.3" y="298">text only: v1 goes into the skills folder</text>
+<path class="st-frame-tab" d="M438.3 420H471.2V432L466.2 437H438.3Z"/>
+<text class="st-frame-kind" x="445.3" y="428.5">alt</text>
+<rect class="st-frame-cond-bg" x="474.2" y="422" width="75.3" height="13"/>
+<text class="st-frame-cond" x="477.2" y="428.5">[text only]</text>
+<rect class="st-frame-cond-bg" x="443.3" y="486" width="144.6" height="13"/>
+<text class="st-frame-cond" x="446.3" y="492.5">[v2 can run something]</text>
+<text class="st-msg-label" x="201.3" y="86.5">publish v1</text>
+<text class="st-msg-label" x="758.5" y="120.5">a skill for release notes?</text>
+<text class="st-msg-label" x="557.4" y="154.5">discover</text>
+<text class="st-msg-label st-msg-label--return" x="382.7" y="188.5">release-note-draft</text>
+<text class="st-msg-label" x="557.4" y="222.5">retrieve</text>
+<text class="st-msg-label" x="382.7" y="256.5">fetch v1</text>
+<text class="st-msg-label" x="201.3" y="324.5">publish v2 (adds a script)</text>
+<text class="st-msg-label" x="557.4" y="358.5">update</text>
+<text class="st-msg-label" x="382.7" y="392.5">fetch v2</text>
+<text class="st-msg-label st-msg-label--return" x="557.4" y="456.5">updated to v2</text>
+<text class="st-msg-label st-msg-label--alert" x="557.5" y="514.5">held: shows what changed</text>
+<text class="st-msg-label" x="758.5" y="548.5">accept (in a terminal)</text>
 </svg>
