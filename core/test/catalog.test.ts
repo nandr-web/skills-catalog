@@ -21,7 +21,7 @@ const guardedFromTheStart = (globalThis as Record<symbol, unknown>)[Symbol.for('
 
 describe('the fail-safe (contract §8)', () => {
   // These show the read guard on stand-ins, never on the machine's own files: were the guard ever broken, a test calling
-  // a read on the real ~/.claude.json would read it (the QA plan-guard). The real places are checked by name only.
+  // a read on the real ~/.claude.json would read it (the QA plan's rule). The real places are checked by name only.
   it('never reads Claude Code\'s managed settings or the person\'s own ~/.claude.json and ~/.claude: the places, by name', async () => {
     const { join } = await import('node:path');
     const { READ_REFUSED } = await import('./fail-safe.ts');

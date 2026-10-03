@@ -1,4 +1,4 @@
-// The one environment every process a test starts gets, nothing inherited (the QA plan-guard's rule): PATH is the tripwire
+// The one environment every process a test starts gets, nothing inherited (the QA plan's rule): PATH is the tripwire
 // claude first, then the system's folders and node's own; HOME and the other home-like places are in the test's
 // sandbox, each refused by the fail-safe if it's anywhere else. And the source scan that keeps it so.
 

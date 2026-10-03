@@ -1,4 +1,4 @@
-// Every process a test starts gets one built environment, nothing inherited (the QA plan-guard's rule): the tripwire claude
+// Every process a test starts gets one built environment, nothing inherited (the QA plan's rule): the tripwire claude
 // first on PATH, the home-like places in the test's sandbox. A source scan keeps it so: a start with no env fails here.
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
