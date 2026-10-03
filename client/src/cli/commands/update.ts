@@ -85,7 +85,13 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
   const look = io.person ? (first ? 'person.accept_look_install' : 'person.accept_look') : first ? 'update.accept_look_install' : 'update.accept_look';
   // A person sees what waits and why behind the orange bar every "needs your OK" has (person/view.ts).
   const paint = painter(io.color === true);
-  const shown = io.person ? barred(paint, 'attention', [paint('attention', paint('bold', `${MARK.attention} `)) + paint('bold', said(s, intro, at)), '', said(s, look, at)]).join('\n') : `${said(s, intro, at)}\n${said(s, look, at)}`;
+  // Held for its flags: a short title, then one bullet per reason, as the update view lays it out (review V4.6); the other
+  // holds keep their one sentence, which is itself the reason.
+  const flagged = intro === 'update.accept_intro' || intro === 'update.accept_intro_install';
+  const head = flagged
+    ? [paint('attention', paint('bold', `${MARK.attention} `)) + paint('bold', said(s, first ? 'person.accept_title_install' : 'person.accept_title', at)), ...String(hold.reasons).split('; ').map((r) => `  • ${r}`), ...(first ? [said(s, 'person.accept_where', at)] : [])]
+    : [paint('attention', paint('bold', `${MARK.attention} `)) + paint('bold', said(s, intro, at))];
+  const shown = io.person ? barred(paint, 'attention', [...head, '', said(s, look, at)]).join('\n') : `${said(s, intro, at)}\n${said(s, look, at)}`;
   io.stdout(shown + '\n');
   // Showing the person the reasons is a look (usage metrics); their no is an answer. Their yes is an answer too, for the
   // installer to record where a held update is taken, on every face: not recorded yet (usage-look.test.ts says so).

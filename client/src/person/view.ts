@@ -114,7 +114,9 @@ function update({ s, say, m }: Ctx, v: UpdateView | undefined): string | undefin
       else block.push('', say('update.stays_reply', at), say('update.look_reply', at), '');
     }
     while (block.at(-1) === '') block.pop();
-    out.push('', ...m.callout(block));
+    // One blank line before the box, not two when nothing was listed above it (review V4.6).
+    if (out.at(-1) !== '') out.push('');
+    out.push(...m.callout(block));
   }
   return out.join('\n');
 }
