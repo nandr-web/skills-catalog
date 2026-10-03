@@ -17,6 +17,8 @@ export function conforms(schema: OutputSchema, value: unknown, at = '$'): string
       return schema.enum && !schema.enum.includes(value) ? [`${at}: ${value} not one of ${schema.enum.join(', ')}`] : [];
     case 'integer':
       return Number.isInteger(value) ? [] : [`${at}: not an integer`];
+    case 'number':
+      return typeof value === 'number' && Number.isFinite(value) ? [] : [`${at}: not a number`];
     case 'boolean':
       return typeof value === 'boolean' ? [] : [`${at}: not a boolean`];
     case 'array':

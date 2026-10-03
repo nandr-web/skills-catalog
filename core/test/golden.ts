@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
-import { DEFAULT_LIMITS, type Limits, type Mode } from '../src/skill-tree/index.ts';
+import { DEFAULT_CONTEXT_COST_BUDGET, DEFAULT_LIMITS, type Limits, type Mode } from '../src/skill-tree/index.ts';
 
 export const GOLDEN = join(import.meta.dirname, '..', '..', 'qa', 'golden');
 
@@ -89,6 +89,11 @@ export function generated(name: string, limits: Limits = DEFAULT_LIMITS): RawFil
       return [md('d'.repeat(1024))];
     case 'description-1025':
       return [md('d'.repeat(1025))];
+    case 'context-heavy': {
+      // One estimated token over the rules reviewer's default budget (contract §5.3: UTF-8 bytes / 4, rounded up).
+      const head = skillMd(name, 'Generated.', '');
+      return [md('Generated.', 'w'.repeat(DEFAULT_CONTEXT_COST_BUDGET * 4 - Buffer.byteLength(head) + 1))];
+    }
     default:
       throw new Error(`no recipe for generated fixture ${name}`);
   }

@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { Catalog, type CatalogConfig } from '../catalog.ts';
 import { CatalogError } from '../errors.ts';
 import type { Clock, Events, Identity, Ids, Storage } from '../ports.ts';
+import type { Reviewer } from '../skill-tree/index.ts';
 import { FolderBlobStore } from './blobs.ts';
 import { LocalDb, NotCatalogTables, openReadOnly } from './db.ts';
 import { actAs } from './identity.ts';
@@ -22,6 +23,8 @@ export interface LocalOptions {
   ids?: Ids;
   identity?: Identity;
   config?: Partial<CatalogConfig>;
+  // The reviewers a publish runs (contract §10); absent, the built-in rules reviewer.
+  reviewers?: readonly Reviewer[];
   // Test seams, without changing the catalog: wrap the local storage's halves (fault injection, a cleanup between
   // the blob puts and the append), or the whole Storage port (another publish landing before this one's commit).
   wrapMeta?: (m: SqliteMetadataStore) => SqliteMetadataStore;
@@ -96,6 +99,7 @@ export async function openLocalCatalog(dir: string, opts: LocalOptions = {}): Pr
       clock,
       ids,
       ...(opts.config ? { config: opts.config } : {}),
+      ...(opts.reviewers ? { reviewers: opts.reviewers } : {}),
       close: () => db.close(),
     });
     if (db.indexReset) await catalog.rebuildIndex();

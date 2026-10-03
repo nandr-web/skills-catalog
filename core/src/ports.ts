@@ -1,7 +1,7 @@
 // The ports (contract §7): where a choice can change. Every port is async, so a hosted adapter (DynamoDB and S3,
 // a remote index, a sign-in) drops in behind the same interfaces. Phase 1 has the local adapters (src/local/).
 
-import type { FileEntry, Review } from './skill-tree/index.ts';
+import type { FileEntry, Review, RiskFlag } from './skill-tree/index.ts';
 
 export interface SkillRecord {
   name: string;
@@ -84,6 +84,8 @@ export interface SearchCard {
   tags: string[];
   publisher: string;
   updated_at: string;
+  // What the latest version's reviews flagged, one flag of each kind; absent when nothing is (contract §10).
+  quality?: { flags: RiskFlag[] } | undefined;
 }
 
 export interface SearchFilters {

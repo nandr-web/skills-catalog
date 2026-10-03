@@ -1,6 +1,7 @@
 // Reviews in the local catalog's file (contract §10): their own table beside the versions. A catalog from before it has no
 // reviews: a read-only open reads none and writes nothing; the first writing open makes the table. A row that isn't JSON
-// (the file is someone else's input, contract §6) reads as no review.
+// (the file is someone else's input, contract §6) reads as no review. A card table from before cards carried quality
+// gets the column at the first writing open.
 import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -63,7 +64,21 @@ describe('reviews in the local catalog file', () => {
     const root = await published();
     withDb(root, (db) => db.prepare("INSERT INTO reviews (name, version, reviewer, data) VALUES (?, 1, 'broken', '{not json')").run(NAME));
     const ro = await openLocalCatalog(root, { readOnly: true });
-    expect((await storageOf(ro).reviews(NAME, 1)).map((r) => r.reviewer)).toEqual(['security-agent']);
+    expect((await storageOf(ro).reviews(NAME, 1)).map((r) => r.reviewer)).toEqual(['rules', 'security-agent']);
     ro.close();
+  });
+
+  it('a card table from before quality: a read-only open reads its cards without it; a writing open adds the column', async () => {
+    const root = await published();
+    const columns = () => withDb(root, (db) => (db.prepare('PRAGMA table_info(search_cards)').all() as { name: string }[]).map((c) => c.name));
+    withDb(root, (db) => db.exec('ALTER TABLE search_cards DROP COLUMN quality'));
+    expect(columns()).not.toContain('quality');
+    const ro = await openLocalCatalog(root, { readOnly: true });
+    const card = (await ro.search({})).results[0]!;
+    expect(card.name).toBe(NAME);
+    expect('quality' in card).toBe(false);
+    ro.close();
+    (await openLocalCatalog(root)).close();
+    expect(columns()).toContain('quality');
   });
 });

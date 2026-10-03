@@ -11,6 +11,7 @@ import { actAs } from '../src/local/index.ts';
 import { userInfo } from 'node:os';
 import { ADAPTERS } from './adapters.ts';
 import { catalogSuite } from './shared/catalog.ts';
+import { reviewsSuite } from './shared/reviews.ts';
 
 const skills = loadGolden('skills.yaml');
 const histories = loadGolden('histories.yaml');
@@ -235,6 +236,7 @@ describe('search: the local index', () => {
 });
 
 for (const a of ADAPTERS) catalogSuite(a);
+for (const a of ADAPTERS) reviewsSuite(a);
 
 describe('SKILLS_CATALOG (contract §8)', () => {
   it('file:// opens the local catalog; https:// opens a hosted one (over its web API, nothing asked at open); anything else is refused', async () => {

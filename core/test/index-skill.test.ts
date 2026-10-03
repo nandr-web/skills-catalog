@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { indexSkill, type SearchCard, type SkillRecord, type VersionRecord } from '../src/index.ts';
+import type { Review } from '../src/skill-tree/index.ts';
 
 function version(name: string, n: number): VersionRecord {
   return {
@@ -20,7 +21,7 @@ function version(name: string, n: number): VersionRecord {
   };
 }
 
-function world(skills: Record<string, VersionRecord[]>) {
+function world(skills: Record<string, VersionRecord[]>, reviews: Record<string, Review[]> = {}) {
   const upserts: SearchCard[] = [];
   const storage = {
     skill: async (name: string): Promise<SkillRecord | undefined> => {
@@ -28,6 +29,7 @@ function world(skills: Record<string, VersionRecord[]>) {
       return vs ? { name, owners: ['dev1'], latest: vs.length } : undefined;
     },
     version: async (name: string, n: number) => skills[name]?.[n - 1],
+    reviews: async (name: string, n: number) => reviews[`${name}@${n}`] ?? [],
   };
   const index = { upsert: async (c: SearchCard) => void upserts.push(c) };
   return { storage, index, upserts };
@@ -54,5 +56,16 @@ describe('indexSkill', () => {
     const w = world({});
     await expect(indexSkill(w, 'gone')).resolves.toBeUndefined();
     expect(w.upserts).toEqual([]);
+  });
+
+  it("the card carries what the latest version's reviews flagged, one flag of each kind, and nothing for an older version's", async () => {
+    const flag = (line: number) => ({ kind: 'prompt_injection' as const, path: 'SKILL.md', line, detail: 'ignore previous instructions' });
+    const review = (flags: ReturnType<typeof flag>[]): Review => ({ reviewer: 'rules', reviewer_version: '1', fingerprint: 'fp', at: '2026-09-29T00:00:00.000Z', measurements: {}, flags, findings: [] });
+    const w = world({ pdf: [version('pdf', 1), version('pdf', 2)] }, { 'pdf@1': [review([flag(9)])], 'pdf@2': [review([flag(5), flag(6)])] });
+    await indexSkill(w, 'pdf');
+    expect(w.upserts[0]!.quality).toEqual({ flags: [flag(5)] });
+    const clean = world({ pdf: [version('pdf', 1), version('pdf', 2)] }, { 'pdf@1': [review([flag(9)])], 'pdf@2': [review([])] });
+    await indexSkill(clean, 'pdf');
+    expect('quality' in clean.upserts[0]!).toBe(false);
   });
 });

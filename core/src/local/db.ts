@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS search_cards (
   latest_version INTEGER NOT NULL,
   tags TEXT NOT NULL,
   publisher TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  quality TEXT
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5 (name UNINDEXED, words, description, tokenize = '${TOKENIZE}');
 `;
@@ -157,6 +158,9 @@ export class LocalDb {
       const stale = fts !== undefined && !fts.sql.includes(`'${TOKENIZE}'`);
       if (stale) this.db.exec('DROP TABLE search_fts; DELETE FROM search_cards;');
       const indexed = this.hasTable('version_files');
+      // A search card's quality (contract §10) came after the first catalogs: an older card table gets the column, empty
+      // (its cards show none until the next publish, the offline review run or a rebuild fills it).
+      if (this.hasTable('search_cards') && !this.hasColumn('search_cards', 'quality')) this.db.exec('ALTER TABLE search_cards ADD COLUMN quality TEXT');
       this.db.exec(SCHEMA);
       if (!indexed) {
         this.db.exec(FILL_FILE_INDEX);
@@ -164,6 +168,10 @@ export class LocalDb {
       }
       return stale;
     });
+  }
+
+  hasColumn(table: string, column: string): boolean {
+    return (this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column);
   }
 
   hasTable(name: string): boolean {

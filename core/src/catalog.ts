@@ -25,12 +25,18 @@ import {
   hasLineBreakOrControl,
   isText,
   decodeText,
+  rulesReviewer,
   sha256Hex,
   scanSecrets,
+  type DiffSide,
   type FileChange,
   type Limits,
   type Mode,
+  type Review,
+  type Reviewer,
+  type ReviewSubject,
   type RiskFlag,
+  type RiskKind,
   type TreeDiff,
   type TreeFile,
 } from './skill-tree/index.ts';
@@ -73,6 +79,9 @@ export interface CatalogPorts {
   links?: BlobLinks; // hosted only: files go up and come back by link, never as bytes in a request or an answer
   tokens?: TokenStore; // hosted only: the Bearer tokens
   signIn?: GitHubSignIn; // hosted only: GitHub's check of a token for our OAuth app
+  // The reviewers a publish runs on the version it stores (contract §10, the Reviewer port); absent, the built-in rules
+  // reviewer on this catalog's config. Each id at most once.
+  reviewers?: readonly Reviewer[];
 }
 
 // A stored version's file, as the files route answers it (§1.1): its bytes (local), a link to them (hosted), on its
@@ -115,8 +124,14 @@ export interface SearchInput {
   cursor?: string;
 }
 
+// A card's quality (contract §10): only when a review flagged something, one flag of each kind, right after the name.
+export interface Quality {
+  flags: RiskFlag[];
+}
+
 export interface Card {
   name: string;
+  quality?: Quality;
   description: string;
   latest_version: number;
   tags: string[];
@@ -167,7 +182,7 @@ export interface ReadItem {
   // The front matter always comes; the body only when it fits the read's budget (body_omitted otherwise), and with
   // paths[] only when SKILL.md is one of them (no body_omitted then).
   manifest: { frontmatter: Record<string, unknown>; body?: string; body_omitted?: true };
-  reviews: unknown[];
+  reviews: Review[];
   files?: ReadFile[];
 }
 
@@ -336,17 +351,44 @@ function checkSha256s(files: readonly { sha256: string }[]): void {
 
 const notUploaded = (i: number) => new CatalogError('invalid_request', { field: `files[${i}].sha256`, why: 'not_uploaded' });
 
-function cardOf(v: VersionRecord): SearchCard {
-  return { name: v.name, description: v.description, latest_version: v.version, tags: v.tags, publisher: v.publisher, updated_at: v.published_at };
+// What a version's reviews say on its card: the first flag of each kind across them, or nothing when none flags anything
+// (a clean skill's card stays as it was: no noise).
+export function qualityOf(reviews: readonly Review[]): Quality | undefined {
+  const seen = new Set<RiskKind>();
+  const flags: RiskFlag[] = [];
+  for (const r of reviews) {
+    for (const f of r.flags) {
+      if (seen.has(f.kind)) continue;
+      seen.add(f.kind);
+      flags.push(f);
+    }
+  }
+  return flags.length ? { flags } : undefined;
 }
 
-/** One skill re-indexed after version_published: its latest version's card, read from storage rather than taken from
- *  the event, so a repeated or late delivery can't put an old card back. A name storage has no skill for indexes
- *  nothing. The catalog's own subscriber and a hosted indexer both run this. */
-export async function indexSkill(p: { storage: Pick<Storage, 'skill' | 'version'>; index: Pick<SearchIndex, 'upsert'> }, name: string): Promise<void> {
+function cardOf(v: VersionRecord, reviews: readonly Review[]): SearchCard {
+  const card: SearchCard = { name: v.name, description: v.description, latest_version: v.version, tags: v.tags, publisher: v.publisher, updated_at: v.published_at };
+  const quality = qualityOf(reviews);
+  if (quality) card.quality = quality;
+  return card;
+}
+
+/** One skill re-indexed after version_published: its latest version's card with what its reviews flagged, read from
+ *  storage rather than taken from the event, so a repeated or late delivery can't put an old card back. A name storage
+ *  has no skill for indexes nothing. The catalog's own subscriber, its offline review run and a hosted indexer all run
+ *  this. */
+export async function indexSkill(p: { storage: Pick<Storage, 'skill' | 'version' | 'reviews'>; index: Pick<SearchIndex, 'upsert'> }, name: string): Promise<void> {
   const s = await p.storage.skill(name);
   const v = s && (await p.storage.version(name, s.latest));
-  if (v) await p.index.upsert(cardOf(v));
+  if (v) await p.index.upsert(cardOf(v, await p.storage.reviews(name, v.version)));
+}
+
+/** What the offline review run did: the versions it looked at, the reviews it stored (a review already current, by the
+ *  same reviewer version of the same fingerprint, is skipped), and the skills whose latest version is flagged. */
+export interface ReviewRun {
+  versions: number;
+  reviewed: number;
+  flagged: string[];
 }
 
 // ---------- the catalog ----------
@@ -355,12 +397,19 @@ export class Catalog {
   readonly config: CatalogConfig;
   private readonly p: CatalogPorts;
   private readonly signInList: Map<string, SignInEntry>;
+  private readonly reviewers: readonly Reviewer[];
+  // The built-in rules reviewer on this catalog's config: what a read works out for a version stored with no review.
+  private readonly rules: Reviewer;
 
   private constructor(ports: CatalogPorts) {
     this.p = ports;
     this.config = { ...DEFAULT_CONFIG, ...ports.config };
     checkContextCostBudget(this.config.contextCostBudget);
     this.signInList = signInEntries(this.config.signInLogins);
+    this.rules = rulesReviewer({ contextCostBudget: this.config.contextCostBudget, safeFrontmatterKeys: this.config.safeFrontmatterKeys, nonGrantingKeys: this.config.nonGrantingKeys });
+    this.reviewers = ports.reviewers ?? [this.rules];
+    const ids = this.reviewers.map((r) => r.id);
+    if (new Set(ids).size !== ids.length) throw new Error('each reviewer is given once: two reviewers share an id');
     // The search index is the first listener on version_published (§5.1 step 4).
     ports.events.subscribe((e) => indexSkill(ports, e.name));
   }
@@ -386,7 +435,70 @@ export class Catalog {
   }
 
   async rebuildIndex(): Promise<void> {
-    await this.p.index.rebuild((await this.p.storage.latestVersions()).map(cardOf));
+    const latest = await this.p.storage.latestVersions();
+    await this.p.index.rebuild(await Promise.all(latest.map(async (v) => cardOf(v, await this.p.storage.reviews(v.name, v.version)))));
+  }
+
+  // Runs the given reviewers on one version (contract §10): each review keyed by the version's fingerprint and the moment,
+  // listed by reviewer id. A reviewer that fails is left out (reviewers never block a publish); the offline run tries it
+  // again.
+  private async review(reviewers: readonly Reviewer[], subject: ReviewSubject, fingerprint: string, at: string): Promise<Review[]> {
+    const out: Review[] = [];
+    for (const r of reviewers) {
+      try {
+        const o = await r.review(subject);
+        out.push({ reviewer: r.id, reviewer_version: r.version, fingerprint, at, measurements: o.measurements, flags: o.flags, findings: o.findings, ...(o.notes !== undefined ? { notes: o.notes } : {}) });
+      } catch {
+        // left for the offline run
+      }
+    }
+    return out.sort((a, b) => (a.reviewer < b.reviewer ? -1 : a.reviewer > b.reviewer ? 1 : 0));
+  }
+
+  private async sideOf(v: VersionRecord): Promise<DiffSide> {
+    return { files: await this.tree(v), publisher: v.publisher };
+  }
+
+  // A version's reviews as stored; for one stored with none (published before reviews were kept, or while every reviewer
+  // failed), the rules review worked out now from its files, and stored nowhere (a read changes nothing).
+  private async reviewsOf(v: VersionRecord, files: readonly TreeFile[]): Promise<Review[]> {
+    const stored = await this.p.storage.reviews(v.name, v.version);
+    if (stored.length) return stored;
+    const before = v.version > 1 ? await this.p.storage.version(v.name, v.version - 1) : undefined;
+    const previous = before ? await this.sideOf(before) : null;
+    return this.review([this.rules], { files, publisher: v.publisher, previous }, v.fingerprint, this.p.clock.now().toISOString());
+  }
+
+  /** The offline review run (contract §10: "on publish or offline"): runs this catalog's reviewers over every stored
+   *  version of one skill or all of them, oldest first, stores each review that isn't current (another reviewer version,
+   *  or none yet), and re-indexes each skill so its card shows what its latest version's reviews flagged. */
+  async reviewStored(input: { name?: string } = {}): Promise<ReviewRun> {
+    const names = input.name !== undefined ? [(await this.versionOf(input.name)).record.name] : await this.p.storage.names();
+    const run: ReviewRun = { versions: 0, reviewed: 0, flagged: [] };
+    for (const name of names) {
+      const s = await this.p.storage.skill(name);
+      if (!s) continue;
+      let previous: VersionRecord | undefined;
+      let previousSide: DiffSide | undefined;
+      for (let n = 1; n <= s.latest; n++) {
+        const v = await this.p.storage.version(name, n);
+        if (!v) continue;
+        run.versions++;
+        const stored = await this.p.storage.reviews(name, n);
+        const due = this.reviewers.filter((r) => !stored.some((x) => x.reviewer === r.id && x.reviewer_version === r.version && x.fingerprint === v.fingerprint));
+        if (due.length) {
+          if (previous && !previousSide) previousSide = await this.sideOf(previous);
+          const fresh = await this.review(due, { files: await this.tree(v), publisher: v.publisher, previous: previousSide ?? null }, v.fingerprint, this.p.clock.now().toISOString());
+          for (const r of fresh) await this.p.storage.putReview(name, n, r);
+          run.reviewed += fresh.length;
+        }
+        previous = v;
+        previousSide = undefined;
+      }
+      await indexSkill(this.p, name);
+      if (qualityOf(await this.p.storage.reviews(name, s.latest))) run.flagged.push(name);
+    }
+    return run;
   }
 
   private async notFound(name: string): Promise<CatalogError> {
@@ -427,6 +539,7 @@ export class Catalog {
     const out: SearchResult = {
       results: page.map(({ card, matched_words }) => ({
         name: card.name,
+        ...(card.quality ? { quality: card.quality } : {}),
         description: card.description,
         latest_version: card.latest_version,
         tags: card.tags,
@@ -466,7 +579,7 @@ export class Catalog {
         published_at: record.published_at,
         publisher: record.publisher,
         manifest: { frontmatter: md.frontmatter },
-        reviews: [],
+        reviews: await this.reviewsOf(record, tree),
       };
       if (req.paths === undefined || req.paths.some((p) => p.normalize('NFC') === MANIFEST)) bodies.set(item, md.body);
       let shown = tree;
@@ -554,10 +667,12 @@ export class Catalog {
     const offset = decodeCursor(req.cursor);
     const { latest } = await this.versionOf(req.name);
     const rows = await this.p.storage.versions(req.name, offset, VERSIONS_PAGE);
+    // Each row's flags are what its stored reviews flagged (a version stored with no review shows none here).
+    const reviews = await Promise.all(rows.map((v) => this.p.storage.reviews(req.name, v.version)));
     const out: VersionsResult = {
       name: req.name,
       latest,
-      versions: rows.map((v) => ({ version: v.version, fingerprint: v.fingerprint, published_at: v.published_at, publisher: v.publisher, message: v.message, flags: [] })),
+      versions: rows.map((v, i) => ({ version: v.version, fingerprint: v.fingerprint, published_at: v.published_at, publisher: v.publisher, message: v.message, flags: reviews[i]!.flatMap((r) => r.flags) })),
     };
     if (offset + VERSIONS_PAGE < latest) out.next_cursor = encodeCursor(offset + VERSIONS_PAGE);
     return out;
@@ -600,7 +715,8 @@ export class Catalog {
     const entries = tree.map(entryOf);
     const fingerprint = fingerprintOf(entries);
     const latest = skill ? await this.p.storage.version(name, latestNo) : undefined;
-    const diff = diffTrees(latest ? { files: await this.tree(latest), publisher: latest.publisher } : null, { files: tree, publisher }, this.config.safeFrontmatterKeys, this.config.nonGrantingKeys, this.config.contextCostBudget);
+    const previous = latest ? await this.sideOf(latest) : null;
+    const diff = diffTrees(previous, { files: tree, publisher }, this.config.safeFrontmatterKeys, this.config.nonGrantingKeys, this.config.contextCostBudget);
     const result = (version: number, created: boolean): PublishResult => ({
       name,
       version,
@@ -616,10 +732,12 @@ export class Catalog {
     if (req.dry_run) return result(latestNo + 1, false);
 
     const at = this.p.clock.now().toISOString();
+    // The reviewers run on the version about to be stored; their reviews go in its commit, all or nothing with it (§10).
+    const reviews = await this.review(this.reviewers, { files: tree, publisher, previous }, fingerprint, at);
     // Hosted, the commit names each file by its sha256 alone and checks it's still stored and usable (§1.1).
     const hosted = this.p.where === 'hosted';
     const r = await this.p.storage.commit(
-      { name, fingerprint, publisher, message: req.message ?? '', published_at: at, files: entries, description: md.description, tags: md.tags, frontmatter: md.frontmatter },
+      { name, fingerprint, publisher, message: req.message ?? '', published_at: at, files: entries, description: md.description, tags: md.tags, frontmatter: md.frontmatter, reviews },
       tree.map((f) => (hosted ? { sha256: sha256Hex(f.bytes) } : { sha256: sha256Hex(f.bytes), bytes: f.bytes })),
       { expectedLatest: req.expected_latest },
       (version) => ({ type: 'version_published', name, version, fingerprint, publisher, at }),

@@ -148,6 +148,7 @@ export function hostedAdapter(endpoint: () => string): TestAdapter {
             clock,
             ids: opts.ids ?? counterIds(),
             ...(opts.config ? { config: opts.config } : {}),
+            ...(opts.reviewers ? { reviewers: opts.reviewers } : {}),
             close: () => {
               ddb.destroy();
               indexer.destroy();

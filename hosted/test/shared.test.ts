@@ -1,8 +1,8 @@
-// The core's shared suites (storage, the catalog's oracles, the discovery golden set) on the hosted adapters, against the
+// The core's shared suites (storage, the catalog's oracles, its reviews, the discovery golden set) on the hosted adapters, against the
 // stand-in: the same tests and oracles as the local adapters.
 
 import { afterAll, beforeAll } from 'vitest';
-import { catalogSuite, discoverySuite, storageSuite } from '@skills-catalog/core/testing/suites';
+import { catalogSuite, discoverySuite, reviewsSuite, storageSuite } from '@skills-catalog/core/testing/suites';
 import { hostedAdapter } from './adapter.ts';
 import { startEmulator, type Emulator } from './emulator.ts';
 
@@ -17,4 +17,5 @@ afterAll(async () => {
 const hosted = hostedAdapter(() => emu!.endpoint);
 storageSuite(hosted);
 catalogSuite(hosted);
+reviewsSuite(hosted);
 discoverySuite(hosted);

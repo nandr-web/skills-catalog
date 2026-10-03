@@ -16,6 +16,7 @@ export type Schema =
 export type OutputSchema =
   | { type: 'string'; enum?: readonly string[] }
   | { type: 'integer' }
+  | { type: 'number' }
   | { type: 'boolean' }
   | { type: 'null' }
   | { type: 'array'; items: OutputSchema }
@@ -98,6 +99,24 @@ const obj = (properties: Record<string, OutputSchema>, optional: readonly string
   additionalProperties: false,
 });
 const riskFlag = obj({ kind: oneOf(...FLAG_KINDS), path: str, line: int, field: str, from: anyValue, to: anyValue, detail: str }, ['path', 'line', 'field', 'from', 'to']);
+// A review (contract §10): who reviewed which fingerprint and when, what it measured (numbers by name), its flags, each
+// finding grounded (where, the text it rests on, why), and notes only when they help.
+const finding = obj({ kind: oneOf(...FLAG_KINDS), path: str, line: int, evidence: str, why: str }, ['path', 'line']);
+const review = obj(
+  {
+    reviewer: str,
+    reviewer_version: str,
+    fingerprint: str,
+    at: str,
+    measurements: { type: 'object', properties: {}, required: [], additionalProperties: { type: 'number' } },
+    flags: list(riskFlag),
+    findings: list(finding),
+    notes: str,
+  },
+  ['notes'],
+);
+// A card's quality: only when a review flagged something (contract §10).
+const quality = obj({ flags: list(riskFlag) });
 const treeDiff = {
   files: list(obj({ path: str, status: oneOf('added', 'changed', 'removed'), flags: obj({ binary: bool, executable: bool, script: bool }), unified: str }, ['unified'])),
   frontmatter_changes: list(obj({ field: str, from: anyValue, to: anyValue })),
@@ -107,7 +126,7 @@ const treeDiff = {
 const mode = oneOf(...MODES);
 const SEARCH_OUTPUT = obj(
   {
-    results: list(obj({ name: str, description: str, latest_version: int, tags: list(str), publisher: str, matched_words: list(str) })),
+    results: list(obj({ name: str, quality, description: str, latest_version: int, tags: list(str), publisher: str, matched_words: list(str) }, ['quality'])),
     match: oneOf('all', 'partial', 'none'),
     ranking: oneOf('none', 'lexical'),
     next_cursor: str,
@@ -125,7 +144,7 @@ const readItem = obj(
     published_at: str,
     publisher: str,
     manifest: obj({ frontmatter: { type: 'object', properties: {}, required: [], additionalProperties: true }, body: str, body_omitted: bool }, ['body', 'body_omitted']),
-    reviews: list(anyValue),
+    reviews: list(review),
     files: list(obj({ path: str, mode, size: int, sha256: str, type: oneOf('text', 'binary'), content: str, content_omitted: bool }, ['content', 'content_omitted'])),
   },
   ['files'],
