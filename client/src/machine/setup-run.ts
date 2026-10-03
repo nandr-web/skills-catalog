@@ -138,13 +138,13 @@ function underLock(input: RunInput): SetupResult {
           const path = join(places.backups, `${utc}-${randomBytes(2).toString('hex')}-${BACKUP_SUFFIX[k]}`);
           const id = writeNew(path, Buffer.from(fp.read!, 'utf8'));
           backup = { file: fp.path, path, sha256: sha256(fp.read!), dev: part(id.dev), ino: part(id.ino), birth: part(id.birthtimeMs) };
+          // Listed before the file is written, so a crash never leaves a copy (it holds the sign-in) the record doesn't name.
+          record.backups.push(backup);
+          saveRecord();
         }
         input.seams?.afterRead?.(fp.path, attempt);
         if (writeFileText(fp.path, fp.text, fp.was, folderId(dirname(fp.path))) === 'written') {
-          if (backup) {
-            record.backups.push(backup);
-            backups.push(backup.path);
-          }
+          if (backup) backups.push(backup.path);
           if (fp.was === 'absent') record.created_files = [...record.created_files.filter((c) => c.file !== fp.path), { file: fp.path, sha256: sha256(fp.text) }];
           state[k] = 'written';
           written.push(fp.path);
@@ -152,7 +152,11 @@ function underLock(input: RunInput): SetupResult {
           input.seams?.afterWrite?.(fp.path);
           break;
         }
-        if (backup) removeOwn(backup);
+        if (backup) {
+          removeOwn(backup);
+          record.backups = record.backups.filter((b) => b !== backup);
+          saveRecord();
+        }
         if (attempt === TRIES) throw new CatalogError('assistant_file_changed', { path: fp.path });
         files[k] = planFile(k, plan, input.words);
       }
