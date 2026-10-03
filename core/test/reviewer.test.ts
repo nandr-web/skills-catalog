@@ -24,6 +24,7 @@ function expectFindings(got: ReviewOutcome, want: any[], label: string): void {
     const f = got.findings[i]!;
     if (w.evidence !== undefined) expect(f.evidence, `${label}: evidence`).toContain(flagText(w.evidence));
     if (w.detail !== undefined) expect(f.why, `${label}: why`).toBe(w.detail);
+    expect(f.advice, `${label}: advice`).toBe(w.advice);
     expect(f.evidence.length, `${label}: evidence is never empty`).toBeGreaterThan(0);
   }
 }

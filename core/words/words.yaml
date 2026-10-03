@@ -577,6 +577,7 @@ results:
     finding: "{path} line {line}: {why} ({evidence})"
     finding_file: "{path}: {why}"
     findings_more: "{n} more like these"
+    finding_advice: "{path} line {line}: a warning about {why}, as advice that holds nothing ({evidence})"
     review_omitted: "The catalog's review of this version found what to know before using it ({notes}); its findings aren't shown here, to keep this result short ({used} of {limit} used). To see them: ${get} with name \"{name}\" alone. Mention it when you recommend this skill."
     review_omitted_cli: "The catalog's review of this version found what to know before using it ({notes}); its findings aren't shown here, to keep this result short ({used} of {limit} used). To see them: ${cli} read {name}. Mention it when you recommend this skill."
   quality:
@@ -595,6 +596,7 @@ results:
       prompt_injection: "has text that tries to steer assistants ({path}, found: {detail})"
       context_cost: "long: {detail}"
       low_score: low review score ({score})
+    note_advice: "warns about a risky pattern, as advice that holds nothing ({path}: {detail})"
     note_injection:
       hidden: "has a character people can't see but assistants read ({path}, {detail})"
       pipe: downloads something and runs it in a shell ({path})

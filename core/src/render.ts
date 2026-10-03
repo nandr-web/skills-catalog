@@ -58,10 +58,10 @@ export function qualityNotes(s: Words, flags: readonly RiskFlag[]): string {
   const out: string[] = [];
   for (const f of flags) {
     const rule = f.kind === 'prompt_injection' ? injectionRule(f.detail) : undefined;
-    const key = rule ? `${f.kind}:${rule}` : f.kind;
+    const key = `${rule ? `${f.kind}:${rule}` : f.kind}${f.advice ? ':advice' : ''}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const template = rule && rule !== 'steering' ? s.word('quality.note_injection')[rule] : s.word('quality.note')[f.kind];
+    const template = f.advice ? s.word('quality.note_advice') : rule && rule !== 'steering' ? s.word('quality.note_injection')[rule] : s.word('quality.note')[f.kind];
     out.push(s.format(template, { path: flagText(f.path ?? ''), detail: flagText(noteDetail(f)) }));
   }
   return out.join('; ');
@@ -174,7 +174,7 @@ function renderItem(s: Words, item: ReadItem, token: string, budget: InlineBudge
 function findingWords(s: Words, f: Finding): string {
   const w = s.word('get');
   const why = flagText(f.why);
-  if (f.path !== undefined && f.line !== undefined) return s.format(w.finding, { path: quoted(f.path), line: f.line, why, evidence: quoted(f.evidence) });
+  if (f.path !== undefined && f.line !== undefined) return s.format(f.advice ? w.finding_advice : w.finding, { path: quoted(f.path), line: f.line, why, evidence: quoted(f.evidence) });
   if (f.path !== undefined) return s.format(w.finding_file, { path: quoted(f.path), why });
   return s.format(s.word('quality.note')[f.kind], { path: '', detail: why });
 }

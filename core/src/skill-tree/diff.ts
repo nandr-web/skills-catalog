@@ -38,6 +38,8 @@ export interface RiskFlag {
   from?: unknown;
   to?: unknown;
   detail: string;
+  // Prose that only warns about the pattern (a review's finding shown as advice): it holds no install or update.
+  advice?: true;
 }
 
 export interface FileFlags {
@@ -439,13 +441,15 @@ function keyLine(lines: string[], key: string): number | undefined {
 
 // `configuredSafeKeys` can only narrow the fixed safe list (contract §5.3): a key not on it always counts.
 // `configuredNonGrantingKeys` can only narrow the fixed non-granting list the same way. `contextCostBudget` is the rules
-// reviewer's budget for SKILL.md's length, in estimated tokens.
+// reviewer's budget for SKILL.md's length, in estimated tokens. A review's advice (prose that only warns about a pattern)
+// holds nothing, so it isn't a risk flag here unless `opts.advice` asks for it (the rules reviewer, which shows it).
 export function diffTrees(
   from: DiffSide | null,
   to: DiffSide,
   configuredSafeKeys: readonly string[] = DEFAULT_SAFE_FRONTMATTER_KEYS,
   configuredNonGrantingKeys: readonly string[] = DEFAULT_NON_GRANTING_KEYS,
   contextCostBudget: number = DEFAULT_CONTEXT_COST_BUDGET,
+  opts: { advice?: boolean } = {},
 ): TreeDiff {
   const safeKeys = configuredSafeKeys.filter((k) => DEFAULT_SAFE_FRONTMATTER_KEYS.includes(k));
   const nonGranting = configuredNonGrantingKeys.filter((k) => DEFAULT_NON_GRANTING_KEYS.includes(k));
@@ -523,7 +527,7 @@ export function diffTrees(
   if (publisher_changed) risk.push({ kind: 'new_publisher', from: flagText(from!.publisher), to: flagText(to.publisher), detail: flagText(`${from!.publisher} → ${to.publisher}`) });
   // A path is publisher text too (checked at publish, but a flag is shown wherever it goes).
   // The rules reviewer's flags join the diff's (contract §5.3, §10), beside each file's own reason.
-  risk.push(...reviewFlags(from, to, contextCostBudget));
+  risk.push(...reviewFlags(from, to, contextCostBudget).filter((f) => opts.advice === true || f.advice !== true));
   return { files, frontmatter_changes, publisher_changed, risk_flags: risk.map((f) => (f.path === undefined ? f : { ...f, path: flagText(f.path) })) };
 }
 

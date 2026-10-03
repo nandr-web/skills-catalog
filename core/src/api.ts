@@ -98,10 +98,10 @@ const obj = (properties: Record<string, OutputSchema>, optional: readonly string
   required: Object.keys(properties).filter((k) => !optional.includes(k)),
   additionalProperties: false,
 });
-const riskFlag = obj({ kind: oneOf(...FLAG_KINDS), path: str, line: int, field: str, from: anyValue, to: anyValue, detail: str }, ['path', 'line', 'field', 'from', 'to']);
+const riskFlag = obj({ kind: oneOf(...FLAG_KINDS), path: str, line: int, field: str, from: anyValue, to: anyValue, detail: str, advice: bool }, ['path', 'line', 'field', 'from', 'to', 'advice']);
 // A review (contract §10): who reviewed which fingerprint and when, what it measured (numbers by name), its flags, each
 // finding grounded (where, the text it rests on, why), and notes only when they help.
-const finding = obj({ kind: oneOf(...FLAG_KINDS), path: str, line: int, evidence: str, why: str }, ['path', 'line']);
+const finding = obj({ kind: oneOf(...FLAG_KINDS), path: str, line: int, evidence: str, why: str, advice: bool }, ['path', 'line', 'advice']);
 const review = obj(
   {
     reviewer: str,

@@ -21,6 +21,7 @@ export interface Finding {
   line?: number;
   evidence: string;
   why: string;
+  advice?: true; // prose that only warns about the pattern: shown, never held
 }
 
 /** Findings a review doesn't list, by kind: past REVIEW_LIMITS (one kind in one file, or all of them). */
@@ -150,7 +151,8 @@ export function rulesReviewer(config: Partial<RulesConfig> = {}): Reviewer {
     id: RULES_REVIEWER_ID,
     version: RULES_REVIEWER_VERSION,
     review({ files, publisher, previous }: ReviewSubject): ReviewOutcome {
-      const whole = diffTrees(null, { files, publisher }, safe, nonGranting, budget).risk_flags;
+      // Advice included: a warning about a pattern is shown on the card and the read, though it holds nothing.
+      const whole = diffTrees(null, { files, publisher }, safe, nonGranting, budget, { advice: true }).risk_flags;
       const flags = whole.filter((f) => REVIEWED.has(f.kind) && !(f.kind === 'capability_frontmatter' && f.field !== undefined && nonGranting.includes(f.field)));
       if (previous && previous.publisher !== publisher) {
         flags.push({ kind: 'new_publisher', from: flagText(previous.publisher), to: flagText(publisher), detail: flagText(`${previous.publisher} → ${publisher}`) });
@@ -199,7 +201,7 @@ function linesOf(files: readonly TreeFile[]): (path: string) => string[] | undef
 }
 
 function finding(f: RiskFlag, files: readonly TreeFile[], lines: (path: string) => string[] | undefined): Finding {
-  const out: Finding = { kind: f.kind, evidence: evidenceOf(f, files, lines), why: f.detail };
+  const out: Finding = { kind: f.kind, evidence: evidenceOf(f, files, lines), why: f.detail, ...(f.advice ? { advice: true as const } : {}) };
   if (f.path !== undefined) out.path = f.path;
   if (f.line !== undefined) out.line = f.line;
   return out;

@@ -809,6 +809,9 @@
                           "to": {},
                           "detail": {
                             "type": "string"
+                          },
+                          "advice": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -1097,6 +1100,9 @@
                                 "to": {},
                                 "detail": {
                                   "type": "string"
+                                },
+                                "advice": {
+                                  "type": "boolean"
                                 }
                               },
                               "required": [
@@ -1136,6 +1142,9 @@
                                 },
                                 "why": {
                                   "type": "string"
+                                },
+                                "advice": {
+                                  "type": "boolean"
                                 }
                               },
                               "required": [
@@ -1480,6 +1489,9 @@
                       "to": {},
                       "detail": {
                         "type": "string"
+                      },
+                      "advice": {
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -1713,6 +1725,9 @@
                 "to": {},
                 "detail": {
                   "type": "string"
+                },
+                "advice": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -1978,6 +1993,9 @@
                         "to": {},
                         "detail": {
                           "type": "string"
+                        },
+                        "advice": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -2033,6 +2051,9 @@
                 "to": {},
                 "detail": {
                   "type": "string"
+                },
+                "advice": {
+                  "type": "boolean"
                 }
               },
               "required": [

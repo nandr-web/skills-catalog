@@ -357,12 +357,14 @@ const notUploaded = (i: number) => new CatalogError('invalid_request', { field: 
 // What a version's reviews say on its card: the first flag of each kind across them, or nothing when none flags anything
 // (a clean skill's card stays as it was: no noise).
 export function qualityOf(reviews: readonly Review[]): Quality | undefined {
-  const seen = new Set<RiskKind>();
+  // One of each kind, and apart from it one of each kind given as advice, so a warning never hides a real finding.
+  const seen = new Set<string>();
   const flags: RiskFlag[] = [];
   for (const r of reviews) {
     for (const f of r.flags) {
-      if (seen.has(f.kind)) continue;
-      seen.add(f.kind);
+      const key = `${f.kind}${f.advice ? ':advice' : ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
       flags.push(f);
     }
   }

@@ -760,6 +760,7 @@ Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`)
         - `from`: any value (not always there)
         - `to`: any value (not always there)
         - `detail`: text
+        - `advice`: true or false (not always there)
     - `description`: text
     - `latest_version`: a whole number
     - `tags`: a list, each text
@@ -814,12 +815,14 @@ Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`)
           - `from`: any value (not always there)
           - `to`: any value (not always there)
           - `detail`: text
+          - `advice`: true or false (not always there)
         - `findings`: a list, each an object with
           - `kind`: one of `runnable_file`, `runs_at_load`, `command_instruction`, `capability_frontmatter`, `instructions_changed`, `non_markdown`, `new_publisher`, `prompt_injection`, `context_cost`
           - `path`: text (not always there)
           - `line`: a whole number (not always there)
           - `evidence`: text
           - `why`: text
+          - `advice`: true or false (not always there)
         - `notes`: text (not always there)
         - `omitted`: a list, each an object with (not always there)
           - `kind`: one of `runnable_file`, `runs_at_load`, `command_instruction`, `capability_frontmatter`, `instructions_changed`, `non_markdown`, `new_publisher`, `prompt_injection`, `context_cost`
@@ -872,6 +875,7 @@ Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`)
       - `from`: any value (not always there)
       - `to`: any value (not always there)
       - `detail`: text
+      - `advice`: true or false (not always there)
   - `next_cursor`: text (not always there)
 
 **Errors:** `invalid_name`, `not_found`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
@@ -913,6 +917,7 @@ Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`)
     - `from`: any value (not always there)
     - `to`: any value (not always there)
     - `detail`: text
+    - `advice`: true or false (not always there)
 
 **Errors:** `invalid_name`, `not_found`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
 
@@ -971,6 +976,7 @@ Served by local and hosted catalogs. Called through HTTP (`web`). It changes the
         - `from`: any value (not always there)
         - `to`: any value (not always there)
         - `detail`: text
+        - `advice`: true or false (not always there)
     - `null`
   - `risk_flags`: a list, each an object with
     - `kind`: one of `runnable_file`, `runs_at_load`, `command_instruction`, `capability_frontmatter`, `instructions_changed`, `non_markdown`, `new_publisher`, `prompt_injection`, `context_cost`
@@ -980,6 +986,7 @@ Served by local and hosted catalogs. Called through HTTP (`web`). It changes the
     - `from`: any value (not always there)
     - `to`: any value (not always there)
     - `detail`: text
+    - `advice`: true or false (not always there)
 
 **Errors:** `unauthenticated`, `not_owner`, `conflict`, `invalid_manifest`, `invalid_name`, `invalid_path`, `too_large`, `secret_suspected`; and, like every call, `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
 

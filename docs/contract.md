@@ -957,7 +957,11 @@ plain text, never rendered as markdown: each is escaped first (an invisible char
 then cut to 200 code points, ending in "…" within the 200.
 
 **The prompt-injection word list is advice.** Its flag holds an auto-update like any other, as the owner asked for reviewer
-flags, but the flags from the diff are what make the rule true: a reworded instruction passes any word list.
+flags, but the flags from the diff are what make the rule true: a reworded instruction passes any word list. Prose that only
+warns about a pattern (in the same sentence, just before it: a negation with what not to do, such as "never run", a warning
+word, or a mention, such as "prompts that say" or "a line like") is flagged as advice (`advice: true`): shown on the card and
+the read, holding nothing on its own (owner default, reversible). A hidden character, an HTML comment and text addressed to
+the assistant are never advice.
 
 **When Claude Code runs without prompts, one more flag** (the owner's decisions; built with the update hold). In auto mode (a
 classifier stands in for the person), bypass mode, with the sandbox's auto-allow, or with a broad Bash allow rule in the

@@ -617,17 +617,42 @@ const hiddenLinkComment = (text: string) => {
   return m !== null && LETTER.test(m[1] ?? m[2] ?? m[3] ?? m[4] ?? '');
 };
 
+// Prose that only warns about a pattern is advice (owner default, reversible): in the same sentence and just before the
+// pattern, a negation with what not to do, a warning word, or a mention ("prompts that say", "a line like"). Read on at
+// most the 200 characters before the pattern, so a long line costs nothing more. Only for the rules a person writes about
+// in plain sight: ignoring previous instructions, a download run in a shell, a file sent out.
+const NOT_TO_DO = '(?:run|use|paste|type|execute|follow|pipe|copy|obey|trust|do)';
+const ADVICE_BEFORE = new RegExp(
+  `(?:\\b(?:never|don['\u2019]?t|do${S}+not)${S}+${NOT_TO_DO}\\b|\\b(?:avoid|beware(?:${S}+of)?|careful${S}+with|watch${S}+out${S}+for)|\\bwarning${S}*:|\\b(?:prompts?|texts?|messages?|lines?|commands?|instructions?|someone|attackers?|pages?|emails?)(?:${S}+that)?${S}+(?:says?|said|like|such${S}+as))[^.!?;]{0,40}$`,
+  'i',
+);
+const SENTENCE_BREAK = /[.!?;]/g;
+function warnsBefore(text: string, at: number): boolean {
+  let before = text.slice(Math.max(0, at - 200), at);
+  SENTENCE_BREAK.lastIndex = 0;
+  let cut = -1;
+  for (let m = SENTENCE_BREAK.exec(before); m !== null; m = SENTENCE_BREAK.exec(before)) cut = m.index;
+  if (cut >= 0) before = before.slice(cut + 1);
+  return ADVICE_BEFORE.test(before);
+}
+const TOOL_AT = /\b(?:curl|wget|nc)\b/i;
+
 // The first rule a line matches, of those read on the line alone (an HTML comment over several lines is read over the
-// whole file).
-function lineRule(text: string, fileStart: boolean): string | null {
+// whole file), and whether the line only warns about it (advice).
+function lineRule(text: string, fileStart: boolean): { detail: string; advice?: true } | null {
   const hidden = hiddenIn(text, fileStart);
-  if (hidden) return `hidden character ${codePoint(hidden)}`;
-  if (IGNORE.test(text)) return 'ignore previous instructions';
-  if (ADDRESSED.test(text)) return 'addressed to the assistant';
+  if (hidden) return { detail: `hidden character ${codePoint(hidden)}` };
+  const ignore = IGNORE.exec(text);
+  if (ignore) return { detail: 'ignore previous instructions', ...(warnsBefore(text, ignore.index) ? { advice: true as const } : {}) };
+  if (ADDRESSED.test(text)) return { detail: 'addressed to the assistant' };
   const commands = commandFlags(text);
-  if (commands.pipe) return 'curl piped to a shell';
-  if (commands.send) return 'sends a local file or variable';
-  if (hiddenLinkComment(text)) return 'text hidden in an HTML comment';
+  if (commands.pipe || commands.send) {
+    // The tool as written: one spelled to hide (c"u"rl) is never advice.
+    const tool = TOOL_AT.exec(text);
+    const advice = tool !== null && warnsBefore(text, tool.index);
+    return { detail: commands.pipe ? 'curl piped to a shell' : 'sends a local file or variable', ...(advice ? { advice: true as const } : {}) };
+  }
+  if (hiddenLinkComment(text)) return { detail: 'text hidden in an HTML comment' };
   return null;
 }
 
@@ -707,8 +732,8 @@ function promptInjection(a: TreeFile | undefined, b: TreeFile): RiskFlag[] {
   }
   const out: RiskFlag[] = [];
   lines.forEach((text, i) => {
-    const detail = (changed[i] ? lineRule(text, i === 0) : null) ?? (commentAt.has(i) ? 'text hidden in an HTML comment' : null);
-    if (detail) out.push({ kind: 'prompt_injection', path: flagText(b.path), line: i + 1, detail });
+    const rule = (changed[i] ? lineRule(text, i === 0) : null) ?? (commentAt.has(i) ? { detail: 'text hidden in an HTML comment' } : null);
+    if (rule) out.push({ kind: 'prompt_injection', path: flagText(b.path), line: i + 1, detail: rule.detail, ...(rule.advice ? { advice: true as const } : {}) });
   });
   return out;
 }
