@@ -59,7 +59,8 @@ export function help(s: Words): string {
   const lines = Object.entries(s.names)
     .filter(([, n]) => Object.keys(COMMANDS).includes(n.split(' ')[1] ?? ''))
     .map(([key, n]) => [n, w.commands[key] ?? '']);
-  for (const word of [...Object.keys(PROCESS_COMMANDS), 'login', 'logout']) lines.push([`${s.cli} ${word}`, w.commands[word] ?? '']);
+  // Each process command once (login and logout are among them now; the integration check found them listed twice).
+  for (const word of new Set([...Object.keys(PROCESS_COMMANDS), 'login', 'logout'])) lines.push([`${s.cli} ${word}`, w.commands[word] ?? '']);
   const width = Math.max(...lines.map(([n]) => n!.length));
   return `${w.title}\n\n${lines.map(([n, what]) => `  ${n!.padEnd(width)}   ${what}`).join('\n')}\n\n${s.format(w.footer)}\n`;
 }

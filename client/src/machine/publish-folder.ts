@@ -15,7 +15,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { closeSync, constants, fstatSync, linkSync, lstatSync, mkdirSync, openSync, readdirSync, readSync, realpathSync, renameSync, unlinkSync, writeFileSync, type Stats } from 'node:fs';
 import { join } from 'node:path';
-import { CatalogError, validateInput, type PublishResult } from '@skills-catalog/core';
+import { CatalogError, qualityNotes, validateInput, type PublishResult } from '@skills-catalog/core';
 import { DEFAULT_LIMITS, checkManifest, checkTree, fingerprint, flagText, sha256Hex, type Mode, type RiskFlag } from '@skills-catalog/core/skill-tree';
 import { logWords } from '../activity.ts';
 import type { Context, Done } from '../operations.ts';
@@ -256,7 +256,8 @@ export async function publishFolder(ctx: Context, args: unknown): Promise<Done> 
       const confirm = mac(key, { folder: real, fingerprint: fp, name, latest, message, files: files.length, flags }).toString('base64url');
       const shown = skipped.slice(0, SKIPPED_SHOWN).map((p) => (why[p] ? `${quoted(flagText(p))} (${w.skip_why[why[p]!]})` : quoted(flagText(p))));
       const changed = (r.diff_from_latest?.files ?? []).map((f) => quoted(f.path));
-      const notes = r.risk_flags.map((f: RiskFlag) => s.format(s.word('quality.note')[f.kind], { path: flagText(f.path ?? ''), detail: flagText(f.detail) }));
+      // Each flag in the words search and read use for it (a hidden character as such, not as steering text).
+      const notes = r.risk_flags.map((f: RiskFlag) => qualityNotes(s, [f]));
       const fields = {
         name,
         version: r.version,

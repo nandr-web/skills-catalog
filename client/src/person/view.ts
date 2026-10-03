@@ -154,7 +154,7 @@ function install({ s, say, m }: Ctx, v: InstallView | undefined): string | undef
     const bullet = m.kind === 'terminal' ? '  • ' : '- ';
     const block = [paint('attention', paint('bold', `${MARK.attention} ${say(over ? 'install.held_title_over' : 'install.held_title', at)}`)), '', ...why.map((w) => bullet + w), ''];
     if (m.commands) block.push(`  ${say('install.see', at)}`, `  ${say('install.take', { command: v.held.command })}`, paint('dim', `  ${say(over ? 'install.stays_over' : 'install.stays', at)}`));
-    else block.push(say(over ? 'install.stays_reply_over' : 'install.stays_reply', at), say('update.look_reply', at));
+    else block.push(say(over ? 'install.stays_reply_over' : 'install.stays_reply', at), say(over ? 'update.look_reply' : 'install.look_reply', at));
     return m.callout(block).join('\n');
   }
   const d = v.done!;

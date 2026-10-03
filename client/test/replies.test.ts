@@ -393,3 +393,31 @@ describe('a SKILLS_CATALOG that names a place with no catalog', () => {
     expect(existsSync(nowhere)).toBe(false);
   });
 });
+
+// Where search's two changes meet (the integration check): a card a review flagged among the cards that share only some
+// words keeps its review, in the assistant's words and in the person's "also" table.
+describe('a flagged card among the cards sharing only some words', () => {
+  it('shows its review in the assistant\'s words and in the person\'s table', async () => {
+    const p = place();
+    const { open, request, skillMd } = await import('./seed.ts');
+    const { actAs } = await import('@skills-catalog/core');
+    const c = await open(p);
+    await c.publish(request('release-note-draft', [{ path: 'SKILL.md', text: skillMd('release-note-draft', 'Draft release notes from merged pull requests.') }]), actAs('ana'));
+    await c.publish(request('release-planner', [{ path: 'SKILL.md', text: skillMd('release-planner', 'Plan a release calendar.', 'Plan the dates​ with the team.\n') }]), actAs('ben'));
+    await c.close?.();
+    const ctx = ctxFor(p);
+    const r = await perform(ctx, 'search_shared_skills', 'search_shared_skills', { query: 'release notes' });
+    const data = r.data as { results: { name: string; quality?: unknown }[] };
+    expect(data.results.find((x) => x.name === 'release-planner')?.quality, 'the planner is flagged').toBeDefined();
+    const line = r.text.split('\n').find((l) => l.startsWith('- release-planner'))!;
+    expect(line, r.text).toContain('shares only: release');
+    expect(line).toContain('Review:');
+    const v = views(r, 'search_shared_skills', { query: 'release notes' });
+    // A terminal lays the cards out one under another: the planner's review is the line under its name.
+    const t = v.terminal!.split('\n');
+    const at = t.findIndex((l) => l.includes('release-planner'));
+    expect(t.slice(at, at + 4).some((l) => l.includes('▲') && l.includes(S.format(S.word('person.search.review'), { notes: '' }).trim().split(':')[0]!)), v.terminal).toBe(true);
+    // A reply lays them out in tables: the planner's row has its review in the Review column.
+    expect(v.markdown!.split('\n').find((l) => l.includes('release-planner')), v.markdown).toContain('▲');
+  });
+});

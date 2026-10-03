@@ -3,6 +3,7 @@
 // above .claude gets, so nobody else can swap the parent. The project target is unaffected.
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { CatalogError, Words, actAs } from '@skills-catalog/core';
 import { describe, expect, it } from 'vitest';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
@@ -74,6 +75,26 @@ describe('SKILLS_INSTALL_DIR', () => {
     expect(opened).toEqual([]);
     expect(folderBytes(p.catalogDir)).toEqual(catalogBefore);
     expect(existsSync('relative')).toBe(false);
+  });
+
+  // Where A's check meets B's (the integration check): a relative folder and a SKILLS_CATALOG naming a place with no
+  // catalog in it: the folder's refusal comes first, for every call that checks both.
+  it('with no catalog where SKILLS_CATALOG points too, the folder is still refused first', async () => {
+    const p = place();
+    const nowhere = join(p.dir, 'no-catalog-here');
+    mkdirSync(nowhere, { recursive: true });
+    const ctx = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: pathToFileURL(nowhere).href, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed, SKILLS_INSTALL_DIR: 'relative/skills' }, join(p.dir, 'project')), S, 'mcp').ctx;
+    for (const [name, call] of [
+      ['install', () => install(ctx, { name: 'alpha' })],
+      ['update', () => MACHINE_RUNS['update_installed_skills']!(ctx, {})],
+      ['accept', () => MACHINE_RUNS['accept_held_update']!(ctx, { name: 'alpha', target: 'user', version: 1, flags: [], confirm: 'x' })],
+    ] as [string, () => Promise<unknown>][]) {
+      const e = await refusal(call);
+      expect([name, e?.code, e?.data]).toEqual([name, 'invalid_request', { field: 'SKILLS_INSTALL_DIR', why: 'not_absolute' }]);
+    }
+    // With the folder right, the missing catalog is what's refused.
+    const fixed = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: pathToFileURL(nowhere).href, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project')), S, 'mcp').ctx;
+    expect((await refusal(() => install(fixed, { name: 'alpha' })))?.data).toMatchObject({ field: 'catalog', why: 'not_a_catalog' });
   });
 
   it('the folder above its parent writable by others is refused as not private (not the assistant home), nothing made', async () => {

@@ -570,8 +570,8 @@ function catalogThere(ctx: Context): void {
 
 export async function install(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<InstallInput>('install_shared_skill', args, ctx.face, 'local');
-  catalogThere(ctx);
   userFolderChecked(ctx);
+  catalogThere(ctx);
   const s = ctx.words;
   const log = logWords(s);
   const target = req.target ?? 'user';
@@ -765,8 +765,8 @@ type AcceptInput = { name: string; target: Target; version: number; confirm: str
 
 export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<AcceptInput>('accept_held_update', args, ctx.face, 'local');
-  catalogThere(ctx);
   userFolderChecked(ctx);
+  catalogThere(ctx);
   const s = ctx.words;
   const { lock, config } = readRecords(ctx.settings.home);
   const t = decode(req.confirm);
@@ -840,8 +840,8 @@ type UpdateInput = { names?: string[]; dry_run?: boolean; latest?: boolean };
 
 export async function update(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<UpdateInput>('update_installed_skills', args, ctx.face, 'local');
-  catalogThere(ctx);
   userFolderChecked(ctx);
+  catalogThere(ctx);
   const s = ctx.words;
   const w = s.word('update');
   const log = logWords(s);

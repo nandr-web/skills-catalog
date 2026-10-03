@@ -365,6 +365,12 @@ describe('the CLI face', () => {
       expect(r.out).toContain('Find shared skills by what they do');
       expect(r.out).toContain('skills-catalog login');
       expect(r.out).not.toContain("didn't understand");
+      // Every command once, each with what it's for (the integration check: login twice, four with no words).
+      const rows = r.out.split('\n').filter((l) => l.startsWith('  skills-catalog '));
+      const commands = rows.map((l) => l.trim().split(/\s{3,}/)[0]);
+      expect(new Set(commands).size, commands.join(' | ')).toBe(commands.length);
+      for (const row of rows) expect(row.trim().split(/\s{3,}/)[1], row).toBeTruthy();
+      for (const word of ['publish', 'review', 'setup', 'teardown']) expect(r.out).toMatch(new RegExp(`^  skills-catalog ${word}\\b`, 'm'));
     }
   });
 });

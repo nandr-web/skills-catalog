@@ -520,7 +520,7 @@ results:
   versions:
     header: "{name}: {n} version(s), latest v{latest}. Newest first:"
     line: "- v{version} ({published_at}, {publisher}): {message}"
-    line_reviewed: "- v{version} ({published_at}, {publisher}): {message} Review: {notes}."
+    line_reviewed: "- v{version} ({published_at}, {publisher}): {message}; review: {notes}."
     no_message: (no note from the publisher)
     more: 'Older versions: call again with cursor "{cursor}".'
     more_cli: "Older versions: run the same command with --cursor {cursor}."
@@ -668,7 +668,7 @@ results:
       prompt_injection: "{path} has text that tries to steer the assistant (found: {detail})"
       context_cost: "its SKILL.md is long for the assistant to read each time it's used ({detail})"
     reason_injection:
-      hidden: "{path} line {line} has a character the person can't see but the assistant reads ({detail})"
+      hidden: "{path} line {line} has a character people can't see but assistants read ({detail})"
       steering: "{path} line {line} has text that tries to steer the assistant (found: {detail})"
       pipe: "{path} line {line} downloads something and runs it in a shell"
       sends: "{path} line {line} sends a local file or variable over the network"
@@ -1107,6 +1107,7 @@ results:
       stays: Nothing is installed until then.
       stays_over: Until then it stays on v{from}.
       stays_reply: Nothing is installed until you say yes.
+      look_reply: Ask to read it first, if you want to.
       stays_reply_over: It stays on v{from} until you say yes.
       done: "Installed {name} v{version}, its files checked against the catalog's"
       done_over: "Updated {name} v{from} → v{version}, its files checked against the catalog's"
@@ -1202,6 +1203,10 @@ results:
         status: See the skills installed here
         policy: "Choose how skills update: auto, notify (tell me first) or pin"
         accept: Take an update or install that waits for your yes
+        publish: "Share a skill folder in the catalog (a preview first; nothing is sent until you say yes)"
+        review: "Check skills against the catalog's review rules again (all of them, or one by name)"
+        setup: "Set up this machine: Claude Code's connection, updates, your name (--yes or --config <file> to skip the questions)"
+        teardown: Undo what setup did, putting Claude Code's settings back as they were
         stats: See how skills are used on this machine (nothing leaves it)
         mcp: Serve the catalog's tools to an assistant (MCP, over stdio)
         serve: Serve the catalog's API on this machine (127.0.0.1 only)
