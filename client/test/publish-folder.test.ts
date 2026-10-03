@@ -2,7 +2,7 @@
 // published before it is. Step 1 lists what it would send and skip, stores nothing and gives a confirm tied to the
 // folder's fingerprint; step 2 with that confirm publishes, unless the folder or the catalog changed in between. The
 // folder is read as regular files only (golden/skills.yaml hostile), and the ignore list is skipped and reported.
-import { chmodSync, linkSync, mkdirSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, linkSync, mkdirSync, readdirSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { CatalogError, Words, actAs } from '@skills-catalog/core';
@@ -79,7 +79,7 @@ describe('publish a folder, in two steps (contract §3)', () => {
     expect(preview.text).toBe(
       S.format(S.word('publish.preview'), {
         name: 'ignore-list', version: 1, change: S.word('publish.new_skill'), n_send: 1, send: '"SKILL.md"', n_skip: 5,
-        skip: ['".DS_Store"', '".env"', '".git/"', '"id_fake"', '"key.pem"'].join(', '), review: '', folder: JSON.stringify(dir), confirm, flags: '[]',
+        skip: [`".DS_Store" (${S.word('publish.skip_why.system')})`, `".env" (${S.word('publish.skip_why.env')})`, `".git/" (${S.word('publish.skip_why.git')})`, `"id_fake" (${S.word('publish.skip_why.key')})`, `"key.pem" (${S.word('publish.skip_why.key')})`].join(', '), review: '', folder: JSON.stringify(dir), confirm, flags: '[]',
         message_part: S.format(S.word('publish.with_message'), { message: JSON.stringify('First version.') }),
       }),
     );
@@ -179,6 +179,35 @@ describe('publish a folder, in two steps (contract §3)', () => {
 
 // Contract §4.2, "its target is never read": what is read is the file that was checked. A file or folder swapped between
 // its check and its read (by the person's other programs, or anyone who can write there) is refused, never followed.
+// The preview says why each file is skipped, sends what only looks like a secret's name, and names what changes on the
+// way: an empty folder (not stored) and a mode the catalog doesn't keep (review P2.3, P2.4, P8.4, P8.5).
+describe('what the preview says about the folder', () => {
+  it('a reason per skip; id_mapping.md and .envrc-notes.md are sent; an empty folder and a 0600 file are named', async () => {
+    const p = place();
+    const dir = folder(p, 'notes-kit', {
+      'SKILL.md': skillMd('notes-kit', 'Keeps notes.'),
+      'id_mapping.md': 'a table of ids\n',
+      '.envrc-notes.md': 'how we use direnv\n',
+      'private.txt': { text: 'mine\n', mode: 0o600 },
+      '.env': 'X=1\n',
+      id_rsa: 'key\n',
+    });
+    mkdirSync(join(dir, 'assets'));
+    const preview = await publish(ctxFor(p, 'ana'), { folder: dir });
+    const t = preview.text;
+    for (const sent of ['"id_mapping.md"', '".envrc-notes.md"']) expect(t.split('Files it skips')[0]).toContain(sent);
+    expect(t).toContain(`".env" (${S.word('publish.skip_why.env')})`);
+    expect(t).toContain(`"id_rsa" (${S.word('publish.skip_why.key')})`);
+    expect(t).toContain(`"assets/" (${S.word('publish.skip_why.empty')})`);
+    expect(t).toContain(S.format(S.word('publish.mode_note'), { from: '0600', to: '0644' }));
+    // A name written in decomposed form (NFD), as some systems write it: the composed form it's stored in is named.
+    const nfd = 'cafe\u0301.md';
+    writeFileSync(join(dir, nfd), 'x\n');
+    const again = await publish(ctxFor(p, 'ana'), { folder: dir });
+    if (readdirSync(dir).includes(nfd)) expect(again.text).toContain(S.format(S.word('publish.nfc_note'), { path: JSON.stringify(nfd.normalize('NFC')) }));
+  });
+});
+
 describe('the folder is read as it was checked (a swap in between is refused)', () => {
   const outsideSecret = (p: Place) => {
     const f = join(p.dir, 'outside', 'id_fake');

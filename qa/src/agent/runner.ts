@@ -3,6 +3,8 @@
 // the sandbox torn down and checked (on every ending, Ctrl-C included), then scored. A try that leaves anything behind
 // fails its safety rule `nothing_left_behind`. Writes report.json and summary.txt.
 import { spawn, type ChildProcess } from 'node:child_process';
+import { skipReason } from './skips.ts';
+import { budgetsOf } from './budgets.ts';
 import { signalGroup } from '../groups.ts';
 import { chmodSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -42,19 +44,11 @@ export type Report = { runs: RunRecord[]; summary: (Omit<TryId, 'try'> & Aggrega
 
 // Starting catalogs the MCP server brings itself (before slice 1: the stand-in catalog serves the discovery corpus). Seeding
 // any other state takes the catalog's own publish, which comes with slice 1.
-const SERVED = new Set(['queries.corpus']);
 export const PRODUCT_REPO = fileURLToPath(new URL('../../..', import.meta.url));
 export const DISCOVERY = new Set(['A1', 'A2', 'A3', 'A3g', 'A11', 'A13']);   // 5 tries for Haiku (the QA plan §3.1)
 export const MODEL_ALIAS: Record<string, string> = { haiku: 'claude-haiku-4-5-20251001', opus: 'claude-opus-5-5' };
 const short = (model: string) => model.replace(/^claude-/, '').split('-')[0];
 
-function why(s: any): string | undefined {
-  const catalogs = [s.catalog].flat().map(String);
-  const unserved = catalogs.filter((c) => !SERVED.has(c));
-  if (unserved.length) return `starting catalog ${unserved.join(', ')} needs the catalog's publish to seed it (slice 1)`;
-  if (s.workdir_fixtures || s.installed || s.before) return 'starting files need the fixture builder (slice 1)';
-  return undefined;
-}
 
 export async function runScenarios(o: RunnerOptions): Promise<Report> {
   const doc = parse(readFileSync(o.scenariosFile, 'utf8'));
@@ -76,10 +70,11 @@ export async function runScenarios(o: RunnerOptions): Promise<Report> {
   const report: Report = { runs: [], summary: [], skipped: [] };
   const chosen = (doc.scenarios as any[]).filter((s) => (!o.scenarios || o.scenarios.includes(s.id)) && (o.phase === undefined || s.phase === o.phase));
   matrix: for (const s of chosen) {
-    const skip = why(s);
+    const skip = skipReason(s);
     if (skip) { report.skipped.push({ scenario: s.id, why: skip }); continue; }
     const rules = { expect: (s.expect ?? []) as Rule[], safety: [...(doc.defaults.safety ?? []), ...(s.safety ?? [])] as Rule[] };
     const agreesTo: string[] = s.person?.agrees_to ?? doc.defaults.person?.agrees_to ?? [];
+    const budgets = budgetsOf(doc, s);
     for (const setupName of (s.setups as string[] | undefined) ?? Object.keys(setups)) {
       if (o.setups && !o.setups.includes(setupName)) continue;
       const setup = setups[setupName];
@@ -89,7 +84,7 @@ export async function runScenarios(o: RunnerOptions): Promise<Report> {
         for (let n = 1; n <= tries; n++) {
           if (o.signal?.aborted) {
             report.stopped = 'interrupted';
-            if (done.length) report.summary.push({ scenario: s.id, setup: setupName, model, ...aggregate(done) });
+            if (done.length) report.summary.push({ scenario: s.id, setup: setupName, model, ...aggregate(done, budgets) });
             break matrix;
           }
           const id: TryId = { scenario: s.id, setup: setupName, model, try: n };
@@ -98,10 +93,10 @@ export async function runScenarios(o: RunnerOptions): Promise<Report> {
           o.afterTry?.(id);
           report.runs.push(r);
           done.push(r);
-          if (o.signal?.aborted) { report.stopped = 'interrupted'; report.summary.push({ scenario: s.id, setup: setupName, model, ...aggregate(done) }); break matrix; }
-          if (r.harness?.action === 'stop_the_matrix') { report.stopped = r.harness.reason; report.summary.push({ scenario: s.id, setup: setupName, model, ...aggregate(done) }); break matrix; }
+          if (o.signal?.aborted) { report.stopped = 'interrupted'; report.summary.push({ scenario: s.id, setup: setupName, model, ...aggregate(done, budgets) }); break matrix; }
+          if (r.harness?.action === 'stop_the_matrix') { report.stopped = r.harness.reason; report.summary.push({ scenario: s.id, setup: setupName, model, ...aggregate(done, budgets) }); break matrix; }
         }
-        report.summary.push({ scenario: s.id, setup: setupName, model, ...aggregate(done) });
+        report.summary.push({ scenario: s.id, setup: setupName, model, ...aggregate(done, budgets) });
       }
     }
   }
@@ -219,6 +214,7 @@ function summaryText(r: Report): string {
   });
   const notes = [
     ...r.runs.flatMap((run) => run.differences.map((d) => `left behind: ${d.what} (${run.scenario} ${run.setup} try ${run.try})`)),
+    ...r.summary.flatMap((s) => (s.over_budget ?? []).map((b) => `over budget ${s.scenario} ${s.setup}: ${b}`)),
     ...r.skipped.map((k) => `skipped ${k.scenario}: ${k.why}`),
     ...(r.stopped ? [`stopped: ${r.stopped} (${r.stopped === 'interrupted' ? 'Ctrl-C' : 'every later run would fail the same way'})`] : []),
   ];

@@ -1,5 +1,5 @@
-// SearchIndex, hosted adapter (contract §2, §7): the search cards in one file in S3, rewritten whole by its one
-// writer with If-Match on the ETag it read (a lost race reads again). Queries rank in the function with the local
+// SearchIndex, hosted adapter (contract §2, §7): the search cards in one file in S3, rewritten whole by its writers
+// (the indexer, and the API function at publish) with If-Match on the ETag it read (a lost race reads again). Queries rank in the function with the local
 // catalog's own index on an in-memory database, rebuilt when the file's ETag changes, so the matched words, the
 // stemming, the ranking and its ties are the local catalog's. Rebuildable from the versions at any time.
 

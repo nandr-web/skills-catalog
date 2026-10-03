@@ -226,7 +226,10 @@ describe('the skipped list: ignored folders once and never walked, at most 50 en
       if (x.skipped_reported_last !== undefined) expect(listed.at(-1)).toBe(x.skipped_reported_last);
       for (const gone of x.skipped_reported_excludes ?? []) expect(listed).not.toContain(gone);
       expect(line.startsWith(`${before}${listed.length + more})`)).toBe(true);
-      expect(line.endsWith(more ? S.format(S.word('publish.skip_more'), { n: more }) : `"${listed.at(-1)}"`)).toBe(true);
+      // Each entry may carry its reason in brackets (review P2.3).
+      const lastEntry = new RegExp(`${JSON.stringify(listed.at(-1)).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( \\([^)]*\\))?$`);
+      if (more) expect(line.endsWith(S.format(S.word('publish.skip_more'), { n: more }))).toBe(true);
+      else expect(line).toMatch(lastEntry);
       const v = step2Of(preview.text);
       await publish(ctxFor(p), { folder: dir, ...v });
       const c = await open(p);

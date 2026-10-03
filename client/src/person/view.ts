@@ -3,7 +3,7 @@
 // (the CLI) or in the assistant's reply (markdown, handed to it with the MCP result). What needs their decision comes
 // last, set apart (medium.ts's callout), with what answers it: the commands in a terminal, a question in a reply. Every
 // word is the words file's (results.person); only the layout is here. A result with no view here has none.
-import { CatalogError, fenced, manifestRefusal, reasons, renderError, shellQuote, skillMdOf, type DiffResult, type ReadItem, type ReadResult, type SearchInput, type SearchResult, type VersionsResult, type Words } from '@skills-catalog/core';
+import { CatalogError, fenced, manifestRefusal, oneNewlineOff, reasons, renderError, sharesEveryWord, shellQuote, skillMdOf, type DiffResult, type ReadItem, type ReadResult, type SearchInput, type SearchResult, type VersionsResult, type Words } from '@skills-catalog/core';
 import { flagText, oneLine } from '@skills-catalog/core/skill-tree';
 import type { InstallView, ListView, UpdateView } from '../machine/installer.ts';
 import type { PublishView } from '../machine/publish-folder.ts';
@@ -177,20 +177,27 @@ function search({ say, m }: Ctx, r: SearchResult, req: SearchInput): string {
     ? paint('dim', `${MARK.partial} ${say('search.partial', { query })}`)
     : r.ranking === 'none'
       ? say(r.next_cursor || first < r.catalog_size ? 'search.header_page' : 'search.header_all', { total: r.catalog_size, first: 1, last: first })
-      : say('search.header', { count: r.total_matches, total: r.catalog_size, query });
+      : say('search.header', { count: r.full_matches ?? r.total_matches, total: r.catalog_size, query });
   const out = [paint('bold', title), ''];
+  // On a page with matches, the cards sharing only some words come after them, under their own heading, with the words.
+  const matches = partial ? r.results : r.results.filter((c) => sharesEveryWord(r, c));
+  const extras = partial ? [] : r.results.filter((c) => !sharesEveryWord(r, c));
   if (m.kind === 'markdown') {
     // A table the person scans: one row per skill, what it does in its own words.
-    const rows = r.results.map((c) => [paint('bold', c.name), `v${c.latest_version}`, m.text(oneLine(c.publisher)), ...(partial ? [m.text(c.matched_words.join(', '))] : []), m.text(oneLine(c.description))]);
-    out.push(...m.table(header(say, partial ? 'search.columns_partial' : 'search.columns'), rows));
+    const rows = (cs: typeof r.results, shares: boolean) => cs.map((c) => [paint('bold', c.name), `v${c.latest_version}`, m.text(oneLine(c.publisher)), ...(shares ? [m.text(c.matched_words.join(', '))] : []), m.text(oneLine(c.description))]);
+    out.push(...m.table(header(say, partial ? 'search.columns_partial' : 'search.columns'), rows(matches, partial)));
+    if (extras.length) out.push('', paint('attention', `${MARK.attention} ${say('search.also')}`), '', ...m.table(header(say, 'search.columns_partial'), rows(extras, true)));
     return out.join('\n');
   }
-  for (const c of r.results) {
+  const card = (c: (typeof r.results)[number], shares: boolean) => {
     const meta = [`v${c.latest_version}`, oneLine(c.publisher), ...(c.tags.length ? [c.tags.map(oneLine).join(', ')] : [])].join(' · ');
     out.push(`  ${paint('bold', c.name)}  ${paint('dim', meta)}`);
-    if (partial) out.push(`    ${paint('dim', say('search.shares', { words: c.matched_words.join(', ') }))}`);
+    if (shares) out.push(`    ${paint('dim', say('search.shares', { words: c.matched_words.join(', ') }))}`);
     out.push(`    ${oneLine(c.description)}`, '');
-  }
+  };
+  for (const c of matches) card(c, partial);
+  if (extras.length) out.push(paint('attention', `${MARK.attention} ${say('search.also')}`), '');
+  for (const c of extras) card(c, true);
   if (r.next_cursor) out.push(say('search.more', { cursor: r.next_cursor }));
   out.push(paint('dim', say('search.next', { name: r.results[0]!.name })));
   return out.join('\n');
@@ -209,7 +216,7 @@ function readOne({ say, m }: Ctx, item: ReadItem): string {
   const latest_mark = item.version === item.latest_version ? '' : say('read.older', { latest: item.latest_version });
   const out = [paint('bold', say('read.header', { name: item.name, version: item.version, latest_mark, publisher, published_at: day(item.published_at) }))];
   const skillMd = skillMdOf(item);
-  if (skillMd !== undefined) out.push('', paint('dim', say('read.as_written', { publisher })), ...m.quoted(fenced(skillMd.trimEnd()), 'markdown'));
+  if (skillMd !== undefined) out.push('', paint('dim', say('read.as_written', { publisher })), ...m.quoted(fenced(oneNewlineOff(skillMd)), 'markdown'));
   const files = item.files ?? [];
   if (files.length) out.push('', say('read.files', { files: files.map((f) => flagText(f.path)).join(', ') }));
   const left = files.filter((f) => f.content_omitted && f.path !== 'SKILL.md').map((f) => flagText(f.path));

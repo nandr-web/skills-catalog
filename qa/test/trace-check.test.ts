@@ -71,6 +71,20 @@ describe('qa trace-check', () => {
     ]));
   });
 
+  // Review P3.2, P11.3: an agent check counts as automated only if the runner runs its scenario.
+  it('fails when an agent check is marked auto but the runner skips its scenario, saying why', () => {
+    const c = copy();
+    edit(join(c.qa, 'traceability.yaml'), (d) => {
+      const r = d.requirements.find((x: any) => x.id === 'retrieve');
+      const a4 = r.checks.find((x: any) => x.golden === 'agent.A4');
+      a4.auto = true;
+      delete a4.automate_by;
+    });
+    const problems = traceCheck(c).problems;
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatch(/^retrieve: check "A4 .*" is marked auto, but the runner skips A4 \(starting catalog histories\.h1@v4 needs/);
+  });
+
   it('fails when a scenario names an unknown requirement', () => {
     const c = copy();
     edit(join(c.qa, 'golden', 'agent-scenarios.yaml'), (d) => { d.scenarios[0].requirement = ['teleport']; });

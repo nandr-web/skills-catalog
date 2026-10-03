@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { MAX_UPLOAD_LINKS, OPERATIONS } from '../api.ts';
 import type { Catalog, FileAnswer } from '../catalog.ts';
 import { CatalogError } from '../errors.ts';
+import { checkManifest, checkName, checkTree, scanSecrets } from '../skill-tree/index.ts';
 
 export type RemoteOptions = {
   /** The catalog's Bearer token (skills-catalog login saves one); without it every call is unauthenticated. */
@@ -17,6 +18,9 @@ export type RemoteOptions = {
 };
 
 type Inline = { path: string; mode: string; content_base64: string };
+const NO_LIMITS = { files: Infinity, file_bytes: Infinity, skill_bytes: Infinity };
+/** The refusals a publish makes before it looks at the files (contract §5.1). */
+const BEFORE_FILES = new Set(['unauthenticated', 'forbidden', 'not_owner', 'conflict']);
 const API = '/api/v1/';
 
 export function openRemoteCatalog(url: string, o: RemoteOptions = {}): Catalog {
@@ -62,6 +66,30 @@ export function openRemoteCatalog(url: string, o: RemoteOptions = {}): Catalog {
       const bytes = Buffer.from(f.content_base64, 'base64');
       return { path: f.path, mode: f.mode, bytes, sha256: createHash('sha256').update(bytes).digest('hex') };
     });
+    // The checks a publish can make on this machine, before any file goes up (review P5.6): the paths, SKILL.md and the
+    // secret scan, as the catalog makes them (a hosted catalog never takes the override). A refused publish, or its
+    // preview's dry run, then leaves nothing in the catalog's storage. The sizes are the catalog's to check: its limits
+    // can differ from the defaults, and request_upload_links checks them before giving a link.
+    try {
+      const tree = checkTree(files, NO_LIMITS);
+      checkManifest(tree, checkName(rest.name));
+      const secret = scanSecrets(tree);
+      if (secret) throw new CatalogError('secret_suspected', { ...secret });
+    } catch (e) {
+      // One order of refusals (contract §5.1): the token, the owner and the latest come before the files. So a local
+      // refusal first asks the catalog, with no file uploaded: a dry run naming SKILL.md by a sha256 never uploaded is
+      // refused for whichever comes first, and anything that isn't one of those (not_uploaded, the files) leaves the
+      // local refusal standing.
+      if (!(e instanceof CatalogError)) throw e;
+      const md = files.find((f) => f.path === 'SKILL.md') ?? files[0];
+      const probe = { name: rest.name, dry_run: true, files: md ? [{ path: md.path, mode: md.mode, sha256: md.sha256 }] : [], ...(rest.expected_latest !== undefined ? { expected_latest: rest.expected_latest } : {}) };
+      try {
+        await call('publish_version', probe);
+      } catch (first) {
+        if (first instanceof CatalogError && BEFORE_FILES.has(first.code)) throw first;
+      }
+      throw e;
+    }
     const distinct = [...new Map(files.map((f) => [f.sha256, f.bytes])).entries()];
     for (let at = 0; at < distinct.length; at += MAX_UPLOAD_LINKS) {
       const batch = distinct.slice(at, at + MAX_UPLOAD_LINKS);

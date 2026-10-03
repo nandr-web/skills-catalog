@@ -35,6 +35,11 @@ const day = (s: Words, iso: string) => {
   return s.format(s.word('date'), { yyyy, mm, dd });
 };
 
+/** Whether a search card shares every word the search kept (a match, not "closest"). A result that doesn't say its
+ *  words (from a catalog before them) counts every card on a matching page as a match, as it did. */
+export const sharesEveryWord = (r: Pick<SearchResult, 'query_words'>, c: { matched_words: readonly string[] }): boolean =>
+  r.query_words === undefined || r.query_words.every((w) => c.matched_words.includes(w));
+
 // `req` is the search as asked: its words and, for a later page, its cursor (read here, so no face parses one).
 export function renderSearch(s: Words, r: SearchResult, req: SearchInput): string {
   if (!s.guided) return JSON.stringify(r);
@@ -57,11 +62,16 @@ export function renderSearch(s: Words, r: SearchResult, req: SearchInput): strin
       ...r.results.map((c) => s.format(w.partial_card, { name: c.name, version: c.latest_version, publisher: oneLine(c.publisher), shared: list(c.matched_words), description: oneLine(c.description) })),
     ];
   } else {
+    // Some card shares every word: those are the matches; a card on the same page sharing only some words is listed
+    // apart, with the words it shares, so a weak hit never reads as a match.
+    const extras = r.results.filter((c) => !sharesEveryWord(r, c));
     lines = [
       r.ranking === 'none'
         ? s.format(w.header_all, { total: r.catalog_size, first: offset + 1, last: offset + r.results.length })
-        : s.format(w.header, { count: r.total_matches, total: r.catalog_size, query, ranking }),
-      ...r.results.map((c) => s.format(w.card, { name: c.name, version: c.latest_version, publisher: oneLine(c.publisher), tags: tags(c.tags), description: oneLine(c.description) })),
+        : s.format(w.header, { count: r.full_matches ?? r.total_matches, total: r.catalog_size, query, ranking }),
+      ...r.results.filter((c) => sharesEveryWord(r, c)).map((c) => s.format(w.card, { name: c.name, version: c.latest_version, publisher: oneLine(c.publisher), tags: tags(c.tags), description: oneLine(c.description) })),
+      ...(extras.length ? [s.format(w.also_header, { query })] : []),
+      ...extras.map((c) => s.format(w.partial_card, { name: c.name, version: c.latest_version, publisher: oneLine(c.publisher), shared: list(c.matched_words), description: oneLine(c.description) })),
     ];
   }
   if (r.next_cursor) lines.push(s.format(w.more, { cursor: r.next_cursor }));
@@ -76,6 +86,10 @@ const quoted = (path: string) => JSON.stringify(path);
 // close the fence by planting a marker in any spelling: it can't know the token. Everything shown comes from the
 // read's own result, so a face can't show more than the core inlined (§2's budget): the fence holds the front matter
 // and the body when the core inlined it; a skill whose body was left out shows no fence at all.
+/** A file's text for its fence: only its one final newline taken off (the fence line follows), never trailing spaces or
+ *  blank lines, which are part of what was published (review P8.1). */
+export const oneNewlineOff = (text: string) => text.replace(/\n$/, '');
+
 function renderItem(s: Words, item: ReadItem, token: string, budget: InlineBudget): string {
   const w = s.word('get');
   const size = (bytes: number) => s.format(w.size, { kb: Math.ceil(bytes / 1024) });
@@ -86,12 +100,12 @@ function renderItem(s: Words, item: ReadItem, token: string, budget: InlineBudge
   if (shown) {
     const skillMd = skillMdOf(item)!;
     const end = s.format(w.fence[1], { token });
-    lines.push(s.format(w.data_note, { publisher, end }), s.format(w.fence[0], { token }), fenced(skillMd.trimEnd()), end);
+    lines.push(s.format(w.data_note, { publisher, end }), s.format(w.fence[0], { token }), fenced(oneNewlineOff(skillMd)), end);
   }
   if (item.files) lines.push(s.format(w.files, { files: list(item.files.map((f) => `${quoted(f.path)} (${f.size} B)`)) }));
   for (const f of item.files ?? []) {
     if (f.content !== undefined && f.path !== MANIFEST) {
-      lines.push(s.format(w.file_fence[0], { path: quoted(f.path), token }), fenced(f.content.trimEnd()), s.format(w.file_fence[1], { path: quoted(f.path), token }));
+      lines.push(s.format(w.file_fence[0], { path: quoted(f.path), token }), fenced(oneNewlineOff(f.content)), s.format(w.file_fence[1], { path: quoted(f.path), token }));
     }
   }
   // What was left out. A body is read with paths ["SKILL.md"] (one path is read whole, whatever its size); a file
@@ -109,7 +123,13 @@ function renderItem(s: Words, item: ReadItem, token: string, budget: InlineBudge
 /** A read's SKILL.md as its text (front matter, then body), when the read carries its body; control characters are
  *  still the caller's to show escaped (fenced). */
 export const skillMdOf = (item: ReadItem): string | undefined =>
-  item.manifest.body === undefined ? undefined : `---\n${stringify(item.manifest.frontmatter, { lineWidth: 0 })}---\n${item.manifest.body}`;
+  item.manifest.body === undefined
+    ? undefined
+    : // As published when the catalog sends the front matter's text (review P8.1); rebuilt from its keys otherwise (an
+      // older hosted catalog).
+      item.manifest.frontmatter_text !== undefined
+      ? item.manifest.frontmatter_text + item.manifest.body
+      : `---\n${stringify(item.manifest.frontmatter, { lineWidth: 0 })}---\n${item.manifest.body}`;
 
 // `ids` makes the read's fence token (the injected Ids, so tests can fix it).
 export function renderRead(s: Words, r: ReadResult, ids: Ids): string {

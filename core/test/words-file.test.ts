@@ -517,6 +517,28 @@ describe('publisher text never forges the product\'s own lines (contract §4.1, 
     expect((await catalog.publish(request('fmt', md('Formats code.'), { message: 'first' }), actAs('dev-one'))).created).toBe(true);
   });
 
+  it('a page with full matches shows the cards that share only some words apart, naming those words (the review of 2026-10-02, P1.1)', () => {
+    const s = Words.load();
+    const card = (name: string, matched_words: string[]) => ({ name, description: `${name} does it.`, latest_version: 1, tags: [], publisher: 'ana', matched_words });
+    const r = { results: [card('release-note-draft', ['release', 'notes']), card('semver-bump', ['release'])], match: 'all' as const, ranking: 'lexical' as const, total_matches: 2, full_matches: 1, query_words: ['release', 'notes'], catalog_size: 4 };
+    const text = renderSearch(s, r, { query: 'release notes' });
+    const lines = text.split('\n');
+    expect(lines[0]).toBe(s.format(s.word('search.header'), { count: 1, total: 4, query: 'release notes', ranking: s.word('search.ranking').lexical }));
+    expect(lines[1]).toMatch(/^- release-note-draft \(v1, ana; tags: none\)/);
+    expect(lines[2]).toBe(s.format(s.word('search.also_header'), { query: 'release notes' }));
+    expect(lines[3]).toMatch(/^- semver-bump \(v1, ana; shares only: release\)/);
+    // A page from a catalog that doesn't say its words (an older hosted one) shows every card as before.
+    const { query_words: _, full_matches: __, ...older } = r;
+    expect(renderSearch(s, older, { query: 'release notes' })).not.toContain(s.format(s.word('search.also_header'), { query: 'release notes' }));
+  });
+
+  it('a page of only partial cards tells the assistant to read the closest and search once more before saying there is none (P9.4)', () => {
+    const s = Words.load();
+    const next = s.format(s.word('search.partial_next'));
+    expect(next).toMatch(/search once more/i);
+    expect(next).toMatch(/read/i);
+  });
+
   it('an empty catalog says so, rather than to search once more with other words', () => {
     const s = Words.load();
     const empty = renderSearch(s, { results: [], match: 'none', ranking: 'lexical', total_matches: 0, catalog_size: 0 }, { query: 'release notes' });

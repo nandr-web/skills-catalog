@@ -33,6 +33,7 @@
     "api-doc": "node scripts/api-doc.ts",
     "config-modules": "node scripts/config-modules.ts",
     "perf": "node scripts/node-check.mjs && node --disable-warning=ExperimentalWarning scripts/perf-search.ts",
+    "search-score": "node scripts/node-check.mjs && node --disable-warning=ExperimentalWarning scripts/search-score.ts",
     "try-it": "node scripts/node-check.mjs && node --disable-warning=ExperimentalWarning scripts/try-it.ts"
   },
   "dependencies": {

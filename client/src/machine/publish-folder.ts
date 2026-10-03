@@ -32,14 +32,24 @@ const STEP2 = ['name', 'version', 'files', 'flags'] as const;
 export type PublishView = { kind: 'publish'; stage: 'preview' | 'published'; name: string; version: number; latest: number; send: string[]; skipped: string[]; changed: string[]; notes: string[] };
 
 export const SKIPPED_SHOWN = 50;
-type Folder = { files: { path: string; mode: Mode; bytes: Buffer }[]; skipped: string[] };
+// `why` names each skipped path's reason; `modes` each sent file whose mode isn't one the catalog keeps (review P2.3,
+// P2.4, P8.4, P8.5).
+type Folder = { files: { path: string; mode: Mode; bytes: Buffer }[]; skipped: string[]; why: Record<string, SkipWhy>; modes: Record<string, string> };
+export type SkipWhy = 'git' | 'system' | 'env' | 'key' | 'empty';
 
 const quoted = (p: string) => JSON.stringify(p);
 const list = (xs: readonly string[]) => xs.join(', ');
 
 // The ignore list, by name at any depth, files and folders alike: what the person keeps next to a skill and never means
-// to publish.
-const ignored = (name: string) => name.toLowerCase() === '.git' || name === '.DS_Store' || name.startsWith('.env') || name.endsWith('.pem') || name.startsWith('id_');
+// to publish, with its reason. Narrow on purpose (review P2.3): .env, .env.* and .envrc, not every name starting .env
+// (.envrc-notes.md is notes); id_* only with no extension or as .pub (id_rsa, id_ed25519.pub), not id_mapping.md.
+function ignored(name: string): SkipWhy | undefined {
+  if (name.toLowerCase() === '.git') return 'git';
+  if (name === '.DS_Store') return 'system';
+  if (name === '.env' || name === '.envrc' || (name.startsWith('.env.') && !/\.(md|markdown|txt)$/i.test(name))) return 'env';
+  if (name.endsWith('.pem') || /^id_[^.]+(\.pub)?$/.test(name)) return 'key';
+  return undefined;
+}
 // Paths in code-point order (UTF-8 bytes sort that way).
 const byCodePoint = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.from(b));
 
@@ -86,6 +96,8 @@ export function readFolder(root: string, hooks: ReadHooks = {}): Folder {
   if (!top.isDirectory()) throw new CatalogError('invalid_manifest', { problem: 'missing', fields: ['SKILL.md'] });
   const found: { path: string; full: string; st: Stats }[] = [];
   const skipped: string[] = [];
+  const why: Record<string, SkipWhy> = {};
+  const modes: Record<string, string> = {};
   // A folder is listed only if it is still the folder that was checked once listed: a link swapped in is refused
   // before anything it listed is used.
   const walk = (dir: string, rel: string, checked: Stats) => {
@@ -97,12 +109,23 @@ export function readFolder(root: string, hooks: ReadHooks = {}): Folder {
       const r = rel ? `${rel}/${e.name}` : e.name;
       const full = join(dir, e.name);
       const st = lstatSync(full);
-      if (ignored(e.name)) {
-        skipped.push(st.isDirectory() ? `${r}/` : r); // a folder is one entry, never walked
+      const reason = ignored(e.name);
+      if (reason) {
+        const shown = st.isDirectory() ? `${r}/` : r; // a folder is one entry, never walked
+        skipped.push(shown);
+        why[shown] = reason;
         continue;
       }
       if (st.isSymbolicLink()) notRegular(r);
-      if (st.isDirectory()) walk(full, r, st);
+      if (st.isDirectory()) {
+        // An empty folder isn't stored (a skill is its files): said, not silently dropped.
+        if (readdirSync(full).length === 0) {
+          skipped.push(`${r}/`);
+          why[`${r}/`] = 'empty';
+          continue;
+        }
+        walk(full, r, st);
+      }
       else if (st.isFile()) {
         if (st.nlink > 1) notRegular(r); // a hard link may be another file's bytes, outside this folder
         else found.push({ path: r, full, st });
@@ -120,9 +143,13 @@ export function readFolder(root: string, hooks: ReadHooks = {}): Folder {
   if (total > limits.skill_bytes) throw new CatalogError('too_large', { limit: 'skill_bytes', max: limits.skill_bytes, value: total });
   const files = found.map((f) => {
     hooks.beforeRead?.(f.full);
-    return { path: f.path, mode: (f.st.mode & 0o111 ? '0755' : '0644') as Mode, bytes: readChecked(f.full, f.path, f.st, limits.file_bytes) };
+    const mode = (f.st.mode & 0o111 ? '0755' : '0644') as Mode;
+    // The catalog keeps two modes (contract §4.2; the fingerprint holds them): another one is named, not silently changed.
+    const had = '0' + (f.st.mode & 0o777).toString(8);
+    if (had !== mode) modes[f.path] = had;
+    return { path: f.path, mode, bytes: readChecked(f.full, f.path, f.st, limits.file_bytes) };
   });
-  return { files, skipped: skipped.sort(byCodePoint) };
+  return { files, skipped: skipped.sort(byCodePoint), why, modes };
 }
 
 // The secret the confirm is keyed with: $SKILLS_HOME/confirm.key, 32 random bytes, 0600, made on first use. One that
@@ -196,7 +223,7 @@ export async function publishFolder(ctx: Context, args: unknown): Promise<Done> 
   const log = logWords(s);
   let real = req.folder;
   try {
-    const { files, skipped } = readFolder(req.folder);
+    const { files, skipped, why, modes } = readFolder(req.folder);
     real = realpathSync(req.folder); // what the confirm binds and a refusal names: links in the path resolved
     const tree = checkTree(files);
     const name = checkManifest(tree).name;
@@ -221,7 +248,7 @@ export async function publishFolder(ctx: Context, args: unknown): Promise<Done> 
       if (identical) return { text: s.format(w.identical, { folder: quoted(req.folder), name, latest }), target: `${name} v${latest}`, result: log.result('publish', 'identical') };
       const flags = kinds(r.risk_flags.map((f: RiskFlag) => f.kind));
       const confirm = mac(key, { folder: real, fingerprint: fp, name, latest, message, files: files.length, flags }).toString('base64url');
-      const shown = skipped.slice(0, SKIPPED_SHOWN).map((p) => quoted(flagText(p)));
+      const shown = skipped.slice(0, SKIPPED_SHOWN).map((p) => (why[p] ? `${quoted(flagText(p))} (${w.skip_why[why[p]!]})` : quoted(flagText(p))));
       const changed = (r.diff_from_latest?.files ?? []).map((f) => quoted(f.path));
       const notes = r.risk_flags.map((f: RiskFlag) => s.format(s.word('quality.note')[f.kind], { path: flagText(f.path ?? ''), detail: flagText(f.detail) }));
       const text = s.format(w.preview, {
@@ -229,7 +256,13 @@ export async function publishFolder(ctx: Context, args: unknown): Promise<Done> 
         version: r.version,
         change: latest === 0 ? w.new_skill : s.format(w.change_from, { latest, files: list(changed) }),
         n_send: files.length,
-        send: list(files.map((f) => quoted(f.path))),
+        // What changes on the way is named: a mode the catalog doesn't keep, a name stored in its composed (NFC) form.
+        send: list(
+          files.map((f) => {
+            const notes = [...(modes[f.path] ? [s.format(w.mode_note, { from: modes[f.path], to: f.mode })] : []), ...(f.path.normalize('NFC') !== f.path ? [s.format(w.nfc_note, { path: quoted(f.path.normalize('NFC')) })] : [])];
+            return notes.length ? `${quoted(f.path)} (${notes.join('; ')})` : quoted(f.path);
+          }),
+        ),
         n_skip: skipped.length,
         skip: shown.length ? list(shown) + (skipped.length > shown.length ? s.format(w.skip_more, { n: skipped.length - shown.length }) : '') : w.skip_none,
         review: notes.length ? s.format(w.review, { notes: notes.join('; ') }) : '',

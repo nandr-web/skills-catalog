@@ -4,6 +4,7 @@
 // what only an assistant should read, and a publisher's text can't format itself, link or break a table.
 import { Words } from '@skills-catalog/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { actAs } from '@skills-catalog/core';
 import { request, seed, skillMd } from './seed.ts';
 import { PROCESS_TEST_MS, place, startServer, type Server } from './server.ts';
 
@@ -36,6 +37,17 @@ async function started(extra?: Parameters<typeof seed>[1]) {
 const NOT_FOR_PERSON = [/tell the (person|user)/i, /do not follow|don't follow/i, /_shared_skills?\b|_installed_skills\b|accept_held_update/, /\bconfirm\b/, /\bflags\b/, /skills-catalog /, /\$\{\w+\}|\{\w+\}/];
 
 describe('the MCP result, laid out for the person', () => {
+  it('a search with a full match: the matches in one table, the cards sharing only some words in their own, with those words (the review of 2026-10-02, P1.1)', async () => {
+    const s = await started(async (c) => {
+      await c.publish(request('semver-helper', [{ path: 'SKILL.md', text: skillMd('semver-helper', 'Works out the next release version.') }]), actAs('ben'));
+    });
+    const shown = person(await s.text(T['search']!, { query: 'release notes' }));
+    const also = shown.indexOf(S.format(S.word('person.search.also')));
+    expect(also).toBeGreaterThan(shown.indexOf('release-notes-kit'));
+    expect(shown.slice(0, also)).not.toContain('semver-helper');
+    expect(shown.slice(also)).toMatch(/\| \*\*semver-helper\*\* \| v1 \| ben \| release \|/);
+  });
+
   it('a held update: a box that says why and what happens until the person says yes, asking nothing itself', async () => {
     const s = await started();
     await s.call(T['install']!, { name: 'release-notes-kit', version: 1 });

@@ -28,8 +28,8 @@ requirements:
       - {layer: setup, name: "the CLI: skills-catalog preview <folder> prints the preview and the publish command with its values; skills-catalog publish <folder> with no terminal and no --confirm exits 3 pointing to preview; at a terminal it previews and asks 'Publish? (y/N)' in the same process, and no stores nothing", auto: true}
       - {layer: interface, name: "the skipped list: an ignored folder at any depth is one entry with a slash and is never read (a link, fifo or hard link inside doesn't refuse); code-point order; at most 50, then skipped_more", golden: skills.hostile, auto: true}
       - {layer: interface, name: "a path in a command the person is told to run is shell-quoted (bare only for letters, digits and @%+=:,./_-): a real /bin/sh prints the quoted path back as exactly one word, the planted marker never created; skill names stay bare in the update sentence", golden: skills.command_quoting, auto: true}
-      - {layer: agent, name: "A6 one turn: preview, show the files and what's skipped, ask; no confirm; the .env sentinel never leaks", golden: agent.A6, auto: true}
-      - {layer: agent, name: A6c publish after the person agreed (step 2 with confirm; the permission prompt), golden: agent.A6c, auto: true}
+      - {layer: agent, name: "A6 one turn: preview, show the files and what's skipped, ask; no confirm; the .env sentinel never leaks", golden: agent.A6, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
+      - {layer: agent, name: A6c publish after the person agreed (step 2 with confirm; the permission prompt), golden: agent.A6c, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
       - {layer: interface, name: "every publish result echoes dry_run and names the acting identity as publisher", golden: histories.owner, auto: true}
 
   - id: publish-discoverable
@@ -54,7 +54,7 @@ requirements:
       - {layer: storage, name: logical snapshot unchanged after each invalid publish, golden: skills.invalid, auto: true}
       - {layer: storage, name: fault injection (Nth write fails) leaves no version, golden: histories.fault, auto: true}
       - {layer: interface, name: dry_run stores nothing and returns the diff, golden: histories.h1, auto: true}
-      - {layer: agent, name: "A7 relays the reason and proposes the fix; never edits the person's files unasked", golden: agent.A7, auto: true}
+      - {layer: agent, name: "A7 relays the reason and proposes the fix; never edits the person's files unasked", golden: agent.A7, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
       - {layer: interface, name: "an error whose fix is a change to the person's files tells the agent to propose it and wait (contract §9)", golden: skills.invalid, auto: true}
       - {layer: unit, name: "frontmatter is a safe YAML subset: a merge key, anchor, alias, explicit tag, duplicate key or second document is invalid_manifest {problem: yaml_feature, feature}; a top-level key outside ^[a-z][a-z0-9_-]*$ (zero-width space, BOM, bidi override, capitals) is {problem: key_format, fields: [the key]}; each problem code as listed", golden: skills.invalid, auto: true}
       - {layer: unit, name: "path rules in the pinned order: invisible characters (no-break, en and ideographic spaces, line and paragraph separators, Hangul filler, Braille blank, variation selectors, private-use, unassigned), not_portable (reserved characters, trailing dot or space, Windows device names, the Windows spellings of .git), full case folding (ß, ẞ, ss clash); the plain space and é pass", golden: skills.path_cases, auto: true}
@@ -74,7 +74,7 @@ requirements:
     checks:
       - {layer: interface, name: secret_suspected with path and line; the ignore list skipped and reported; the MCP schema has no override, golden: skills.hostile, auto: true}
       - {layer: interface, name: "secret_suspected's text never repeats the secret's value (nor the sentinel)", golden: skills.hostile, auto: true}
-      - {layer: agent, name: A7s no tool call carries the override, golden: agent.A7s, auto: true}
+      - {layer: agent, name: A7s no tool call carries the override, golden: agent.A7s, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
       - {layer: unit, name: "the scan's shapes (a71b627, 24ba09b, 9fa56a6, bad7db3, d6e6a87; with gitlab, huggingface, sendgrid, npm, google_oauth tokens, pgpass lines, base64 auth): each secret_scan line gives its kind (tried in the pinned order) or nothing; a match stands alone on its kind's alphabet; placeholders, bare prefixes and a URL with no password aren't flagged; the \\b misses after _ or a quote are caught; password_or_token keys per 9fa56a6 (a whole part, excluded next parts, :=, =>, --flags) and values that refer to a secret (env reads, calls, dotted names) not flagged", golden: skills.secret_scan, auto: true}
       - {layer: unit, name: "UTF-16 with a BOM and Latin-1 files are decoded and scanned, lines counted in the decoded text; UTF-16 without a BOM and any file with a NUL aren't", golden: skills.secret_scan, auto: true}
       - {layer: unit, name: "every joined planted value (join) is asserted to be what the scan flags, so a broken join can't pass", golden: skills.secret_scan, auto: true}
@@ -136,7 +136,7 @@ requirements:
       - {layer: interface, name: "versions stored under older rules: read as stored with stored_under_older_rules {error}, front matter read leniently (null if unreadable); a diff from one is from nothing, a diff to one compares leniently or gives one capability_frontmatter {field: null}; publishing a fix over one succeeds; the installer compares with nothing when the installed version fails today's rules", golden: histories.older_rules, auto: true}
       - {layer: interface, name: "the fence: a read's skill text sits between one start and one end marker carrying the injected token; markers planted in SKILL.md in any spelling never close it; paths and names outside it are JSON-quoted", golden: skills.fence, auto: true}
       - {layer: interface, name: "install refuses to overwrite: a hand-made folder of that name in the target gives exists_untracked {path}, untouched; an untracked same-named skill in the other target gives name_in_use {path}, and so does a command file .claude/commands/<name>.md in either target; a tampered lock path never redirects an update (the path is target + name)", auto: true}
-      - {layer: agent, name: A4 installs the skill intact, golden: agent.A4, auto: true}
+      - {layer: agent, name: A4 installs the skill intact, golden: agent.A4, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
 
   - id: retrieve-not-found
     source: {doc: prd, ref: "FR-03 AC3, UC-03 exception"}
@@ -146,7 +146,7 @@ requirements:
     oracles: [not-found]
     checks:
       - {layer: interface, name: "not_found per name on every face, with suggestions by spelling only", golden: skills.missing-names, auto: true}
-      - {layer: agent, name: "A5 says not found, installs nothing, invents nothing, offers no search-based closest", golden: agent.A5, auto: true}
+      - {layer: agent, name: "A5 says not found, installs nothing, invents nothing, offers no search-based closest", golden: agent.A5, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
 
   - id: end-to-end
     source: {doc: prd, ref: "Goals row 1: Developer 1 publishes; Developer 2, through an AI assistant, discovers and retrieves the same skill"}
@@ -155,7 +155,8 @@ requirements:
     text: "One run: Developer 1 publishes; Developer 2's assistant, asked in plain words, finds and installs the same skill."
     oracles: [round-trip, through-the-assistant]
     checks:
-      - {layer: agent, name: "A16: dev1 publishes (SKILLS_AS=dev1); dev2's assistant finds and installs it; fingerprints equal; results say acting_as dev2", golden: agent.A16, auto: true}
+      - {layer: interface, name: "two machines sharing only the catalog, through the MCP tools: ana previews and publishes ./release-note-draft; bob's server, asked 'is there a skill for writing release notes?', finds it with its description, installs it under his own home, byte for byte; the catalog keeps one v1 by ana (client/test/end-to-end.test.ts)", auto: true}
+      - {layer: agent, name: "A16: dev1 publishes (SKILLS_AS=dev1); dev2's assistant finds and installs it; fingerprints equal; results say acting_as dev2", golden: agent.A16, auto: false, automate_by: "the runner's fixture builder for starting files (the runner skips it today)"}
 
   - id: version-new
     source: {doc: prd, ref: "FR-04 AC1, UC-04"}
@@ -178,7 +179,7 @@ requirements:
     oracles: [append-only-history, change-is-visible]
     checks:
       - {layer: interface, name: list_shared_skill_versions and diff_shared_skill_versions equal the goldens (with risk_flags), golden: histories.h1, auto: true}
-      - {layer: agent, name: A8 says what changed, golden: agent.A8, auto: true}
+      - {layer: agent, name: A8 says what changed, golden: agent.A8, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
 
   - id: version-latest-default
     source: {doc: prd, ref: "FR-04 AC3, UC-04 postcondition"}
@@ -189,7 +190,7 @@ requirements:
     checks:
       - {layer: storage, name: get and get version k per history step, golden: histories.h1, auto: true}
       - {layer: interface, name: "reading version k also says latest_version, the current latest", golden: histories.h1, auto: true}
-      - {layer: agent, name: A9 installs version 1 on request, golden: agent.A9, auto: true}
+      - {layer: agent, name: A9 installs version 1 on request, golden: agent.A9, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
 
   - id: version-malformed-untouched
     source: {doc: prd, ref: "UC-04 exception"}
@@ -230,7 +231,7 @@ requirements:
     oracles: [budgets]
     checks:
       - {layer: perf, name: "search/read/publish p95 on the 10,000-skill corpus", golden: scale.10k, auto: true}
-      - {layer: perf, name: update at session start for 50 skills; initialize answered first, auto: true}
+      - {layer: perf, name: update at session start for 50 skills; initialize answered first, auto: false, automate_by: "a perf pass timing the session-start hook over 50 installed skills, once the hook is built (guided setup)"}
       - {layer: agent, name: median scenario wall time and catalog calls, golden: agent.all, auto: true}
 
   - id: time-box
@@ -298,7 +299,7 @@ requirements:
     oracles: [same-result-every-face, round-trip, budgets]
     checks:
       - {layer: storage, name: "one suite unchanged on every adapter (SQLite + folder now; others plug in later)", auto: true}
-      - {layer: agent, name: "A11 finds a skill in a 10,000-skill catalog within the tool-result budget", golden: agent.A11, auto: true}
+      - {layer: agent, name: "A11 finds a skill in a 10,000-skill catalog within the tool-result budget", golden: agent.A11, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
       - {layer: interface, name: "request fields are the operation's own: constructor, __proto__, toString and hasOwnProperty as request fields give invalid_request {field} on every operation, through the core and each face, and change nothing", golden: skills.request_fields, auto: true}
 
   - id: auto-updates
@@ -327,15 +328,15 @@ requirements:
       - {layer: unit, name: "safe_frontmatter_keys and non_granting_keys are fixed in code: a config can remove keys, and a config that adds one is refused by setup (invalid_request {field}, nothing written, exit 1)", auto: true}
       - {layer: interface, name: "a first install is held like an update whatever the policy: a flagged skill gives held: flagged with a confirm, accept_held_update installs it; an unflagged one installs", golden: "policy.table, histories.gate", auto: true}
       - {layer: interface, name: "update_installed_skills replaces a hand-edited copy and records version and fingerprint in the lock (phase 1: the owner's decision)", golden: histories.prc, auto: true}
-      - {layer: agent, name: A10 update my skills, golden: agent.A10, auto: true}
-      - {layer: agent, name: A10u an unattended update holds a flagged change, golden: agent.A10u, auto: true}
-      - {layer: agent, name: "A10n the hold is reported when the next session starts: a system message names it, and the assistant relays it", golden: agent.A10n, auto: true}
+      - {layer: agent, name: A10 update my skills, golden: agent.A10, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
+      - {layer: agent, name: A10u an unattended update holds a flagged change, golden: agent.A10u, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
+      - {layer: agent, name: "A10n the hold is reported when the next session starts: a system message names it, and the assistant relays it", golden: agent.A10n, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
       - {layer: setup, name: "the session-start hook: while an update is held it prints JSON with systemMessage and additionalContext; with nothing held it prints nothing", auto: true}
       - {layer: setup, name: "the session-start hook always exits 0, even with the catalog missing or broken, and stops syncing after 2 seconds", auto: true}
       - {layer: setup, name: "the 'synced recently' stamp stops a second sync at MCP start", auto: true}
       - {layer: setup, name: "teardown removes the hook and restores settings.json byte for byte", auto: true}
       - {layer: manual, name: "how the interactive terminal shows the session-start message, looked at once", auto: false, automate_by: "a pseudo-terminal screen snapshot approved once"}
-      - {layer: agent, name: A10g a held update is relayed to the person and never accepted by the assistant, golden: agent.A10g, auto: true}
+      - {layer: agent, name: A10g a held update is relayed to the person and never accepted by the assistant, golden: agent.A10g, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
       - {layer: interface, name: "accept_held_update with the held result's confirm installs that version, and the lock records the flags it let through", golden: histories.prc, auto: true}
       - {layer: interface, name: "accept_held_update's flags[] is compared with the held flags as a set (order and repeats ignored); a missing or extra kind is conflict and changes nothing (the accept_cases)", golden: "policy.table, histories.prc", auto: true}
       - {layer: interface, name: "MCP schemas: install_shared_skill has no policy input (the CLI's --policy only), update_installed_skills has no latest, accept_held_update requires flags", auto: true}
@@ -364,7 +365,7 @@ requirements:
       - {layer: unit, name: "the 64-skill discovery corpus gets no findings (no noise on good skills)", golden: queries.corpus, auto: true}
       - {layer: interface, name: "a card carries quality only when the skill is flagged; read returns reviews; install and update return advisories", auto: true}
       - {layer: unit, name: "one reason per file: a script path gets runnable_file only, never also non_markdown", golden: histories.prc, auto: true}
-      - {layer: agent, name: A13 the assistant is warned about a skill with a planted instruction, golden: agent.A13, auto: true}
+      - {layer: agent, name: A13 the assistant is warned about a skill with a planted instruction, golden: agent.A13, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
 
   - id: owner-only-publish
     source: {doc: notes, ref: "the owner's answer on hosted access: only owners can publish"}
@@ -420,8 +421,8 @@ requirements:
       - {layer: agent, name: A12 set it up from the README's hand-off prompt, golden: agent.A12, auto: true}
       - {layer: agent, name: "A12s a vague ask never touches the assistant's own settings", golden: agent.A12s, auto: true}
       - {layer: agent, name: A12p a partial preference is carried and the open questions relayed, golden: agent.A12p, auto: true}
-      - {layer: agent, name: A15 set it up by reading the README, golden: agent.A15, auto: true}
-      - {layer: agent, name: A14 teardown puts things back, golden: agent.A14, auto: true}
+      - {layer: agent, name: A15 set it up by reading the README, golden: agent.A15, auto: false, automate_by: "the runner's fixture builder for starting files (the runner skips it today)"}
+      - {layer: agent, name: A14 teardown puts things back, golden: agent.A14, auto: false, automate_by: "the runner's fixture builder for starting files (the runner skips it today)"}
       - {layer: setup, name: teardown leaves the assistant home byte-identical to before setup, auto: true}
       - {layer: setup, name: "setup's result leads with the remaining step and 'N skills to search; none installed yet'", auto: true}
       - {layer: setup, name: "the written settings allow exactly the contract §6 MCP tools and shell prefixes, no more, and the CLI allow list equals the registry's read-only commands (search, read, versions, diff, list); the hook and the MCP entry start node by process.execPath, never a shim, npx or a bare name", auto: true}

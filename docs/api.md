@@ -760,6 +760,8 @@ Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`)
   - `ranking`: one of `none`, `lexical`
   - `next_cursor`: text (not always there)
   - `total_matches`: a whole number
+  - `query_words`: a list, each text (not always there)
+  - `full_matches`: a whole number (not always there)
   - `catalog_size`: a whole number
 
 **Errors:** only those every call can return: `invalid_request`, `invalid_developer_setting`, `internal_error`, `forbidden`
@@ -791,6 +793,7 @@ Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`)
         - `frontmatter`: an object
         - `body`: text (not always there)
         - `body_omitted`: true or false (not always there)
+        - `frontmatter_text`: text (not always there)
       - `reviews`: a list, each any value
       - `files`: a list, each an object with (not always there)
         - `path`: text
