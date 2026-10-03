@@ -67,9 +67,8 @@ Each PRD item, where you see it, and the requirement in [`qa/traceability.yaml`]
 | **NFR** Through an assistant | Every screen: Claude Code calling the catalog | screens 1-6 · `qa/try-claude.sh selftest` | [assistant-mediated](qa/traceability.yaml#L217) |
 | **NFR** Responsiveness | p95 under 100 ms on a 10,000-skill catalog | `npm run perf` | [responsiveness](qa/traceability.yaml#L226) |
 | **Goal 1** End to end | Developer 1 publishes; Developer 2's assistant finds and gets the same skill | screens 1-3 · the reels | [end-to-end](qa/traceability.yaml#L151) |
-| **D1** Access through an assistant | The assistant's tools (MCP) are the way in; the CLI is for the person's own yes | screens | as the NFR above |
-| **D2** Versioning in the MVP | As FR-04 | | |
-| **D3** No auth, no de-dup | De-dup isn't built. Locally, "acting as" is a demo label, not security. The hosted catalog's sign-in is an opt-in extra | [Our thinking](docs/thinking.md#beyond-the-prd) | |
+| **D1, D2** | Access through the assistant; versions in the MVP | as the NFR and FR-04 above | |
+| **D3** No auth, no de-dup | De-dup isn't built. Sign-in exists only on the opt-in hosted catalog | [why](docs/thinking.md#beyond-the-prd) | |
 
 **The PRD's words, here:**
 
@@ -178,7 +177,7 @@ A check runs this script and compares it with this copy, so the copy can't drift
 
 ### In real Claude Code (about two minutes)
 
-**Needs:** the [install](#install) (the repository in `~/skills-catalog`) · [Claude Code](https://code.claude.com/docs/en/overview), signed in. One script plays ana and bob, each with a project wired to this checkout, sharing one sandbox catalog (`~/sc-try`). skills-catalog writes nothing in your own `~/.claude`.
+**Needs:** the [install](#install) · [Claude Code](https://code.claude.com/docs/en/overview), signed in. A script plays ana and bob on a sandbox catalog (`~/sc-try`), outside your own `~/.claude`.
 
 ```sh
 cd ~/skills-catalog
@@ -194,19 +193,19 @@ qa/try-claude.sh uninstall
 | Step | You should see |
 |---|---|
 | `install` | **Ready:** and the sandbox's folder |
-| `launch ana publish` | Claude Code as ana: a preview of the files; say yes, and v1 is published (screen 1) |
-| `launch bob install` | Claude Code as bob: the skill found, read, then installed (screens 2-3) |
-| `launch ana publish-v2` | Claude Code as ana: v2 published, adding a script |
-| `launch bob update` | A box: **Waiting for your OK: 1 update** (the screen at the top) |
-| `accept` | **Take it? (y/N)**; answer y: **Took it** (screen 6) |
-| `uninstall` | **Deleted** and the sandbox's folder. Claude Code may still list its two folders as trusted. |
+| `launch ana publish` | A preview; say yes, and v1 is published (screen 1) |
+| `launch bob install` | Found, read, installed (screens 2-3) |
+| `launch ana publish-v2` | v2 published, adding a script |
+| `launch bob update` | **Waiting for your OK: 1 update** (the top screen) |
+| `accept` | **Take it? (y/N)**; y: **Took it** (screen 6) |
+| `uninstall` | **Deleted** and the sandbox's folder |
 
-- `qa/try-claude.sh` alone lists every scenario; `status` shows what's published and installed; `log` follows every call.
-- `qa/try-claude.sh selftest` runs it all unattended, checking each step on the catalog's log. **Needs** tmux too. It runs `claude -p` on Haiku (a few cents, at most $0.50 a step). You should see **PASS: every step seen with real Claude Code**.
+- `qa/try-claude.sh` alone lists every scenario; `status` and `log` show the catalog.
+- `qa/try-claude.sh selftest` runs it all unattended on Haiku (a few cents; at most $0.50 a step). **Needs** tmux too. You should see **PASS: every step seen with real Claude Code**.
 
-### In Docker (nothing on your machine but Docker)
+<details><summary><b>In Docker</b>: nothing on your machine but Docker</summary>
 
-The first build downloads a Node.js 24 image and Claude Code (a few minutes); later builds take seconds.
+<br>The first build downloads a Node.js 24 image and Claude Code (a few minutes); later builds take seconds.
 
 ```sh
 cd ~/skills-catalog
@@ -217,6 +216,8 @@ docker run --rm -e ANTHROPIC_API_KEY skills-catalog qa/try-claude.sh selftest
 
 - `docker run --rm skills-catalog` runs the tests, then the script above. You should see the tests pass and the scenes, ending with **Nothing else was changed.**, then the client's tests pass.
 - The selftest **needs** `ANTHROPIC_API_KEY` set in your shell (Claude Code in the container has no sign-in). You should see **PASS: every step seen with real Claude Code**.
+
+</details>
 
 <details><summary><b>Step by step</b>: check Node, install, run the tests, two developers in a script, check the speed (about two minutes)</summary>
 
@@ -408,18 +409,16 @@ skills-catalog login --with-token < token.txt                    # or with a per
 
 | Part | Today |
 |---|---|
-| Catalog: publish, versions, search, read, history, diff | ✓ Built. Every publish is reviewed by a rules reviewer; findings show in plain words |
+| Catalog: publish, versions, search, read, history, diff, a review of every publish | ✓ Built |
 | Claude Code: the assistant's tools (MCP), guided setup, teardown | ✓ Built |
 | CLI: search, read, versions, diff, install, list, update, policy, publish, review, stats, serve, setup, teardown, login, logout | ✓ Built |
-| Installer: risky updates wait for your yes | ✓ Built. Held: anything that can run something new, a file that isn't plain instructions, new permissions, a new publisher, text that tries to steer the assistant. Images and data the instructions only link to aren't held |
+| Installer: an update that could run something new, change permissions or come from a new publisher waits for your yes | ✓ Built |
 | Hosted catalog in AWS (opt-in) | ✓ Built, deployed, passes its smoke test with real Claude Code |
 | pi | Next (phase 2) |
 | Copilot, Codex, Cursor, Gemini CLI | Later (phase 3) |
 | A web page with a delta view · bundles · agent reviewers | Later |
 
-**Known limits:** search matches keywords (a short synonym list helps; the assistant rewords a paraphrase). The agent-level checks with a real assistant are run by hand today (`qa/try-claude.sh selftest`); the automated runner can't seed its starting catalog yet.
-
-What we'd add next and why, what we cut, and the PRD's 4-hour box: [Our thinking](docs/thinking.md).
+**Known limits:** search matches keywords (the assistant rewords a paraphrase). Checks with a real assistant run by hand today (`selftest`). What's next, what we cut, and the 4-hour box: [Our thinking](docs/thinking.md).
 
 ## How it works
 
@@ -433,12 +432,9 @@ Two developers, one catalog, in order:
 
 ## Read more
 
-- [Our thinking](docs/thinking.md): the PRD's open question, what we cut and why, the time box
-- [Architecture](docs/architecture.md): the shape, the parts, and the alternatives we weighed
-- [Decisions](docs/decisions.md): what was chosen, what else was considered, why, and who decided
-- [The API](docs/api.md): every operation as the code has it today, with its inputs, output, errors and a real run of each
-- [The contract](docs/contract.md): operations, data, rules and errors
-- [Requirements](docs/requirements.md): each requirement, where it lives, and the test that checks it
-- [How we test](qa/qa-plan.md): oracles, golden sets, test layers
+- [Our thinking](docs/thinking.md): Q1, what we cut, the time box
+- [Architecture](docs/architecture.md) and [decisions](docs/decisions.md): the shape, the choices, who made them
+- [The API](docs/api.md) and [the contract](docs/contract.md): every operation, its data, rules and errors
+- [Requirements](docs/requirements.md) and [how we test](qa/qa-plan.md): each requirement and its tests
 - [Agent experience](docs/agent-experience.md): what we measured with real assistants
 - [The owner's notes on the PRD](docs/prd/notes.md) and [how we worked](docs/how-we-worked.md)
