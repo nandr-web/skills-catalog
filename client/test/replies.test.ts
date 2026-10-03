@@ -251,3 +251,23 @@ describe('install, as the person reads it', () => {
     expect(shown).not.toContain('?');
   });
 });
+
+// A command line the CLI can't run, as a person reads it: which part, why, and the command's usage; no "Correct the
+// call", no code (review V4.2).
+describe('a command typed wrong, as the person reads it', () => {
+  it('a missing --from, a policy that isn\'t one, a bad --as', async () => {
+    const p = place();
+    await seed(p);
+    for (const [argv, part, usage] of [
+      [['diff', 'release-notes-kit'], '--from', 'diff <name> --from <from> --to <to>'],
+      [['policy', 'sometimes'], 'policy', 'policy <auto|notify|pin> [<name>]'],
+      [['search', 'notes', '--as', 'Bad!'], '--as', 'search <words>'],
+    ] as const) {
+      const r = await person(p, [...argv]);
+      expect(r.code, argv.join(' ')).toBe(1);
+      expect(r.err.split('\n')[0], argv.join(' ')).toMatch(new RegExp(`^✗ ${part.replace(/[-|]/g, '\\$&')} .*Nothing was done\\.$`));
+      expect(r.err, argv.join(' ')).toContain(usage);
+      expect(r.err, argv.join(' ')).not.toMatch(/invalid_request|Correct the/);
+    }
+  });
+});

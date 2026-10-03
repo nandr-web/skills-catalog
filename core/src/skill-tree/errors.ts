@@ -27,6 +27,7 @@ export const ERROR_CODES = [
   'target_changed',
   'target_not_private',
   'target_unavailable',
+  'catalog_unreachable',
   'assistant_file_unusable',
   'assistant_file_changed',
   'name_taken',

@@ -50,6 +50,32 @@ export function usage(s: Words): string {
   return `${s.cli}\n${served.map((n) => `  ${n}`).join('\n')}\n${processes.map((n) => `  ${n}`).join('\n')}\n`;
 }
 
+/** What the CLI does, asked for (help, --help, -h, or nothing at all): each command with one line on what it's for,
+ *  the process commands and sign-in too, on stdout (review V4.4). */
+export function help(s: Words): string {
+  const w = s.word('person.help') as { title: string; commands: Record<string, string>; footer: string };
+  const lines = Object.entries(s.names)
+    .filter(([, n]) => Object.keys(COMMANDS).includes(n.split(' ')[1] ?? ''))
+    .map(([key, n]) => [n, w.commands[key] ?? '']);
+  for (const word of [...Object.keys(PROCESS_COMMANDS), 'login', 'logout']) lines.push([`${s.cli} ${word}`, w.commands[word] ?? '']);
+  const width = Math.max(...lines.map(([n]) => n!.length));
+  return `${w.title}\n\n${lines.map(([n, what]) => `  ${n!.padEnd(width)}   ${what}`).join('\n')}\n\n${s.format(w.footer)}\n`;
+}
+
+/** A command line the CLI can't run as typed, as a person reads it: which part, why, and the command's own usage line;
+ *  an assistant (no person at the terminal) keeps the error's words (review V4.2). */
+function inputError(s: Words, io: Io, word: string, cmd: Command, e: CatalogError, withActing: (t: string) => string): string {
+  if (!io.person || e.code !== 'invalid_request') return withActing(renderError(s, e));
+  const d = e.data as { field?: string; why?: string };
+  const raw = String(d.field ?? '');
+  const field = raw.startsWith('-') || !Object.hasOwn(cmd.flags, raw) ? raw : `--${raw}`;
+  const why = (s.word('errors.why') as Record<string, string>)[String(d.why)] ?? String(d.why ?? '');
+  const own = Object.values(s.names).filter((n) => n.split(' ')[1] === word);
+  const paint = terminal(io.color === true).paint;
+  const lines = [`${paint('refused', '✗')} ${s.format(s.word('person.bad_input'), { field, why })}`, ...own.map((u) => paint('dim', `  ${s.format(s.word('person.bad_input_usage'), { usage: u })}`))];
+  return withActing(lines.join('\n'));
+}
+
 // The command line as the person would type it, without the developer to act as (they are that developer).
 const withoutAs = (argv: readonly string[]) => argv.filter((a, i) => !(a === '--as' || a.startsWith('--as=') || argv[i - 1] === '--as'));
 
@@ -58,6 +84,10 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
   // A person who typed something the CLI doesn't take is told so before the list of what it takes.
   const showUsage = () => io.stderr((io.person ? usageLead(s) + '\n' : '') + usage(s));
   const [word, ...rest] = argv;
+  if (word === undefined || word === 'help' || word === '--help' || word === '-h') {
+    io.stdout(help(s));
+    return 0;
+  }
   const cmd = word === undefined || !Object.hasOwn(COMMANDS, word) ? undefined : COMMANDS[word];
   if (!cmd) {
     showUsage();
@@ -79,7 +109,7 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
     try {
       developer = checkActor(values['as']);
     } catch (e) {
-      io.stderr(renderError(s, e as CatalogError) + '\n');
+      io.stderr(inputError(s, io, word, cmd, e as CatalogError, (t) => t) + '\n');
       return 1;
     }
   }
@@ -94,7 +124,7 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
       showUsage();
       return 1;
     }
-    io.stderr(withActing(renderError(s, e as CatalogError)) + '\n');
+    io.stderr(inputError(s, io, word, cmd, e as CatalogError, withActing) + '\n');
     return 1;
   }
 
@@ -119,6 +149,12 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
     const a = await perform(ctx, cmd.op, word!, input);
     const failed = a.isError || (cmd.failsOn?.includes(a.outcome) ?? false);
     // A person reads the result laid out for them, where this command has a view; otherwise its words.
+    // A field the command line got wrong (a flag missing, a value not allowed) reads like any other typing mistake.
+    const typed = io.person && a.isError && a.error instanceof CatalogError && a.error.code === 'invalid_request' && !String(a.error.data['why'] ?? '').includes('confirm') && a.error.data['field'] !== 'catalog';
+    if (typed) {
+      io.stderr(inputError(s, io, word!, cmd, a.error as CatalogError, withActing) + '\n');
+      return 1;
+    }
     const shown = io.person ? personView(s, terminal(io.color === true), cmd.op, a, input) : undefined;
     (failed ? io.stderr : io.stdout)((shown === undefined ? a.text : withActing(shown)) + '\n');
     return failed ? 1 : cmd.needsPersonOn?.includes(a.outcome ?? '') ? 3 : 0;

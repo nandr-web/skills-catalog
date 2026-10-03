@@ -65,12 +65,14 @@ describe('the CLI face', () => {
     expect(readFileSync(join(p.dir, 'project', '.claude', 'skills', 'release-notes-kit', 'SKILL.md'), 'utf8')).toBe(skillMd('release-notes-kit', 'Draft release notes from merged pull requests.'));
   });
 
-  it('install from a hosted catalog that can\'t be reached fails and writes nothing (its log says it could not be reached)', async () => {
+  it('install from a hosted catalog that can\'t be reached fails and writes nothing, and says which catalog (not a bug: review V4.3)', async () => {
     const p = place();
     const catalog = 'https://127.0.0.1:1';
     const r = await cli(p, ['install', 'release-notes-kit'], { env: { SKILLS_CATALOG: catalog } });
     expect(r.code).toBe(1);
-    expect(r.err).toContain('internal_error');
+    expect(r.err).toContain('catalog_unreachable');
+    expect(r.err).toContain(catalog);
+    expect(r.err).not.toContain('internal_error');
     expect(existsSync(skills(p))).toBe(false);
     expect(existsSync(join(p.dir, 'project', '.claude'))).toBe(false);
   });
@@ -283,10 +285,21 @@ describe('the CLI face', () => {
 
   it('an unknown command or flag prints the usage and exits 1', async () => {
     const p = place();
-    for (const argv of [['frobnicate'], ['list', '--no-such-flag'], []]) {
+    for (const argv of [['frobnicate'], ['list', '--no-such-flag']]) {
       const r = await cli(p, argv);
       expect(r.code, argv.join(' ')).toBe(1);
       expect(r.err).toContain('skills-catalog');
+    }
+  });
+
+  it('asked for help (or nothing typed): what each command is for, on stdout, exit 0 (review V4.4)', async () => {
+    const p = place();
+    for (const argv of [[], ['help'], ['--help'], ['-h']]) {
+      const r = await cli(p, argv);
+      expect(r.code, argv.join(' ')).toBe(0);
+      expect(r.out).toContain('Find shared skills by what they do');
+      expect(r.out).toContain('skills-catalog login');
+      expect(r.out).not.toContain("didn't understand");
     }
   });
 });

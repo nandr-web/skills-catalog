@@ -29,7 +29,8 @@ export function openRemoteCatalog(url: string, o: RemoteOptions = {}): Catalog {
     try {
       res = await http(`${base}${API}${op}`, { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify(input ?? {}) });
     } catch (e) {
-      throw new Error(`the catalog at ${base} could not be reached (${e instanceof Error ? e.message : String(e)})`);
+      // The network or the address, not a bug: its own code, so the person is told what to check (review V4.3).
+      throw new CatalogError('catalog_unreachable', { catalog: base, detail: e instanceof Error ? e.message : String(e) });
     }
     let body: any;
     try {

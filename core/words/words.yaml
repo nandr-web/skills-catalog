@@ -876,6 +876,7 @@ results:
       file_bytes: the size of one file
       skill_bytes: the size of the whole skill
     invalid_request: "invalid_request: {field} {why}, so nothing was done. Correct the call and try again."
+    catalog_unreachable: "catalog_unreachable: the catalog at {catalog} couldn't be reached ({detail}), so nothing was done. This is the network or the catalog's address (the SKILLS_CATALOG setting), not a bug. Tell the person what to check; try once more later."
     invalid_request_cli: "invalid_request: {field} {why}, so nothing was done. Correct the command and run it again."
     invalid_request_limit: "invalid_request: {field} {why}; the limit is {limit}. Nothing was done: call again within it (for example in batches)."
     invalid_request_budget: "invalid_request: the context_cost_budget setting must be a positive whole number of estimated tokens (the default is 5000), so setup changed nothing: a budget can't turn the size check off. Tell the person, and use a number only once they agree."
@@ -1052,6 +1053,10 @@ results:
       look_reply: Ask to see the change first, if you want to.
       refused_title: "Not updated:"
     errors:
+      unreachable: "Can't reach the catalog at {catalog} ({detail})."
+      unreachable_next: "Check your connection, or the SKILLS_CATALOG setting."
+      no_catalog: "No catalog at {path}: the SKILLS_CATALOG setting names a place that has none."
+      no_catalog_next: "Check SKILLS_CATALOG, or unset it to use the catalog on this machine."
       not_found: 'No skill named "{name}" in the shared catalog.'
       not_found_suggest: "Did you mean: {names}?"
       not_found_suggest_reply: "Names like it: {names}."
@@ -1079,6 +1084,26 @@ results:
     accepted_install: "Installed {name} v{to}, its files checked against the catalog's."
     accept_look_install: "To read it first:  ${cli} read {name} --version {to}"
     usage: "skills-catalog didn't understand that. It takes:"
+    bad_input: "{field} {why}. Nothing was done."
+    bad_input_usage: "It takes:  {usage}"
+    help:
+      title: "skills-catalog: your team's shared skills catalog, from this terminal"
+      commands:
+        search: Find shared skills by what they do
+        get: Read a skill before you install it (--version N for an earlier one)
+        versions: List a skill's versions
+        diff: See what changed between two versions
+        install: Install a skill here (--version N, --project for this project only)
+        update: Bring installed skills up to date
+        status: See the skills installed here
+        policy: "Choose how skills update: auto, notify (tell me first) or pin"
+        accept: Take an update or install that waits for your yes
+        stats: See how skills are used on this machine (nothing leaves it)
+        mcp: Serve the catalog's tools to an assistant (MCP, over stdio)
+        serve: Serve the catalog's API on this machine (127.0.0.1 only)
+        login: Sign in to a hosted catalog with GitHub
+        logout: Forget the saved sign-in
+      footer: "Settings: SKILLS_CATALOG (which catalog), SKILLS_HOME (this tool's folder), SKILLS_AS (who you act as locally, for demo purposes)."
     for_person: "Laid out for the person:"
 setup:
   questions:

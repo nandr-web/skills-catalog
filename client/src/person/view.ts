@@ -279,6 +279,9 @@ function error({ s, say, m }: Ctx, a: Answer): string | undefined {
       return shown(paint('bold', say('errors.rejected', { file, problem: r.problem })), say(`errors.rejected_fix.${fix}`, r.slots));
     }
   }
+  // The catalog itself can't be used: which one, and the setting to check (review V4.3).
+  if (e.code === 'catalog_unreachable') return shown(say('errors.unreachable', { catalog: m.text(String(d['catalog'])), detail: m.text(String(d['detail'] ?? '')) }), ...next(say('errors.unreachable_next')));
+  if (e.code === 'invalid_request' && d['why'] === 'not_a_catalog') return shown(say('errors.no_catalog', { path: m.text(String(d['path'] ?? '')) }), ...next(say('errors.no_catalog_next')));
   if (m.kind !== 'terminal') return undefined;
   if (e.code === 'not_installed' && typeof d['name'] === 'string') return `${mark} ${say('errors.not_installed', { name: oneLine(d['name']) })}`;
   // The rest keep their text, without the leading code and without the "acting as" line the CLI adds once itself.
