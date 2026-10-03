@@ -1,36 +1,45 @@
 # The catalog's API
 
-Every operation as the code has it today: what you call, with what, and what comes back, with a real run of each.
+Every operation as the code has it today: what is called, with what, and what comes back, with a real run of each.
 
-*As built on the product's main branch (4cc3747), 2026-09-29. The HTTP form is planned, not built yet.*
+The HTTP form is built: `skills-catalog serve` runs it on 127.0.0.1 for a local catalog, and the hosted catalog serves it in AWS. Its published schemas: [openapi.local.json](api/openapi.local.json) (what `serve` runs) and [openapi.hosted.json](api/openapi.hosted.json). The [reference](#reference-every-operation-from-its-definition) at the end is written from the operations' definitions, so it is always current.
 
 ## The operations at a glance
 
-Every operation, grouped by what it acts on; the chips say where each one can be called, and whether that is built yet.
+Every operation, grouped by what it acts on; the chips say where each one can be called. `npm run check` in core/ checks these tables and the picture against the definitions.
 
-![Every operation of the catalog as built, grouped by what it acts on, each as name(inputs) → output, with its faces: the Assistant's tool, the CLI, HTTP. The shared skills: search_shared_skills(query?, filters?{tags, publisher, updated_since}, limit = 10, cursor?) → cards\[\] + match + total_matches + next_cursor?; read_shared_skill(name | names\[\], version = latest, include = manifest, paths\[\]?) → skills\[\] + inline_budget; list_shared_skill_versions(name, cursor?) → versions\[\], newest first, 50 a page; diff_shared_skill_versions(name, from, to) → files\[\] + frontmatter_changes\[\] + risk_flags\[\]. Each has a tool and a CLI command, built; HTTP is planned. The catalog's own, with no tool or command: publish_version(name, files\[\], message?, expected_latest?, dry_run = false) → version, fingerprint, created, diff_from_latest, risk_flags\[\]; fetch_version(name + version | fingerprint) → files\[\]. HTTP planned. This machine's installed skills, never over HTTP: preview_skill_publish(folder, message?), on a branch; publish_skill_to_catalog(folder, message?, confirm?, name?, version?, files?, flags\[\]?) → text only, a tool, its CLI command on a branch; install_shared_skill(name, version = latest, target = user) → text only; update_installed_skills(names\[\] = all, dry_run = false) → text only; accept_held_update(name, target, version, confirm, flags\[\]) → text only, CLI for a person only; list_installed_skills() → text only; set_skill_update_policy(policy, name? = every skill) → text only. CLI only and planned: setup and teardown on a branch, serve planned, stats and mcp built. Dotted means not built yet. Inputs the Assistant's tool doesn't take are left out.](pictures/api-overview.svg)
+![Every operation of the catalog by name, grouped by what it acts on, with its faces: the Assistant's tool, the CLI, HTTP (the signatures are in the tables below it). The shared skills: search_shared_skills, read_shared_skill, list_shared_skill_versions and diff_shared_skill_versions, each a tool, a CLI command and HTTP, all built. The catalog's own, with no tool or command, over HTTP: publish_version and fetch_version, built. Hosted catalog only, over HTTP: request_upload_links, sign_in_with_github, list_tokens and revoke_token, built. This machine's installed skills, never over HTTP: preview_skill_publish, designed, not built (publish_skill_to_catalog without a confirm previews); publish_skill_to_catalog, install_shared_skill, update_installed_skills, list_installed_skills and set_skill_update_policy, each a tool and a CLI command, built, answering in sentences; accept_held_update, a tool, and its CLI command for a person only. CLI only, for a person: setup, teardown, serve (the API on this machine, no page yet), stats, review, login, logout and mcp, all built. Dotted means not built yet.](pictures/api-overview.svg)
 
-**The shared skills (the catalog).** The Assistant, the Developer, and (planned) the web page read these.
+**The shared skills (the catalog).** The Assistant, the Developer and the HTTP API read these.
 
-| Operation | Signature | Tool | CLI | HTTP status |
+| Operation | Signature | Tool | CLI | HTTP |
 |---|---|---|---|---|
-| [search_shared_skills](#search_shared_skills) | `search_shared_skills(query?, filters?{tags, publisher, updated_since}, limit = 10, cursor?)` → cards[] + match + total_matches + next_cursor? | built | built | planned |
-| [read_shared_skill](#read_shared_skill) | `read_shared_skill(name \| names[], version = latest, include = manifest, paths[]?)` → skills[] {manifest, files[]?} + inline_budget | built | built | planned |
-| [list_shared_skill_versions](#list_shared_skill_versions) | `list_shared_skill_versions(name, cursor?)` → versions[] (newest first, 50 a page) + next_cursor? | built | built | planned |
-| [diff_shared_skill_versions](#diff_shared_skill_versions) | `diff_shared_skill_versions(name, from, to)` → files[] + frontmatter_changes[] + risk_flags[] | built | built | planned |
+| [search_shared_skills](#search_shared_skills) | `search_shared_skills(query?, filters?{tags, publisher, updated_since}, limit = 10, cursor?)` → cards[] + match + total_matches + next_cursor? | built | built | built |
+| [read_shared_skill](#read_shared_skill) | `read_shared_skill(name \| names[], version = latest, include = manifest, paths[]?)` → skills[] {manifest, files[]?} + inline_budget | built | built | built |
+| [list_shared_skill_versions](#list_shared_skill_versions) | `list_shared_skill_versions(name, cursor?)` → versions[] (newest first, 50 a page) + next_cursor? | built | built | built |
+| [diff_shared_skill_versions](#diff_shared_skill_versions) | `diff_shared_skill_versions(name, from, to)` → files[] + frontmatter_changes[] + risk_flags[] | built | built | built |
 
-**The catalog's own.** No tool, no command: this machine's operations call them.
+**The catalog's own.** No tool, no command: this machine's operations call them, over HTTP for a hosted catalog.
 
-| Operation | Signature | Tool | CLI | HTTP status |
+| Operation | Signature | Tool | CLI | HTTP |
 |---|---|---|---|---|
-| [publish_version](#publish_version) | `publish_version(name, files[], message?, expected_latest?, dry_run = false)` → version + fingerprint + created + diff_from_latest + risk_flags[] | — | — | planned |
-| [fetch_version](#fetch_version) | `fetch_version(name + version \| fingerprint)` → files[] {path, mode, content_base64} | — | — | planned |
+| [publish_version](#publish_version) | `publish_version(name, files[], message?, expected_latest?, dry_run = false)` → version + fingerprint + created + diff_from_latest + risk_flags[] | — | — | built |
+| [fetch_version](#fetch_version) | `fetch_version(name + version \| fingerprint)` → files[] {path, mode, content_base64} | — | — | built |
+
+**Hosted catalog only.** Signing in and uploading files, over HTTP.
+
+| Operation | Signature | Tool | CLI | HTTP |
+|---|---|---|---|---|
+| [request_upload_links](#request_upload_links) | `request_upload_links(name, files[]{sha256, size})` → files[]: an upload link, or already stored | — | — | built |
+| [sign_in_with_github](#sign_in_with_github) | `sign_in_with_github(github_token, scope)` → token + id + scope + expires_at | — | — | built |
+| [list_tokens](#list_tokens) | `list_tokens()` → tokens[] {id, scope, kind, created_at, expires_at} | — | — | built |
+| [revoke_token](#revoke_token) | `revoke_token(id)` → id | — | — | built |
 
 **This machine's installed skills.** Run on the Developer's machine; never over HTTP.
 
-| Operation | Signature | Tool | CLI | HTTP status |
+| Operation | Signature | Tool | CLI | HTTP |
 |---|---|---|---|---|
-| [preview_skill_publish](#preview_skill_publish-on-a-branch) | `preview_skill_publish(folder, message?)` → files to send and skip + diff + confirm | on a branch | on a branch | never |
+| [preview_skill_publish](#preview_skill_publish-designed-not-built) | `preview_skill_publish(folder, message?)` → files to send and skip + diff + confirm | not built | not built | never |
 | [publish_skill_to_catalog](#publish_skill_to_catalog) | `publish_skill_to_catalog(folder, message?, confirm?, name?, version?, files?, flags[]?)` → text only: a preview (no confirm), or "Published … v{n}" | built | built | never |
 | [install_shared_skill](#install_shared_skill) | `install_shared_skill(name, version = latest, target = user)` → text only: installed \| unchanged \| held for a yes | built | built | never |
 | [update_installed_skills](#update_installed_skills) | `update_installed_skills(names[] = all, dry_run = false)` → text only, per skill: updated \| unchanged \| held \| refused | built | built | never |
@@ -38,15 +47,15 @@ Every operation, grouped by what it acts on; the chips say where each one can be
 | [list_installed_skills](#list_installed_skills) | `list_installed_skills()` → text only: each skill's version, the latest, its update setting | built | built | never |
 | [set_skill_update_policy](#set_skill_update_policy) | `set_skill_update_policy(policy, name? = every skill)` → text only: the new setting | built | built | never |
 
-**CLI only, and planned.** [setup, teardown, serve, stats, mcp](#cli-only-and-planned-setup-teardown-serve-stats-mcp).
+**CLI only, for a person.** [setup, teardown, serve, stats, review, login, logout, mcp](#cli-only-for-a-person).
 
-"On a branch" and "planned" mean not built on main yet. "Text only" means the operation answers in sentences today, no data. Inputs the Assistant's tool doesn't take (install's policy, update's latest, the secret override) are left out of the signatures.
+"Text only" means the operation answers in sentences today, no data; each reply also carries a part laid out for the person. Inputs the Assistant's tool doesn't take (install's policy, update's latest, the secret override) are left out of the signatures.
 
 ## What every call shares
 
 - **Strict inputs:** an unknown field, or one past its limit, is refused with invalid_request naming the field and the limit; nothing is ever cut to fit.
-- **Errors any call can return,** besides each operation's own: **invalid_request** (a field outside its schema), **invalid_developer_setting** (the demo-developer setting isn't a developer's name), **internal_error** (a bug; its details go to a log file). When the catalog can't be opened: **invalid_request** (its location) or **forbidden** (a hosted address, not built).
-- **The demo line:** while the demo-developer setting is on, every answer ends with "(Acting as bob, for demo purposes.)". The examples here leave it out.
+- **Errors any call can return,** besides each operation's own: **invalid_request** (a field outside its schema), **invalid_developer_setting** (the demo-developer setting isn't a developer's name), **internal_error** (a bug; its details go to a log file). When the catalog can't be opened: **invalid_request** (its location), or **forbidden** (a hosted address given to `serve`, which serves a local catalog only).
+- **The demo line:** every answer on a local catalog says who is acting: "(Acting as bob, for demo purposes.)" while a demo developer is set (`--as` or `SKILLS_AS`), or, on the default install with no name set, "(Signed in locally as ana, this computer's login, for demo purposes. skills-catalog setup changes it.)". The examples here leave it out.
 - **The CLI:** every command also takes --as &lt;developer>, and exits 0 when done, 1 on an error, 3 when it needs the person at a terminal.
 
 ## The shared skills (the catalog)
@@ -63,7 +72,7 @@ CLI
   skills-catalog search release notes --limit 3
   (also --tags a,b  --publisher <name>  --updated-since <date>  --cursor <c>)
 
-HTTP (planned)
+HTTP
   POST /api/v1/search_shared_skills
   {"query": "release notes", "limit": 3}
   → 200 {"ok": true, "data": {"results": […], "match": "all", …}}
@@ -85,7 +94,7 @@ HTTP (planned)
 - **ranking**: none (no words) | lexical
 - **total_matches** and **catalog_size** ("6 of 64 skills match"); **next_cursor** when there's another page
 
-*Differs from [the design](contract.md) (the planned version of this API):* the design adds quality to each card and semantic or hybrid ranking; a tag over 32 characters is too_long in the code, item_too_long in the design.
+*Differs from [the design](contract.md) (the planned version of this API):* the design adds semantic or hybrid ranking; a tag over 32 characters is too_long in the code, item_too_long in the design.
 
 #### Errors
 
@@ -124,7 +133,7 @@ CLI
   skills-catalog read release-note-draft
   (also several names; --version <n>; --files or --contents; --path <file>, repeated)
 
-HTTP (planned)
+HTTP
   POST /api/v1/read_shared_skill
   {"name": "release-note-draft"}
   → 200 {"ok": true, "data": {"skills": […], "inline_budget": {…}}}
@@ -184,7 +193,7 @@ Assistant's tool
 CLI
   skills-catalog versions release-note-draft      (--cursor <c> for older ones)
 
-HTTP (planned)
+HTTP
   POST /api/v1/list_shared_skill_versions
   {"name": "release-note-draft"}
   → 200 {"ok": true, "data": {"name": …, "latest": 4, "versions": […]}}
@@ -233,7 +242,7 @@ Assistant's tool
 CLI
   skills-catalog diff release-note-draft --from 3 --to 4
 
-HTTP (planned)
+HTTP
   POST /api/v1/diff_shared_skill_versions
   {"name": "release-note-draft", "from": 3, "to": 4}
   → 200 {"ok": true, "data": {"files": […], "risk_flags": […], …}}
@@ -287,7 +296,7 @@ Assistant's tool
 CLI
   none
 
-HTTP (planned; a real publish only with serve --publish, dry runs always)
+HTTP (locally, a real publish only with serve --publish; dry runs always)
   POST /api/v1/publish_version
   {"name": "pr-review-checklist", "files": [{"path": "SKILL.md", "mode": "0644",
    "content_base64": "LS0t…"}, …], "message": "lint script", "dry_run": true}
@@ -352,7 +361,7 @@ Assistant's tool
 CLI
   none
 
-HTTP (planned)
+HTTP
   POST /api/v1/fetch_version
   {"name": "pr-review-checklist", "version": 2}
   → 200 {"ok": true, "data": {"fingerprint": "sha256:…", "files": […]}}
@@ -389,15 +398,15 @@ fetch_version {"name": "pr-review-checklist", "version": 2}
 
 ## This machine's installed skills
 
-### preview_skill_publish (on a branch)
+### preview_skill_publish (designed, not built)
 
-**On a branch, not on main yet.** The first step of publishing a folder, as a tool of its own, so allowing previews never allows a publish. Today this step is publish_skill_to_catalog called without confirm.
+**Designed, not built.** The first step of publishing a folder, as a tool of its own, so allowing previews never allows a publish. Today this step is publish_skill_to_catalog called without confirm.
 
 ```text
-Assistant's tool (on a branch)
+Assistant's tool (not built)
   preview_skill_publish {"folder": "…/pr-review-checklist", "message": "lint script"}
 
-CLI (on a branch)
+CLI (not built)
   skills-catalog preview …/pr-review-checklist --message "lint script"
 
 HTTP
@@ -410,7 +419,7 @@ HTTP
 | message | text, one line | none | 1,000 characters | no |
 | allow_suspected_secrets (a person only) | yes or no | no | — | no |
 
-#### Output (planned)
+#### Output (designed)
 
 The files it would send and the ones it skips, the diff against the latest, risk_flags[], and the values the publish takes: confirm, name, version, files, flags[] and the message; or that nothing would change.
 
@@ -712,21 +721,22 @@ set_skill_update_policy {"policy": "pin", "name": "unit-test-writer"}
 
 *A real run of the code on main, as the Assistant calls it, on the 64-skill test catalog.*
 
-## CLI only, and planned
+## CLI only, for a person
 
-### CLI only, and planned: setup, teardown, serve, stats, mcp
-
-Commands a person runs. None is an Assistant's tool today, and none has an HTTP form.
+Commands a person runs. None is an Assistant's tool, and none has an HTTP form.
 
 | Command | Status | What it does | Takes |
 |---|---|---|---|
-| skills-catalog setup | BUILT | Connects the Assistant to the catalog (its tool server entry, a session-start notice of held updates, the tools it may use without asking), saves your name and update setting, and can add the skills-catalog command to your terminal; asks its questions at a terminal, in colour | --yes, --config &lt;file>, --dry-run, --print-mcp-entry, one flag per question (--auto-update, --catalog, --for, --me, --demo-developers, --terminal-command) |
+| skills-catalog setup | BUILT | Connects the Assistant to the catalog (its tool server entry, a session-start notice of held updates, the tools it may use without asking), saves the Developer's name and update setting, and can add the skills-catalog command to the terminal; asks its questions at a terminal, in colour | --yes, --config &lt;file>, --dry-run, --print-mcp-entry, one flag per question (--auto-update, --catalog, --for, --me, --demo-developers, --terminal-command) |
 | skills-catalog teardown | BUILT | Removes exactly what setup added (and the terminal command, while unchanged); keeps the catalog, the installed skills, config.json and the backups | nothing |
-| skills-catalog serve | PLANNED | The local web page and its HTTP API, on 127.0.0.1, for a local catalog only; reads and dry runs unless started with --publish | --port, --publish |
+| skills-catalog serve | BUILT (the API; the page is not built) | The HTTP API on 127.0.0.1, for a local catalog only; reads and dry runs unless started with --publish. The local web page it was made for is not built yet | --port, --publish |
 | skills-catalog stats | BUILT | This machine's usage summary: held updates, looks, answers; nothing leaves the machine. A person's only, on purpose (no Assistant's tool): it measures how the person answers held updates, including whether a hold changed their answer, which is a check on the Assistant's influence rather than a step it takes for them | nothing |
+| skills-catalog review | BUILT | Reviews a local catalog's stored versions again with its reviewers (all of them, or one skill's), so search and read show the findings; a hosted catalog reviews each version as it's published | [&lt;name>] |
+| skills-catalog login | BUILT | Signs in to a hosted catalog with GitHub (a code typed at github.com/login/device) and saves the catalog's token on this machine | --scope, --client-id, --with-token (a personal token on stdin) |
+| skills-catalog logout | BUILT | Forgets the saved token | nothing |
 | skills-catalog mcp | BUILT | Starts the Assistant's tools (the MCP server, over stdio) | nothing |
 
-Also planned, for later: login and logout (a hosted catalog only) and clear-kept (delete copies kept aside).
+Planned: clear-kept (delete copies kept aside).
 
 ## Reference: every operation, from its definition
 

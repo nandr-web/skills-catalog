@@ -6,4 +6,5 @@ quote: "only owners can publish"
 want: "As Developer 1, I want only a skill's owners to be able to publish it, so that no one else can change what my skill's subscribers get."
 accept: "Locally, in the core: the first publisher owns the name; a publish of that name by anyone else returns a clear not-owner error naming the owners, and stores nothing; the recorded publisher is always the acting identity."
 confirmed: true
+parts: [core]
 relates: [skill-demo-identity, skill-owner-permissions]

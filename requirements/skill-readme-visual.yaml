@@ -6,4 +6,5 @@ quote: "The README should be very easy / visual / simple, with an architecture d
 want: "As a reviewer of the exercise, I want a very easy, visual, simple README, with an architecture diagram, how to run it (one command with a guided setup) and links to other documents, so that I understand and run it in minutes."
 accept: "The README shows an architecture diagram, one command that starts the guided setup, and links to the other documents; the README walker runs that command word for word in a fresh home folder and it completes."
 confirmed: true
+parts: [cli]
 relates: [skill-readme-run, skill-setup-welcome]

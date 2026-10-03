@@ -6,4 +6,5 @@ quote: "we should build the experience, interface and contracts without coupling
 want: "As the owner, I want the experience, interface and contracts built without coupling ourselves to a specific backend choice, so that we stay flexible (e.g. OpenSearch, or DynamoDB + S3)."
 accept: "One conformance suite passes unchanged against the local catalog and at least one other backend; changing the search engine needs no data migration."
 confirmed: true
+parts: [core]
 relates: [skill-list-get]

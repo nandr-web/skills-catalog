@@ -75,7 +75,7 @@ requirements:
       - {layer: interface, name: secret_suspected with path and line; the ignore list skipped and reported; the MCP schema has no override, golden: skills.hostile, auto: true}
       - {layer: interface, name: "secret_suspected's text never repeats the secret's value (nor the sentinel)", golden: skills.hostile, auto: true}
       - {layer: agent, name: A7s no tool call carries the override, golden: agent.A7s, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
-      - {layer: unit, name: "the scan's shapes (a71b627, 24ba09b, 9fa56a6, bad7db3, d6e6a87; with gitlab, huggingface, sendgrid, npm, google_oauth tokens, pgpass lines, base64 auth): each secret_scan line gives its kind (tried in the pinned order) or nothing; a match stands alone on its kind's alphabet; placeholders, bare prefixes and a URL with no password aren't flagged; the \\b misses after _ or a quote are caught; password_or_token keys per 9fa56a6 (a whole part, excluded next parts, :=, =>, --flags) and values that refer to a secret (env reads, calls, dotted names) not flagged", golden: skills.secret_scan, auto: true}
+      - {layer: unit, name: "the scan's shapes (each key shape the security reviews named, with gitlab, huggingface, sendgrid, npm, google_oauth tokens, pgpass lines, base64 auth): each secret_scan line gives its kind (tried in the pinned order) or nothing; a match stands alone on its kind's alphabet; placeholders, bare prefixes and a URL with no password aren't flagged; the \\b misses after _ or a quote are caught; password_or_token keys (a whole part, excluded next parts, :=, =>, --flags) and values that refer to a secret (env reads, calls, dotted names) not flagged", golden: skills.secret_scan, auto: true}
       - {layer: unit, name: "UTF-16 with a BOM and Latin-1 files are decoded and scanned, lines counted in the decoded text; UTF-16 without a BOM and any file with a NUL aren't", golden: skills.secret_scan, auto: true}
       - {layer: unit, name: "every joined planted value (join) is asserted to be what the scan flags, so a broken join can't pass", golden: skills.secret_scan, auto: true}
       - {layer: storage, name: "the core's publish_version runs the same secret scan: a planted secret gives secret_suspected {path, line, kind} and stores nothing, its value never echoed; allow_suspected_secrets: true publishes; no MCP schema carries that field", golden: skills.hostile, auto: true}
@@ -304,7 +304,7 @@ requirements:
 
   - id: auto-updates
     source: {doc: notes, ref: "personas; the owner's answer on auto-updates"}
-    backlog: [skill-auto-updates]
+    backlog: [skill-auto-updates, skill-hold-every-assistant]
     phase: 1
     text: "Auto-updates are on by default, global and overridable per skill; an update that raises a risk flag stops and shows it."
     oracles: [update-gate, local-edits-replaced]
@@ -350,7 +350,7 @@ requirements:
       - {layer: interface, name: "a hold with no risk flags (notify, a cooldown) is taken with flags: [] and refused with any kind named", golden: policy.table, auto: true}
       - {layer: setup, name: "setup reads the assistant's permission settings, and its summary says when a permissive mode will hold every update, naming the mode; the session-start notice names it as the reason", auto: true}
       - {layer: interface, name: "a newer version published between hold and accept gives conflict and changes nothing; a confirm for another name or version is refused", golden: histories.prc, auto: true}
-      - {layer: setup, name: "setup's allowed tools never include accept_held_update, preview_skill_publish, publish_skill_to_catalog or set_skill_update_policy, nor the CLI's preview or publish commands (24ba09b); update_installed_skills is pre-allowed through MCP, and through the CLI only Bash(skills-catalog update) exactly: update <name>, --accept and --latest still ask", auto: true}
+      - {layer: setup, name: "setup's allowed tools never include accept_held_update, preview_skill_publish, publish_skill_to_catalog or set_skill_update_policy, nor the CLI's preview or publish commands; update_installed_skills is pre-allowed through MCP, and through the CLI only Bash(skills-catalog update) exactly: update <name>, --accept and --latest still ask", auto: true}
       - {layer: setup, name: "accept_flagged_updates is set only by the terminal wizard: true from --config, --yes or the no-terminal mode is refused (invalid_request {field: accept_flagged_updates}, nothing written, exit 1); while it's on, the session-start notice says so", auto: true}
 
   - id: review-flags
@@ -365,7 +365,7 @@ requirements:
       - {layer: unit, name: "prompt_injection {path, line, detail}: one per added or changed markdown line (every line on a first install, front matter included), the first rule naming it: hidden characters (not tab, space separators, emoji selectors and joiners, or a file's leading BOM), ignore previous instructions, addressed to the assistant, curl piped to a shell, sends a local file or variable, text hidden in an HTML comment (a multi-line one at its opening line); stated misses get no flag", golden: skills.rules_review, auto: true}
       - {layer: unit, name: "context_cost {path: SKILL.md, detail: about N tokens (budget M)}: over the budget in estimated tokens (UTF-8 bytes / 4, rounded up) and grown in estimated tokens since the installed version, or over on a first install; the budget from config", golden: skills.rules_review, auto: true}
       - {layer: perf, name: "the review stays linear: a pathological line per rule, 100 KB to 400 KB, at most 2.5 times slower per doubling, under a 10 s hang guard", golden: skills.rules_review, auto: true}
-      - {layer: unit, name: "the reviewer's flags join the diff's in each gate pair whose new version plants a flagged line", golden: histories.gate, auto: true}
+      - {layer: unit, name: "the reviewer's flags join the diff's in each held-update pair whose new version plants a flagged line", golden: histories.gate, auto: true}
       - {layer: unit, name: "the 64-skill discovery corpus gets no findings (no noise on good skills)", golden: queries.corpus, auto: true}
       - {layer: interface, name: "a card carries quality only when the skill is flagged; read returns reviews; install and update return advisories", auto: true}
       - {layer: unit, name: "one reason per file: a script path gets runnable_file only, never also non_markdown", golden: histories.prc, auto: true}
@@ -430,9 +430,9 @@ requirements:
       - {layer: agent, name: A14 teardown puts things back, golden: agent.A14, auto: false, automate_by: "the runner's fixture builder for starting files (the runner skips it today)"}
       - {layer: setup, name: teardown leaves the assistant home byte-identical to before setup, auto: true}
       - {layer: setup, name: "setup's result leads with the remaining step and 'N skills to search; none installed yet'", auto: true}
-      - {layer: setup, name: "the written settings allow exactly the contract §6 MCP tools and shell prefixes, no more, and the CLI allow list equals the registry's read-only commands (search, read, versions, diff, list); the hook and the MCP entry start node by process.execPath, never a shim, npx or a bare name", auto: true}
+      - {layer: setup, name: "the written settings allow exactly the contract §6 MCP tools and shell prefixes, no more, and the CLI allow list equals the API's read-only commands (search, read, versions, diff, list); the hook and the MCP entry start node by process.execPath, never a shim, npx or a bare name", auto: true}
       - {layer: setup, name: "the pre-allowed read-only commands never write: pointed with --catalog and --home at an empty folder they fail or read, and the folder stays empty (no catalog created, no sweep, no index rebuilt)", auto: true}
-      - {layer: setup, name: "--accept (and --allow-suspected-secrets, once the CLI has a publish: 3e56b3e) with no terminal exits 3 and changes nothing", auto: true}
+      - {layer: setup, name: "--accept (and --allow-suspected-secrets) with no terminal exits 3 and changes nothing", auto: true}
       - {layer: setup, name: "the session-start notice never contains a publisher-chosen string: a sentinel planted in a skill's path and description is absent from it", auto: true}
       - {layer: manual, name: the owner watches a recording of the wizard, auto: false, automate_by: "pseudo-terminal screen snapshots approved once"}
 
@@ -567,3 +567,104 @@ requirements:
     checks:
       - {layer: interface, name: "made-up session transcripts with labelled needs give the labelled skills", auto: true}
       - {layer: cleanup, name: "a sentinel planted in the transcripts never leaves the machine (no request body or log carries it)", auto: true}
+
+  # ---------------- Other assistants (the owner's four requirement lines, 2026-09-29) ----------------
+  - id: pi-agent
+    source: {doc: notes, ref: "the owner's answer on other assistants: pi in phase 2"}
+    backlog: [skill-pi-agent]
+    phase: 2
+    text: "From pi, a developer finds, installs and updates skills through the CLI pi runs; installed skills land where pi reads them."
+    oracles: [round-trip]
+    checks:
+      - {layer: setup, name: "from pi, through the CLI it runs, a developer finds, installs and updates a skill, which lands where pi reads skills", auto: true}
+
+  - id: one-install-all-assistants
+    source: {doc: notes, ref: "the owner's answer on other assistants: one install reaches every assistant, from phase 2"}
+    backlog: [skill-one-install-all-assistants]
+    phase: 2
+    text: "One install or update puts the skill where each of the person's supported assistants reads it, recorded once."
+    oracles: [round-trip]
+    checks:
+      - {layer: interface, name: "one install or update writes the skill to each supported assistant's folder, recorded once in the lock, each place checked", auto: true}
+
+  - id: other-assistants
+    source: {doc: notes, ref: "the owner's answer on other assistants: Copilot, Codex, Cursor and Gemini CLI in phase 3, after the owner's approval"}
+    backlog: [skill-other-assistants]
+    phase: 3
+    text: "From Copilot, Codex, Cursor and Gemini CLI, a developer finds, installs and updates skills; not started without the owner's approval."
+    oracles: [round-trip]
+    checks:
+      - {layer: setup, name: "from each of the four assistants, a developer finds, installs and updates a skill (setup writes or prints its MCP entry)", auto: true}
+
+# Each requirement item and the test files that hold it: the requirements page says "built" from these (a file must have
+# a test that runs). not_yet says, in words, what of the item isn't built yet; it can only lower its status. An item not
+# listed here has no tests yet: not built.
+items:
+  skill-agent-first:
+    tests: [client/test/operations-seam.test.ts, core/test/api.test.ts, client/test/mcp.test.ts]
+  skill-agent-qa:
+    tests: [qa/test/agent-runner.test.ts, qa/test/scorer.test.ts, qa/test/person-eval.test.ts]
+    not_yet: "the agent-level runs aren't scheduled (each spends money on a real Claude login), and 17 agent checks are still manual: the runner can't seed its starting catalog yet"
+  skill-assistant-access:
+    tests: [client/test/mcp.test.ts, client/test/end-to-end.test.ts]
+  skill-auto-updates:
+    tests: [core/test/risky-updates.test.ts, client/test/installer.test.ts, client/test/held-table.test.ts, client/test/permissive.test.ts]
+  skill-backend-neutral:
+    tests: [core/test/catalog.test.ts, hosted/test/shared.test.ts, hosted/test/remote-client.test.ts]
+  skill-demo-identity:
+    tests: [client/test/identity.test.ts]
+  skill-discover:
+    tests: [core/test/discovery.test.ts, client/test/mcp.test.ts, client/test/cli-commands.test.ts, client/test/replies.test.ts]
+  skill-end-to-end:
+    tests: [client/test/end-to-end.test.ts]
+  skill-hold-every-assistant:
+    tests: [client/test/held-table.test.ts, client/test/hook.test.ts]
+  skill-list-get:
+    tests: [core/test/catalog.test.ts, core/test/operation-errors.test.ts]
+  skill-local-default:
+    tests: [client/test/setup-command.test.ts]
+  skill-owner-only-publish:
+    tests: [core/test/storage.test.ts, client/test/publish.test.ts]
+  skill-publish:
+    tests: [core/test/catalog.test.ts, core/test/golden-rules.test.ts, core/test/secret-scan.test.ts, client/test/publish.test.ts, client/test/publish-steps.test.ts, client/test/publish-folder.test.ts, client/test/cli-publish.test.ts]
+  skill-qa-first:
+    tests: [qa/test/clean-run.test.ts, qa/test/qa-run.test.ts, qa/test/safe-delete.test.ts, qa/test/temp-folders.test.ts, qa/test/env.test.ts]
+  skill-quality-reviews:
+    tests: [core/test/reviewer.test.ts, core/test/rules-review.test.ts]
+    not_yet: "the pluggable agent reviewers (phase 2) aren't built; the rules reviewer is"
+  skill-readme-run:
+    tests: [client/test/readme-install.test.ts]
+  skill-readme-visual:
+    tests: [client/test/readme-install.test.ts]
+  skill-responsive:
+    tests: [client/test/perf-mcp.test.ts, hosted/test/perf-hosted.test.ts]
+  skill-retrieve:
+    tests: [client/test/installer.test.ts, client/test/install-mcp.test.ts, client/test/round-trip.test.ts, core/test/replies.test.ts]
+  skill-review-flags:
+    tests: [core/test/rules-review.test.ts, client/test/review-holds.test.ts, client/test/person-review.test.ts]
+  skill-reviewer-tenet:
+    tests: [core/test/reviewer.test.ts, core/test/rules-review.test.ts]
+  skill-scale-plan:
+    tests: [client/test/perf-mcp.test.ts]
+    not_yet: "the 10,000-skill search budget is measured by npm run perf in core/, not by a test"
+  skill-search-measure:
+    tests: [core/test/discovery.test.ts]
+    not_yet: "each run keeps its recall scores (npm run search-score in core/); tokens per discovery and first-query time aren't kept per run yet"
+  skill-setup-by-agent:
+    tests: [client/test/setup-command.test.ts]
+  skill-setup-unattended:
+    tests: [client/test/setup-command.test.ts]
+  skill-setup-welcome:
+    tests: [client/test/setup-command.test.ts, client/test/setup-run.test.ts, client/test/setup-entries.test.ts, client/test/teardown.test.ts]
+  skill-signed-in-read:
+    tests: [hosted/test/api-who.test.ts, hosted/test/tokens.test.ts]
+  skill-time-box:
+    tests: [qa/test/docs-truth.test.ts, qa/test/trace-check.test.ts]
+  skill-unchanged:
+    tests: [client/test/round-trip.test.ts, core/test/round-trip-property.test.ts, core/test/skill-tree.test.ts]
+  skill-usage-metrics:
+    tests: [client/test/usage.test.ts, client/test/usage-stats.test.ts, client/test/usage-use.test.ts, client/test/usage-installer.test.ts, client/test/cli-stats.test.ts]
+  skill-versions:
+    tests: [core/test/catalog.test.ts, core/test/storage.test.ts, client/test/cli-commands.test.ts, client/test/install-over.test.ts]
+  skill-web-aws:
+    tests: [infra/test/deploy.test.ts, infra/test/snapshot.test.ts, infra/test/nag.test.ts]

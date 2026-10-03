@@ -1,0 +1,10 @@
+id: skill-other-assistants
+title: "Phase 3: Copilot, Codex, Cursor and Gemini CLI"
+phase: "3"
+source: "the owner"
+quote: "Yes: Copilot, Codex, Cursor and Gemini CLI (recommended) For phase 3, but don’t start phase 3 without approval."
+want: "As a developer using Copilot, Codex, Cursor or Gemini CLI, I want to find, install and update our shared skills from it, so that a skill shared once works for everyone."
+accept: "From each of the four assistants, a developer finds, installs and updates skills from the catalog (its MCP entry written or printed by setup; skills installed where it reads them); not started without the owner's approval."
+confirmed: true
+parts: [mcp, installer, cli]
+relates: [skill-hold-every-assistant, skill-one-install-all-assistants]

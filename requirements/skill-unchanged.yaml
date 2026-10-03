@@ -6,4 +6,5 @@ quote: "A retrieved skill is complete and unchanged from what was published, no 
 want: "As Developer 2, I want a retrieved skill to be complete and unchanged from what was published, with no silent loss or alteration, so that I have the same skill Developer 1 published."
 accept: "Publish then retrieve; compare against the original (the PRD's method): the test computes the fingerprint of every file, byte and file mode, itself and it matches."
 confirmed: true
+parts: [core, installer]
 relates: [skill-retrieve]

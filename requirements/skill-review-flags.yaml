@@ -6,4 +6,5 @@ quote: "should also consider other reviewer-based metrics or flags (maybe phase 
 want: "As Developer 2, I want reviewer-based metrics or flags, such as the risk of prompt injection, considered alongside auto-updates, so that a risky skill or update is flagged before it reaches my assistant."
 accept: "Phase 1: a built-in rules reviewer flags scripts and executables, tool-granting frontmatter, a publisher change, prompt-injection patterns (instructions to ignore prior guidance, exfiltration or curl-to-shell, hidden unicode or HTML comments) and context cost, each finding grounded; a clean skill gets an empty list; the update hold stops any update with a risk flag; search cards show the flags."
 confirmed: true
+parts: [core, installer]
 relates: [skill-quality-reviews, skill-reviewer-tenet, skill-auto-updates]

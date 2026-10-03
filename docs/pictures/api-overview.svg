@@ -1,6 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="d d-api" viewBox="0 0 760 964" width="760" height="964" role="img" aria-label="Every operation of the catalog as built, grouped by what it acts on, each as name(inputs) → output, with its faces: the Assistant's tool, the CLI, HTTP. The shared skills: search_shared_skills(query?, filters?{tags, publisher, updated_since}, limit = 10, cursor?) → cards[] + match + total_matches + next_cursor?; read_shared_skill(name | names[], version = latest, include = manifest, paths[]?) → skills[] + inline_budget; list_shared_skill_versions(name, cursor?) → versions[], newest first, 50 a page; diff_shared_skill_versions(name, from, to) → files[] + frontmatter_changes[] + risk_flags[]. Each has a tool and a CLI command, built; HTTP is planned. The catalog's own, with no tool or command: publish_version(name, files[], message?, expected_latest?, dry_run = false) → version, fingerprint, created, diff_from_latest, risk_flags[]; fetch_version(name + version | fingerprint) → files[]. HTTP planned. This machine's installed skills, never over HTTP: preview_skill_publish(folder, message?), on a branch; publish_skill_to_catalog(folder, message?, confirm?, name?, version?, files?, flags[]?) → text only, a tool, its CLI command on a branch; install_shared_skill(name, version = latest, target = user) → text only; update_installed_skills(names[] = all, dry_run = false) → text only; accept_held_update(name, target, version, confirm, flags[]) → text only, CLI for a person only; list_installed_skills() → text only; set_skill_update_policy(policy, name? = every skill) → text only. CLI only and planned: setup and teardown on a branch, serve planned, stats and mcp built. Dotted means not built yet. Inputs the Assistant's tool doesn't take are left out.">
+<svg xmlns="http://www.w3.org/2000/svg" class="d d-api" viewBox="0 0 396 812" width="396" height="812" role="img" aria-label="Every operation of the catalog by name, grouped by what it acts on, with its faces: the Assistant's tool, the CLI, HTTP (the signatures are in the tables below it). The shared skills: search_shared_skills, read_shared_skill, list_shared_skill_versions and diff_shared_skill_versions, each a tool, a CLI command and HTTP, all built. The catalog's own, with no tool or command, over HTTP: publish_version and fetch_version, built. Hosted catalog only, over HTTP: request_upload_links, sign_in_with_github, list_tokens and revoke_token, built. This machine's installed skills, never over HTTP: preview_skill_publish, designed, not built (publish_skill_to_catalog without a confirm previews); publish_skill_to_catalog, install_shared_skill, update_installed_skills, list_installed_skills and set_skill_update_policy, each a tool and a CLI command, built, answering in sentences; accept_held_update, a tool, and its CLI command for a person only. CLI only, for a person: setup, teardown, serve (the API on this machine, no page yet), stats, review, login, logout and mcp, all built. Dotted means not built yet.">
 <title>The operations at a glance</title>
 <style>.d { --d-page: #ECF0F3; --d-canvas: #F9FBFC; --d-ink: #13202A; --d-ink2: #3A4A56; --d-line: #B7C4CD; --d-grid: #D5DDE3; --d-shade: #E1E7EB; --d-accent: #137052; --d-accent-soft: #D9EDE3; --d-hot: #B23A0A; --d-hot-soft: #F8E2D5; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .d, svg.d:root { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+}
+:root[data-theme="dark"] .d { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
 
 .d { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 12px; fill: var(--d-ink); }
 .d text { dominant-baseline: central; }
@@ -78,154 +82,183 @@
 .d-composite { fill: var(--d-grid); fill-opacity: 0.25; stroke: var(--d-ink2); stroke-width: 1.1; }
 .d-composite-label { font-size: 11px; font-weight: 600; fill: var(--d-ink); }
 
+/* system map */
+.d-map-quiet { stroke: var(--d-ink2); stroke-width: 1; }
+.d-map-label--start { text-anchor: start; }
+.d-map-label--end { text-anchor: end; }
+.d-map-badge { fill: var(--d-accent); }
+.d-map-badge--alert { fill: var(--d-hot); }
+.d-map-badge--planned { fill: var(--d-canvas); stroke: var(--d-accent); stroke-width: 1.2; stroke-dasharray: 2 2; }
+.d-map-badge-text { font-size: 10.5px; font-weight: 600; fill: var(--d-canvas); text-anchor: middle; }
+.d-map-badge-text--planned { fill: var(--d-accent); }
+.d-map-part[role="button"] { cursor: pointer; }
+.d-map-part[role="button"]:focus { outline: none; }
+.d-map-part[role="button"]:focus-visible > :first-child, .d-map-part--picked > :first-child { stroke: var(--d-ink); stroke-width: 3; }
+
 /* groups (boundaries) */
 .d-group { fill: var(--d-grid); fill-opacity: 0.35; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
 .d-group-label { font-size: 10.5px; fill: var(--d-ink2); letter-spacing: 0.06em; font-weight: 500; }
 </style>
-<rect class="d-bg" fill="#F9FBFC" x="0" y="0" width="760" height="964"/>
-<text class="d-compare-label" x="10" y="16" style="white-space:pre;text-anchor:start">EVERY OPERATION: NAME(INPUTS) → OUTPUT</text>
-<text class="d-compare-label" x="530" y="16" style="white-space:pre;text-anchor:middle">TOOL</text>
-<text class="d-compare-label" x="616" y="16" style="white-space:pre;text-anchor:middle">CLI</text>
-<text class="d-compare-label" x="702" y="16" style="white-space:pre;text-anchor:middle">HTTP</text>
-<rect class="d-memo" x="10" y="26" width="740" height="256" rx="5"/>
-<text class="d-label d-label--strong" x="20" y="42" style="white-space:pre;text-anchor:start;font-size:11px;letter-spacing:0.04em">THE SHARED SKILLS (THE CATALOG)</text>
-<text class="d-note" x="20" y="55" style="white-space:pre;text-anchor:start;font-size:10.5px">the Assistant, the Developer, and (planned) the web page read these</text>
-<rect class="d-node" x="18" y="66" width="724" height="54" rx="3"/>
-<text class="d-label" x="28" y="81" style="white-space:pre;text-anchor:start;font-size:10.5px"><tspan class="d-label--strong">search_shared_skills</tspan>(query?, filters?{tags, publisher, updated_since},</text>
-<text class="d-label" x="28" y="95" style="white-space:pre;text-anchor:start;font-size:10.5px">    limit = 10, cursor?)</text>
-<text class="d-note" x="42" y="109" style="white-space:pre;text-anchor:start;font-size:10.5px">→ cards[] + match + total_matches + next_cursor?</text>
-<rect class="d-node" x="490" y="84" width="80" height="18" rx="9"/>
-<text class="d-label" x="530" y="93" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<rect class="d-node" x="576" y="84" width="80" height="18" rx="9"/>
-<text class="d-label" x="616" y="93" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<rect class="d-node d-node--proposed" x="662" y="84" width="80" height="18" rx="9"/>
-<text class="d-label" x="702" y="93" style="white-space:pre;text-anchor:middle;font-size:10px">planned</text>
-<rect class="d-node" x="18" y="126" width="724" height="54" rx="3"/>
-<text class="d-label" x="28" y="141" style="white-space:pre;text-anchor:start;font-size:10.5px"><tspan class="d-label--strong">read_shared_skill</tspan>(name | names[], version = latest,</text>
-<text class="d-label" x="28" y="155" style="white-space:pre;text-anchor:start;font-size:10.5px">    include = manifest, paths[]?)</text>
-<text class="d-note" x="42" y="169" style="white-space:pre;text-anchor:start;font-size:10.5px">→ skills[] {manifest, files[]?} + inline_budget</text>
-<rect class="d-node" x="490" y="144" width="80" height="18" rx="9"/>
-<text class="d-label" x="530" y="153" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<rect class="d-node" x="576" y="144" width="80" height="18" rx="9"/>
-<text class="d-label" x="616" y="153" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<rect class="d-node d-node--proposed" x="662" y="144" width="80" height="18" rx="9"/>
-<text class="d-label" x="702" y="153" style="white-space:pre;text-anchor:middle;font-size:10px">planned</text>
-<rect class="d-node" x="18" y="186" width="724" height="40" rx="3"/>
-<text class="d-label" x="28" y="201" style="white-space:pre;text-anchor:start;font-size:10.5px"><tspan class="d-label--strong">list_shared_skill_versions</tspan>(name, cursor?)</text>
-<text class="d-note" x="42" y="215" style="white-space:pre;text-anchor:start;font-size:10.5px">→ versions[] (newest first, 50 a page) + next_cursor?</text>
-<rect class="d-node" x="490" y="197" width="80" height="18" rx="9"/>
-<text class="d-label" x="530" y="206" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<rect class="d-node" x="576" y="197" width="80" height="18" rx="9"/>
-<text class="d-label" x="616" y="206" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<rect class="d-node d-node--proposed" x="662" y="197" width="80" height="18" rx="9"/>
-<text class="d-label" x="702" y="206" style="white-space:pre;text-anchor:middle;font-size:10px">planned</text>
-<rect class="d-node" x="18" y="232" width="724" height="40" rx="3"/>
-<text class="d-label" x="28" y="247" style="white-space:pre;text-anchor:start;font-size:10.5px"><tspan class="d-label--strong">diff_shared_skill_versions</tspan>(name, from, to)</text>
-<text class="d-note" x="42" y="261" style="white-space:pre;text-anchor:start;font-size:10.5px">→ files[] + frontmatter_changes[] + risk_flags[]</text>
-<rect class="d-node" x="490" y="243" width="80" height="18" rx="9"/>
-<text class="d-label" x="530" y="252" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<rect class="d-node" x="576" y="243" width="80" height="18" rx="9"/>
-<text class="d-label" x="616" y="252" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<rect class="d-node d-node--proposed" x="662" y="243" width="80" height="18" rx="9"/>
-<text class="d-label" x="702" y="252" style="white-space:pre;text-anchor:middle;font-size:10px">planned</text>
-<rect class="d-memo" x="10" y="292" width="740" height="150" rx="5"/>
-<text class="d-label d-label--strong" x="20" y="308" style="white-space:pre;text-anchor:start;font-size:11px;letter-spacing:0.04em">THE CATALOG'S OWN</text>
-<text class="d-note" x="20" y="321" style="white-space:pre;text-anchor:start;font-size:10.5px">no tool, no command: this machine's operations call them</text>
-<rect class="d-node" x="18" y="332" width="724" height="54" rx="3"/>
-<text class="d-label" x="28" y="347" style="white-space:pre;text-anchor:start;font-size:10.5px"><tspan class="d-label--strong">publish_version</tspan>(name, files[], message?, expected_latest?,</text>
-<text class="d-label" x="28" y="361" style="white-space:pre;text-anchor:start;font-size:10.5px">    dry_run = false)</text>
-<text class="d-note" x="42" y="375" style="white-space:pre;text-anchor:start;font-size:10.5px">→ version + fingerprint + created + diff_from_latest + risk_flags[]</text>
-<text class="d-note" x="530" y="359" style="white-space:pre;text-anchor:middle;font-size:10px">—</text>
-<text class="d-note" x="616" y="359" style="white-space:pre;text-anchor:middle;font-size:10px">—</text>
-<rect class="d-node d-node--proposed" x="662" y="350" width="80" height="18" rx="9"/>
-<text class="d-label" x="702" y="359" style="white-space:pre;text-anchor:middle;font-size:10px">planned</text>
-<rect class="d-node" x="18" y="392" width="724" height="40" rx="3"/>
-<text class="d-label" x="28" y="407" style="white-space:pre;text-anchor:start;font-size:10.5px"><tspan class="d-label--strong">fetch_version</tspan>(name + version | fingerprint)</text>
-<text class="d-note" x="42" y="421" style="white-space:pre;text-anchor:start;font-size:10.5px">→ files[] {path, mode, content_base64}</text>
-<text class="d-note" x="530" y="412" style="white-space:pre;text-anchor:middle;font-size:10px">—</text>
-<text class="d-note" x="616" y="412" style="white-space:pre;text-anchor:middle;font-size:10px">—</text>
-<rect class="d-node d-node--proposed" x="662" y="403" width="80" height="18" rx="9"/>
-<text class="d-label" x="702" y="412" style="white-space:pre;text-anchor:middle;font-size:10px">planned</text>
-<rect class="d-memo" x="10" y="452" width="740" height="380" rx="5"/>
-<text class="d-label d-label--strong" x="20" y="468" style="white-space:pre;text-anchor:start;font-size:11px;letter-spacing:0.04em">THIS MACHINE'S INSTALLED SKILLS</text>
-<text class="d-note" x="20" y="481" style="white-space:pre;text-anchor:start;font-size:10.5px">run on the Developer's machine; never over HTTP</text>
-<rect class="d-node d-node--proposed" x="18" y="492" width="724" height="40" rx="3"/>
-<text class="d-label" x="28" y="507" style="white-space:pre;text-anchor:start;font-size:10.5px"><tspan class="d-label--strong">preview_skill_publish</tspan>(folder, message?)</text>
-<text class="d-note" x="42" y="521" style="white-space:pre;text-anchor:start;font-size:10.5px">→ files to send and skip + diff + confirm</text>
-<rect class="d-tag--proposed" x="392" y="498" width="87" height="15" rx="2"/>
-<text class="d-tag-text d-tag-text--proposed" x="435.5" y="506" style="white-space:pre">ON A BRANCH</text>
-<rect class="d-node d-node--proposed" x="490" y="503" width="80" height="18" rx="9"/>
-<text class="d-label" x="530" y="512" style="white-space:pre;text-anchor:middle;font-size:10px">on a branch</text>
-<rect class="d-node d-node--proposed" x="576" y="503" width="80" height="18" rx="9"/>
-<text class="d-label" x="616" y="512" style="white-space:pre;text-anchor:middle;font-size:10px">on a branch</text>
-<text class="d-note" x="702" y="512" style="white-space:pre;text-anchor:middle;font-size:10px">never</text>
-<rect class="d-node" x="18" y="538" width="724" height="54" rx="3"/>
-<text class="d-label" x="28" y="553" style="white-space:pre;text-anchor:start;font-size:10.5px"><tspan class="d-label--strong">publish_skill_to_catalog</tspan>(folder, message?, confirm?, name?, version?,</text>
-<text class="d-label" x="28" y="567" style="white-space:pre;text-anchor:start;font-size:10.5px">    files?, flags[]?)</text>
-<text class="d-note d-note--alert" x="42" y="581" style="white-space:pre;text-anchor:start;font-size:10.5px">→ text only: a preview (no confirm), or &quot;Published … v{n}&quot;</text>
-<rect class="d-node" x="490" y="556" width="80" height="18" rx="9"/>
-<text class="d-label" x="530" y="565" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<rect class="d-node d-node--proposed" x="576" y="556" width="80" height="18" rx="9"/>
-<text class="d-label" x="616" y="565" style="white-space:pre;text-anchor:middle;font-size:10px">on a branch</text>
-<text class="d-note" x="702" y="565" style="white-space:pre;text-anchor:middle;font-size:10px">never</text>
-<rect class="d-node" x="18" y="598" width="724" height="40" rx="3"/>
-<text class="d-label" x="28" y="613" style="white-space:pre;text-anchor:start;font-size:10.5px"><tspan class="d-label--strong">install_shared_skill</tspan>(name, version = latest, target = user)</text>
-<text class="d-note d-note--alert" x="42" y="627" style="white-space:pre;text-anchor:start;font-size:10.5px">→ text only: installed | unchanged | held for a yes</text>
-<rect class="d-node" x="490" y="609" width="80" height="18" rx="9"/>
-<text class="d-label" x="530" y="618" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<rect class="d-node" x="576" y="609" width="80" height="18" rx="9"/>
-<text class="d-label" x="616" y="618" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<text class="d-note" x="702" y="618" style="white-space:pre;text-anchor:middle;font-size:10px">never</text>
-<rect class="d-node" x="18" y="644" width="724" height="40" rx="3"/>
-<text class="d-label" x="28" y="659" style="white-space:pre;text-anchor:start;font-size:10.5px"><tspan class="d-label--strong">update_installed_skills</tspan>(names[] = all, dry_run = false)</text>
-<text class="d-note d-note--alert" x="42" y="673" style="white-space:pre;text-anchor:start;font-size:10.5px">→ text only, per skill: updated | unchanged | held | refused</text>
-<rect class="d-node" x="490" y="655" width="80" height="18" rx="9"/>
-<text class="d-label" x="530" y="664" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<rect class="d-node" x="576" y="655" width="80" height="18" rx="9"/>
-<text class="d-label" x="616" y="664" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<text class="d-note" x="702" y="664" style="white-space:pre;text-anchor:middle;font-size:10px">never</text>
-<rect class="d-node" x="18" y="690" width="724" height="40" rx="3"/>
-<text class="d-label" x="28" y="705" style="white-space:pre;text-anchor:start;font-size:10.5px"><tspan class="d-label--strong">accept_held_update</tspan>(name, target, version, confirm, flags[])</text>
-<text class="d-note d-note--alert" x="42" y="719" style="white-space:pre;text-anchor:start;font-size:10.5px">→ text only: the held update, installed</text>
-<rect class="d-node" x="490" y="701" width="80" height="18" rx="9"/>
-<text class="d-label" x="530" y="710" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<rect class="d-node" x="576" y="701" width="80" height="18" rx="9"/>
-<text class="d-label" x="616" y="710" style="white-space:pre;text-anchor:middle;font-size:10px">person</text>
-<text class="d-note" x="702" y="710" style="white-space:pre;text-anchor:middle;font-size:10px">never</text>
-<rect class="d-node" x="18" y="736" width="724" height="40" rx="3"/>
-<text class="d-label" x="28" y="751" style="white-space:pre;text-anchor:start;font-size:10.5px"><tspan class="d-label--strong">list_installed_skills</tspan>()</text>
-<text class="d-note d-note--alert" x="42" y="765" style="white-space:pre;text-anchor:start;font-size:10.5px">→ text only: each skill's version, the latest, its update setting</text>
-<rect class="d-node" x="490" y="747" width="80" height="18" rx="9"/>
-<text class="d-label" x="530" y="756" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<rect class="d-node" x="576" y="747" width="80" height="18" rx="9"/>
-<text class="d-label" x="616" y="756" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<text class="d-note" x="702" y="756" style="white-space:pre;text-anchor:middle;font-size:10px">never</text>
-<rect class="d-node" x="18" y="782" width="724" height="40" rx="3"/>
-<text class="d-label" x="28" y="797" style="white-space:pre;text-anchor:start;font-size:10.5px"><tspan class="d-label--strong">set_skill_update_policy</tspan>(policy, name? = every skill)</text>
-<text class="d-note d-note--alert" x="42" y="811" style="white-space:pre;text-anchor:start;font-size:10.5px">→ text only: the new setting</text>
-<rect class="d-node" x="490" y="793" width="80" height="18" rx="9"/>
-<text class="d-label" x="530" y="802" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<rect class="d-node" x="576" y="793" width="80" height="18" rx="9"/>
-<text class="d-label" x="616" y="802" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<text class="d-note" x="702" y="802" style="white-space:pre;text-anchor:middle;font-size:10px">never</text>
-<rect class="d-memo" x="10" y="842" width="740" height="70" rx="5"/>
-<text class="d-label d-label--strong" x="20" y="858" style="white-space:pre;text-anchor:start;font-size:11px;letter-spacing:0.04em">CLI ONLY, AND PLANNED</text>
-<rect class="d-node d-node--proposed" x="20" y="868" width="91.3" height="34" rx="4"/>
-<text class="d-label d-label--strong" x="65.65" y="879" style="white-space:pre;text-anchor:middle;font-size:10.5px">setup</text>
-<text class="d-note" x="65.65" y="893" style="white-space:pre;text-anchor:middle;font-size:10px">on a branch</text>
-<rect class="d-node d-node--proposed" x="119.3" y="868" width="91.3" height="34" rx="4"/>
-<text class="d-label d-label--strong" x="164.95" y="879" style="white-space:pre;text-anchor:middle;font-size:10.5px">teardown</text>
-<text class="d-note" x="164.95" y="893" style="white-space:pre;text-anchor:middle;font-size:10px">on a branch</text>
-<rect class="d-node d-node--proposed" x="218.6" y="868" width="66.1" height="34" rx="4"/>
-<text class="d-label d-label--strong" x="251.64999999999998" y="879" style="white-space:pre;text-anchor:middle;font-size:10.5px">serve</text>
-<text class="d-note" x="251.64999999999998" y="893" style="white-space:pre;text-anchor:middle;font-size:10px">planned</text>
-<rect class="d-node" x="292.7" y="868" width="53.5" height="34" rx="4"/>
-<text class="d-label d-label--strong" x="319.45" y="879" style="white-space:pre;text-anchor:middle;font-size:10.5px">stats</text>
-<text class="d-note" x="319.45" y="893" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
-<rect class="d-node" x="354.2" y="868" width="166.9" height="34" rx="4"/>
-<text class="d-label d-label--strong" x="437.65" y="879" style="white-space:pre;text-anchor:middle;font-size:10.5px">mcp</text>
-<text class="d-note" x="437.65" y="893" style="white-space:pre;text-anchor:middle;font-size:10px">built: starts the tools</text>
-<text class="d-note" x="10" y="926" style="white-space:pre;text-anchor:start;font-size:10.5px">Dotted = not built yet (on a branch, or planned). person = built, for a person at a terminal only.</text>
-<text class="d-note d-note--alert" x="10" y="940" style="white-space:pre;text-anchor:start;font-size:10.5px">Orange = returns sentences only today, no data.</text>
-<text class="d-note" x="10" y="954" style="white-space:pre;text-anchor:start;font-size:10.5px">Left out: inputs the Assistant's tool doesn't take (install's policy, update's latest, the secret override).</text>
+<rect class="d-bg" x="0" y="0" width="396" height="812"/>
+<text class="d-compare-label" x="10" y="16" style="white-space:pre;text-anchor:start">OPERATION</text>
+<text class="d-compare-label" x="226" y="16" style="white-space:pre;text-anchor:middle">TOOL</text>
+<text class="d-compare-label" x="286" y="16" style="white-space:pre;text-anchor:middle">CLI</text>
+<text class="d-compare-label" x="346" y="16" style="white-space:pre;text-anchor:middle">HTTP</text>
+<rect class="d-memo" x="10" y="26" width="376" height="146" rx="5"/>
+<text class="d-label d-label--strong" x="18" y="42" style="white-space:pre;text-anchor:start;font-size:11px;letter-spacing:0.04em">THE SHARED SKILLS (THE CATALOG)</text>
+<text class="d-note" x="18" y="55" style="white-space:pre;text-anchor:start;font-size:10.5px">read by the Assistant, the Developer and HTTP</text>
+<rect class="d-node" x="16" y="66" width="364" height="22" rx="3"/>
+<text class="d-label d-label--strong" x="24" y="77" style="white-space:pre;text-anchor:start;font-size:10.5px">search_shared_skills</text>
+<rect class="d-node" x="198" y="69" width="56" height="16" rx="8"/>
+<text class="d-label" x="226" y="77" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="258" y="69" width="56" height="16" rx="8"/>
+<text class="d-label" x="286" y="77" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="318" y="69" width="56" height="16" rx="8"/>
+<text class="d-label" x="346" y="77" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="16" y="92" width="364" height="22" rx="3"/>
+<text class="d-label d-label--strong" x="24" y="103" style="white-space:pre;text-anchor:start;font-size:10.5px">read_shared_skill</text>
+<rect class="d-node" x="198" y="95" width="56" height="16" rx="8"/>
+<text class="d-label" x="226" y="103" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="258" y="95" width="56" height="16" rx="8"/>
+<text class="d-label" x="286" y="103" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="318" y="95" width="56" height="16" rx="8"/>
+<text class="d-label" x="346" y="103" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="16" y="118" width="364" height="22" rx="3"/>
+<text class="d-label d-label--strong" x="24" y="129" style="white-space:pre;text-anchor:start;font-size:10.5px">list_shared_skill_versions</text>
+<rect class="d-node" x="198" y="121" width="56" height="16" rx="8"/>
+<text class="d-label" x="226" y="129" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="258" y="121" width="56" height="16" rx="8"/>
+<text class="d-label" x="286" y="129" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="318" y="121" width="56" height="16" rx="8"/>
+<text class="d-label" x="346" y="129" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="16" y="144" width="364" height="22" rx="3"/>
+<text class="d-label d-label--strong" x="24" y="155" style="white-space:pre;text-anchor:start;font-size:10.5px">diff_shared_skill_versions</text>
+<rect class="d-node" x="198" y="147" width="56" height="16" rx="8"/>
+<text class="d-label" x="226" y="155" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="258" y="147" width="56" height="16" rx="8"/>
+<text class="d-label" x="286" y="155" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="318" y="147" width="56" height="16" rx="8"/>
+<text class="d-label" x="346" y="155" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-memo" x="10" y="180" width="376" height="94" rx="5"/>
+<text class="d-label d-label--strong" x="18" y="196" style="white-space:pre;text-anchor:start;font-size:11px;letter-spacing:0.04em">THE CATALOG'S OWN</text>
+<text class="d-note" x="18" y="209" style="white-space:pre;text-anchor:start;font-size:10.5px">called by this machine's operations; HTTP when hosted</text>
+<rect class="d-node" x="16" y="220" width="364" height="22" rx="3"/>
+<text class="d-label d-label--strong" x="24" y="231" style="white-space:pre;text-anchor:start;font-size:10.5px">publish_version</text>
+<text class="d-note" x="226" y="231" style="white-space:pre;text-anchor:middle;font-size:10px">—</text>
+<text class="d-note" x="286" y="231" style="white-space:pre;text-anchor:middle;font-size:10px">—</text>
+<rect class="d-node" x="318" y="223" width="56" height="16" rx="8"/>
+<text class="d-label" x="346" y="231" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="16" y="246" width="364" height="22" rx="3"/>
+<text class="d-label d-label--strong" x="24" y="257" style="white-space:pre;text-anchor:start;font-size:10.5px">fetch_version</text>
+<text class="d-note" x="226" y="257" style="white-space:pre;text-anchor:middle;font-size:10px">—</text>
+<text class="d-note" x="286" y="257" style="white-space:pre;text-anchor:middle;font-size:10px">—</text>
+<rect class="d-node" x="318" y="249" width="56" height="16" rx="8"/>
+<text class="d-label" x="346" y="257" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-memo" x="10" y="282" width="376" height="146" rx="5"/>
+<text class="d-label d-label--strong" x="18" y="298" style="white-space:pre;text-anchor:start;font-size:11px;letter-spacing:0.04em">HOSTED CATALOG ONLY</text>
+<text class="d-note" x="18" y="311" style="white-space:pre;text-anchor:start;font-size:10.5px">signing in and uploading files, over HTTP</text>
+<rect class="d-node" x="16" y="322" width="364" height="22" rx="3"/>
+<text class="d-label d-label--strong" x="24" y="333" style="white-space:pre;text-anchor:start;font-size:10.5px">request_upload_links</text>
+<text class="d-note" x="226" y="333" style="white-space:pre;text-anchor:middle;font-size:10px">—</text>
+<text class="d-note" x="286" y="333" style="white-space:pre;text-anchor:middle;font-size:10px">—</text>
+<rect class="d-node" x="318" y="325" width="56" height="16" rx="8"/>
+<text class="d-label" x="346" y="333" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="16" y="348" width="364" height="22" rx="3"/>
+<text class="d-label d-label--strong" x="24" y="359" style="white-space:pre;text-anchor:start;font-size:10.5px">sign_in_with_github</text>
+<text class="d-note" x="226" y="359" style="white-space:pre;text-anchor:middle;font-size:10px">—</text>
+<text class="d-note" x="286" y="359" style="white-space:pre;text-anchor:middle;font-size:10px">—</text>
+<rect class="d-node" x="318" y="351" width="56" height="16" rx="8"/>
+<text class="d-label" x="346" y="359" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="16" y="374" width="364" height="22" rx="3"/>
+<text class="d-label d-label--strong" x="24" y="385" style="white-space:pre;text-anchor:start;font-size:10.5px">list_tokens</text>
+<text class="d-note" x="226" y="385" style="white-space:pre;text-anchor:middle;font-size:10px">—</text>
+<text class="d-note" x="286" y="385" style="white-space:pre;text-anchor:middle;font-size:10px">—</text>
+<rect class="d-node" x="318" y="377" width="56" height="16" rx="8"/>
+<text class="d-label" x="346" y="385" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="16" y="400" width="364" height="22" rx="3"/>
+<text class="d-label d-label--strong" x="24" y="411" style="white-space:pre;text-anchor:start;font-size:10.5px">revoke_token</text>
+<text class="d-note" x="226" y="411" style="white-space:pre;text-anchor:middle;font-size:10px">—</text>
+<text class="d-note" x="286" y="411" style="white-space:pre;text-anchor:middle;font-size:10px">—</text>
+<rect class="d-node" x="318" y="403" width="56" height="16" rx="8"/>
+<text class="d-label" x="346" y="411" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-memo" x="10" y="436" width="376" height="224" rx="5"/>
+<text class="d-label d-label--strong" x="18" y="452" style="white-space:pre;text-anchor:start;font-size:11px;letter-spacing:0.04em">THIS MACHINE'S INSTALLED SKILLS</text>
+<text class="d-note" x="18" y="465" style="white-space:pre;text-anchor:start;font-size:10.5px">run on the Developer's machine; never over HTTP</text>
+<rect class="d-node d-node--proposed" x="16" y="476" width="364" height="22" rx="3"/>
+<text class="d-label d-label--strong" x="24" y="487" style="white-space:pre;text-anchor:start;font-size:10.5px">preview_skill_publish</text>
+<rect class="d-node d-node--proposed" x="198" y="479" width="56" height="16" rx="8"/>
+<text class="d-label" x="226" y="487" style="white-space:pre;text-anchor:middle;font-size:10px">not yet</text>
+<rect class="d-node d-node--proposed" x="258" y="479" width="56" height="16" rx="8"/>
+<text class="d-label" x="286" y="487" style="white-space:pre;text-anchor:middle;font-size:10px">not yet</text>
+<text class="d-note" x="346" y="487" style="white-space:pre;text-anchor:middle;font-size:10px">never</text>
+<rect class="d-node" x="16" y="502" width="364" height="22" rx="3"/>
+<text class="d-label d-label--strong" x="24" y="513" style="white-space:pre;text-anchor:start;font-size:10.5px">publish_skill_to_catalog</text>
+<rect class="d-node" x="198" y="505" width="56" height="16" rx="8"/>
+<text class="d-label" x="226" y="513" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="258" y="505" width="56" height="16" rx="8"/>
+<text class="d-label" x="286" y="513" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<text class="d-note" x="346" y="513" style="white-space:pre;text-anchor:middle;font-size:10px">never</text>
+<rect class="d-node" x="16" y="528" width="364" height="22" rx="3"/>
+<text class="d-label d-label--strong" x="24" y="539" style="white-space:pre;text-anchor:start;font-size:10.5px">install_shared_skill</text>
+<rect class="d-node" x="198" y="531" width="56" height="16" rx="8"/>
+<text class="d-label" x="226" y="539" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="258" y="531" width="56" height="16" rx="8"/>
+<text class="d-label" x="286" y="539" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<text class="d-note" x="346" y="539" style="white-space:pre;text-anchor:middle;font-size:10px">never</text>
+<rect class="d-node" x="16" y="554" width="364" height="22" rx="3"/>
+<text class="d-label d-label--strong" x="24" y="565" style="white-space:pre;text-anchor:start;font-size:10.5px">update_installed_skills</text>
+<rect class="d-node" x="198" y="557" width="56" height="16" rx="8"/>
+<text class="d-label" x="226" y="565" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="258" y="557" width="56" height="16" rx="8"/>
+<text class="d-label" x="286" y="565" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<text class="d-note" x="346" y="565" style="white-space:pre;text-anchor:middle;font-size:10px">never</text>
+<rect class="d-node" x="16" y="580" width="364" height="22" rx="3"/>
+<text class="d-label d-label--strong" x="24" y="591" style="white-space:pre;text-anchor:start;font-size:10.5px">accept_held_update</text>
+<rect class="d-node" x="198" y="583" width="56" height="16" rx="8"/>
+<text class="d-label" x="226" y="591" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="258" y="583" width="56" height="16" rx="8"/>
+<text class="d-label" x="286" y="591" style="white-space:pre;text-anchor:middle;font-size:10px">person</text>
+<text class="d-note" x="346" y="591" style="white-space:pre;text-anchor:middle;font-size:10px">never</text>
+<rect class="d-node" x="16" y="606" width="364" height="22" rx="3"/>
+<text class="d-label d-label--strong" x="24" y="617" style="white-space:pre;text-anchor:start;font-size:10.5px">list_installed_skills</text>
+<rect class="d-node" x="198" y="609" width="56" height="16" rx="8"/>
+<text class="d-label" x="226" y="617" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="258" y="609" width="56" height="16" rx="8"/>
+<text class="d-label" x="286" y="617" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<text class="d-note" x="346" y="617" style="white-space:pre;text-anchor:middle;font-size:10px">never</text>
+<rect class="d-node" x="16" y="632" width="364" height="22" rx="3"/>
+<text class="d-label d-label--strong" x="24" y="643" style="white-space:pre;text-anchor:start;font-size:10.5px">set_skill_update_policy</text>
+<rect class="d-node" x="198" y="635" width="56" height="16" rx="8"/>
+<text class="d-label" x="226" y="643" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="258" y="635" width="56" height="16" rx="8"/>
+<text class="d-label" x="286" y="643" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<text class="d-note" x="346" y="643" style="white-space:pre;text-anchor:middle;font-size:10px">never</text>
+<rect class="d-memo" x="10" y="668" width="376" height="106" rx="5"/>
+<text class="d-label d-label--strong" x="18" y="684" style="white-space:pre;text-anchor:start;font-size:11px;letter-spacing:0.04em">CLI ONLY: COMMANDS FOR A PERSON</text>
+<rect class="d-node" x="18" y="694" width="49" height="34" rx="4"/>
+<text class="d-label d-label--strong" x="42.5" y="705" style="white-space:pre;text-anchor:middle;font-size:10.5px">setup</text>
+<text class="d-note" x="42.5" y="719" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="73" y="694" width="68.8" height="34" rx="4"/>
+<text class="d-label d-label--strong" x="107.4" y="705" style="white-space:pre;text-anchor:middle;font-size:10.5px">teardown</text>
+<text class="d-note" x="107.4" y="719" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="147.8" y="694" width="113.6" height="34" rx="4"/>
+<text class="d-label d-label--strong" x="204.60000000000002" y="705" style="white-space:pre;text-anchor:middle;font-size:10.5px">serve</text>
+<text class="d-note" x="204.60000000000002" y="719" style="white-space:pre;text-anchor:middle;font-size:10px">the API, no page</text>
+<rect class="d-node" x="267.4" y="694" width="49" height="34" rx="4"/>
+<text class="d-label d-label--strong" x="291.9" y="705" style="white-space:pre;text-anchor:middle;font-size:10.5px">stats</text>
+<text class="d-note" x="291.9" y="719" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="322.4" y="694" width="55.599999999999994" height="34" rx="4"/>
+<text class="d-label d-label--strong" x="350.2" y="705" style="white-space:pre;text-anchor:middle;font-size:10.5px">review</text>
+<text class="d-note" x="350.2" y="719" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="18" y="734" width="49" height="34" rx="4"/>
+<text class="d-label d-label--strong" x="42.5" y="745" style="white-space:pre;text-anchor:middle;font-size:10.5px">login</text>
+<text class="d-note" x="42.5" y="759" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="73" y="734" width="55.599999999999994" height="34" rx="4"/>
+<text class="d-label d-label--strong" x="100.8" y="745" style="white-space:pre;text-anchor:middle;font-size:10.5px">logout</text>
+<text class="d-note" x="100.8" y="759" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<rect class="d-node" x="134.6" y="734" width="46.5" height="34" rx="4"/>
+<text class="d-label d-label--strong" x="157.85" y="745" style="white-space:pre;text-anchor:middle;font-size:10.5px">mcp</text>
+<text class="d-note" x="157.85" y="759" style="white-space:pre;text-anchor:middle;font-size:10px">built</text>
+<text class="d-note" x="10" y="788" style="white-space:pre;text-anchor:start;font-size:10.5px">Dotted = not built yet.</text>
+<text class="d-note" x="10" y="802" style="white-space:pre;text-anchor:start;font-size:10.5px">person = built, for a person at a terminal only.</text>
 </svg>

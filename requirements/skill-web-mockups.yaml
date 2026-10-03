@@ -6,4 +6,5 @@ quote: "let's have a designer + architect come up with mock-ups that I can revie
 want: "As the owner, I want a designer and an architect to come up with mock-ups that I can review, so that I shape the UI before it's built."
 accept: "Mock-ups of the main web pages (browse, a skill and its history, the delta view, editing, bundles) are in front of the owner for review."
 confirmed: true
+parts: [web]
 relates: [skill-web-ui]

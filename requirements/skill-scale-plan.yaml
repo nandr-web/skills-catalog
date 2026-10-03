@@ -6,4 +6,5 @@ quote: "We need to consider how many skills we'll have over time."
 want: "As the owner, I want the design to consider how many skills we'll have over time, so that it informs our choices in the backend for searching and our APIs."
 accept: "The design states the scale tiers, with measured card sizes, and the point at which search moves to the next backend; a generated 10,000-skill catalog meets the search budget."
 confirmed: true
+parts: [core]
 relates: [skill-backend-neutral]

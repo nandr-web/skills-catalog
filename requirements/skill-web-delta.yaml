@@ -6,4 +6,5 @@ quote: "And importantly, a delta UX to view changes across revisions."
 want: "As a developer, I want a delta view of the changes across a skill's revisions, so that I can see what changed."
 accept: "Choosing two versions shows each file added, changed or removed with its differences, and flags new scripts and changed frontmatter."
 confirmed: true
+parts: [web, core]
 relates: [skill-versions]

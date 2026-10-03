@@ -6,4 +6,5 @@ quote: "Discover and retrieve happen through an AI assistant acting for the deve
 want: "As Developer 2, I want discover and retrieve to happen through an AI assistant acting for me on natural-language intent, not only a direct human-operated interface, so that I can reuse skills with little effort."
 accept: "Exercise discover and retrieve via an AI assistant (the PRD's method): the QA plan's agent scenarios drive a real assistant in plain words, and the trace shows catalog calls before the answer."
 confirmed: true
+parts: [mcp]
 relates: [skill-agent-first, skill-agent-qa]

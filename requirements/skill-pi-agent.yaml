@@ -1,0 +1,10 @@
+id: skill-pi-agent
+title: "Phase 2: The pi coding agent"
+phase: "2"
+source: "the owner"
+quote: "For phase 2 do pi coding agent"
+want: "As a developer using pi, I want to find, install and update our shared skills from it, so that a skill shared once works for me too."
+accept: "From pi, a developer finds, installs and updates skills from the catalog through the CLI pi runs; installed skills land where pi reads them (~/.agents/skills); pi's own MCP is used once a pi release ships it."
+confirmed: true
+parts: [cli, installer]
+relates: [skill-hold-every-assistant, skill-one-install-all-assistants]

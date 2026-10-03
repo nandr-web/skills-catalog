@@ -16,10 +16,14 @@ const load = (p: string): Doc => parse(readFileSync(p, 'utf8'));
 
 /** The exported requirement list (exported from the design's requirement files), next to the qa package. */
 export const DEFAULT_BACKLOG = fileURLToPath(new URL('../../requirements', import.meta.url));
+/** The product repo's root: a requirement's `tests` are paths from here. */
+export const REPO = fileURLToPath(new URL('../..', import.meta.url));
+/** A test file's path from the repo's root: <package>/test/….test.ts, nothing outside the repo. */
+const TEST_PATH = /^(?:core|client|hosted|infra|qa)\/test\/(?:[\w.-]+\/)*[\w.-]+\.test\.ts$/;
 /** The keys a traceability check may have. */
 export const CHECK_KEYS = ['layer', 'name', 'golden', 'auto', 'automate_by'];
 
-export function traceCheck({ qa, backlog = DEFAULT_BACKLOG }: { qa: string; backlog?: string }): { problems: string[]; counts: Record<string, number> } {
+export function traceCheck({ qa, backlog = DEFAULT_BACKLOG, repo = REPO }: { qa: string; backlog?: string; repo?: string }): { problems: string[]; counts: Record<string, number> } {
   const g = Object.fromEntries(['skills', 'histories', 'queries', 'agent-scenarios', 'policy'].map((n) => [n, load(join(qa, 'golden', `${n}.yaml`))]));
   const trace = load(join(qa, 'traceability.yaml'));
   const scenarios: Doc[] = g['agent-scenarios'].scenarios;
@@ -45,6 +49,7 @@ export function traceCheck({ qa, backlog = DEFAULT_BACKLOG }: { qa: string; back
   // ---- requirements ----
   for (const r of trace.requirements) {
     if (!r.checks.some((c: Doc) => c.auto)) problems.push(`${r.id}: no automated check`);
+    if (r.tests !== undefined) problems.push(`${r.id}: tests are named per requirement item, under items: (not on a traceability entry)`);
     for (const c of r.checks) {
       // A comma in an unquoted flow-mapping name splits it into stray keys: {name: a, b} is {name: a, b: null}.
       const stray = Object.keys(c).filter((k) => !CHECK_KEYS.includes(k));
@@ -59,6 +64,23 @@ export function traceCheck({ qa, backlog = DEFAULT_BACKLOG }: { qa: string; back
           if (skip) problems.push(`${r.id}: check ${JSON.stringify(c.name)} is marked auto, but the runner skips ${s.id} (${skip})`);
         }
       }
+    }
+  }
+
+  // ---- items: the tests that hold each requirement item (review P11.3, V2.2; the requirements page says "built" from
+  // these). Each is a test file in the repo with at least one test that runs; not_yet is words that can only lower its
+  // status. ----
+  const itemIds = new Set(backlog && existsSync(backlog) ? readdirSync(backlog).filter((f) => /^skill-.*\.yaml$/.test(f)).map((f) => f.replace(/\.yaml$/, '')) : []);
+  for (const [id, item] of Object.entries((trace.items ?? {}) as Record<string, Doc>)) {
+    const where = `item ${id}`;
+    if (backlog && !itemIds.has(id)) problems.push(`${where}: no such requirement item`);
+    for (const k of Object.keys(item ?? {}).filter((k) => !['tests', 'not_yet'].includes(k))) problems.push(`${where}: unknown key ${k} (tests and not_yet only)`);
+    if (item?.not_yet !== undefined && (typeof item.not_yet !== 'string' || !item.not_yet.trim())) problems.push(`${where}: not_yet should be words`);
+    if (!Array.isArray(item?.tests)) { problems.push(`${where}: tests should be a list of test files`); continue; }
+    for (const t of item.tests) {
+      if (typeof t !== 'string' || !TEST_PATH.test(t)) problems.push(`${where}: test '${t}' isn't a test file (<package>/test/….test.ts)`);
+      else if (!existsSync(join(repo, t))) problems.push(`${where}: test '${t}' doesn't exist`);
+      else if (runnableTests(readFileSync(join(repo, t), 'utf8')) === 0) problems.push(`${where}: test '${t}' has no test that runs (each is skipped or expected to fail)`);
     }
   }
 
@@ -153,6 +175,25 @@ export function traceCheck({ qa, backlog = DEFAULT_BACKLOG }: { qa: string; back
     problems,
     counts: { backlog: items.length, requirements: trace.requirements.length, scenarios: scen.size, queries: qids.size, policy: (g.policy.cases ?? []).length },
   };
+}
+
+/** How many tests in a test file's text run: it( and test( calls (also with .each, .only, .concurrent, .sequential, or a
+ *  condition: .skipIf / .runIf run on a usual machine), and calls to a shared suite (storageSuite(...)), outside a comment
+ *  line and outside a top-level describe.skip / todo block (to its closing }); at the start of a line). .skip, .todo and
+ *  .fails calls don't count. Read from the text, so a test a golden row marks as pending (expected to fail at run time)
+ *  still counts: the suite's own expected-fail count shows those. */
+export function runnableTests(text: string): number {
+  let n = 0;
+  let skipping = false;
+  for (const line of text.split('\n')) {
+    if (/^(?:describe|suite)\.(?:skip|todo)\b/.test(line)) { skipping = true; continue; }
+    if (skipping) { if (/^\}\)/.test(line)) skipping = false; continue; }
+    if (/^\s*(?:\/\/|\*)/.test(line)) continue;
+    if (/(?<![\w.])[a-z]\w*Suite\(/.test(line) && !/\bfunction\b|\bimport\b/.test(line)) { n += 1; continue; }
+    const calls = line.match(/(?<![\w.])(?:it|test)(?:\.(?:only|concurrent|sequential|each|skip|skipIf|runIf|todo|fails))*\s*[(`]/g) ?? [];
+    n += calls.filter((c) => !/\.(?:skip|todo|fails)\b/.test(c)).length;
+  }
+  return n;
 }
 
 const bytes = (c: unknown) => (typeof c === 'string' ? c : String((c as Doc).text ?? ''));

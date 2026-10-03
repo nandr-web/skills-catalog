@@ -6,3 +6,4 @@ quote: "Time-boxed exercise (~4 hours). Scope accordingly, a smaller, coherent, 
 want: "As the reviewer of the exercise, I want the build scoped to the time box, a smaller, coherent, working system rather than a larger broken one, so that what's shipped works."
 accept: "Everything in the submission passes its tests; what isn't built is shown as design, and the owner's scope decision says which is which."
 confirmed: true
+parts: [core]

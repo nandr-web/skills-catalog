@@ -6,4 +6,5 @@ quote: "Developer 1 publishes a skill; Developer 2, through an AI assistant, dis
 want: "As Developer 2, I want to discover and retrieve, through an AI assistant, the same skill Developer 1 published, with no file handoff and no repo sharing, so that skill reuse is low-effort and consistent."
 accept: "One scripted run: Developer 1 publishes a skill; Developer 2's assistant, asked in plain words, finds it and installs it; the installed files' fingerprint equals the published one; no file or repo was handed over."
 confirmed: true
+parts: [core, installer, mcp]
 relates: [skill-publish, skill-discover, skill-retrieve]

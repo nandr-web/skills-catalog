@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parse, stringify } from 'yaml';
-import { traceCheck } from '../src/trace-check.ts';
+import { runnableTests, traceCheck } from '../src/trace-check.ts';
 import { cleanup, scratch } from './machine.ts';
 
 const QA = fileURLToPath(new URL('..', import.meta.url));
@@ -30,7 +30,7 @@ describe('qa trace-check', () => {
   it('passes on the real goldens and the exported requirement list (requirements/, the default)', () => {
     const r = traceCheck({ qa: QA });
     expect(r.problems).toEqual([]);
-    expect(r.counts.backlog).toBe(40);
+    expect(r.counts.backlog).toBe(44);
   });
 
   it('a check with a key outside layer, name, golden, auto and automate_by is a problem (a comma in an unquoted name makes one)', () => {
@@ -49,6 +49,45 @@ describe('qa trace-check', () => {
     expect(r.problems).toEqual([]);
     const golden = (f: string) => parse(readFileSync(join(QA, 'golden', f), 'utf8'));
     expect(r.counts).toMatchObject({ scenarios: golden('agent-scenarios.yaml').scenarios.length, queries: golden('queries.yaml').queries.length });
+  });
+
+  // Review P11.3, V2.2 (and the validator's round): the requirements page says "built" from the tests named for each
+  // requirement item (items: in the trace file), so each name must be a test file in the repo with at least one test that
+  // runs (not skipped, not expected to fail); not_yet is the words for what isn't built, and can only lower a status.
+  it('fails when an item names a test file that doesn\'t exist, isn\'t a test file, or has no test that runs', () => {
+    const c = copy();
+    // A repo of its own, so a test file can be skip-only: one that runs, one whose tests are all skipped or expected to fail.
+    const repo = scratch('qa-trace-repo-');
+    mkdirSync(join(repo, 'core', 'test'), { recursive: true });
+    writeFileSync(join(repo, 'core', 'test', 'runs.test.ts'), "it('runs', () => {});\n");
+    writeFileSync(join(repo, 'core', 'test', 'skipped.test.ts'), "describe.skip('later', () => {\n  it('a', () => {});\n});\nit.fails('b', () => {});\n");
+    edit(join(c.qa, 'traceability.yaml'), (d) => {
+      d.items = {
+        'skill-publish': { tests: ['core/test/no-such.test.ts', 'core/src/catalog.ts', '../outside.test.ts', 'core/test/skipped.test.ts', 'core/test/runs.test.ts'] },
+        'skill-versions': { tests: 'core/test/runs.test.ts', not_yet: 3 },
+        'skill-no-such-item': { tests: ['core/test/runs.test.ts'] },
+        'skill-discover': { tests: ['core/test/runs.test.ts'], color: 'x' },
+      };
+    });
+    const p = traceCheck({ qa: c.qa, backlog: c.backlog, repo }).problems;
+    expect(p).toEqual(expect.arrayContaining([
+      "item skill-publish: test 'core/test/no-such.test.ts' doesn't exist",
+      "item skill-publish: test 'core/src/catalog.ts' isn't a test file (<package>/test/….test.ts)",
+      "item skill-publish: test '../outside.test.ts' isn't a test file (<package>/test/….test.ts)",
+      "item skill-publish: test 'core/test/skipped.test.ts' has no test that runs (each is skipped or expected to fail)",
+      'item skill-versions: tests should be a list of test files',
+      'item skill-versions: not_yet should be words',
+      'item skill-no-such-item: no such requirement item',
+      'item skill-discover: unknown key color (tests and not_yet only)',
+    ]));
+    expect(p.filter((x) => x.includes('runs.test.ts'))).toEqual([]);
+  });
+
+  it('counts the tests that run: plain, each, only, sequential and conditional calls and shared suites; never skipped, todo or expected-fail ones, nor those in a skipped block or a comment', () => {
+    expect(runnableTests("it('a', () => {});\ntest.each([1])('b %s', () => {});\nit.only('c', () => {});\nit.sequential('d', () => {});\nit.skipIf(x)('e', () => {});")).toBe(5);
+    expect(runnableTests("it.skip('a', () => {});\nit.todo('b');\nit.fails('c', () => {});\n// it('e')\n * it('f')")).toBe(0);
+    expect(runnableTests("describe.skip('later', () => {\n  it('a', () => {});\n});\nit('b', () => {});")).toBe(1);
+    expect(runnableTests("describe('x', () => {\n  it('a', () => {});\n});\nstorageSuite(hosted);\nfor (const a of ADAPTERS) discoverySuite(a);\nimport { catalogSuite } from './x.ts';")).toBe(3);
   });
 
   it('fails when a requirement has no automated check, or a manual one says nothing about automating it', () => {

@@ -86,3 +86,46 @@ describe('the API page\'s reference section (docs/api.md)', () => {
     expect(search).toMatch(/`query`[^\n]*500/);
   });
 });
+
+// The page's hand-written top (review V5.3, V5.7, V6.3): its at-a-glance tables and picture said HTTP was planned long
+// after it was built. Their chips are checked against the definitions here, so they can't drift again.
+describe('the API page\'s at-a-glance tables and picture (docs/api.md, pictures/api-overview.svg)', () => {
+  const PICTURE = join(import.meta.dirname, '..', '..', 'docs', 'pictures', 'api-overview.svg');
+  /** The rows of the at-a-glance tables: operation name and its Tool, CLI and HTTP cells. */
+  const glance = (text: string) => {
+    const top = text.slice(text.indexOf('## The operations at a glance'), text.indexOf('## What every call shares'));
+    return [...top.matchAll(/^\| \[([a-z_]+)\]\(#[^)]*\) \| .* \| ([^|]+) \| ([^|]+) \| ([^|]+) \|$/gm)].map((m) => ({ name: m[1]!, tool: m[2]!.trim(), cli: m[3]!.trim(), http: m[4]!.trim() }));
+  };
+  // GitHub's anchor for a heading: lower case, punctuation dropped (hyphens and underscores kept), spaces to hyphens.
+  const slug = (h: string) => h.toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').trim().replace(/\s/g, '-');
+
+  it('lists every operation once, its chips as its definition says: a face it has is built, one it lacks is not', () => {
+    const rows = glance(page());
+    const defs = Object.values(OPERATIONS) as OperationDef[];
+    for (const def of defs) {
+      const row = rows.filter((r) => r.name === def.name);
+      expect(row, def.name).toHaveLength(1);
+      const { tool, cli, http } = row[0]!;
+      expect(tool.startsWith('built'), `${def.name} Tool: ${tool}`).toBe(def.faces.includes('mcp'));
+      expect(cli.startsWith('built'), `${def.name} CLI: ${cli}`).toBe(def.faces.includes('cli'));
+      expect(http, def.name).toBe(def.faces.includes('web') ? 'built' : 'never');
+    }
+    // A row with no definition is a design, and says so.
+    for (const r of rows.filter((x) => !(x.name in OPERATIONS))) expect([r.tool, r.cli], r.name).toEqual(['not built', 'not built']);
+  });
+
+  it('the picture shows every operation and no "planned" chip, in light and dark', () => {
+    const svg = readFileSync(PICTURE, 'utf8');
+    for (const name of Object.keys(OPERATIONS)) expect(svg, name).toContain(`>${name}<`);
+    expect(svg).not.toMatch(/>(?:planned|on a branch|ON A BRANCH)</);
+    expect(svg).toContain('prefers-color-scheme: dark');
+  });
+
+  it('every link to a heading on the page has that heading', () => {
+    const text = page();
+    const anchors = new Set([...text.matchAll(/^#{1,6} (.+)$/gm)].map((m) => slug(m[1]!.replace(/`/g, ''))));
+    const links = [...text.matchAll(/\]\(#([^)]+)\)/g)].map((m) => m[1]!);
+    expect(links.length).toBeGreaterThan(10);
+    expect(links.filter((l) => !anchors.has(l))).toEqual([]);
+  });
+});

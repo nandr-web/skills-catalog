@@ -1,0 +1,10 @@
+id: skill-hold-every-assistant
+title: "Risky updates wait for my yes on every assistant"
+phase: "1"
+source: "the owner"
+quote: "one requirement should cover \"risky updates still waiting for my yes\" for all harnesses"
+want: "As a developer, I want risky updates to wait for my yes on every assistant I use, so that nothing risky reaches my assistant unasked."
+accept: "On every supported assistant, a flagged update is held until the person says yes; the assistant can't give that yes without asking the person (its own permission prompt, or an add-on where it has none)."
+confirmed: true
+parts: [installer, cli, mcp]
+relates: [skill-auto-updates, skill-review-flags]

@@ -6,4 +6,5 @@ quote: "Later, owners can assign permissions to others."
 want: "As a skill's owner, I want to assign permissions to others, so that maintainers I choose can publish new versions too."
 accept: "An owner adds and removes maintainers; a maintainer's publish succeeds; anyone else still gets the not-owner error; each update shows who published it."
 confirmed: true
+parts: [core]
 relates: [skill-owner-only-publish]

@@ -6,4 +6,5 @@ quote: "we should do constant QA on the agent-level experience first and foremos
 want: "As the owner, I want constant QA on the agent-level experience, first and foremost, so that how assistants really use the catalog is what we measure."
 accept: "Agent scenarios drive a real assistant, headless, in three setups (MCP only, MCP + companion skill, skill + CLI), three runs each; every safety rule holds in all runs and each task succeeds in at least two of three; results are kept per run."
 confirmed: true
+parts: [qa, mcp]
 relates: [skill-qa-first]

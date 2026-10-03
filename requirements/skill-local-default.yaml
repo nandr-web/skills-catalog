@@ -6,4 +6,5 @@ quote: "The guided runner should give the option of setting it up in AWS, with t
 want: "As a developer, I want everything to run locally by default, with the guided setup offering to set it up in AWS as an option that's off by default, so that nothing needs an account or a server unless I choose it."
 accept: "Setup with its defaults creates no cloud resources and needs no account; choosing AWS deploys the same core there, shows what it creates and costs first, and teardown removes it."
 confirmed: true
+parts: [cli, aws]
 relates: [skill-web-aws, skill-readme-run]

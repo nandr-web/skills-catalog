@@ -6,4 +6,5 @@ quote: "When running locally / for demo, simplify the \"login\" process (e.g. ab
 want: "As someone running the catalog locally or for a demo, I want a simplified login where I can act as other developers, with a seamless, discreet label saying it's for demo purposes, so that I can show two developers sharing a skill on one machine."
 accept: "With no sign-in, a person chooses who they act as (a flag, a setting, or the MCP server's config); every result says who is acting, and the CLI shows one discreet 'for demo purposes' line; setup can add two demo developers; the README demo shows Developer 1 publishing and Developer 2 installing but not overwriting."
 confirmed: true
+parts: [core, cli, mcp]
 relates: [skill-owner-only-publish, skill-readme-visual]
