@@ -753,6 +753,7 @@ results:
       unknown_field_cut: isn't a field this tool takes (its name is cut here to its first 200 characters)
       required: is required
       contradicting_flags: was set by two flags that contradict each other (use one)
+      not_through_setup: is a setting only the person turns on, by editing config.json themselves; setup never sets it
       not_a_confirm: isn't a confirm value a preview gives
       not_a_cursor: isn't a cursor an earlier page gave
       not_a_developer_name: isn't a valid developer name (lowercase letters, digits and single hyphens)
@@ -1029,6 +1030,11 @@ setup:
     - ask: Add two demo developers, dev1 and dev2, to try it?
       default: "no"
       flag: --demo-developers
+    - ask: Add the skills-catalog command to your terminal? Setup puts a two-line launcher in {command_folder}, never over a file already there.
+      default: "yes"
+      flag: --terminal-command yes|no
+  welcome: "Welcome to Skills Catalog: your team's skills, found, shared and kept up to date by your assistant. {n} questions; press Enter to take the answer in [brackets]."
+  answers_heading: "Your answers:"
   no_terminal: |
     Skills Catalog setup has {n} questions and there's no terminal to ask them in, so nothing was changed.
     Ask the person these, then run setup again with their answers:
@@ -1053,6 +1059,20 @@ setup:
     wrong_type: the setting {key} has the wrong type
     not_absolute: CLAUDE_CONFIG_DIR, which says where it is, isn't an absolute path
   updates_off: only when you ask (${cli} update)
+  assistant_claude_code: "Claude Code ({files})"
+  done_me: "- you: {me}, the name the catalog shows as who published what"
+  done_me_none: "- you: no name yet; publishing asks for one (run ${cli} setup --me <name>)"
+  done_demo: "- demo developers: {names}; act as one with --as <name> on a command, or SKILLS_AS=<name>"
+  catalog_hosted: "- {catalog} is a hosted catalog: sign in with ${cli} login before you publish."
+  catalog_shared_folder: "- Careful: {path} looks like a {kind} folder. A folder catalog works on one machine only; two machines writing it through a network or a sync service can lose versions without any error. For a team, use a hosted catalog."
+  shared_folder_kind:
+    network: network
+    synced: synced
+  command_added: "- terminal: {path} runs skills-catalog"
+  command_taken: "- terminal: {path} is already there and isn't setup's, so setup left it. To run this copy: {runnable}"
+  command_unsafe: "- terminal: others on this machine can change {folder}, so setup didn't put the skills-catalog command there. To run it: {runnable}"
+  command_off_path: "{folder} isn't on your PATH, so a terminal won't find skills-catalog yet. Add this line to your shell's startup file (for zsh, ~/.zshrc), then open a new terminal: export PATH=\"{folder}:$PATH\""
+  command_none: "- terminal: no command added; to run skills-catalog: {runnable}"
   handoff_prompt: "Set up our team's Skills Catalog on this machine: run `${cli} setup` and ask me the questions it prints."
   handoff_prompt_fast: "Set up our team's Skills Catalog on this machine with the defaults: run `${cli} setup --yes`."
   next_claude_code: quit Claude Code if it's open, then start a new session (the catalog's tools load when a session starts) and ask it "is there a skill for ...?".
@@ -1066,6 +1086,8 @@ setup:
     hook_add: "- {path}: add one session-start hook (it tells you when an update waits for your yes) and {rules} allow rule(s), so your assistant can search, read, install and update skills without asking you each time"
     hook_replace: "- {path}: update the session-start hook setup added before (Node or a setting has moved)"
     record: "- {path}: a record of exactly what setup added, so teardown can remove just that"
+    command: "- {path}: add the skills-catalog command for your terminal (a launcher for this copy of skills-catalog)"
+    config_same: "- {path}: the catalog's settings stay as they are"
     backup: Before changing a file, setup saves a copy of it in {folder}.
     unchanged: Everything is already set up as it would be; nothing to change.
     ask: Go ahead? (Y/n)

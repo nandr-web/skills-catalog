@@ -22,6 +22,20 @@ const USAGE = `skills-catalog: your team's shared skills catalog, on this machin
 `;
 
 const [command, ...rest] = process.argv.slice(2);
+
+/** One question to the person at the terminal; Ctrl-D or Ctrl-C at it is an empty answer (a no), not a crash. */
+async function askPerson(question: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return await rl.question(question);
+  } catch (e) {
+    if ((e as Error).name !== 'AbortError') throw e;
+    process.stdout.write('\n');
+    return '';
+  } finally {
+    rl.close();
+  }
+}
 // One terminal check, for every command that asks the person something or refuses without them.
 const tty = Boolean(process.stdin.isTTY && process.stdout.isTTY);
 if (command === 'mcp' && rest.length === 0) {
@@ -37,6 +51,9 @@ if (command === 'mcp' && rest.length === 0) {
     return text;
   };
   process.exitCode = await runLogin(rest, { settings: settingsFrom(process.env), env: process.env, stdout: (t) => void process.stdout.write(t), stderr: (t) => void process.stderr.write(t), readStdin });
+} else if (command === 'setup') {
+  const { runSetupCommand } = await import('./cli/setup.ts');
+  process.exitCode = await runSetupCommand(rest, { env: process.env, cwd: process.cwd(), tty, color: wantsColor(Boolean(process.stdout.isTTY), process.env), ask: askPerson, stdout: (t) => void process.stdout.write(t), stderr: (t) => void process.stderr.write(t) });
 } else if (command === 'logout') {
   process.exitCode = runLogout({ settings: settingsFrom(process.env), stdout: (t) => void process.stdout.write(t) });
 } else if (command === 'serve') {
@@ -57,19 +74,7 @@ if (command === 'mcp' && rest.length === 0) {
     // A person reads stdout: results are laid out for them, in colour unless NO_COLOR is set.
     person: Boolean(process.stdout.isTTY),
     color: wantsColor(Boolean(process.stdout.isTTY), process.env),
-    ask: async (question) => {
-      const rl = createInterface({ input: process.stdin, output: process.stdout });
-      try {
-        return await rl.question(question);
-      } catch (e) {
-        // Ctrl-D or Ctrl-C at the question is a no, not a crash.
-        if ((e as Error).name !== 'AbortError') throw e;
-        process.stdout.write('\n');
-        return '';
-      } finally {
-        rl.close();
-      }
-    },
+    ask: askPerson,
     stdout: (t) => void process.stdout.write(t),
     stderr: (t) => void process.stderr.write(t),
   });
