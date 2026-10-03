@@ -72,11 +72,12 @@ export interface Server {
   close(): Promise<number | null>;
 }
 
-export function startServer(p: Place, env: Record<string, string> = {}): Server {
+/** `run`: the command and arguments to start, as an assistant's MCP config names them (default: this package's server). */
+export function startServer(p: Place, env: Record<string, string> = {}, run: { command: string; args: string[] } = { command: process.execPath, args: [CLI, 'mcp'] }): Server {
   // Not UTC, so a local time anywhere (the activity log's clock) differs from UTC even on a machine set to UTC.
   const full = childEnv(p, { TZ: 'Asia/Kolkata', ...env });
 
-  const child = spawn(process.execPath, [CLI, 'mcp'], { env: full, cwd: p.dir, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(run.command, run.args, { env: full, cwd: p.dir, stdio: ['pipe', 'pipe', 'pipe'] });
   // Never left behind: however the test ends (a timeout, a failure, a server stuck in a system call that can't see its
   // input close), the server it started is killed once the test is over.
   onTestFinished(() => {
