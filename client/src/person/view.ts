@@ -6,6 +6,7 @@
 import { fenced, manifestRefusal, reasons, skillMdOf, type DiffResult, type ReadResult, type SearchInput, type SearchResult, type VersionsResult, type Words } from '@skills-catalog/core';
 import { flagText, oneLine } from '@skills-catalog/core/skill-tree';
 import type { InstallView, ListView, UpdateView } from '../machine/installer.ts';
+import type { PublishView } from '../machine/publish-folder.ts';
 import type { Answer } from '../operations.ts';
 import type { Medium } from './medium.ts';
 import { MARK } from './terminal.ts';
@@ -48,6 +49,8 @@ export function personView(s: Words, m: Medium, op: string, a: Answer, args: Rec
       return versions(c, a.data as VersionsResult);
     case 'diff_shared_skill_versions':
       return diff(c, a.data as DiffResult);
+    case 'publish_skill_to_catalog':
+      return publish(c, a.view as PublishView | undefined);
     case 'install_shared_skill':
     case 'accept_held_update':
       return install(c, a.view as InstallView | undefined);
@@ -118,6 +121,18 @@ function update({ s, say, m }: Ctx, v: UpdateView | undefined): string | undefin
     if (out.at(-1) !== '') out.push('');
     out.push(...m.callout(block));
   }
+  return out.join('\n');
+}
+
+function publish({ say, m }: Ctx, v: PublishView | undefined): string | undefined {
+  if (!v) return undefined;
+  const { paint } = m;
+  if (v.stage === 'published') return [`${paint('ok', MARK.ok)} ${paint('bold', say('publish.published', v))}`, paint('dim', say('publish.published_next'))].join('\n');
+  const title = v.latest === 0 ? say('publish.title_new', v) : say('publish.title', { ...v, changed: v.changed.map((p) => m.text(flagText(p))).join(', ') });
+  const rows = [...v.send.map((p) => [m.text(flagText(p)), paint('ok', say('publish.sent'))]), ...v.skipped.map((p) => [paint('dim', m.text(flagText(p))), paint('dim', say('publish.skipped'))])];
+  const out = [paint('bold', title), '', ...m.table(header(say, 'publish.columns'), rows)];
+  if (v.notes.length) out.push('', ...m.callout([paint('attention', paint('bold', `${MARK.attention} ${say('publish.look')}`)), ...v.notes.map((n) => (m.kind === 'terminal' ? '  • ' : '- ') + n)]));
+  if (!m.commands) out.push('', say('publish.stays_reply'));
   return out.join('\n');
 }
 

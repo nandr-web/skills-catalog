@@ -346,3 +346,23 @@ describe('using a skill just installed, in this session (review F3)', () => {
     expect(second.text).not.toContain('/reload-skills');
   });
 });
+
+// The publish preview, laid out for the person: what would be sent and skipped as a table, a box for what's worth a
+// look, and no question of its own; then what was published (review V3.2).
+describe('publish, as the person reads it in a reply', () => {
+  it('a preview table of sent and skipped files, then the published line', async () => {
+    const p = place();
+    const dir = folder(p, 'release-note-draft', { 'SKILL.md': '---\nname: release-note-draft\ndescription: Drafts release notes.\n---\nBody.\n', 'template.md': 'T\n', '.env': 'X=1\n' });
+    const ctx = ctxFor(p);
+    const pre = await perform(ctx, OP, OP, { folder: dir });
+    const shown = views(pre, OP, { folder: dir }).markdown!;
+    expect(shown).toContain('Preview: release-note-draft would be published as v1, a new skill');
+    expect(shown).toMatch(/\| template\.md \| sent \|/);
+    expect(shown).toMatch(/\.env.*skipped/);
+    expect(shown).toContain('Nothing is published until you say yes.');
+    expect(shown).not.toContain('?');
+    const m = /confirm "([^"]+)", name "([^"]+)", version (\d+), files (\d+) and flags (\[[^\]]*\])/.exec(pre.text)!;
+    const done = await perform(ctx, OP, OP, { folder: dir, confirm: m[1], name: m[2], version: Number(m[3]), files: Number(m[4]), flags: JSON.parse(m[5]!) });
+    expect(views(done, OP, { folder: dir }).markdown).toContain("✓ **Published release-note-draft v1 to the shared catalog, its files checked.**");
+  });
+});

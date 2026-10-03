@@ -1016,6 +1016,16 @@ results:
         removed: it no longer lets the skill use {from} without asking
       publisher: "publisher: {from} → {to}"
       same: "{name} v{from} and v{to} have the same content."
+    publish:
+      title_new: "Preview: {name} would be published as v{version}, a new skill"
+      title: "Preview: {name} would become v{version} (changed since v{latest}: {changed})"
+      columns: "File | Sent or skipped"
+      sent: sent
+      skipped: skipped
+      look: "Worth a look before publishing:"
+      stays_reply: Nothing is published until you say yes.
+      published: "Published {name} v{version} to the shared catalog, its files checked."
+      published_next: Teammates can find it now; installed copies pick it up at their next update.
     install:
       held_title: "Waiting for your OK: {name} v{version}, not installed"
       held_title_over: "Waiting for your OK: {name} v{from} → v{version}, not installed"
