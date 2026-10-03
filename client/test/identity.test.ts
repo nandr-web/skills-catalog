@@ -9,7 +9,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { actingLine, perform, contextFor } from '../src/operations.ts';
 import { machineDeveloper, settingsFrom } from '../src/settings.ts';
 import { open, seed, skillMd } from './seed.ts';
-import { PROCESS_TEST_MS, place, startServer, type Place, type Server } from './server.ts';
+import { PROCESS_TEST_MS, place as sandboxPlace, startServer, type Place, type Server } from './server.ts';
+import { pathToFileURL } from 'node:url';
+
+/** A place whose catalog is the default one, $SKILLS_HOME/catalog (the README's install). */
+const place = (): Place => {
+  const p = sandboxPlace();
+  const catalogDir = join(p.home, 'catalog');
+  return { ...p, catalogDir, catalogUrl: pathToFileURL(catalogDir).href };
+};
 
 vi.setConfig({ testTimeout: PROCESS_TEST_MS });
 
@@ -57,6 +65,16 @@ describe('settings: one identity source', () => {
     expect(settingsFrom(envOf(q), q.dir).developer).toBeUndefined();
   });
 
+  it('the login stands in only on the default catalog: a catalog named elsewhere (perhaps shared) needs setup\'s me or SKILLS_AS', () => {
+    const p = sandboxPlace();
+    expect(settingsFrom(envOf(p, { USER: 'nan' }), p.dir).developer).toBeUndefined();
+    const q = place();
+    config(q, { catalog: pathToFileURL(join(q.dir, 'team-catalog')).href });
+    expect(settingsFrom({ SKILLS_HOME: q.home, USER: 'nan' }, q.dir).developer).toBeUndefined();
+    config(q, { catalog: pathToFileURL(join(q.dir, 'team-catalog')).href, me: 'ana' });
+    expect(settingsFrom({ SKILLS_HOME: q.home, USER: 'nan' }, q.dir)).toMatchObject({ developer: 'ana', developerSource: 'config' });
+  });
+
   it('a SKILLS_AS that isn\'t a name stays a setting to fix: no fallback hides it', () => {
     const p = place();
     config(p, { me: 'ana' });
@@ -72,10 +90,21 @@ describe('settings: one identity source', () => {
     expect(s.developer).toBeUndefined();
   });
 
-  it('a config.json that can\'t be read gives no name from it (the installer names the damage); the login still acts', () => {
+  it('a config.json that can\'t be read: no one acts and every call names the damage, never the login or the default catalog in its place', async () => {
     const p = place();
+    await seed(p);
     config(p, 'not json');
-    expect(settingsFrom(envOf(p, { USER: 'nan' }), p.dir)).toMatchObject({ developer: 'nan', developerSource: 'machine' });
+    const s = settingsFrom({ SKILLS_HOME: p.home, SKILLS_ASSISTANT_HOME: p.osHome, USER: 'nan' }, p.dir);
+    expect(s.developer).toBeUndefined();
+    expect(s.configError?.code).toBe('invalid_local_file');
+    const { ctx, close } = contextFor(s, S, 'cli');
+    try {
+      const a = await perform(ctx, 'search_shared_skills', 'search', { query: 'notes' });
+      expect([a.isError, a.outcome]).toEqual([true, 'invalid_local_file']);
+      expect(a.text).toContain('config.json');
+    } finally {
+      close();
+    }
   });
 
   it('config.json\'s catalog is where the catalog lives when SKILLS_CATALOG isn\'t set', () => {

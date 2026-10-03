@@ -133,6 +133,16 @@ describe('--yes: every default', () => {
     expect(outs.join('')).toContain(S.setup.plan.unchanged);
   });
 
+  it('a home with an apostrophe and a space: the PATH line and the runnable command are quoted for the shell', async () => {
+    const w = world();
+    const A = join(w.dir, "o'neil home");
+    mkdirSync(A, { mode: 0o700 });
+    w.io.env['SKILLS_ASSISTANT_HOME'] = A;
+    expect(await runSetupCommand(['--yes'], w.io)).toBe(0);
+    const folder = join(A, '.local', 'bin');
+    expect(w.out()).toContain(`export PATH='${folder.replaceAll("'", "'\\''")}':"$PATH"`);
+  });
+
   it('the launcher\'s folder on PATH: no PATH line', async () => {
     const w = world();
     w.io.env['PATH'] = `${join(w.A, '.local', 'bin')}:/usr/bin`;
@@ -204,6 +214,28 @@ describe('--config refusals change nothing', () => {
       expect(existsSync(w.H)).toBe(false);
     });
   }
+});
+
+describe('a catalog address is one address (review: an escape sequence was stored and printed raw)', () => {
+  const bad = ['https://ex.com/\u001b[31mRED\u001b[0m', 'https://ex.com/a\nfake line', 'https://ex .com/', 'https://', 'ftp://ex.com/'];
+  for (const v of bad) {
+    it(`refused as a flag and in a --config file: ${JSON.stringify(v)}`, async () => {
+      const w = world();
+      expect(await runSetupCommand(['--yes', '--catalog', v], w.io)).toBe(1);
+      const path = join(w.dir, 'answers.json');
+      writeFileSync(path, JSON.stringify({ catalog: v }));
+      expect(await runSetupCommand(['--yes', '--config', path], w.io)).toBe(1);
+      expect(w.out() + w.err()).not.toContain('\u001b[31m');
+      expect(existsSync(w.H)).toBe(false);
+    });
+  }
+
+  it('a hosted catalog\'s address is kept and the summary points to login', async () => {
+    const w = world();
+    expect(await runSetupCommand(['--yes', '--catalog', 'https://catalog.example/team'], w.io)).toBe(0);
+    expect(JSON.parse(w.files().config!).catalog).toBe('https://catalog.example/team');
+    expect(w.out()).toContain(S.format(S.setup.catalog_hosted, { catalog: 'https://catalog.example/team' }));
+  });
 });
 
 describe('--dry-run', () => {

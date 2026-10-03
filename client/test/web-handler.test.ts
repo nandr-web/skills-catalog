@@ -4,6 +4,7 @@
 // code once; files by fingerprint sit behind the same guards; every response carries the fixed headers.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { actAs, Words } from '@skills-catalog/core';
 import { checkHttpCase, HTTP_DEVELOPER, HTTP_SEED, httpCases, skillMd as sharedSkillMd } from '@skills-catalog/core/testing/http';
 import { describe, expect, it } from 'vitest';
@@ -63,7 +64,9 @@ function untouched(): AsyncIterable<Buffer> & { read: boolean } {
 
 /** A fixture home with setup's developers (config.json), a seeded catalog, and a handler paired once. */
 async function served(o: { publish?: boolean; config?: Record<string, unknown> | null; env?: Record<string, string> } = {}) {
-  const p = place();
+  // With an environment of its own, the catalog is the default one ($SKILLS_HOME/catalog), where the login may act.
+  const made = place();
+  const p = o.env ? { ...made, catalogDir: join(made.home, 'catalog'), catalogUrl: pathToFileURL(join(made.home, 'catalog')).href } : made;
   await seed(p);
   mkdirSync(p.home, { recursive: true });
   if (o.config !== null) writeFileSync(join(p.home, 'config.json'), JSON.stringify(o.config ?? { me: 'dev1', demo_developers: ['dev2'] }));

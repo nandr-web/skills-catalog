@@ -89,6 +89,22 @@ const MAX_COOLDOWN_S = 365 * 24 * 3600;
 // The assistants setup writes for in this phase.
 const SETUP_TARGETS: readonly string[] = ['claude-code'];
 const isName = (x: unknown) => typeof x === 'string' && ACTOR.test(x);
+
+/** A catalog's place as config.json keeps it (§6): a local folder, as an absolute path or file:///…, or a hosted
+ *  catalog's https://host… address; never a control character (it can't carry a line of its own or a terminal escape
+ *  into what's shown), and an address has no space either. */
+export function isCatalogAddress(x: unknown): x is string {
+  if (typeof x !== 'string' || /[\u0000-\u001f\u007f-\u009f]/.test(x)) return false;
+  if (isAbsolute(x)) return true;
+  if (/\s/.test(x)) return false;
+  if (!x.startsWith('file:///') && !x.startsWith('https://')) return false;
+  try {
+    const u = new URL(x);
+    return u.protocol === 'file:' || (u.protocol === 'https:' && u.hostname !== '');
+  } catch {
+    return false;
+  }
+}
 // A key list config can only narrow: a key the code doesn't hold is named (compared case-sensitively, so it fails closed).
 const narrowed = (x: unknown, held: readonly string[]): Refusal | undefined => {
   if (!isStrings(x)) return 'wrong_shape';
@@ -97,7 +113,7 @@ const narrowed = (x: unknown, held: readonly string[]): Refusal | undefined => {
 };
 export const CONFIG_KEYS: Record<string, (x: unknown, config: Record<string, unknown>) => Refusal | undefined> = {
   hosting: (x) => (typeof x === 'string' && HOSTING.includes(x) ? undefined : 'wrong_shape'),
-  catalog: (x) => (typeof x === 'string' && x !== '' ? undefined : 'wrong_shape'),
+  catalog: (x) => (isCatalogAddress(x) ? undefined : 'wrong_shape'),
   update_policy: policyWhy,
   // A skill's own policy is named by its path in the file, overrides.<name>.
   overrides: (x) => {

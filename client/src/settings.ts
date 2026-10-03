@@ -2,9 +2,9 @@
 // an assistant's MCP config for the server, the person's shell for the CLI.
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { ACTOR } from '@skills-catalog/core';
+import { ACTOR, CatalogError } from '@skills-catalog/core';
 import { readConfig } from './machine/lock.ts';
 
 
@@ -24,6 +24,9 @@ export type Settings = {
   developerSource?: 'env' | 'config' | 'machine';
   /** SKILLS_AS was set to something that isn't a developer's name: every call says so, and nothing is done. */
   developerInvalid: boolean;
+  /** config.json is there but can't be used: who acts and where the catalog is can't be known, so every call names the
+   *  damage (invalid_local_file) and nothing is done; never the login or the default catalog in its place. */
+  configError?: CatalogError;
   /** SKILLS_ASSISTANT_HOME (default: the OS home): the assistant's own files; the user target is <it>/.claude/skills. */
   assistantHome: string;
   /** The project a project install goes into (<it>/.claude/skills): the folder the client was started in. */
@@ -73,27 +76,32 @@ export function machineDeveloper(env: Record<string, string | undefined>): strin
   return ACTOR.test(name) ? name : undefined;
 }
 
-/** config.json as far as settings need it (who acts, where the catalog is); one that can't be read gives nothing here:
- *  every installer call reads it again and names the damage. */
-function configured(home: string): { me?: string; catalog?: string } {
+/** config.json as far as settings need it (who acts, where the catalog is), or why it can't be used. */
+function configured(home: string): { me?: string; catalog?: string; error?: CatalogError } {
   try {
     const c = readConfig(home);
     return { ...(typeof c['me'] === 'string' ? { me: c['me'] } : {}), ...(typeof c['catalog'] === 'string' ? { catalog: c['catalog'] } : {}) };
-  } catch {
-    return {};
+  } catch (e) {
+    if (e instanceof CatalogError) return { error: e };
+    throw e;
   }
 }
 
 export function settingsFrom(env: Record<string, string | undefined>, cwd: string = process.cwd()): Settings {
   const home = resolve(env['SKILLS_HOME'] || join(homedir(), '.skills-catalog'));
   const config = configured(home);
-  const catalog = env['SKILLS_CATALOG'] || config.catalog || pathToFileURL(join(home, 'catalog')).href;
+  // config.json's catalog may be a folder's absolute path (contract §6) or an address.
+  const configCatalog = config.catalog && isAbsolute(config.catalog) ? pathToFileURL(config.catalog).href : config.catalog;
+  const catalog = env['SKILLS_CATALOG'] || configCatalog || pathToFileURL(join(home, 'catalog')).href;
   const as = env['SKILLS_AS'] || undefined;
   const valid = as !== undefined && ACTOR.test(as);   // a developer's name, by the core's rule for a publisher
-  // A local catalog's mocked sign-in: setup's name, else the login. A hosted catalog's is its token, never these.
+  // A local catalog's mocked sign-in: setup's name, else the login. A hosted catalog's is its token, never these. The
+  // login stands in only on the default catalog ($SKILLS_HOME/catalog, this machine's own): on a catalog named elsewhere,
+  // perhaps shared, two people's logins can map to one name, so taking someone's name must be a choice (me or SKILLS_AS).
   const local = catalog.startsWith('file:');
-  const fallback = as !== undefined || !local ? undefined : config.me ? { developer: config.me, developerSource: 'config' as const } : (() => {
-    const m = machineDeveloper(env);
+  const ownCatalog = catalog === pathToFileURL(join(home, 'catalog')).href;
+  const fallback = as !== undefined || !local || config.error ? undefined : config.me ? { developer: config.me, developerSource: 'config' as const } : (() => {
+    const m = ownCatalog ? machineDeveloper(env) : undefined;
     return m ? { developer: m, developerSource: 'machine' as const } : undefined;
   })();
   const activityLog = resolve(env['SKILLS_ACTIVITY_LOG'] || join(home, 'activity.log'));
@@ -104,6 +112,7 @@ export function settingsFrom(env: Record<string, string | undefined>, cwd: strin
     activityLogInHome: dirname(activityLog) === home,
     ...(valid ? { developer: as, developerSource: 'env' as const } : (fallback ?? {})),
     developerInvalid: as !== undefined && !valid,
+    ...(config.error ? { configError: config.error } : {}),
     assistantHome: resolve(env['SKILLS_ASSISTANT_HOME'] || homedir()),
     projectDir: resolve(cwd),
     ...(env['SKILLS_TOKEN'] ? { token: env['SKILLS_TOKEN'] } : {}),

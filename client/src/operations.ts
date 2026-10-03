@@ -135,6 +135,7 @@ export async function perform(ctx: Context, op: string, name: string, args: unkn
   try {
     // SKILLS_AS that isn't a developer's name is a setting to fix, not a call to retry.
     if (settings.developerInvalid) throw new CatalogError('invalid_developer_setting', { setting: 'SKILLS_AS' });
+    if (settings.configError) throw settings.configError;
     ctx.refuse?.(op, args);
     const ran = await run(ctx, op, args);
     ({ target, result } = ran);

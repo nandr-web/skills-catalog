@@ -13,9 +13,9 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import { ACTOR, CatalogError, openCatalog, renderError, Words } from '@skills-catalog/core';
+import { ACTOR, CatalogError, openCatalog, renderError, shellQuote, Words } from '@skills-catalog/core';
 import { readJsonFile } from '../machine/json-file.ts';
-import { CONFIG_KEYS, configWhy, readConfig, type Config } from '../machine/lock.ts';
+import { CONFIG_KEYS, configWhy, isCatalogAddress, readConfig, type Config } from '../machine/lock.ts';
 import { permissiveMode } from '../machine/permissive.ts';
 import { allowRules, mcpEntry } from '../machine/setup-entries.ts';
 import { planSetup, type PlanInput, type SetupPlan } from '../machine/setup-plan.ts';
@@ -87,9 +87,9 @@ export const QUESTIONS: readonly Question[] = [
     parse: (t, c) => {
       const v = t.trim();
       if (!v) throw bad('--catalog', 'empty');
-      if (v.startsWith('https://') || v.startsWith('file:///')) return v;
-      if (/^[a-z][a-z0-9+.-]*:\/\//i.test(v)) throw bad('--catalog', 'not_a_catalog_url');
-      return pathToFileURL(resolve(c.cwd, v.replace(/^~(?=$|\/)/, c.env['HOME'] ?? homedir()))).href;
+      const url = /^[a-z][a-z0-9+.-]*:/i.test(v) ? v : pathToFileURL(resolve(c.cwd, v.replace(/^~(?=$|\/)/, c.env['HOME'] ?? homedir()))).href;
+      if (!isCatalogAddress(url)) throw bad('--catalog', 'not_a_catalog_url');
+      return url;
     },
     fallback: (c) => (typeof c.existing['catalog'] === 'string' ? c.existing['catalog'] : defaultCatalog(c)),
     fromConfig: (k) => k['catalog'],
@@ -437,7 +437,8 @@ async function summary(s: Words, paint: Paint, ran: Awaited<ReturnType<typeof ru
   const out = [paint('ok', `✓ ${done[0]}`), ...done.slice(1)];
   out.push(typeof config['me'] === 'string' ? s.format(w.done_me, { me: config['me'] }) : w.done_me_none);
   if (Array.isArray(config['demo_developers']) && config['demo_developers'].length) out.push(s.format(w.done_demo, { names: config['demo_developers'].join(', ') }));
-  const runnable = `'${ran.plan.run.node}' '${ran.plan.run.script}'`;
+  // Commands the person may paste: each path quoted for the shell (a home folder can hold an apostrophe or a $).
+  const runnable = `${shellQuote(ran.plan.run.node)} ${shellQuote(ran.plan.run.script)}`;
   const folder = ran.plan.places.commandDir;
   const command: Record<CommandOutcome, string> = {
     added: s.format(w.command_added, { path: ran.plan.places.command }),
@@ -458,7 +459,7 @@ async function summary(s: Words, paint: Paint, ran: Awaited<ReturnType<typeof ru
     for (const b of ran.backups) out.push(s.format(w.restore, { file: original(b), backup: b }));
   }
   out.push(s.format(w.node, { node: ran.plan.run.node }));
-  if ((ran.command === 'added' || ran.command === 'same') && !(env['PATH'] ?? '').split(':').some((p) => p && samePath(p, folder))) out.push(paint('attention', `▲ ${s.format(w.command_off_path, { folder })}`));
+  if ((ran.command === 'added' || ran.command === 'same') && !(env['PATH'] ?? '').split(':').some((p) => p && samePath(p, folder))) out.push(paint('attention', `▲ ${s.format(w.command_off_path, { folder: shellQuote(folder) })}`));
   return out;
 }
 

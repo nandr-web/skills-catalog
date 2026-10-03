@@ -1079,7 +1079,7 @@ setup:
   command_added: "- terminal: {path} runs skills-catalog"
   command_taken: "- terminal: {path} is already there and isn't setup's, so setup left it. To run this copy: {runnable}"
   command_unsafe: "- terminal: others on this machine can change {folder}, so setup didn't put the skills-catalog command there. To run it: {runnable}"
-  command_off_path: "{folder} isn't on your PATH, so a terminal won't find skills-catalog yet. Add this line to your shell's startup file (for zsh, ~/.zshrc), then open a new terminal: export PATH=\"{folder}:$PATH\""
+  command_off_path: "{folder} isn't on your PATH, so a terminal won't find skills-catalog yet. Add this line to your shell's startup file (for zsh, ~/.zshrc), then open a new terminal: export PATH={folder}:\"$PATH\""
   command_none: "- terminal: no command added; to run skills-catalog: {runnable}"
   handoff_prompt: "Set up our team's Skills Catalog on this machine: run `${cli} setup` and ask me the questions it prints."
   handoff_prompt_fast: "Set up our team's Skills Catalog on this machine with the defaults: run `${cli} setup --yes`."
