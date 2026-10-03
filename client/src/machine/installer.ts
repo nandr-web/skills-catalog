@@ -579,7 +579,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   const version = req.version ?? v.latest;
   const dest = checkTarget(ctx, target, req.name, lock);
   // A skills folder made by this install isn't watched by a session that started before it (review F3).
-  const newFolder = !existsSync(skillsDir(ctx, target));
+  const newFolder = unwatched(ctx, skillsDir(ctx, target));
   const existing = lock.skills[dest];
   const to = await fetchListed(catalog, req.name, v, version);
   const w = s.word('install');
@@ -771,7 +771,7 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const v = await allVersions(catalog, req.name);
   if (v.latest !== t.latest) throw conflict();
   const dest = checkTarget(ctx, t.target, req.name, lock);
-  const newFolder = !existsSync(skillsDir(ctx, t.target));
+  const newFolder = unwatched(ctx, skillsDir(ctx, t.target));
   const existing = lock.skills[dest];
   const to = await fetchListed(catalog, req.name, v, t.version);
   if (to.fingerprint !== t.fingerprint) throw conflict();
@@ -795,6 +795,18 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const policy = policyOf(entry, config);
   const view: InstallView = { kind: 'install', name: req.name, version: to.version, done: { path: dest, policy_words: policyWords(s, policy), ...(existing ? { from: existing.version } : {}), latest: t.latest, older: !existing && to.version < t.latest && policy.policy === 'auto', new_folder: newFolder, ...(written.kept !== undefined ? { kept: written.kept } : {}) } };
   return { text, target: `${req.name} v${to.version}`, result: logWords(s).result('accept'), outcome: existing ? 'updated' : 'installed', view };
+}
+
+/** A skills folder the running assistant session isn't watching yet: missing, or made since this process started (the
+ *  MCP server starts with the session, so a folder an earlier install made in the same session counts; review F3, the
+ *  B validator). A file system that keeps no birth time gives 0, read as a folder from before. */
+function unwatched(ctx: Context, dir: string): boolean {
+  if (!existsSync(dir)) return true;
+  try {
+    return statSync(dir).birthtimeMs > (ctx.sessionStart ?? performance.timeOrigin);
+  } catch {
+    return false;
+  }
 }
 
 /** How to use a skill just installed in this session: at once, or, in a skills folder made just now, after /reload-skills

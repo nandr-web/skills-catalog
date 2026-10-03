@@ -340,15 +340,20 @@ describe('files that aren\'t instructions', () => {
 });
 
 describe('using a skill just installed, in this session (review F3)', () => {
-  it('a skills folder made by the install: /reload-skills; one already there: use it now', async () => {
+  it('a skills folder made by the install, or by an earlier one this session: /reload-skills; one there before the session: use it now', async () => {
     const p = place();
     await seed(p);
     const ctx = ctxFor(p);
     const first = await perform(ctx, 'install_shared_skill', 'install_shared_skill', { name: 'sql-migration-helper' });
     expect(first.text).toContain('/reload-skills');
+    // The folder the first install made is still new to this session (the B validator: it said "use it now").
     const second = await perform(ctx, 'install_shared_skill', 'install_shared_skill', { name: 'demo-skill-01' });
-    expect(second.text).toContain(S.format(S.word('install.live'), { name: 'demo-skill-01' }));
-    expect(second.text).not.toContain('/reload-skills');
+    expect(second.text).toContain('/reload-skills');
+    // A session that began after the folder was made watches it.
+    const later = { ...ctx, sessionStart: Date.now() + 60_000 };
+    const third = await perform(later, 'install_shared_skill', 'install_shared_skill', { name: 'demo-skill-02' });
+    expect(third.text).toContain(S.format(S.word('install.live'), { name: 'demo-skill-02' }));
+    expect(third.text).not.toContain('/reload-skills');
   });
 });
 
