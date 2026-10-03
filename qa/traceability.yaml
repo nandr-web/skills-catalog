@@ -17,7 +17,6 @@ requirements:
     phase: 1
     text: "A developer publishes a skill (manifest + supporting files); it is available to others, complete."
     oracles: [round-trip, same-result-every-face, two-step-publish]
-    tests: [core/test/catalog.test.ts, client/test/publish.test.ts, client/test/publish-steps.test.ts, client/test/publish-folder.test.ts, client/test/cli-publish.test.ts]
     checks:
       - {layer: storage, name: publish_version then fetch_version equals the fixture, golden: skills.valid, auto: true}
       - {layer: interface, name: publish_skill_to_catalog through CLI and MCP gives the same fingerprint, golden: skills.valid, auto: true}
@@ -39,7 +38,6 @@ requirements:
     phase: 1
     text: "Right after publishing, the skill can be found; after a new version, search shows its new description."
     oracles: [discoverable]
-    tests: [core/test/catalog.test.ts, core/test/index-skill.test.ts, core/test/discovery.test.ts]
     checks:
       - {layer: storage, name: search finds a skill right after publish_version (the index listens to version_published), auto: true}
       - {layer: interface, name: the card shows the latest description after a new version, golden: histories.prc, auto: true}
@@ -51,7 +49,6 @@ requirements:
     phase: 1
     text: "A skill missing a name, description or body is rejected with an explanation; nothing partial is stored."
     oracles: [all-or-nothing]
-    tests: [core/test/catalog.test.ts, core/test/golden-rules.test.ts, core/test/skill-tree.test.ts, core/test/replies.test.ts]
     checks:
       - {layer: unit, name: manifest validation table, golden: skills.invalid, auto: true}
       - {layer: storage, name: logical snapshot unchanged after each invalid publish, golden: skills.invalid, auto: true}
@@ -74,7 +71,6 @@ requirements:
     phase: 1
     text: "A suspected secret stops a publish; only the person can override it (a CLI flag, not in MCP); ignored files are never sent."
     oracles: [secrets-stop-a-publish, stays-in-the-skill-folder]
-    tests: [core/test/secret-scan.test.ts, client/test/publish-folder.test.ts]
     checks:
       - {layer: interface, name: secret_suspected with path and line; the ignore list skipped and reported; the MCP schema has no override, golden: skills.hostile, auto: true}
       - {layer: interface, name: "secret_suspected's text never repeats the secret's value (nor the sentinel)", golden: skills.hostile, auto: true}
@@ -90,7 +86,6 @@ requirements:
     phase: 1
     text: "Through an AI assistant, in natural language, a developer finds skills matching a need; each result has a name and description."
     oracles: [found, through-the-assistant]
-    tests: [core/test/discovery.test.ts, client/test/mcp.test.ts, client/test/cli-commands.test.ts]
     checks:
       - {layer: interface, name: "search recall@5 = 1.0 on the must-pass set for the adapter's mode (keyword-gate-any for any-word, the contract's) and on each semantic-gap reformulation", golden: queries.keyword-gate-any, auto: true}
       - {layer: interface, name: semantic-gap misses reported (not pass/fail) so a later semantic search shows its gain, golden: queries.semantic-gap-any, auto: true}
@@ -105,7 +100,6 @@ requirements:
     phase: 1
     text: "When nothing matches, the assistant clearly says so."
     oracles: [nothing-matches]
-    tests: [core/test/discovery.test.ts, client/test/replies.test.ts]
     checks:
       - {layer: interface, name: "for each no-match query: match is partial or none, and no card's matched_words covers every content word", golden: queries.no-match, auto: true}
       - {layer: agent, name: "A3 sourdough: says none plainly, invents nothing", golden: agent.A3, auto: true}
@@ -118,7 +112,6 @@ requirements:
     phase: 1
     text: "Search with no words lists skills with filters; read takes several names up to a limit; over a limit is a typed error."
     oracles: [limits-on-reads, found]
-    tests: [core/test/catalog.test.ts, core/test/operation-errors.test.ts]
     checks:
       - {layer: interface, name: "search with no query and each filter (tags, publisher, updated_since) returns exactly the matching fixtures", golden: queries.corpus, auto: true}
       - {layer: interface, name: "tags filter: [docs] returns exactly tagged, tags-deduped, tags-at-limit; [docs, release] only the skills with both; a top-level tags list is never a tag", golden: skills.valid, auto: true}
@@ -134,7 +127,6 @@ requirements:
     phase: 1
     text: "Through an AI assistant, a developer retrieves a named skill, complete and unchanged."
     oracles: [round-trip, through-the-assistant]
-    tests: [client/test/installer.test.ts, client/test/install-mcp.test.ts, client/test/round-trip.test.ts]
     checks:
       - {layer: interface, name: "read_shared_skill include: contents equals the fixture's text files", golden: skills.valid, auto: true}
       - {layer: interface, name: "include: files types each file by its bytes (only logo.png is binary); include: contents gives content for every text file, SKILL.md included, encoding back to the exact bytes; never for a binary", golden: skills.valid, auto: true}
@@ -152,7 +144,6 @@ requirements:
     phase: 1
     text: "Retrieving a skill that doesn't exist returns a clear 'not found'."
     oracles: [not-found]
-    tests: [core/test/replies.test.ts, client/test/replies.test.ts, core/test/operation-errors.test.ts]
     checks:
       - {layer: interface, name: "not_found per name on every face, with suggestions by spelling only", golden: skills.missing-names, auto: true}
       - {layer: agent, name: "A5 says not found, installs nothing, invents nothing, offers no search-based closest", golden: agent.A5, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
@@ -163,7 +154,6 @@ requirements:
     phase: 1
     text: "One run: Developer 1 publishes; Developer 2's assistant, asked in plain words, finds and installs the same skill."
     oracles: [round-trip, through-the-assistant]
-    tests: [client/test/end-to-end.test.ts]
     checks:
       - {layer: interface, name: "two machines sharing only the catalog, through the MCP tools: ana previews and publishes ./release-note-draft; bob's server, asked 'is there a skill for writing release notes?', finds it with its description, installs it under his own home, byte for byte; the catalog keeps one v1 by ana (client/test/end-to-end.test.ts)", auto: true}
       - {layer: agent, name: "A16: dev1 publishes (SKILLS_AS=dev1); dev2's assistant finds and installs it; fingerprints equal; results say acting_as dev2", golden: agent.A16, auto: false, automate_by: "the runner's fixture builder for starting files (the runner skips it today)"}
@@ -174,7 +164,6 @@ requirements:
     phase: 1
     text: "Publishing an existing name creates a new version; prior versions are retained; nothing is silently overwritten."
     oracles: [append-only-history, idempotent-republish, nothing-lost]
-    tests: [core/test/catalog.test.ts, core/test/storage.test.ts]
     checks:
       - {layer: storage, name: history steps, golden: histories.h1, auto: true}
       - {layer: storage, name: 20 publishes from separate processes all land; stale expected_latest conflicts, golden: histories.concurrent, auto: true}
@@ -188,7 +177,6 @@ requirements:
     phase: 1
     text: "A developer can see a skill's version history, and the change is visible."
     oracles: [append-only-history, change-is-visible]
-    tests: [core/test/catalog.test.ts, client/test/cli-commands.test.ts]
     checks:
       - {layer: interface, name: list_shared_skill_versions and diff_shared_skill_versions equal the goldens (with risk_flags), golden: histories.h1, auto: true}
       - {layer: agent, name: A8 says what changed, golden: agent.A8, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
@@ -199,7 +187,6 @@ requirements:
     phase: 1
     text: "Retrieve returns the latest version by default; an earlier version when asked."
     oracles: [append-only-history, round-trip]
-    tests: [client/test/installer.test.ts, client/test/install-over.test.ts]
     checks:
       - {layer: storage, name: get and get version k per history step, golden: histories.h1, auto: true}
       - {layer: interface, name: "reading version k also says latest_version, the current latest", golden: histories.h1, auto: true}
@@ -211,7 +198,6 @@ requirements:
     phase: 1
     text: "A malformed update is rejected; existing versions are untouched."
     oracles: [all-or-nothing, append-only-history]
-    tests: [core/test/catalog.test.ts, core/test/golden-rules.test.ts]
     checks:
       - {layer: storage, name: the malformed step in the history, golden: histories.h1, auto: true}
 
@@ -221,7 +207,6 @@ requirements:
     phase: 1
     text: "A retrieved skill is complete and unchanged from what was published."
     oracles: [round-trip]
-    tests: [client/test/round-trip.test.ts, core/test/round-trip-property.test.ts, core/test/skill-tree.test.ts]
     checks:
       - {layer: unit, name: "round-trip property test over generated trees (paths, bytes, modes)", auto: true}
       - {layer: storage, name: round trip on every adapter, golden: skills.valid, auto: true}
@@ -235,7 +220,6 @@ requirements:
     phase: 1
     text: "Discover and retrieve happen through an AI assistant acting on natural-language intent."
     oracles: [through-the-assistant]
-    tests: [client/test/mcp.test.ts, client/test/end-to-end.test.ts]
     checks:
       - {layer: agent, name: every scenario's trace shows a catalog call before the answer, golden: agent.all, auto: true}
 
@@ -245,7 +229,6 @@ requirements:
     phase: 1
     text: "Discovery and retrieval feel interactive within an assistant conversation."
     oracles: [budgets]
-    tests: [client/test/perf-mcp.test.ts, hosted/test/perf-hosted.test.ts]
     checks:
       - {layer: perf, name: "search/read/publish p95 on the 10,000-skill corpus", golden: scale.10k, auto: true}
       - {layer: perf, name: update at session start for 50 skills; initialize answered first, auto: false, automate_by: "a perf pass timing the session-start hook over 50 installed skills, once the hook is built (guided setup)"}
@@ -257,7 +240,6 @@ requirements:
     phase: 1
     text: "Everything in the submission passes its tests; what isn't built is shown as design."
     oracles: [clean-run]
-    tests: [qa/test/docs-truth.test.ts]
     checks:
       - {layer: cleanup, name: "qa run phase1 passes on the submission commit, from a fresh copy of the repo", auto: true}
       - {layer: unit, name: "every phase-1 requirement's checks exist and run; later items are listed as design in the README", auto: true}
@@ -269,7 +251,6 @@ requirements:
     phase: 1
     text: "Automation is reproducible, cleans up after itself and makes no permanent changes."
     oracles: [clean-run]
-    tests: [qa/test/clean-run.test.ts, qa/test/qa-run.test.ts, qa/test/safe-delete.test.ts, qa/test/temp-folders.test.ts]
     checks:
       - {layer: cleanup, name: before/after check (folders and files) equal after every run, auto: true}
       - {layer: cleanup, name: leaky canary makes the check fail, auto: true}
@@ -285,7 +266,6 @@ requirements:
     phase: 1
     text: "No secret variable reaches the assistant under test or any MCP server it starts: both get only an allow-listed environment; the real HOME is the one documented exception (the assistant's sign-in lives there)."
     oracles: [no-secrets-in-the-run]
-    tests: [qa/test/env.test.ts, client/test/child-env.test.ts, core/test/process-env.test.ts]
     checks:
       - {layer: unit, name: "the child environment is exactly the allow-list (PATH, HOME, USER, LOGNAME, SHELL, TMPDIR, LANG, LC_*, TERM, SKILLS_*, QA_*): given a parent with AWS_*, GITHUB_TOKEN, GH_TOKEN, ANTHROPIC_API_KEY, NPM_TOKEN, SSH_AUTH_SOCK and an ordinary-named MY_NOTES carrying markers, none is kept", auto: true}
       - {layer: cleanup, name: "a fake assistant and the MCP server started from the run's own mcp.json each record their environment: no planted marker, and only allow-listed names", auto: true}
@@ -303,7 +283,6 @@ requirements:
     phase: 1
     text: "Everything is agent-first, with an MCP and/or skill; the agent-level experience is QA'd first and constantly."
     oracles: [through-the-assistant, same-result-every-face, budgets]
-    tests: [client/test/operations-seam.test.ts, core/test/api.test.ts, qa/test/agent-runner.test.ts]
     checks:
       - {layer: agent, name: access matrix (MCP / MCP + skill / skill + CLI) per scenario, golden: agent.all, auto: true}
       - {layer: interface, name: every phase-1 operation marked MCP is in tools/list; the server sends its instructions; the companion skill names only real tools, auto: true}
@@ -318,7 +297,6 @@ requirements:
     phase: 1
     text: "The interface and contracts don't couple to a storage choice; agents search and read with progressive disclosure."
     oracles: [same-result-every-face, round-trip, budgets]
-    tests: [core/test/catalog.test.ts, hosted/test/shared.test.ts, hosted/test/remote-client.test.ts]
     checks:
       - {layer: storage, name: "one suite unchanged on every adapter (SQLite + folder now; others plug in later)", auto: true}
       - {layer: agent, name: "A11 finds a skill in a 10,000-skill catalog within the tool-result budget", golden: agent.A11, auto: false, automate_by: "the runner seeding its starting catalog through publish (the runner skips it today)"}
@@ -330,7 +308,6 @@ requirements:
     phase: 1
     text: "Auto-updates are on by default, global and overridable per skill; an update that raises a risk flag stops and shows it."
     oracles: [update-gate, local-edits-replaced]
-    tests: [core/test/risky-updates.test.ts, client/test/installer.test.ts, client/test/held-table.test.ts, client/test/permissive.test.ts, client/test/hook.test.ts]
     checks:
       - {layer: unit, name: held-update table, golden: policy.table, auto: true}
       - {layer: interface, name: "a damaged lock.json or config.json (not JSON, a wrong type anywhere, a policy outside auto/notify/pin) makes install, update, accept, list, set policy and setup refuse with invalid_local_file {file, why, path}; the file stays byte-identical and its contents never show; a mistyped pin never updates; teardown still runs and the session-start hook prints one fixed line (policy.yaml local_files)", golden: policy.table, auto: true}
@@ -382,7 +359,6 @@ requirements:
     phase: 1
     text: "A built-in rules reviewer flags scripts, tool grants, a publisher change, prompt-injection patterns and context cost; findings are grounded; a clean skill gets none."
     oracles: [reviews-grounded-and-quiet]
-    tests: [core/test/rules-review.test.ts, core/test/reviewer.test.ts, client/test/review-holds.test.ts, client/test/person-review.test.ts]
     checks:
       - {layer: unit, name: "every flagged fixture gets exactly its expected findings, each grounded (path, line, evidence on that line)", golden: skills.flagged, auto: true}
       - {layer: unit, name: "every valid fixture gets a review with no findings", golden: skills.valid, auto: true}
@@ -401,7 +377,6 @@ requirements:
     phase: 1
     text: "Locally, in the core: the first publisher owns a name; anyone else's publish gets not_owner and stores nothing; the recorded publisher is the acting identity."
     oracles: [only-owners-publish]
-    tests: [core/test/storage.test.ts, client/test/publish.test.ts]
     checks:
       - {layer: storage, name: "publish as dev2 of dev1's skill gives not_owner {owners}, preview included; the snapshot (rows and blobs) is unchanged", golden: histories.owner, auto: true}
       - {layer: interface, name: "every version's publisher equals the acting identity, never a field in the request", golden: histories.owner, auto: true}
@@ -412,7 +387,6 @@ requirements:
     phase: 1
     text: "Without sign-in, a person picks who they act as (flag, setting or MCP config); every result says who; the CLI shows one discreet demo line."
     oracles: [demo-identity]
-    tests: [client/test/identity.test.ts]
     checks:
       - {layer: interface, name: "--as, SKILLS_AS and the MCP server's config each set acting_as; every result carries it", auto: true}
       - {layer: interface, name: "the CLI prints exactly one line '(Acting as <developer>, for demo purposes.)', last, after every result and every error, and none in --json output", auto: true}
@@ -425,7 +399,6 @@ requirements:
     phase: 1
     text: "It runs on a reviewer's machine from a very simple, visual README: an architecture diagram, one command with a guided setup, links to other documents."
     oracles: [readme-walk]
-    tests: [client/test/readme-install.test.ts]
     checks:
       - {layer: setup, name: README quickstart run word for word in a fresh home (npm prefix and caches in the sandbox), auto: true}
       - {layer: setup, name: "README lint: exactly one quickstart command; an architecture diagram that renders (light and dark); every link resolves", auto: true}
@@ -436,7 +409,6 @@ requirements:
     phase: 1
     text: "The guided setup runs everything locally by default (hosting: local) and offers AWS, off by default; phase 1 needs nothing outside the machine."
     oracles: [local-by-default]
-    tests: [client/test/setup-command.test.ts]
     checks:
       - {layer: setup, name: "setup with every default writes hosting: local and a local catalog, and never reads a sentinel AWS profile", auto: true}
       - {layer: cleanup, name: "the whole phase-1 run passes with the network to AWS blocked", auto: true}
@@ -447,7 +419,6 @@ requirements:
     phase: 1
     text: "Setup through a guided CLI, or by an assistant from the setup skill or the setup doc; welcoming and colourful; asks about auto-updates, default yes."
     oracles: [setup-one-config, teardown-restores]
-    tests: [client/test/setup-command.test.ts, client/test/setup-run.test.ts, client/test/setup-entries.test.ts, client/test/teardown.test.ts]
     checks:
       - {layer: setup, name: "wizard through a pseudo-terminal: Enter at the auto-update prompt means yes; AWS prompt defaults to no", auto: true}
       - {layer: setup, name: "setup writes only its own entries (one MCP server in .claude.json, one SessionStart group and the 8 allow rules in settings.json) byte for byte by the agreed layout, keeps every other byte, backs each changed file up (two kept), refuses a link, an unusable or foreign file, a race it can't win, sudo, a folder that isn't private, an unsafe install folder and CLAUDE_CONFIG_DIR without SKILLS_ASSISTANT_HOME, changing nothing; teardown gives the input back byte for byte and leaves what the person changed; the hook exits 0 within 2.5 s and never opens the transcript; claude is never started (golden/setup.yaml)", auto: true}
@@ -471,7 +442,6 @@ requirements:
     phase: 1
     text: "Unattended setup via CLI, passing all configuration or a file; the setting can be changed later by CLI or file."
     oracles: [setup-one-config]
-    tests: [client/test/setup-command.test.ts]
     checks:
       - {layer: setup, name: "--config gives the same config as the wizard with the same answers; closed stdin never waits", auto: true}
       - {layer: setup, name: "no terminal and no --yes/--config: prints every question with its flag and the --yes line, exits 3, changes nothing (before/after check)", auto: true}
@@ -524,7 +494,6 @@ requirements:
     phase: 2
     text: "The client counts how it's used (searches that find nothing, installs, updates applied, updates held by reason with how long each waits for a yes, held updates declined or never taken), keeps the counts on the machine and summarises them on request."
     oracles: [activity-log, clean-run]
-    tests: [client/test/usage.test.ts, client/test/usage-stats.test.ts, client/test/usage-use.test.ts, client/test/usage-installer.test.ts, client/test/cli-stats.test.ts]
     checks:
       - {layer: interface, name: "a scripted sequence (a search with no match, a partial one, an install, an update applied, one held and taken later with the injected clock, one held and declined) gives exactly the expected counts and wait times in skills-catalog stats", auto: true}
       - {layer: interface, name: "the counts live under $SKILLS_HOME only and follow the activity log's rules: a sentinel planted in a query, a skill's text and a publish message never appears in them", auto: true}
@@ -537,7 +506,6 @@ requirements:
     phase: aws
     text: "Deploys into the owner's AWS account, optional and off by default."
     oracles: [clean-run, same-result-every-face, budgets]
-    tests: [infra/test/deploy.test.ts, infra/test/snapshot.test.ts, infra/test/nag.test.ts]
     checks:
       - {layer: web, name: CDK assertions and cdk-nag, auto: true}
       - {layer: storage, name: "the suite on moto every change and on a throwaway stack on request, destroyed after", auto: true}
@@ -549,7 +517,6 @@ requirements:
     phase: aws
     text: "On the hosted catalog, a read without a valid sign-in or token is refused; every signed-in person can read."
     oracles: [only-owners-publish]
-    tests: [hosted/test/api-who.test.ts, hosted/test/tokens.test.ts]
     checks:
       - {layer: web, name: no or revoked token gives 401; a signed-in read works (the web plan), auto: true}
 
@@ -628,3 +595,76 @@ requirements:
     oracles: [round-trip]
     checks:
       - {layer: setup, name: "from each of the four assistants, a developer finds, installs and updates a skill (setup writes or prints its MCP entry)", auto: true}
+
+# Each requirement item and the test files that hold it: the requirements page says "built" from these (a file must have
+# a test that runs). not_yet says, in words, what of the item isn't built yet; it can only lower its status. An item not
+# listed here has no tests yet: not built.
+items:
+  skill-agent-first:
+    tests: [client/test/operations-seam.test.ts, core/test/api.test.ts, client/test/mcp.test.ts]
+  skill-agent-qa:
+    tests: [qa/test/agent-runner.test.ts, qa/test/scorer.test.ts, qa/test/person-eval.test.ts]
+    not_yet: "the agent-level runs aren't scheduled (each spends money on a real Claude login), and 17 agent checks are still manual: the runner can't seed its starting catalog yet"
+  skill-assistant-access:
+    tests: [client/test/mcp.test.ts, client/test/end-to-end.test.ts]
+  skill-auto-updates:
+    tests: [core/test/risky-updates.test.ts, client/test/installer.test.ts, client/test/held-table.test.ts, client/test/permissive.test.ts]
+  skill-backend-neutral:
+    tests: [core/test/catalog.test.ts, hosted/test/shared.test.ts, hosted/test/remote-client.test.ts]
+  skill-demo-identity:
+    tests: [client/test/identity.test.ts]
+  skill-discover:
+    tests: [core/test/discovery.test.ts, client/test/mcp.test.ts, client/test/cli-commands.test.ts, client/test/replies.test.ts]
+  skill-end-to-end:
+    tests: [client/test/end-to-end.test.ts]
+  skill-hold-every-assistant:
+    tests: [client/test/held-table.test.ts, client/test/hook.test.ts]
+  skill-list-get:
+    tests: [core/test/catalog.test.ts, core/test/operation-errors.test.ts]
+  skill-local-default:
+    tests: [client/test/setup-command.test.ts]
+  skill-owner-only-publish:
+    tests: [core/test/storage.test.ts, client/test/publish.test.ts]
+  skill-publish:
+    tests: [core/test/catalog.test.ts, core/test/golden-rules.test.ts, core/test/secret-scan.test.ts, client/test/publish.test.ts, client/test/publish-steps.test.ts, client/test/publish-folder.test.ts, client/test/cli-publish.test.ts]
+  skill-qa-first:
+    tests: [qa/test/clean-run.test.ts, qa/test/qa-run.test.ts, qa/test/safe-delete.test.ts, qa/test/temp-folders.test.ts, qa/test/env.test.ts]
+  skill-quality-reviews:
+    tests: [core/test/reviewer.test.ts, core/test/rules-review.test.ts]
+    not_yet: "the pluggable agent reviewers (phase 2) aren't built; the rules reviewer is"
+  skill-readme-run:
+    tests: [client/test/readme-install.test.ts]
+  skill-readme-visual:
+    tests: [client/test/readme-install.test.ts]
+  skill-responsive:
+    tests: [client/test/perf-mcp.test.ts, hosted/test/perf-hosted.test.ts]
+  skill-retrieve:
+    tests: [client/test/installer.test.ts, client/test/install-mcp.test.ts, client/test/round-trip.test.ts, core/test/replies.test.ts]
+  skill-review-flags:
+    tests: [core/test/rules-review.test.ts, client/test/review-holds.test.ts, client/test/person-review.test.ts]
+  skill-reviewer-tenet:
+    tests: [core/test/reviewer.test.ts, core/test/rules-review.test.ts]
+  skill-scale-plan:
+    tests: [client/test/perf-mcp.test.ts]
+    not_yet: "the 10,000-skill search budget is measured by npm run perf in core/, not by a test"
+  skill-search-measure:
+    tests: [core/test/discovery.test.ts]
+    not_yet: "each run keeps its recall scores (npm run search-score in core/); tokens per discovery and first-query time aren't kept per run yet"
+  skill-setup-by-agent:
+    tests: [client/test/setup-command.test.ts]
+  skill-setup-unattended:
+    tests: [client/test/setup-command.test.ts]
+  skill-setup-welcome:
+    tests: [client/test/setup-command.test.ts, client/test/setup-run.test.ts, client/test/setup-entries.test.ts, client/test/teardown.test.ts]
+  skill-signed-in-read:
+    tests: [hosted/test/api-who.test.ts, hosted/test/tokens.test.ts]
+  skill-time-box:
+    tests: [qa/test/docs-truth.test.ts, qa/test/trace-check.test.ts]
+  skill-unchanged:
+    tests: [client/test/round-trip.test.ts, core/test/round-trip-property.test.ts, core/test/skill-tree.test.ts]
+  skill-usage-metrics:
+    tests: [client/test/usage.test.ts, client/test/usage-stats.test.ts, client/test/usage-use.test.ts, client/test/usage-installer.test.ts, client/test/cli-stats.test.ts]
+  skill-versions:
+    tests: [core/test/catalog.test.ts, core/test/storage.test.ts, client/test/cli-commands.test.ts, client/test/install-over.test.ts]
+  skill-web-aws:
+    tests: [infra/test/deploy.test.ts, infra/test/snapshot.test.ts, infra/test/nag.test.ts]
