@@ -190,3 +190,28 @@ describe('the update view: only real questions in the box', () => {
     expect(shown).not.toMatch(/✓ sql-migration-helper/);
   });
 });
+
+// The diff view: a grant in words without its field name, said once, and a long change cut with a way to the rest
+// (review V3.3, V3.8).
+describe('the diff view, as the person reads it', () => {
+  it('a new pre-approved tool is said once, in words; a long file shows 40 lines and how to see the rest', async () => {
+    const p = place();
+    const { open, request, skillMd } = await import('./seed.ts');
+    const { actAs } = await import('@skills-catalog/core');
+    const c = await open(p);
+    const long = Array.from({ length: 120 }, (_, i) => `line ${i}`).join('\n') + '\n';
+    await c.publish(request('tool-user', [{ path: 'SKILL.md', text: skillMd('tool-user', 'Uses tools.') }, { path: 'notes.md', text: 'short\n' }]), actAs('ana'));
+    await c.publish(request('tool-user', [{ path: 'SKILL.md', text: '---\nname: tool-user\ndescription: Uses tools.\nallowed-tools: Bash\n---\nBody.\n' }, { path: 'notes.md', text: long }]), actAs('ana'));
+    await c.close?.();
+    const a = await perform(ctxFor(p), 'diff_shared_skill_versions', 'diff_shared_skill_versions', { name: 'tool-user', from: 1, to: 2 });
+    const v = views(a, 'diff_shared_skill_versions', { name: 'tool-user', from: 1, to: 2 });
+    for (const [medium, shown] of Object.entries(v)) {
+      expect(shown, medium).toContain('it now lets the skill use Bash without asking');
+      // Our words never name the field (the publisher's own changed lines below may).
+      expect(shown, medium).not.toMatch(/^\s*(•|-|>\s*-) .*allowed-tools/m);
+      expect(shown, medium).toMatch(/more lines/);
+      expect(shown, medium).not.toContain('line 100');
+    }
+    expect(v.terminal).toContain('diff tool-user --from 1 --to 2');
+  });
+});

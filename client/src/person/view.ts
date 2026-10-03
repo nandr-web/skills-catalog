@@ -166,13 +166,27 @@ function versions({ say, m }: Ctx, r: VersionsResult): string {
   return out.join('\n');
 }
 
+// The most lines of one file's change a view shows; the rest is a command away (review V3.3).
+const DIFF_LINES = 40;
+
+/** A risk flag's reason as the person reads it: a grant in the front matter in words, without the field's name. */
+function personReason(s: Words, say: Ctx['say'], f: DiffResult['risk_flags'][number]): string {
+  if (f.kind === 'capability_frontmatter' && f.field === 'allowed-tools') {
+    const v = (x: unknown) => (x === null || x === undefined ? say('diff.none') : Array.isArray(x) ? x.map(String).join(', ') : String(x));
+    const how = f.from === null ? 'added' : f.to === null ? 'removed' : 'changed';
+    return say(`diff.tools.${how}`, { from: flagText(v(f.from)), to: flagText(v(f.to)) });
+  }
+  return reasons(s, [f]);
+}
+
 function diff({ s, say, m }: Ctx, r: DiffResult): string {
   const { paint } = m;
   const at = { name: r.name, from: r.from, to: r.to };
   if (r.files.length === 0 && !r.publisher_changed) return say('diff.same', at);
   const out = [paint('bold', say('diff.header', { ...at, n: r.files.length })), ''];
   const bullet = m.kind === 'terminal' ? '  • ' : '- ';
-  if (r.risk_flags.length) out.push(...m.callout([paint('attention', paint('bold', `${MARK.attention} ${say('diff.runs')}`)), ...r.risk_flags.map((f) => bullet + reasons(s, [f]))]), '');
+  const why = [...new Set(r.risk_flags.map((f) => personReason(s, say, f)))];
+  if (why.length) out.push(...m.callout([paint('attention', paint('bold', `${MARK.attention} ${say('diff.runs')}`)), ...why.map((w) => bullet + w)]), '');
   else out.push(`${paint('ok', MARK.ok)} ${say('diff.runs_no')}`, '');
   const tone = { added: 'added', changed: 'bold', removed: 'removed' } as const;
   const rows = r.files.map((f) => {
@@ -180,17 +194,21 @@ function diff({ s, say, m }: Ctx, r: DiffResult): string {
     return [paint(tone[f.status], say(`diff.status.${f.status}`)), m.text(flagText(f.path)), kind ? paint(f.flags.binary ? 'dim' : 'attention', say(`diff.kind.${kind}`)) : ''];
   });
   out.push(...m.table(header(say, 'diff.columns'), rows));
-  const show = (v: unknown) => (v === null ? '-' : flagText(Array.isArray(v) ? v.map(String).join(', ') : typeof v === 'object' ? JSON.stringify(v) : String(v)));
-  for (const c of r.frontmatter_changes) out.push(`${bullet}${m.text(say('diff.frontmatter', { field: flagText(c.field), from: show(c.from), to: show(c.to) }))}`);
+  const show = (v: unknown) => (v === null ? say('diff.none') : flagText(Array.isArray(v) ? v.map(String).join(', ') : typeof v === 'object' ? JSON.stringify(v) : String(v)));
+  // A field the box already explains isn't repeated under the table (review V3.8).
+  const explained = new Set(r.risk_flags.filter((f) => f.kind === 'capability_frontmatter').map((f) => f.field));
+  for (const c of r.frontmatter_changes.filter((c) => !explained.has(c.field))) out.push(`${bullet}${m.text(say('diff.frontmatter', { field: flagText(c.field), from: show(c.from), to: show(c.to) }))}`);
   const publisher = r.risk_flags.find((f) => f.kind === 'new_publisher');
   if (publisher) out.push(`${bullet}${m.text(say('diff.publisher', { from: flagText(String(publisher.from)), to: flagText(String(publisher.to)) }))}`);
   // The changed lines are the publishers' text, apart from ours; in a terminal coloured by + and -.
   for (const f of r.files.filter((x) => x.unified)) {
-    const text = fenced(f.unified!.trimEnd());
+    const all = fenced(f.unified!.trimEnd()).split('\n');
+    const text = all.slice(0, DIFF_LINES).join('\n');
     const shown = m.kind === 'terminal'
       ? text.split('\n').map((l) => (l.startsWith('+') && !l.startsWith('+++') ? paint('added', l) : l.startsWith('-') && !l.startsWith('---') ? paint('removed', l) : l.startsWith('@@') ? paint('newer', l) : paint('dim', l))).join('\n')
       : text;
     out.push('', ...m.quoted(shown, 'diff'));
+    if (all.length > DIFF_LINES) out.push(paint('dim', say(m.commands ? 'diff.more_lines' : 'diff.more_lines_reply', { ...at, n: all.length - DIFF_LINES })));
   }
   return out.join('\n');
 }

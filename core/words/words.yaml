@@ -997,6 +997,13 @@ results:
         script: a script
         binary: binary, not shown
       frontmatter: "front matter {field}: {from} → {to}"
+      none: none
+      more_lines: "… {n} more lines. The whole change: ${cli} diff {name} --from {from} --to {to}"
+      more_lines_reply: "… {n} more lines not shown here."
+      tools:
+        added: it now lets the skill use {to} without asking
+        changed: "it changes what the skill may use without asking: {from} → {to}"
+        removed: it no longer lets the skill use {from} without asking
       publisher: "publisher: {from} → {to}"
       same: "{name} v{from} and v{to} have the same content."
     update:
