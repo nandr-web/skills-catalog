@@ -32,6 +32,7 @@ Node 24.15 or later. From this folder:
 | `node src/cli.ts trace-check` | Every requirement in `../requirements/` has an automated check, and every golden reference resolves |
 | `node src/cli.ts scrub-trace <trace.jsonl>` | Replaces the home folder, the sandbox path and session ids in a trace, before it becomes a test fixture |
 | `npm run demo` | The one-click demo: two developers share skills in one terminal window, step by step (below) |
+| `npm run map` | Checks the system map (`../docs/map/map.yaml`) against the code, then builds its page (`../docs/map/index.html`) and pictures (`../docs/pictures/map-*.svg`); `npm run check` fails while they're stale or disagree |
 
 Live checks with a real assistant run only when you ask: `QA_LIVE=1 npx vitest run test/agent-live.test.ts`.
 The check of `qa run` on the real machine is a script, run by hand: `node test/live/qa-run-real.ts`.
@@ -151,7 +152,7 @@ Exit codes of `qa run`: the command's own code, `2` something was left behind, `
 |---|---|
 | `golden/` | Hand-written expected results: skills, histories, queries, held updates' cases, the assistant scenarios, answer phrasings |
 | `traceability.yaml` | Each requirement, its oracle and its checks |
-| `src/` | The tools: `run`, `janitor`, `check` (before/after), `sandbox`, `safe-delete`, `agent/` (the scenario runner and its scorer) |
+| `src/` | The tools: `run`, `janitor`, `check` (before/after), `sandbox`, `safe-delete`, `agent/` (the scenario runner and its scorer), `map/` (the system map's check and build, with the diagram renderer vendored as `renderer.js` by `npm run vendor-renderer -- <bundle>`) |
 | `test/` | Their tests; `test/machine.ts` builds the fake machines |
 | `fixtures/traces/` | Recorded, scrubbed assistant traces with hand-written scores |
 | `person-eval/` | What a real assistant shows the person: `run.sh <checkout> <out> [tries] [model]` walks ana's and bob's story with `claude -p` (costs a little); `node score.mjs [--history <file.jsonl>] <out…>` scores bob's answers (tables, marks, a box, one question, words and each ask's ceiling in `ceilings.json`, internal terms, still right) as k/n with 95% intervals, with what the run cost, one column per run; `--history` keeps one line per answer |
