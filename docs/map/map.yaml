@@ -72,6 +72,7 @@ parts:
       - core/src/ports.ts
       - core/src/skill-tree/**
       - core/src/remote/**
+      - core/src/open.ts
     tests: &scTests [client/test/**, core/test/**]
   - id: sc2
     label: skills-catalog
@@ -89,7 +90,7 @@ parts:
     at: [0.5, 3]
     zone: machine
     text: "Every published skill and all its versions, each with its fingerprint and its review. On one machine it is a folder: a SQLite file and the skills' files."
-    code: [core/src/local/**, core/src/catalog.ts, core/src/open.ts, core/src/http/**]
+    code: [core/src/local/**, core/src/catalog.ts, core/src/http/**]
     tests: [core/test/**]
     views:
       aws:
@@ -280,8 +281,8 @@ pages:
         label: operations
         note: one runner, every face
         at: [1, 2]
-        text: "Runs every operation the same way, whichever face asked (the tools, the CLI, serve), with the settings this machine was started with."
-        code: [client/src/operations.ts, client/src/settings.ts]
+        text: "Runs every operation the same way, whichever face asked (the tools, the CLI, serve), with the settings this machine was started with. Opens the catalog SKILLS_CATALOG names: the folder on this machine, or the AWS catalog over HTTPS."
+        code: [client/src/operations.ts, client/src/settings.ts, core/src/open.ts]
         tests: [client/test/operations-seam.test.ts, client/test/operation-errors.test.ts]
       - id: agent-reviewers
         label: agent reviewers
@@ -301,16 +302,9 @@ pages:
         label: installer
         note: install · update · hold
         at: [1, 3]
-        text: "Writes skills into Claude Code's skills folder, keeps the list of what came from where, applies updates by each skill's policy, and holds a risky one for a yes. One writer at a time."
-        code: [client/src/machine/**]
-        tests: [client/test/install*.test.ts, client/test/installer*.test.ts, client/test/lock-*.test.ts, client/test/review-holds.test.ts]
-      - id: usage
-        label: usage
-        note: what holds cost
-        at: [2, 2]
-        text: "Counts what update holds cost the Developer (`skills-catalog stats`), and the demo's activity line."
-        code: [client/src/usage/**, client/src/activity.ts]
-        tests: [client/test/usage*.test.ts, client/test/activity.test.ts]
+        text: "Writes skills into Claude Code's skills folder, keeps the list of what came from where, applies updates by each skill's policy, and holds a risky one for a yes. One writer at a time. It also counts what holds cost the Developer (`skills-catalog stats`)."
+        code: [client/src/machine/**, client/src/usage/**, client/src/activity.ts]
+        tests: [client/test/install*.test.ts, client/test/installer*.test.ts, client/test/lock-*.test.ts, client/test/review-holds.test.ts, client/test/usage*.test.ts]
       - id: api
         label: the API
         note: operations · words
@@ -337,7 +331,7 @@ pages:
       - {from: cc1, to: mcp, label: MCP}
       - {from: dev1, to: cli, label: commands}
       - {from: ops, to: catalog, label: calls, only: [local]}
-      - {from: remote, to: catalog, label: HTTPS, over: HTTPS, only: [aws]}
+      - {from: remote, to: catalog, label: HTTPS, over: HTTPS, via: core/src/remote/index.ts, only: [aws]}
 
   - id: catalog
     parts: [catalog]
@@ -352,28 +346,34 @@ pages:
       - id: catalog-rules
         label: catalog rules
         note: publish · find · fetch
-        at: [1, 1]
-        text: "The catalog's operations over its replaceable parts: who may publish, what a new version is, what search returns. The same rules run in AWS, over other parts."
-        code: [core/src/catalog.ts, core/src/open.ts]
+        at: [2, 1]
+        text: "The catalog's operations over its replaceable parts (storage, search, sign-in, events: it calls them through their interfaces, so no line is drawn to them): who may publish, what a new version is, what search returns. The same rules run in AWS, over other parts."
+        code: [core/src/catalog.ts]
         tests: [core/test/catalog.test.ts, core/test/read-only-open.test.ts]
       - id: http-routes
-        label: HTTP routes
-        note: for serve and AWS
+        label: dispatch · routes
+        note: every operation, every face
         at: [0, 1]
-        text: "The API over HTTP without a server: the routes, who's asking, the answers. `skills-catalog serve` and the AWS function both run it."
+        text: "Runs each operation the one way every face does (the tools, the CLI and serve all go through its dispatch), and the API over HTTP without a server: the routes, who's asking, the answers, which `skills-catalog serve` and the AWS function answer."
         code: [core/src/http/**]
         tests: [core/test/http*.test.ts]
+      - id: local-opener
+        label: opener
+        note: wires the local catalog
+        at: [1, 2]
+        text: "Opens the local catalog: the SQLite file, the files folder, search and the outbox, and the local sign-in, each plugged into the catalog's rules."
+        code: [core/src/local/index.ts]
       - id: records
         label: versions
         kind: store
         note: SQLite
-        at: [1, 2]
+        at: [1, 3]
         text: "Every skill's versions, owners and the latest pointer, in one SQLite file shared by every process on this machine."
-        code: [core/src/local/db.ts, core/src/local/storage.ts, core/src/local/metadata.ts, core/src/local/index.ts]
+        code: [core/src/local/db.ts, core/src/local/storage.ts, core/src/local/metadata.ts]
       - id: local-sign-in
         label: local sign-in
         note: acting as a developer
-        at: [2, 2]
+        at: [0, 2]
         text: "No sign-in on one machine: the Developer acts as a named developer (the computer's login by default), labelled a local sign-in for demo purposes."
         code: [core/src/local/identity.ts]
         tests: [client/test/identity.test.ts]
@@ -389,7 +389,7 @@ pages:
         label: files
         kind: store
         note: a folder, by fingerprint
-        at: [1, 3]
+        at: [2, 3]
         text: "Every file of every version, named by its fingerprint (sha256), written only if absent: a version's files never change."
         code: [core/src/local/blobs.ts]
         tests: [core/test/file*.test.ts]
@@ -397,12 +397,13 @@ pages:
         label: outbox
         kind: queue
         note: events
-        at: [2, 3]
+        at: [2, 2]
         text: "An event saved with each version, in the same transaction, then delivered to search."
         code: [core/src/local/outbox.ts]
     lines:
       - {from: sc1, to: catalog-rules, label: calls}
-      - {from: sc1, to: http-routes, label: serve}
+      - {from: sc1, to: http-routes, label: runs each operation}
+      - {from: sc1, to: local-opener, label: opens}
 
   - id: catalog-aws
     parts: [catalog]
@@ -456,7 +457,7 @@ pages:
         kind: store
         note: S3 · by fingerprint
         at: [2, 4]
-        text: "Every file of every version by its sha256, written only if absent, and the search file the indexer keeps."
+        text: "Every file of every version by its sha256, written only if absent, and the search file: rewritten as each version is published (so search finds it at once) and by the indexer."
         resources: [StorageFiles*]
         code: [hosted/src/blobs.ts]
       - id: sweep
@@ -485,7 +486,7 @@ pages:
         label: alarms
         note: alerts · budget
         at: [0, 6]
-        text: "Guard rails: an alarm when an event is lost or the pipe fails, a monthly budget, and a topic that emails the alerts."
+        text: "Guard rails: an alarm when an event is lost or the pipe fails, a monthly budget, and a topic for the alerts, which emails them when an address is given at the deploy."
         resources: [Guardrails*]
         code: [infra/src/constructs/guardrails.ts]
     lines:

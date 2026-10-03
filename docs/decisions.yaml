@@ -186,7 +186,7 @@ decisions:
           - { id: ddb, label: DynamoDB + S3, sub: on demand; create-only files }
           - { id: pg, label: Postgres + S3, sub: Aurora Serverless v2 }
           - { id: dsql, label: Aurora DSQL + S3, sub: "serverless, Postgres-like" }
-          - { id: vm, label: SQLite + a folder, sub: today's store on one small machine }
+          - { id: vm, label: SQLite on a small machine, sub: today's store, hosted on one machine }
         chosen: ddb
         drivers:
           - name: Cost when idle
@@ -451,7 +451,7 @@ decisions:
         note: "This was weighed on CloudFront's flat-rate Free plan. At the first deploy AWS refused that plan for this stack's web firewall, so CloudFront is pay-as-you-go (B31): the cells about the Free plan are as they were then."
         options:
           - { id: today, label: serve, sub: "127.0.0.1, planned" }
-          - { id: cf, label: CloudFront + S3, sub: pay-as-you-go }
+          - { id: cf, label: CloudFront + S3, sub: "on the flat-rate Free plan, as weighed" }
           - { id: amplify, label: Amplify Hosting, sub: managed builds }
           - { id: compute, label: The compute, sub: the API serves the page too }
         chosen: cf
@@ -487,6 +487,7 @@ decisions:
       - id: whole-shape
         title: "AWS only or portable: the whole shape"
         parts: [ catalog ]
+        note: "The cells name CloudFront's flat-rate Free plan as it was weighed. AWS refused that plan for this stack's web firewall at the first deploy, so CloudFront is pay-as-you-go in both of the stack's setups (B31)."
         options:
           - { id: today, label: Built today, sub: on this machine }
           - { id: a, label: A · AWS serverless, sub: "DynamoDB, S3, Lambda" }

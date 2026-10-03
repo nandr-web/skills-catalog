@@ -167,6 +167,38 @@ ${a.note ? `<p class="aspect-note"><span class="kicker">Since</span> ${rich(a.no
 }
 
 /**
+ * A box's own choice, for a card too narrow for the table: the chosen option first, with what counts for and against
+ * it; each alternative folded, with its tally; what's built today on one machine last. The table, every option side by
+ * side, is on the decisions page.
+ */
+function choiceList(a: Aspect, decisionId: string): string {
+  const chosen = a.options.find((o) => o.id === a.chosen);
+  const facts = (id: string) => a.drivers.map((d) => {
+    const c = d.cells[id];
+    if (!c) return '';
+    const v = c.v ?? '';
+    return `<li${v ? ` class="v-${v}"` : ''}>${v ? `<span class="mark" title="${VERDICT_WORD[v]}" aria-label="${VERDICT_WORD[v]}">${VERDICT[v]}</span> ` : ''}<strong>${esc(d.name)}</strong>: ${esc(c.t)}</li>`;
+  }).join('');
+  const tally = (id: string) => {
+    const n = (v: string) => a.drivers.filter((d) => d.cells[id]?.v === v).length;
+    const parts = [['good', 'for'], ['even', 'neither'], ['poor', 'against'], ['unknown', 'not known']].filter(([v]) => n(v!)).map(([v, w]) => ({ mark: `${VERDICT[v!]}${n(v!)}`, words: `${n(v!)} ${w}` }));
+    return parts.length ? ` <span class="tally" aria-label="${parts.map((p) => p.words).join(', ')}">${parts.map((p) => p.mark).join(' ')}</span>` : '';
+  };
+  const option = (o: Aspect['options'][number], open: boolean, prefix = '') =>
+    `<details class="option${open ? ' picked-option' : ''}"${open ? ' open' : ''}><summary>${open ? '<span class="tag chosen-tag">chosen</span> ' : ''}${prefix}<strong>${esc(o.label)}</strong>${o.sub ? ` <span class="sub">${esc(o.sub)}</span>` : ''}${tally(o.id)}</summary><ul class="facts">${facts(o.id)}</ul></details>`;
+  const others = a.options.filter((o) => o.id !== a.chosen && o.id !== 'today');
+  const today = a.options.find((o) => o.id === 'today');
+  return `<div class="choice"><span class="kicker">The choice</span>
+<p><strong>${esc(a.title)}</strong>: ${chosen ? `<span class="pick">${esc(chosen.label)}</span>, chosen over ${others.map((o) => esc(o.label)).join(', ')}` : 'still open'}</p>
+${a.note ? `<p class="aspect-note"><span class="kicker">Since</span> ${rich(a.note)}</p>` : ''}
+${chosen ? option(chosen, true) : ''}
+${others.map((o) => option(o, false)).join('')}
+${today ? option(today, false, 'Built today: ') : ''}
+<p><a href="decisions.html#decision-${esc(decisionId)}">Every option side by side ›</a></p>
+</div>`;
+}
+
+/**
  * One decision: a line to scan (its number, what was decided, built or not) that opens to the rest: over what, why,
  * who and when, the parts it's about, and the options weighed side by side where there were several.
  */
@@ -272,6 +304,16 @@ section > *, .frame > *, .frame-grid > * { min-width: 0; }
 .choice { display: grid; gap: 4px; border-top: 1px solid var(--line); padding-top: 6px; }
 .choice details.aspect { border-top: 0; padding-top: 0; }
 .pick { font-weight: 700; color: var(--accent); }
+details.option { border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; }
+details.option.picked-option { border: 2px solid var(--accent); background: var(--accent-soft); }
+details.option > summary { cursor: pointer; }
+details.option .sub { color: var(--ink-2); font-size: 13px; }
+.tally { font: 600 12px ${fonts.mono}; color: var(--ink-2); white-space: nowrap; }
+ul.facts { list-style: none; margin: 6px 0 2px; padding: 0; display: grid; gap: 3px; font-size: 14px; }
+ul.facts li { padding: 2px 6px; border-radius: 3px; }
+ul.facts li.v-good { background: var(--accent-soft); }
+ul.facts li.v-poor { background: var(--hot-soft); }
+ul.facts li.v-even, ul.facts li.v-unknown { background: var(--even); }
 .did { font: 600 12px ${fonts.mono}; color: var(--ink-2); }
 .built { font: 600 10.5px ${fonts.mono}; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--line); color: var(--ink-2); }
 .built-built { border-color: var(--accent); color: var(--accent); }
@@ -304,6 +346,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 .legend-line { font-size: 13px; color: var(--ink-2); margin: 6px 0 0; }
 .aspect-note { margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--hot); background: var(--hot-soft); font-size: 14px; }
 .hide-planned .d-map-part--proposed, .hide-planned .d-edge--proposed, .hide-planned .d-edge-label--proposed, .hide-planned .planned-only { display: none; }
+.frame-grid.wide { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 760px) { .frame-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 560px) { body { padding-inline: 16px; font-size: 15px; } .frame { padding: 12px; } }
 `;
@@ -401,6 +444,9 @@ ${opts.script && opts.data ? `<script type="application/json" id="page-data">${j
 `;
 }
 
+/** A drawing wider than a desktop column leaves for it gets the whole width, with its panel under it. */
+const gridClass = (width: number) => (width > 720 ? 'frame-grid wide' : 'frame-grid');
+
 /** A drawing on a page: inline, wrapped so a wide one scrolls sideways and says so. */
 function figure(svg: string, widths: number[], w: number): string {
   const { html, width } = wrapWide(svg);
@@ -436,7 +482,7 @@ async function structurePage(c: Ctx): Promise<string> {
     const svg = drawSystemMap(spec, L, undefined, { mode: 'inline', idPrefix: `structure-${v}${planned ? '-planned' : ''}`, interactive: true, partLinks: true });
     frames.push(`<section class="frame" data-sv="running" data-view="${esc(v)}" data-planned="${planned ? 1 : 0}">
 <h2 class="frame-title">The running parts · ${esc(viewLabel(c.m, v))}${planned ? ' · with what\'s planned' : ''}</h2>
-<div class="frame-grid">${figure(svg, widths, L.width)}
+<div class="${gridClass(L.width)}">${figure(svg, widths, L.width)}
 <aside class="panel" aria-live="polite"><div class="picked" hidden></div>
 <h3>What runs where, and what talks to what.</h3>
 <p>${esc(c.m.views!.find((x) => x.id === v)?.note ?? '')}</p>
@@ -495,7 +541,7 @@ async function partPage(c: Ctx, page: Page): Promise<string> {
     const foundations = page.boxes.filter((b) => b.foundation && inView(b, v));
     return `<section class="frame" data-view="${esc(v)}">
 <h2 class="frame-title">Inside ${esc(title)}${views.length > 1 ? ` · ${esc(viewLabel(c.m, v))}` : ''}</h2>
-<div class="frame-grid">${figure(svg, widths, L.width)}
+<div class="${gridClass(L.width)}">${figure(svg, widths, L.width)}
 <aside class="panel" aria-live="polite"><div class="picked" hidden></div>
 <h3>Click a box for what it is, its code and its decisions.</h3>
 <ul class="legend">
@@ -526,9 +572,9 @@ ${uses.length ? `<p><span class="kicker">Uses</span> ${uses.map(esc).join(', ')}
 ${usedBy.length ? `<p><span class="kicker">Used by</span> ${usedBy.map(esc).join(', ')}</p>` : ''}
 ${b.code?.length ? `<p><span class="kicker">Code</span> ${b.code.map((g) => codeLink(c, g)).join(' ')}</p>` : ''}
 ${b.tests?.length ? `<p><span class="kicker">Tests</span> ${b.tests.map((g) => codeLink(c, g)).join(' ')}</p>` : ''}
-${resources.length ? `<details><summary><span class="kicker">In AWS</span> ${resources.length} resources</summary><ul>${resources.map((r) => `<li><code>${esc(r.id)}</code> ${esc(r.type)}</li>`).join('')}</ul></details>` : ''}
+${resources.length ? `<details><summary><span class="kicker">In AWS</span> ${resources.length} resource${resources.length === 1 ? '' : 's'}</summary><ul>${resources.map((r) => `<li><code>${esc(r.id)}</code> ${esc(r.type)}</li>`).join('')}</ul></details>` : ''}
 ${b.needs?.length ? `<p><span class="kicker">Would be built by</span> ${b.needs.map((r) => `<code>${esc(r)}</code>`).join(' ')}</p>` : ''}
-${about.flatMap(({ aspects }) => aspects).map((a) => `<div class="choice"><span class="kicker">The choice</span>${matrix(a, true)}</div>`).join('\n')}
+${about.flatMap(({ decision, aspects }) => aspects.map((a) => choiceList(a, decision.id))).join('\n')}
 ${about.length ? `<div class="decisions"><span class="kicker">Decisions</span>${about.map(({ decision, aspects }) => decisionCard(c, decision, { aspects: aspects.length ? [] : undefined, chips: false, id: false })).join('\n')}</div>` : ''}
 </article>`);
   }

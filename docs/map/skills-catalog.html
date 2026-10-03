@@ -188,6 +188,16 @@ section > *, .frame > *, .frame-grid > * { min-width: 0; }
 .choice { display: grid; gap: 4px; border-top: 1px solid var(--line); padding-top: 6px; }
 .choice details.aspect { border-top: 0; padding-top: 0; }
 .pick { font-weight: 700; color: var(--accent); }
+details.option { border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; }
+details.option.picked-option { border: 2px solid var(--accent); background: var(--accent-soft); }
+details.option > summary { cursor: pointer; }
+details.option .sub { color: var(--ink-2); font-size: 13px; }
+.tally { font: 600 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--ink-2); white-space: nowrap; }
+ul.facts { list-style: none; margin: 6px 0 2px; padding: 0; display: grid; gap: 3px; font-size: 14px; }
+ul.facts li { padding: 2px 6px; border-radius: 3px; }
+ul.facts li.v-good { background: var(--accent-soft); }
+ul.facts li.v-poor { background: var(--hot-soft); }
+ul.facts li.v-even, ul.facts li.v-unknown { background: var(--even); }
 .did { font: 600 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--ink-2); }
 .built { font: 600 10.5px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--line); color: var(--ink-2); }
 .built-built { border-color: var(--accent); color: var(--accent); }
@@ -220,6 +230,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 .legend-line { font-size: 13px; color: var(--ink-2); margin: 6px 0 0; }
 .aspect-note { margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--hot); background: var(--hot-soft); font-size: 14px; }
 .hide-planned .d-map-part--proposed, .hide-planned .d-edge--proposed, .hide-planned .d-edge-label--proposed, .hide-planned .planned-only { display: none; }
+.frame-grid.wide { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 760px) { .frame-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 560px) { body { padding-inline: 16px; font-size: 15px; } .frame { padding: 12px; } }
 
@@ -245,7 +256,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 </nav>
 <main class="frames"><section class="frame" data-view="local">
 <h2 class="frame-title">Inside skills-catalog · on one machine</h2>
-<div class="frame-grid"><figure class="map-art" style="--w: 755px"><div class="d-scroll"><p class="d-scroll-hint" data-w="755" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 755 853" width="755" height="853" role="group" aria-label="What's inside skills-catalog, and which piece uses which?">
+<div class="frame-grid wide"><figure class="map-art" style="--w: 755px"><div class="d-scroll"><p class="d-scroll-hint" data-w="755" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 755 853" width="755" height="853" role="group" aria-label="What's inside skills-catalog, and which piece uses which?">
 <title>skills-catalog · on one machine</title>
 <defs><marker id="skills-catalog-local-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-local-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-local-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-local-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-local-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-local-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-local-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-local-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
 <rect class="d-group" x="22" y="171.3" width="716.7" height="525.4" rx="6"/>
@@ -255,17 +266,15 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <path class="d-edge" d="M381.1 246.3 L381.1 340.1" marker-end="url(#skills-catalog-local-arrow)"/>
 <path class="d-edge" d="M388.1 246.3 L388.1 279.7 Q388.1 284.7 383.1 284.7 L119.5 284.7 Q114.5 284.7 114.5 289.7 L114.5 340.1" marker-end="url(#skills-catalog-local-arrow)"/>
 <path class="d-edge" d="M469.6 226.8 L568.7 226.8" marker-end="url(#skills-catalog-local-arrow)"/>
-<path class="d-edge" d="M374.1 246.3 L374.1 286.7 Q374.1 291.7 379.1 291.7 L642.7 291.7 Q647.7 291.7 647.7 296.7 L647.7 340.1" marker-end="url(#skills-catalog-local-arrow)"/>
-<path class="d-edge" d="M469.6 520.4 L642.7 520.4 Q647.7 520.4 647.7 515.4 L647.7 393.1" marker-end="url(#skills-catalog-local-arrow)" marker-start="url(#skills-catalog-local-arrow)"/>
-<path class="d-edge" d="M114.5 246.3 L114.5 272.7 Q114.5 277.7 119.5 277.7 L390.1 277.7 Q395.1 277.7 395.1 282.7 L395.1 340.1" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M114.5 246.3 L114.5 286.7 Q114.5 291.7 119.5 291.7 L383.1 291.7 Q388.1 291.7 388.1 296.7 L388.1 340.1" marker-end="url(#skills-catalog-local-arrow)"/>
 <path class="d-edge" d="M121.5 246.3 L121.5 340.1" marker-end="url(#skills-catalog-local-arrow)"/>
 <path class="d-edge" d="M381.1 393.1 L381.1 486.9" marker-end="url(#skills-catalog-local-arrow)"/>
-<path class="d-edge" d="M466.6 366.6 L584.2 366.6" marker-end="url(#skills-catalog-local-arrow)"/>
-<path class="d-edge" d="M568.7 219.8 L528.9 219.8 Q523.9 219.8 523.9 224.8 L523.9 501.4 Q523.9 506.4 518.9 506.4 L469.6 506.4" marker-end="url(#skills-catalog-local-arrow)"/>
-<path class="d-edge" d="M647.7 246.3 L647.7 272.7 Q647.7 277.7 642.7 277.7 L372.1 277.7 Q367.1 277.7 367.1 282.7 L367.1 340.1" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M466.6 366.6 L642.7 366.6 Q647.7 366.6 647.7 371.6 L647.7 633.7" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M654.7 246.3 L654.7 515.4 Q654.7 520.4 649.7 520.4 L469.6 520.4" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M647.7 246.3 L647.7 368.6 Q647.7 373.6 642.7 373.6 L466.6 373.6" marker-end="url(#skills-catalog-local-arrow)"/>
 <path class="d-edge" d="M114.5 99.5 L114.5 193.3" marker-end="url(#skills-catalog-local-arrow)"/>
 <path class="d-edge" d="M381.1 92 L381.1 193.3" marker-end="url(#skills-catalog-local-arrow)"/>
-<path class="d-edge" d="M466.6 373.6 L506.4 373.6 Q511.4 373.6 511.4 378.6 L511.4 802 Q511.4 807 516.4 807 L577.7 807" marker-end="url(#skills-catalog-local-arrow)"/>
+<path class="d-edge" d="M466.6 359.6 L506.4 359.6 Q511.4 359.6 511.4 364.6 L511.4 802 Q511.4 807 516.4 807 L577.7 807" marker-end="url(#skills-catalog-local-arrow)"/>
 <g class="d-map-part" data-part="cc1" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
 <rect class="d-node d-node--external" x="58.5" y="46.5" width="112" height="53" rx="3"/>
 <text class="d-label" x="114.5" y="66">Claude Code</text>
@@ -319,11 +328,6 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <text class="d-label" x="381.1" y="506.4">installer</text>
 <text class="d-note" x="381.1" y="522.4">install · update · hold</text>
 </g>
-<g class="d-map-part" data-part="usage" tabindex="0" role="button" aria-label="usage: what it is, its code and tests">
-<rect class="d-node" x="584.2" y="340.1" width="127" height="53" rx="3"/>
-<text class="d-label" x="647.7" y="359.6">usage</text>
-<text class="d-note" x="647.7" y="375.6">what holds cost</text>
-</g>
 <g class="d-map-part" data-part="api" tabindex="0" role="button" aria-label="the API: what it is, its code and tests">
 <rect class="d-node" x="41.5" y="633.7" width="146" height="53" rx="3"/>
 <text class="d-label" x="114.5" y="653.2">the API</text>
@@ -341,7 +345,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 </g>
 <text class="d-edge-label d-map-label--start" x="121.5" y="146.4">MCP</text>
 <text class="d-edge-label d-map-label--start" x="388.1" y="142.7">commands</text>
-<text class="d-edge-label d-map-label--start" x="518.4" y="590.3">calls</text>
+<text class="d-edge-label d-map-label--start" x="518.4" y="583.3">calls</text>
 </svg></div></div></figure>
 <aside class="panel" aria-live="polite"><div class="picked" hidden></div>
 <h3>Click a box for what it is, its code and its decisions.</h3>
@@ -354,7 +358,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 </aside></div></section>
 <section class="frame" data-view="aws">
 <h2 class="frame-title">Inside skills-catalog · in AWS</h2>
-<div class="frame-grid"><figure class="map-art" style="--w: 755px"><div class="d-scroll"><p class="d-scroll-hint" data-w="755" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 755 853" width="755" height="853" role="group" aria-label="What's inside skills-catalog, and which piece uses which?">
+<div class="frame-grid wide"><figure class="map-art" style="--w: 755px"><div class="d-scroll"><p class="d-scroll-hint" data-w="755" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 755 853" width="755" height="853" role="group" aria-label="What's inside skills-catalog, and which piece uses which?">
 <title>skills-catalog · in AWS</title>
 <defs><marker id="skills-catalog-aws-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-aws-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-aws-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-aws-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-aws-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-aws-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="skills-catalog-aws-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="skills-catalog-aws-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
 <rect class="d-group" x="22" y="171.3" width="716.7" height="525.4" rx="6"/>
@@ -364,14 +368,12 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <path class="d-edge" d="M381.1 246.3 L381.1 340.1" marker-end="url(#skills-catalog-aws-arrow)"/>
 <path class="d-edge" d="M388.1 246.3 L388.1 279.7 Q388.1 284.7 383.1 284.7 L119.5 284.7 Q114.5 284.7 114.5 289.7 L114.5 340.1" marker-end="url(#skills-catalog-aws-arrow)"/>
 <path class="d-edge" d="M469.6 226.8 L568.7 226.8" marker-end="url(#skills-catalog-aws-arrow)"/>
-<path class="d-edge" d="M374.1 246.3 L374.1 286.7 Q374.1 291.7 379.1 291.7 L642.7 291.7 Q647.7 291.7 647.7 296.7 L647.7 340.1" marker-end="url(#skills-catalog-aws-arrow)"/>
-<path class="d-edge" d="M469.6 520.4 L642.7 520.4 Q647.7 520.4 647.7 515.4 L647.7 393.1" marker-end="url(#skills-catalog-aws-arrow)" marker-start="url(#skills-catalog-aws-arrow)"/>
-<path class="d-edge" d="M114.5 246.3 L114.5 272.7 Q114.5 277.7 119.5 277.7 L390.1 277.7 Q395.1 277.7 395.1 282.7 L395.1 340.1" marker-end="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M114.5 246.3 L114.5 286.7 Q114.5 291.7 119.5 291.7 L383.1 291.7 Q388.1 291.7 388.1 296.7 L388.1 340.1" marker-end="url(#skills-catalog-aws-arrow)"/>
 <path class="d-edge" d="M121.5 246.3 L121.5 340.1" marker-end="url(#skills-catalog-aws-arrow)"/>
 <path class="d-edge" d="M381.1 393.1 L381.1 486.9" marker-end="url(#skills-catalog-aws-arrow)"/>
-<path class="d-edge" d="M466.6 366.6 L584.2 366.6" marker-end="url(#skills-catalog-aws-arrow)"/>
-<path class="d-edge" d="M568.7 219.8 L528.9 219.8 Q523.9 219.8 523.9 224.8 L523.9 501.4 Q523.9 506.4 518.9 506.4 L469.6 506.4" marker-end="url(#skills-catalog-aws-arrow)"/>
-<path class="d-edge" d="M647.7 246.3 L647.7 272.7 Q647.7 277.7 642.7 277.7 L372.1 277.7 Q367.1 277.7 367.1 282.7 L367.1 340.1" marker-end="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M466.6 366.6 L642.7 366.6 Q647.7 366.6 647.7 371.6 L647.7 633.7" marker-end="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M654.7 246.3 L654.7 515.4 Q654.7 520.4 649.7 520.4 L469.6 520.4" marker-end="url(#skills-catalog-aws-arrow)"/>
+<path class="d-edge" d="M647.7 246.3 L647.7 368.6 Q647.7 373.6 642.7 373.6 L466.6 373.6" marker-end="url(#skills-catalog-aws-arrow)"/>
 <path class="d-edge" d="M114.5 99.5 L114.5 193.3" marker-end="url(#skills-catalog-aws-arrow)"/>
 <path class="d-edge" d="M381.1 92 L381.1 193.3" marker-end="url(#skills-catalog-aws-arrow)"/>
 <path class="d-edge" d="M647.7 686.7 L647.7 777.5" marker-end="url(#skills-catalog-aws-arrow)"/>
@@ -427,11 +429,6 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <rect class="d-node" x="292.6" y="486.9" width="177" height="53" rx="3"/>
 <text class="d-label" x="381.1" y="506.4">installer</text>
 <text class="d-note" x="381.1" y="522.4">install · update · hold</text>
-</g>
-<g class="d-map-part" data-part="usage" tabindex="0" role="button" aria-label="usage: what it is, its code and tests">
-<rect class="d-node" x="584.2" y="340.1" width="127" height="53" rx="3"/>
-<text class="d-label" x="647.7" y="359.6">usage</text>
-<text class="d-note" x="647.7" y="375.6">what holds cost</text>
 </g>
 <g class="d-map-part" data-part="api" tabindex="0" role="button" aria-label="the API: what it is, its code and tests">
 <rect class="d-node" x="41.5" y="633.7" width="146" height="53" rx="3"/>
@@ -551,7 +548,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <p class="note">commands · setup · hook</p>
 <p>The commands for a person at a terminal, including setup and teardown, and the session-start hook that says when an update waits.</p>
 
-<p><span class="kicker">Uses</span> installer, MCP server, operations, the person's view, serve, usage</p>
+<p><span class="kicker">Uses</span> installer, MCP server, operations, the person's view, serve</p>
 <p><span class="kicker">Used by</span> installer</p>
 <p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/cli"><code>client/src/cli/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/cli.ts"><code>client/src/cli.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/main.ts"><code>client/src/main.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/quiet-warnings.ts"><code>client/src/quiet-warnings.ts</code></a></p>
 <p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/cli"><code>client/test/cli*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/setup-"><code>client/test/setup-*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/teardown.test.ts"><code>client/test/teardown.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/hook.test.ts"><code>client/test/hook.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/login.test.ts"><code>client/test/login.test.ts</code></a></p>
@@ -647,11 +644,11 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <article class="card" data-box="ops" data-view="local" id="box-local-ops">
 <h3>operations</h3>
 <p class="note">one runner, every face</p>
-<p>Runs every operation the same way, whichever face asked (the tools, the CLI, serve), with the settings this machine was started with.</p>
+<p>Runs every operation the same way, whichever face asked (the tools, the CLI, serve), with the settings this machine was started with. Opens the catalog SKILLS_CATALOG names: the folder on this machine, or the AWS catalog over HTTPS.</p>
 
-<p><span class="kicker">Uses</span> installer, usage</p>
+<p><span class="kicker">Uses</span> installer, catalog over HTTPS</p>
 <p><span class="kicker">Used by</span> CLI, MCP server, serve</p>
-<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/operations.ts"><code>client/src/operations.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/settings.ts"><code>client/src/settings.ts</code></a></p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/operations.ts"><code>client/src/operations.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/settings.ts"><code>client/src/settings.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/open.ts"><code>core/src/open.ts</code></a></p>
 <p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/operations-seam.test.ts"><code>client/test/operations-seam.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/operation-errors.test.ts"><code>client/test/operation-errors.test.ts</code></a></p>
 
 
@@ -722,12 +719,12 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <article class="card" data-box="installer" data-view="local" id="box-local-installer">
 <h3>installer</h3>
 <p class="note">install · update · hold</p>
-<p>Writes skills into Claude Code's skills folder, keeps the list of what came from where, applies updates by each skill's policy, and holds a risky one for a yes. One writer at a time.</p>
+<p>Writes skills into Claude Code's skills folder, keeps the list of what came from where, applies updates by each skill's policy, and holds a risky one for a yes. One writer at a time. It also counts what holds cost the Developer (<code>skills-catalog stats</code>).</p>
 
-<p><span class="kicker">Uses</span> CLI, usage</p>
-<p><span class="kicker">Used by</span> CLI, usage, operations, serve</p>
-<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/machine"><code>client/src/machine/**</code></a></p>
-<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/install"><code>client/test/install*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/installer"><code>client/test/installer*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/lock-"><code>client/test/lock-*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/review-holds.test.ts"><code>client/test/review-holds.test.ts</code></a></p>
+<p><span class="kicker">Uses</span> CLI</p>
+<p><span class="kicker">Used by</span> CLI, operations, serve</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/machine"><code>client/src/machine/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/usage"><code>client/src/usage/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/activity.ts"><code>client/src/activity.ts</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/install"><code>client/test/install*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/installer"><code>client/test/installer*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/lock-"><code>client/test/lock-*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/review-holds.test.ts"><code>client/test/review-holds.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/usage"><code>client/test/usage*.test.ts</code></a></p>
 
 
 
@@ -816,25 +813,11 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 </div>
 </details></div>
 </article>
-<article class="card" data-box="usage" data-view="local" id="box-local-usage">
-<h3>usage</h3>
-<p class="note">what holds cost</p>
-<p>Counts what update holds cost the Developer (<code>skills-catalog stats</code>), and the demo's activity line.</p>
-
-<p><span class="kicker">Uses</span> installer</p>
-<p><span class="kicker">Used by</span> CLI, installer, operations</p>
-<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/usage"><code>client/src/usage/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/activity.ts"><code>client/src/activity.ts</code></a></p>
-<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/usage"><code>client/test/usage*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/activity.test.ts"><code>client/test/activity.test.ts</code></a></p>
-
-
-
-
-</article>
 <article class="card" data-box="api" data-view="local" id="box-local-api">
 <h3>the API <span class="tag">foundation</span></h3>
 <p class="note">operations · words</p>
 <p>Every operation defined once, with its input schema; the MCP tools, the CLI's commands, the HTTP routes and the published schema all come from it. Also every word Claude Code reads, and the errors.</p>
-<p><span class="kicker">Used by</span> MCP server, CLI, serve, operations, the person's view, installer, usage, catalog over HTTPS</p>
+<p><span class="kicker">Used by</span> MCP server, CLI, serve, operations, the person's view, installer, catalog over HTTPS</p>
 
 
 <p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/api.ts"><code>core/src/api.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/api-doc.ts"><code>core/src/api-doc.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/openapi.ts"><code>core/src/openapi.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/words.ts"><code>core/src/words.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/words-file.ts"><code>core/src/words-file.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/render.ts"><code>core/src/render.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/errors.ts"><code>core/src/errors.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/internal-error.ts"><code>core/src/internal-error.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/index.ts"><code>core/src/index.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/ports.ts"><code>core/src/ports.ts</code></a></p>
@@ -970,7 +953,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <p>The catalog's operations as calls to the AWS catalog's API, opened when SKILLS_CATALOG is an https:// address (on one machine it isn't used). Signs in with the token <code>skills-catalog login</code> keeps.</p>
 
 
-
+<p><span class="kicker">Used by</span> operations</p>
 <p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/remote"><code>core/src/remote/**</code></a></p>
 
 
@@ -1068,7 +1051,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <p class="note">commands · setup · hook</p>
 <p>The commands for a person at a terminal, including setup and teardown, and the session-start hook that says when an update waits.</p>
 
-<p><span class="kicker">Uses</span> installer, MCP server, operations, the person's view, serve, usage</p>
+<p><span class="kicker">Uses</span> installer, MCP server, operations, the person's view, serve</p>
 <p><span class="kicker">Used by</span> installer</p>
 <p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/cli"><code>client/src/cli/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/cli.ts"><code>client/src/cli.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/main.ts"><code>client/src/main.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/quiet-warnings.ts"><code>client/src/quiet-warnings.ts</code></a></p>
 <p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/cli"><code>client/test/cli*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/setup-"><code>client/test/setup-*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/teardown.test.ts"><code>client/test/teardown.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/hook.test.ts"><code>client/test/hook.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/login.test.ts"><code>client/test/login.test.ts</code></a></p>
@@ -1164,11 +1147,11 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <article class="card" data-box="ops" data-view="aws" id="box-aws-ops">
 <h3>operations</h3>
 <p class="note">one runner, every face</p>
-<p>Runs every operation the same way, whichever face asked (the tools, the CLI, serve), with the settings this machine was started with.</p>
+<p>Runs every operation the same way, whichever face asked (the tools, the CLI, serve), with the settings this machine was started with. Opens the catalog SKILLS_CATALOG names: the folder on this machine, or the AWS catalog over HTTPS.</p>
 
-<p><span class="kicker">Uses</span> installer, usage</p>
+<p><span class="kicker">Uses</span> installer, catalog over HTTPS</p>
 <p><span class="kicker">Used by</span> CLI, MCP server, serve</p>
-<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/operations.ts"><code>client/src/operations.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/settings.ts"><code>client/src/settings.ts</code></a></p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/operations.ts"><code>client/src/operations.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/settings.ts"><code>client/src/settings.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/open.ts"><code>core/src/open.ts</code></a></p>
 <p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/operations-seam.test.ts"><code>client/test/operations-seam.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/operation-errors.test.ts"><code>client/test/operation-errors.test.ts</code></a></p>
 
 
@@ -1239,12 +1222,12 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <article class="card" data-box="installer" data-view="aws" id="box-aws-installer">
 <h3>installer</h3>
 <p class="note">install · update · hold</p>
-<p>Writes skills into Claude Code's skills folder, keeps the list of what came from where, applies updates by each skill's policy, and holds a risky one for a yes. One writer at a time.</p>
+<p>Writes skills into Claude Code's skills folder, keeps the list of what came from where, applies updates by each skill's policy, and holds a risky one for a yes. One writer at a time. It also counts what holds cost the Developer (<code>skills-catalog stats</code>).</p>
 
-<p><span class="kicker">Uses</span> CLI, usage</p>
-<p><span class="kicker">Used by</span> CLI, usage, operations, serve</p>
-<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/machine"><code>client/src/machine/**</code></a></p>
-<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/install"><code>client/test/install*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/installer"><code>client/test/installer*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/lock-"><code>client/test/lock-*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/review-holds.test.ts"><code>client/test/review-holds.test.ts</code></a></p>
+<p><span class="kicker">Uses</span> CLI</p>
+<p><span class="kicker">Used by</span> CLI, operations, serve</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/machine"><code>client/src/machine/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/usage"><code>client/src/usage/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/activity.ts"><code>client/src/activity.ts</code></a></p>
+<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/install"><code>client/test/install*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/installer"><code>client/test/installer*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/lock-"><code>client/test/lock-*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/review-holds.test.ts"><code>client/test/review-holds.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/usage"><code>client/test/usage*.test.ts</code></a></p>
 
 
 
@@ -1333,25 +1316,11 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 </div>
 </details></div>
 </article>
-<article class="card" data-box="usage" data-view="aws" id="box-aws-usage">
-<h3>usage</h3>
-<p class="note">what holds cost</p>
-<p>Counts what update holds cost the Developer (<code>skills-catalog stats</code>), and the demo's activity line.</p>
-
-<p><span class="kicker">Uses</span> installer</p>
-<p><span class="kicker">Used by</span> CLI, installer, operations</p>
-<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/usage"><code>client/src/usage/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src/activity.ts"><code>client/src/activity.ts</code></a></p>
-<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/usage"><code>client/test/usage*.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/activity.test.ts"><code>client/test/activity.test.ts</code></a></p>
-
-
-
-
-</article>
 <article class="card" data-box="api" data-view="aws" id="box-aws-api">
 <h3>the API <span class="tag">foundation</span></h3>
 <p class="note">operations · words</p>
 <p>Every operation defined once, with its input schema; the MCP tools, the CLI's commands, the HTTP routes and the published schema all come from it. Also every word Claude Code reads, and the errors.</p>
-<p><span class="kicker">Used by</span> MCP server, CLI, serve, operations, the person's view, installer, usage, catalog over HTTPS</p>
+<p><span class="kicker">Used by</span> MCP server, CLI, serve, operations, the person's view, installer, catalog over HTTPS</p>
 
 
 <p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/api.ts"><code>core/src/api.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/api-doc.ts"><code>core/src/api-doc.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/openapi.ts"><code>core/src/openapi.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/words.ts"><code>core/src/words.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/words-file.ts"><code>core/src/words-file.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/render.ts"><code>core/src/render.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/errors.ts"><code>core/src/errors.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/internal-error.ts"><code>core/src/internal-error.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/index.ts"><code>core/src/index.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/ports.ts"><code>core/src/ports.ts</code></a></p>
@@ -1487,7 +1456,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <p>The catalog's operations as calls to the AWS catalog's API, opened when SKILLS_CATALOG is an https:// address (on one machine it isn't used). Signs in with the token <code>skills-catalog login</code> keeps.</p>
 
 
-
+<p><span class="kicker">Used by</span> operations</p>
 <p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/remote"><code>core/src/remote/**</code></a></p>
 
 
@@ -1612,7 +1581,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <p class="why"><span class="kicker">Why</span> Assistants can do everything a person can, and the faces can't drift apart; two names that sounded alike confused readers</p>
 
 <p class="meta">The owner · 2026-09-29</p>
-<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=api">the API (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=mcp">MCP server (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=cli">CLI (skills-catalog)</a> <a class="chip" href="catalog.html#box=http-routes">HTTP routes (the catalog, on one machine)</a></p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=api">the API (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=mcp">MCP server (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=cli">CLI (skills-catalog)</a> <a class="chip" href="catalog.html#box=http-routes">dispatch · routes (the catalog, on one machine)</a></p>
 
 </div>
 </details>
@@ -1915,7 +1884,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <text class="d-edge-label d-map-label--start" x="215.5" y="478.5">signs in</text>
 </svg></div></div></figure></figure></div></section>
 <section><h2>Code and tests</h2>
-<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src"><code>client/src/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/api.ts"><code>core/src/api.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/api-doc.ts"><code>core/src/api-doc.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/openapi.ts"><code>core/src/openapi.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/words.ts"><code>core/src/words.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/words-file.ts"><code>core/src/words-file.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/render.ts"><code>core/src/render.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/errors.ts"><code>core/src/errors.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/internal-error.ts"><code>core/src/internal-error.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/index.ts"><code>core/src/index.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/ports.ts"><code>core/src/ports.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/skill-tree"><code>core/src/skill-tree/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/remote"><code>core/src/remote/**</code></a></p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src"><code>client/src/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/api.ts"><code>core/src/api.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/api-doc.ts"><code>core/src/api-doc.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/openapi.ts"><code>core/src/openapi.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/words.ts"><code>core/src/words.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/words-file.ts"><code>core/src/words-file.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/render.ts"><code>core/src/render.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/errors.ts"><code>core/src/errors.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/internal-error.ts"><code>core/src/internal-error.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/index.ts"><code>core/src/index.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/ports.ts"><code>core/src/ports.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/skill-tree"><code>core/src/skill-tree/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/remote"><code>core/src/remote/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/open.ts"><code>core/src/open.ts</code></a></p>
 <p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test"><code>client/test/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test"><code>core/test/**</code></a></p>
 
 </section>

@@ -25,6 +25,8 @@ export type Facts = {
   sources: string[];
   /** Does a path or glob (relative to the repo) match any file? */
   matches: (pattern: string) => string[];
+  /** A file's text (relative to the repo). */
+  text: (path: string) => string;
   /** What uses what: every import between the source files (imports.ts). */
   imports: ImportGraph;
   /** The AWS stack's resources and their wiring, from the template infra's tests pin (aws.ts). */
@@ -55,6 +57,7 @@ export function readFacts(root: string): Facts {
     requirements,
     sources,
     matches: (pattern) => files(root, pattern),
+    text: (path) => readFileSync(join(root, path), 'utf8'),
     imports: readImports(root, PACKAGES, sources),
     aws: readAws(root),
   };

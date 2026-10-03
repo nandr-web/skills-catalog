@@ -31,6 +31,13 @@ describe('a page per part: its boxes and the lines read between them', () => {
     // A foundation box draws no lines; it says who uses it instead.
     expect(lines.some((l) => [l.from, l.to].includes('api'))).toBe(false);
     expect(foundationUsers(page(m, 'skills-catalog'), box(page(m, 'skills-catalog'), 'api'), 'local', facts)).toEqual(expect.arrayContaining(['mcp', 'cli', 'ops']));
+    // The catalog over HTTPS is opened by the operations (core/src/open.ts runs in the client), so it isn't an island.
+    expect(readLines(page(m, 'skills-catalog'), 'aws', facts)).toContainEqual({ from: 'ops', to: 'remote', both: false });
+  });
+  it('draws the file that wires the local catalog together as its own box, so the store doesn\'t seem to use what it\'s wired to', () => {
+    const lines = readLines(page(source(), 'catalog'), 'local', facts);
+    expect(lines.filter((l) => l.from === 'records' || l.to === 'records').map((l) => (l.from === 'records' ? l.to : l.from)).sort()).toEqual(['local-opener', 'local-search']);
+    expect(lines.filter((l) => l.from === 'local-opener').map((l) => l.to)).toEqual(expect.arrayContaining(['local-sign-in', 'outbox', 'records', 'local-files', 'local-search']));
   });
   it('reads the lines in AWS from the stack, with what each may do', () => {
     const lines = readLines(page(source(), 'catalog-aws'), 'aws', facts);
@@ -72,11 +79,23 @@ describe('the page checks catch each kind of drift', () => {
   it('an AWS resource in two boxes', () => caught('resource-in-two-boxes', (m) => { box(page(m, 'catalog-aws'), 'alarms').resources!.push('Sweep*'); }));
   it('a resource pattern that matches nothing in the stack', () => caught('glob-matches-nothing', (m) => { box(page(m, 'catalog-aws'), 'alarms').resources!.push('Warehouse*'); }));
   it('words on a line between two boxes that the code doesn\'t have', () => caught('line-not-in-code', (m) => {
-    page(m, 'skills-catalog').lines!.push({ from: 'person', to: 'usage', label: 'counts' });
+    page(m, 'skills-catalog').lines!.push({ from: 'mcp', to: 'installer', label: 'installs' });
   }));
   it('a line to a part around that no import backs', () => caught('line-not-in-code', (m) => {
-    page(m, 'skills-catalog').lines!.push({ from: 'usage', to: 'catalog', label: 'reads', only: ['local'] });
+    page(m, 'skills-catalog').lines!.push({ from: 'mcp', to: 'catalog', label: 'reads', only: ['local'] });
   }));
+  it('a line over the network that names no file making the call', () => caught('line-not-in-code', (m) => {
+    page(m, 'skills-catalog').lines!.push({ from: 'person', to: 'catalog', label: 'phones home', over: 'HTTPS', only: ['aws'] });
+  }));
+  it('a line over the network whose file isn\'t the box\'s', () => caught('line-not-in-code', (m) => {
+    page(m, 'skills-catalog').lines!.push({ from: 'person', to: 'catalog', label: 'phones home', over: 'HTTPS', via: 'core/src/remote/index.ts', only: ['aws'] });
+  }));
+  it('a line over the network whose file makes no network call', () => caught('line-not-in-code', (m) => {
+    page(m, 'skills-catalog').lines!.push({ from: 'person', to: 'catalog', label: 'phones home', over: 'HTTPS', via: 'client/src/person/view.ts', only: ['aws'] });
+  }));
+  it('a box shown in a view the map hasn\'t', () => caught('unknown-view', (m) => { box(page(m, 'skills-catalog'), 'remote').only = ['mars']; }));
+  it('a planned box naming a requirement that doesn\'t exist', () => caught('unknown-requirement', (m) => { box(page(m, 'skills-catalog'), 'agent-reviewers').needs = ['reviews-by-oracle']; }));
+  it('a shared file with no reason', () => caught('left-out-without-why', (m) => { page(m, 'catalog-aws').shared![0]!.why = ' '; }));
   it('a line to a part around that the map one level up doesn\'t link', () => caught('line-not-on-map', (m) => {
     page(m, 'catalog-aws').context!.push({ part: 'cc2', at: [2, 0] });
     page(m, 'catalog-aws').lines!.push({ from: 'cc2', to: 'edge', label: 'asks' });
@@ -138,9 +157,13 @@ describe('the pages show what was asked for', () => {
   it('clicking the database shows the options weighed, the one chosen, and what drove it', () => {
     const p = html('catalog-aws.html');
     const card = p.slice(p.indexOf('data-box="versions-table"'), p.indexOf('</article>', p.indexOf('data-box="versions-table"')));
-    expect(card).toContain('<details class="aspect" open>');
-    expect(card).toContain('<span class="pick">DynamoDB + S3</span>, chosen over Postgres + S3, Aurora DSQL + S3, SQLite + a folder');
-    expect(card).toContain('Cost when idle');
+    // In the card, a list that fits it: the chosen option open with what counts for and against it, the others folded
+    // with their tallies, and the table with every option side by side one click away.
+    expect(card).toContain('<span class="pick">DynamoDB + S3</span>, chosen over Postgres + S3, Aurora DSQL + S3, SQLite on a small machine');
+    expect(card).toMatch(/<details class="option picked-option" open><summary><span class="tag chosen-tag">chosen<\/span> <strong>DynamoDB \+ S3<\/strong>/);
+    expect(card).toContain('<strong>Cost when idle</strong>: $0: no hourly charge; 25 GB free');
+    expect(card).toMatch(/<summary><strong>Postgres \+ S3<\/strong>[^<]*<span class="sub">[^<]*<\/span> <span class="tally" aria-label="[^"]*for[^"]*">/);
+    expect(card).toContain('href="decisions.html#decision-B13">Every option side by side ›</a>');
   });
   it('no page shows a reader "undefined", "NaN" or "[object Object]"', () => {
     for (const name of ['index.html', 'structure.html', 'decisions.html', 'skills-catalog.html', 'catalog.html', 'catalog-aws.html']) {

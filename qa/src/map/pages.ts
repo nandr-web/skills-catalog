@@ -20,7 +20,12 @@ export type Box = {
   /** A planned box: the requirements that would build it. */
   needs?: string[];
 };
-export type Line = { from: string; to: string; label?: string; only?: string[]; /** Not an import: over the network. */ over?: string };
+/** A hand-written line. `over`: not an import but a call over the network (e.g. HTTPS), made by the box's file `via`,
+ *  which must be one of the box's files and make a network call (it uses fetch). */
+export type Line = { from: string; to: string; label?: string; only?: string[]; over?: string; via?: string };
+
+/** What a file that calls over the network says: it uses fetch, or node's http(s) request. */
+const CALLS_OUT = /\bfetch\b|\bhttps?\.request\(/;
 export type Page = {
   id: string; parts: string[]; view?: string; title?: string; question: string;
   reads: 'imports' | 'aws'; zone: string;
@@ -179,11 +184,18 @@ export function checkPages(m: MapSource, facts: Facts): Problem[] {
         const outside = context.has(l.from) && !ids.has(l.from) ? l.from : l.to;
         if (!page.parts.some((p) => linked(outside, p, view)))
           add('line-not-on-map', `${where}: the map one level up has no link between ${outside} and ${page.parts.join('/')} in this view`);
+        const inside = page.boxes.find((b) => b.id === (outside === l.from ? l.to : l.from))!;
         if (page.reads === 'imports' && !l.over) {
           const theirs = new Set(partFiles(m, facts, outside, view));
-          const mine = new Set(filesOf(facts, page.boxes.find((b) => b.id === (outside === l.from ? l.to : l.from))!));
+          const mine = new Set(filesOf(facts, inside));
           if (theirs.size && !facts.imports.edges.some((e) => (mine.has(e.from) && theirs.has(e.to)) || (theirs.has(e.from) && mine.has(e.to))))
-            add('line-not-in-code', `${where}: no import between the box's files and ${outside}'s (say over: when they talk over a network)`);
+            add('line-not-in-code', `${where}: no import between the box's files and ${outside}'s (say over: and via: when they talk over a network)`);
+        }
+        // Over the network: the box's own file that makes the call, and it does call out.
+        if (l.over) {
+          const via = l.via ? filesOf(facts, inside).find((f) => f === l.via) : undefined;
+          if (!via) add('line-not-in-code', `${where}: over ${l.over} needs via: the file of "${inside.id}" that makes the call (${l.via ? `${l.via} isn't one of its files` : 'none named'})`);
+          else if (!CALLS_OUT.test(facts.text(via))) add('line-not-in-code', `${where}: ${via} makes no network call (no fetch or http request)`);
         }
       }
       const drawn = read.length + (page.lines ?? []).filter((l) => inView(l, view) && (context.has(l.from) || context.has(l.to))).length;

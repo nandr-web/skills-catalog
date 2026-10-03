@@ -188,6 +188,16 @@ section > *, .frame > *, .frame-grid > * { min-width: 0; }
 .choice { display: grid; gap: 4px; border-top: 1px solid var(--line); padding-top: 6px; }
 .choice details.aspect { border-top: 0; padding-top: 0; }
 .pick { font-weight: 700; color: var(--accent); }
+details.option { border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; }
+details.option.picked-option { border: 2px solid var(--accent); background: var(--accent-soft); }
+details.option > summary { cursor: pointer; }
+details.option .sub { color: var(--ink-2); font-size: 13px; }
+.tally { font: 600 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--ink-2); white-space: nowrap; }
+ul.facts { list-style: none; margin: 6px 0 2px; padding: 0; display: grid; gap: 3px; font-size: 14px; }
+ul.facts li { padding: 2px 6px; border-radius: 3px; }
+ul.facts li.v-good { background: var(--accent-soft); }
+ul.facts li.v-poor { background: var(--hot-soft); }
+ul.facts li.v-even, ul.facts li.v-unknown { background: var(--even); }
 .did { font: 600 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--ink-2); }
 .built { font: 600 10.5px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--line); color: var(--ink-2); }
 .built-built { border-color: var(--accent); color: var(--accent); }
@@ -220,6 +230,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 .legend-line { font-size: 13px; color: var(--ink-2); margin: 6px 0 0; }
 .aspect-note { margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--hot); background: var(--hot-soft); font-size: 14px; }
 .hide-planned .d-map-part--proposed, .hide-planned .d-edge--proposed, .hide-planned .d-edge-label--proposed, .hide-planned .planned-only { display: none; }
+.frame-grid.wide { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 760px) { .frame-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 560px) { body { padding-inline: 16px; font-size: 15px; } .frame { padding: 12px; } }
 
@@ -227,7 +238,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 .d-scroll-art { overflow-x: auto; }
 .d-scroll-hint { display: none; margin: 0 0 6px; font: 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--d-ink2); text-align: right; }
 @container (max-width: 404.5px) { .d-scroll-hint[data-w="405"] { display: block; } }
-@container (max-width: 706.5px) { .d-scroll-hint[data-w="707"] { display: block; } }
+@container (max-width: 763.5px) { .d-scroll-hint[data-w="764"] { display: block; } }
 </style>
 <div class="wrap">
 <nav class="site" aria-label="The system map's pages">
@@ -241,65 +252,74 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 
 <main class="frames"><section class="frame" data-view="local">
 <h2 class="frame-title">Inside the catalog, on one machine</h2>
-<div class="frame-grid"><figure class="map-art" style="--w: 707px"><div class="d-scroll"><p class="d-scroll-hint" data-w="707" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 707 474" width="707" height="474" role="group" aria-label="What's inside the catalog on one machine, and where does each thing live?">
+<div class="frame-grid wide"><figure class="map-art" style="--w: 764px"><div class="d-scroll"><p class="d-scroll-hint" data-w="764" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 764 474" width="764" height="474" role="group" aria-label="What's inside the catalog on one machine, and where does each thing live?">
 <title>the catalog, on one machine</title>
 <defs><marker id="catalog-local-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="catalog-local-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="catalog-local-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="catalog-local-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="catalog-local-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="catalog-local-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="catalog-local-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="catalog-local-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
-<rect class="d-group" x="38" y="136" width="652.5" height="322" rx="6"/>
-<text class="d-group-label" x="516.2" y="147">a folder on this machine</text>
-<path class="d-edge" d="M358 272 L358 211" marker-end="url(#catalog-local-arrow)" marker-start="url(#catalog-local-arrow)"/>
-<path class="d-edge" d="M358 331 L358 389" marker-end="url(#catalog-local-arrow)"/>
-<path class="d-edge" d="M313 301.5 L123 301.5 Q118 301.5 118 306.5 L118 389" marker-end="url(#catalog-local-arrow)" marker-start="url(#catalog-local-arrow)"/>
-<path class="d-edge" d="M403 301.5 L515.5 301.5" marker-end="url(#catalog-local-arrow)"/>
-<path class="d-edge" d="M365 331 L365 355 Q365 360 370 360 L593 360 Q598 360 598 365 L598 392" marker-end="url(#catalog-local-arrow)"/>
-<path class="d-edge" d="M358 94 L358 158" marker-end="url(#catalog-local-arrow)"/>
-<path class="d-edge" d="M291.5 67.5 L123 67.5 Q118 67.5 118 72.5 L118 158" marker-end="url(#catalog-local-arrow)"/>
+<rect class="d-group" x="16" y="136" width="731.5" height="322" rx="6"/>
+<text class="d-group-label" x="24" y="147">a folder on this machine</text>
+<path class="d-edge" d="M386.5 275 L386.5 189.5 Q386.5 184.5 391.5 184.5 L560 184.5" marker-end="url(#catalog-local-arrow)"/>
+<path class="d-edge" d="M386.5 328 L386.5 352 Q386.5 357 391.5 357 L640.5 357 Q645.5 357 645.5 362 L645.5 389" marker-end="url(#catalog-local-arrow)"/>
+<path class="d-edge" d="M393.5 328 L393.5 359 Q393.5 364 388.5 364 L132.5 364 Q127.5 364 127.5 369 L127.5 389" marker-end="url(#catalog-local-arrow)"/>
+<path class="d-edge" d="M298 301.5 L210 301.5" marker-end="url(#catalog-local-arrow)"/>
+<path class="d-edge" d="M475 301.5 L594.5 301.5" marker-end="url(#catalog-local-arrow)"/>
+<path class="d-edge" d="M379.5 328 L379.5 389" marker-end="url(#catalog-local-arrow)"/>
+<path class="d-edge" d="M194 418.5 L341.5 418.5" marker-end="url(#catalog-local-arrow)"/>
+<path class="d-edge" d="M386.5 94 L386.5 186.5 Q386.5 191.5 391.5 191.5 L560 191.5" marker-end="url(#catalog-local-arrow)"/>
+<path class="d-edge" d="M393.5 94 L393.5 172.5 Q393.5 177.5 388.5 177.5 L229 177.5" marker-end="url(#catalog-local-arrow)"/>
+<path class="d-edge" d="M379.5 94 L379.5 275" marker-end="url(#catalog-local-arrow)"/>
 <a class="d-map-part d-map-part--opens" data-part="sc1" href="skills-catalog.html" aria-label="skills-catalog: open its page">
-<rect class="d-node" x="291.5" y="41" width="133" height="53" rx="3"/>
-<text class="d-label" x="358" y="60.5">skills-catalog</text>
-<text class="d-note" x="358" y="76.5">MCP server · CLI</text>
-<text class="d-map-opens" x="416.5" y="67.5" aria-hidden="true">›</text>
+<rect class="d-node" x="320" y="41" width="133" height="53" rx="3"/>
+<text class="d-label" x="386.5" y="60.5">skills-catalog</text>
+<text class="d-note" x="386.5" y="76.5">MCP server · CLI</text>
+<text class="d-map-opens" x="445" y="67.5" aria-hidden="true">›</text>
 </a>
 <g class="d-map-part" data-part="catalog-rules" tabindex="0" role="button" aria-label="catalog rules: what it is, its code and tests">
-<rect class="d-node" x="272.5" y="158" width="171" height="53" rx="3"/>
-<text class="d-label" x="358" y="177.5">catalog rules</text>
-<text class="d-note" x="358" y="193.5">publish · find · fetch</text>
+<rect class="d-node" x="560" y="158" width="171" height="53" rx="3"/>
+<text class="d-label" x="645.5" y="177.5">catalog rules</text>
+<text class="d-note" x="645.5" y="193.5">publish · find · fetch</text>
 </g>
-<g class="d-map-part" data-part="http-routes" tabindex="0" role="button" aria-label="HTTP routes: what it is, its code and tests">
-<rect class="d-node" x="48" y="158" width="140" height="53" rx="3"/>
-<text class="d-label" x="118" y="177.5">HTTP routes</text>
-<text class="d-note" x="118" y="193.5">for serve and AWS</text>
+<g class="d-map-part" data-part="http-routes" tabindex="0" role="button" aria-label="dispatch · routes: what it is, its code and tests">
+<rect class="d-node" x="26" y="158" width="203" height="53" rx="3"/>
+<text class="d-label" x="127.5" y="177.5">dispatch · routes</text>
+<text class="d-note" x="127.5" y="193.5">every operation, every face</text>
+</g>
+<g class="d-map-part" data-part="local-opener" tabindex="0" role="button" aria-label="opener: what it is, its code and tests">
+<rect class="d-node" x="298" y="275" width="177" height="53" rx="3"/>
+<text class="d-label" x="386.5" y="294.5">opener</text>
+<text class="d-note" x="386.5" y="310.5">wires the local catalog</text>
 </g>
 <g class="d-map-part" data-part="records" tabindex="0" role="button" aria-label="versions: what it is, its code and tests">
-<path class="d-node" d="M313 278 A45 6 0 0 1 403 278 V325 A45 6 0 0 1 313 325 Z"/>
-<path class="d-node-detail" d="M313 278 A45 6 0 0 0 403 278"/>
-<text class="d-label" x="358" y="297.5">versions</text>
-<text class="d-note" x="358" y="313.5">SQLite</text>
+<path class="d-node" d="M341.5 395 A45 6 0 0 1 431.5 395 V442 A45 6 0 0 1 341.5 442 Z"/>
+<path class="d-node-detail" d="M341.5 395 A45 6 0 0 0 431.5 395"/>
+<text class="d-label" x="386.5" y="414.5">versions</text>
+<text class="d-note" x="386.5" y="430.5">SQLite</text>
 </g>
 <g class="d-map-part" data-part="local-sign-in" tabindex="0" role="button" aria-label="local sign-in: what it is, its code and tests">
-<rect class="d-node" x="515.5" y="275" width="165" height="53" rx="3"/>
-<text class="d-label" x="598" y="294.5">local sign-in</text>
-<text class="d-note" x="598" y="310.5">acting as a developer</text>
+<rect class="d-node" x="45" y="275" width="165" height="53" rx="3"/>
+<text class="d-label" x="127.5" y="294.5">local sign-in</text>
+<text class="d-note" x="127.5" y="310.5">acting as a developer</text>
 </g>
 <g class="d-map-part" data-part="local-search" tabindex="0" role="button" aria-label="search: what it is, its code and tests">
-<path class="d-node" d="M51.5 395 A66.5 6 0 0 1 184.5 395 V442 A66.5 6 0 0 1 51.5 442 Z"/>
-<path class="d-node-detail" d="M51.5 395 A66.5 6 0 0 0 184.5 395"/>
-<text class="d-label" x="118" y="414.5">search</text>
-<text class="d-note" x="118" y="430.5">SQLite full-text</text>
+<path class="d-node" d="M61 395 A66.5 6 0 0 1 194 395 V442 A66.5 6 0 0 1 61 442 Z"/>
+<path class="d-node-detail" d="M61 395 A66.5 6 0 0 0 194 395"/>
+<text class="d-label" x="127.5" y="414.5">search</text>
+<text class="d-note" x="127.5" y="430.5">SQLite full-text</text>
 </g>
 <g class="d-map-part" data-part="local-files" tabindex="0" role="button" aria-label="files: what it is, its code and tests">
-<path class="d-node" d="M266 395 A92 6 0 0 1 450 395 V442 A92 6 0 0 1 266 442 Z"/>
-<path class="d-node-detail" d="M266 395 A92 6 0 0 0 450 395"/>
-<text class="d-label" x="358" y="414.5">files</text>
-<text class="d-note" x="358" y="430.5">a folder, by fingerprint</text>
+<path class="d-node" d="M553.5 395 A92 6 0 0 1 737.5 395 V442 A92 6 0 0 1 553.5 442 Z"/>
+<path class="d-node-detail" d="M553.5 395 A92 6 0 0 0 737.5 395"/>
+<text class="d-label" x="645.5" y="414.5">files</text>
+<text class="d-note" x="645.5" y="430.5">a folder, by fingerprint</text>
 </g>
 <g class="d-map-part" data-part="outbox" tabindex="0" role="button" aria-label="outbox: what it is, its code and tests">
-<rect class="d-node" x="547" y="392" width="102" height="53" rx="3"/>
-<path class="d-node-detail" d="M635 399V438M639 399V438M643 399V438"/>
-<text class="d-label" x="591" y="411.5">outbox</text>
-<text class="d-note" x="591" y="427.5">events</text>
+<rect class="d-node" x="594.5" y="275" width="102" height="53" rx="3"/>
+<path class="d-node-detail" d="M682.5 282V321M686.5 282V321M690.5 282V321"/>
+<text class="d-label" x="638.5" y="294.5">outbox</text>
+<text class="d-note" x="638.5" y="310.5">events</text>
 </g>
-<text class="d-edge-label d-map-label--start" x="365" y="126">calls</text>
-<text class="d-edge-label" x="204.8" y="58.5">serve</text>
+<text class="d-edge-label" x="473.3" y="200.5">calls</text>
+<text class="d-edge-label" x="311.3" y="168.5">runs each operation</text>
+<text class="d-edge-label d-map-label--end" x="372.5" y="211.7">opens</text>
 </svg></div></div></figure>
 <aside class="panel" aria-live="polite"><div class="picked" hidden></div>
 <h3>Click a box for what it is, its code and its decisions.</h3>
@@ -313,11 +333,11 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <section class="cards boxes"><h2>The boxes</h2><div class="card-grid"><article class="card" data-box="catalog-rules" data-view="local" id="box-local-catalog-rules">
 <h3>catalog rules</h3>
 <p class="note">publish · find · fetch</p>
-<p>The catalog's operations over its replaceable parts: who may publish, what a new version is, what search returns. The same rules run in AWS, over other parts.</p>
+<p>The catalog's operations over its replaceable parts (storage, search, sign-in, events: it calls them through their interfaces, so no line is drawn to them): who may publish, what a new version is, what search returns. The same rules run in AWS, over other parts.</p>
 
-<p><span class="kicker">Uses</span> versions</p>
-<p><span class="kicker">Used by</span> versions</p>
-<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/catalog.ts"><code>core/src/catalog.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/open.ts"><code>core/src/open.ts</code></a></p>
+
+<p><span class="kicker">Used by</span> opener</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/catalog.ts"><code>core/src/catalog.ts</code></a></p>
 <p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/catalog.test.ts"><code>core/test/catalog.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/read-only-open.test.ts"><code>core/test/read-only-open.test.ts</code></a></p>
 
 
@@ -348,9 +368,9 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 </details></div>
 </article>
 <article class="card" data-box="http-routes" data-view="local" id="box-local-http-routes">
-<h3>HTTP routes</h3>
-<p class="note">for serve and AWS</p>
-<p>The API over HTTP without a server: the routes, who's asking, the answers. <code>skills-catalog serve</code> and the AWS function both run it.</p>
+<h3>dispatch · routes</h3>
+<p class="note">every operation, every face</p>
+<p>Runs each operation the one way every face does (the tools, the CLI and serve all go through its dispatch), and the API over HTTP without a server: the routes, who's asking, the answers, which <code>skills-catalog serve</code> and the AWS function answer.</p>
 
 
 
@@ -372,14 +392,28 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 </div>
 </details></div>
 </article>
+<article class="card" data-box="local-opener" data-view="local" id="box-local-local-opener">
+<h3>opener</h3>
+<p class="note">wires the local catalog</p>
+<p>Opens the local catalog: the SQLite file, the files folder, search and the outbox, and the local sign-in, each plugged into the catalog's rules.</p>
+
+<p><span class="kicker">Uses</span> catalog rules, files, search, local sign-in, outbox, versions</p>
+
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/index.ts"><code>core/src/local/index.ts</code></a></p>
+
+
+
+
+
+</article>
 <article class="card" data-box="records" data-view="local" id="box-local-records">
 <h3>versions</h3>
 <p class="note">SQLite</p>
 <p>Every skill's versions, owners and the latest pointer, in one SQLite file shared by every process on this machine.</p>
 
-<p><span class="kicker">Uses</span> catalog rules, files, search, local sign-in, outbox</p>
-<p><span class="kicker">Used by</span> catalog rules, search</p>
-<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/db.ts"><code>core/src/local/db.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/storage.ts"><code>core/src/local/storage.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/metadata.ts"><code>core/src/local/metadata.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/index.ts"><code>core/src/local/index.ts</code></a></p>
+
+<p><span class="kicker">Used by</span> opener, search</p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/db.ts"><code>core/src/local/db.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/storage.ts"><code>core/src/local/storage.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/metadata.ts"><code>core/src/local/metadata.ts</code></a></p>
 
 
 
@@ -392,7 +426,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <p>No sign-in on one machine: the Developer acts as a named developer (the computer's login by default), labelled a local sign-in for demo purposes.</p>
 
 
-<p><span class="kicker">Used by</span> versions</p>
+<p><span class="kicker">Used by</span> opener</p>
 <p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/identity.ts"><code>core/src/local/identity.ts</code></a></p>
 <p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/test/identity.test.ts"><code>client/test/identity.test.ts</code></a></p>
 
@@ -453,7 +487,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <p>Keyword search over each skill's name and description (SQLite FTS5), rebuilt from the stored versions.</p>
 
 <p><span class="kicker">Uses</span> versions</p>
-<p><span class="kicker">Used by</span> versions</p>
+<p><span class="kicker">Used by</span> opener</p>
 <p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/search-index.ts"><code>core/src/local/search-index.ts</code></a></p>
 <p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/discovery.test.ts"><code>core/test/discovery.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/memory-search-index.test.ts"><code>core/test/memory-search-index.test.ts</code></a></p>
 
@@ -490,7 +524,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <p>Every file of every version, named by its fingerprint (sha256), written only if absent: a version's files never change.</p>
 
 
-<p><span class="kicker">Used by</span> versions</p>
+<p><span class="kicker">Used by</span> opener</p>
 <p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/blobs.ts"><code>core/src/local/blobs.ts</code></a></p>
 <p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/file"><code>core/test/file*.test.ts</code></a></p>
 
@@ -504,7 +538,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <p>An event saved with each version, in the same transaction, then delivered to search.</p>
 
 
-<p><span class="kicker">Used by</span> versions</p>
+<p><span class="kicker">Used by</span> opener</p>
 <p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/outbox.ts"><code>core/src/local/outbox.ts</code></a></p>
 
 
@@ -581,7 +615,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <p class="why"><span class="kicker">Why</span> Assistants can do everything a person can, and the faces can't drift apart; two names that sounded alike confused readers</p>
 
 <p class="meta">The owner · 2026-09-29</p>
-<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=api">the API (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=mcp">MCP server (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=cli">CLI (skills-catalog)</a> <a class="chip" href="catalog.html#box=http-routes">HTTP routes (the catalog, on one machine)</a></p>
+<p class="about"><span class="kicker">About</span> <a class="chip" href="skills-catalog.html#box=api">the API (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=mcp">MCP server (skills-catalog)</a> <a class="chip" href="skills-catalog.html#box=cli">CLI (skills-catalog)</a> <a class="chip" href="catalog.html#box=http-routes">dispatch · routes (the catalog, on one machine)</a></p>
 
 </div>
 </details>
@@ -606,9 +640,9 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 
 <p class="meta">The owner · 2026-09-29 · Yes, except the web page</p>
 <p class="about"><span class="kicker">About</span> <a class="chip" href="catalog.html">catalog</a></p>
-<details class="aspect"><summary><strong>Skills store: versions + files</strong>: <span class="pick">DynamoDB + S3</span>, chosen over Postgres + S3, Aurora DSQL + S3, SQLite + a folder</summary>
+<details class="aspect"><summary><strong>Skills store: versions + files</strong>: <span class="pick">DynamoDB + S3</span>, chosen over Postgres + S3, Aurora DSQL + S3, SQLite on a small machine</summary>
 
-<div class="matrix-wrap"><table class="matrix"><thead><tr><th scope="col">What drives it</th><th scope="col" class="">SQLite + a folder<span class="sub">built today, on one machine</span></th><th scope="col" class="chosen">DynamoDB + S3 <span class="tag chosen-tag">chosen</span><span class="sub">on demand; create-only files</span></th><th scope="col" class="">Postgres + S3<span class="sub">Aurora Serverless v2</span></th><th scope="col" class="">Aurora DSQL + S3<span class="sub">serverless, Postgres-like</span></th><th scope="col" class="">SQLite + a folder<span class="sub">today's store on one small machine</span></th></tr></thead><tbody><tr><th scope="row">Cost when idle<span class="sub">favours DynamoDB + S3</span></th><td class="">$0</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0: no hourly charge; 25 GB free</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> storage only while paused</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0: 100k DPUs and 1 GB free</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> $5/month, always on</td></tr><tr><th scope="row">Cost at 100k skills<span class="sub">favours DynamoDB + S3</span></th><td class="">$0</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> ≈$0 records; files ≈$0.14/month</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> cents paused; $43.80 kept warm</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> $8 per million DPUs past free</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> $5; 20 GB disk</td></tr><tr><th scope="row">Publish is all or nothing</th><td class="">one transaction</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> one transaction: 100 writes, 4 MB</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> one transaction</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> retry on conflict; 3,000 rows</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> one transaction</td></tr><tr><th scope="row">Files written only if absent</th><td class="">temp name, then rename</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> S3 If-None-Match, forced by a bucket rule</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> the same S3 rule</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> the same S3 rule</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> as today</td></tr><tr><th scope="row">First request after idle<span class="sub">favours DynamoDB + S3</span></th><td class="">instant</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> no resume step</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> ≈15 s, longer after 24 h</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> no instance to wake</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> always on</td></tr><tr><th scope="row">Same tests as local<span class="sub">favours SQLite + a folder</span></th><td class="">the tests</td><td class="v-poor chosen"><span class="mark" title="counts against it" aria-label="counts against it">−</span> a new adapter</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> a new SQL adapter</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> a new adapter; SQL subset</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> the same code</td></tr><tr><th scope="row">Lock-in<span class="sub">favours Postgres + S3</span></th><td class="">none</td><td class="v-even chosen"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> AWS API; open twin Alternator; files: any S3 API</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> Postgres and the S3 API run anywhere</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> no extensions, triggers or full-text</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> none</td></tr><tr><th scope="row">The work to run it<span class="sub">favours DynamoDB + S3</span></th><td class="">none</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> none: managed</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> a VPC or the Data API; 15 s timeouts</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> none: managed</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> patching, TLS, backups</td></tr></tbody></table></div>
+<div class="matrix-wrap"><table class="matrix"><thead><tr><th scope="col">What drives it</th><th scope="col" class="">SQLite + a folder<span class="sub">built today, on one machine</span></th><th scope="col" class="chosen">DynamoDB + S3 <span class="tag chosen-tag">chosen</span><span class="sub">on demand; create-only files</span></th><th scope="col" class="">Postgres + S3<span class="sub">Aurora Serverless v2</span></th><th scope="col" class="">Aurora DSQL + S3<span class="sub">serverless, Postgres-like</span></th><th scope="col" class="">SQLite on a small machine<span class="sub">today's store</span></th></tr></thead><tbody><tr><th scope="row">Cost when idle<span class="sub">favours DynamoDB + S3</span></th><td class="">$0</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0: no hourly charge; 25 GB free</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> storage only while paused</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0: 100k DPUs and 1 GB free</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> $5/month, always on</td></tr><tr><th scope="row">Cost at 100k skills<span class="sub">favours DynamoDB + S3</span></th><td class="">$0</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> ≈$0 records; files ≈$0.14/month</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> cents paused; $43.80 kept warm</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> $8 per million DPUs past free</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> $5; 20 GB disk</td></tr><tr><th scope="row">Publish is all or nothing</th><td class="">one transaction</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> one transaction: 100 writes, 4 MB</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> one transaction</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> retry on conflict; 3,000 rows</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> one transaction</td></tr><tr><th scope="row">Files written only if absent</th><td class="">temp name, then rename</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> S3 If-None-Match, forced by a bucket rule</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> the same S3 rule</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> the same S3 rule</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> as today</td></tr><tr><th scope="row">First request after idle<span class="sub">favours DynamoDB + S3</span></th><td class="">instant</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> no resume step</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> ≈15 s, longer after 24 h</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> no instance to wake</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> always on</td></tr><tr><th scope="row">Same tests as local<span class="sub">favours SQLite on a small machine</span></th><td class="">the tests</td><td class="v-poor chosen"><span class="mark" title="counts against it" aria-label="counts against it">−</span> a new adapter</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> a new SQL adapter</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> a new adapter; SQL subset</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> the same code</td></tr><tr><th scope="row">Lock-in<span class="sub">favours Postgres + S3</span></th><td class="">none</td><td class="v-even chosen"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> AWS API; open twin Alternator; files: any S3 API</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> Postgres and the S3 API run anywhere</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> no extensions, triggers or full-text</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> none</td></tr><tr><th scope="row">The work to run it<span class="sub">favours DynamoDB + S3</span></th><td class="">none</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> none: managed</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> a VPC or the Data API; 15 s timeouts</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> none: managed</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> patching, TLS, backups</td></tr></tbody></table></div>
 <p class="legend-line"><span class="mark">+</span> counts for it · <span class="mark">=</span> neither · <span class="mark">−</span> counts against it</p></details>
 <details class="aspect"><summary><strong>Search</strong>: <span class="pick">Search file in S3</span>, chosen over OpenSearch, Postgres, S3 Vectors</summary>
 
@@ -628,10 +662,10 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <p class="legend-line"><span class="mark">+</span> counts for it · <span class="mark">=</span> neither · <span class="mark">−</span> counts against it · <span class="mark">?</span> not known when it was weighed</p></details>
 <details class="aspect"><summary><strong>Web UI hosting</strong>: <span class="pick">CloudFront + S3</span>, chosen over Amplify Hosting, The compute</summary>
 <p class="aspect-note"><span class="kicker">Since</span> This was weighed on CloudFront's flat-rate Free plan. At the first deploy AWS refused that plan for this stack's web firewall, so CloudFront is pay-as-you-go (B31): the cells about the Free plan are as they were then.</p>
-<div class="matrix-wrap"><table class="matrix"><thead><tr><th scope="col">What drives it</th><th scope="col" class="">serve<span class="sub">127.0.0.1, planned</span></th><th scope="col" class="chosen">CloudFront + S3 <span class="tag chosen-tag">chosen</span><span class="sub">pay-as-you-go</span></th><th scope="col" class="">Amplify Hosting<span class="sub">managed builds</span></th><th scope="col" class="">The compute<span class="sub">the API serves the page too</span></th></tr></thead><tbody><tr><th scope="row">Cost when idle</th><td class="">$0</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0 on the Free plan</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0.023/GB stored</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> the compute's own</td></tr><tr><th scope="row">Cost per use<span class="sub">favours CloudFront + S3</span></th><td class="">$0</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> 1M requests, 100 GB included</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> $0.15/GB served</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> every page load is an API call; no edge cache</td></tr><tr><th scope="row">A web firewall<span class="sub">favours CloudFront + S3</span></th><td class="">127.0.0.1 only</td><td class="v-unknown chosen"><span class="mark" title="not known when it was weighed" aria-label="not known when it was weighed">?</span> included; its limits not re-read</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> $15/month extra</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> none at the edge</td></tr><tr><th scope="row">The work to set it up<span class="sub">favours CloudFront + S3</span></th><td class="">built into serve</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> plan subscribed by API (CDK)</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> builds at $0.01 a minute</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> nothing extra</td></tr></tbody></table></div>
+<div class="matrix-wrap"><table class="matrix"><thead><tr><th scope="col">What drives it</th><th scope="col" class="">serve<span class="sub">127.0.0.1, planned</span></th><th scope="col" class="chosen">CloudFront + S3 <span class="tag chosen-tag">chosen</span><span class="sub">on the flat-rate Free plan, as weighed</span></th><th scope="col" class="">Amplify Hosting<span class="sub">managed builds</span></th><th scope="col" class="">The compute<span class="sub">the API serves the page too</span></th></tr></thead><tbody><tr><th scope="row">Cost when idle</th><td class="">$0</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0 on the Free plan</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0.023/GB stored</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> the compute's own</td></tr><tr><th scope="row">Cost per use<span class="sub">favours CloudFront + S3</span></th><td class="">$0</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> 1M requests, 100 GB included</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> $0.15/GB served</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> every page load is an API call; no edge cache</td></tr><tr><th scope="row">A web firewall<span class="sub">favours CloudFront + S3</span></th><td class="">127.0.0.1 only</td><td class="v-unknown chosen"><span class="mark" title="not known when it was weighed" aria-label="not known when it was weighed">?</span> included; its limits not re-read</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> $15/month extra</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> none at the edge</td></tr><tr><th scope="row">The work to set it up<span class="sub">favours CloudFront + S3</span></th><td class="">built into serve</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> plan subscribed by API (CDK)</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> builds at $0.01 a minute</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> nothing extra</td></tr></tbody></table></div>
 <p class="legend-line"><span class="mark">+</span> counts for it · <span class="mark">=</span> neither · <span class="mark">−</span> counts against it · <span class="mark">?</span> not known when it was weighed</p></details>
 <details class="aspect"><summary><strong>AWS only or portable: the whole shape</strong>: <span class="pick">A · AWS serverless</span>, chosen over B · One Postgres, C · One machine</summary>
-
+<p class="aspect-note"><span class="kicker">Since</span> The cells name CloudFront's flat-rate Free plan as it was weighed. AWS refused that plan for this stack's web firewall at the first deploy, so CloudFront is pay-as-you-go in both of the stack's setups (B31).</p>
 <div class="matrix-wrap"><table class="matrix"><thead><tr><th scope="col">What drives it</th><th scope="col" class="">Built today<span class="sub">on this machine</span></th><th scope="col" class="chosen">A · AWS serverless <span class="tag chosen-tag">chosen</span><span class="sub">DynamoDB, S3, Lambda</span></th><th scope="col" class="">B · One Postgres<span class="sub">Aurora Serverless v2</span></th><th scope="col" class="">C · One machine<span class="sub">today's catalog, hosted</span></th></tr></thead><tbody><tr><th scope="row">Cost when idle<span class="sub">favours A · AWS serverless</span></th><td class="">$0: the Developer's machine</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> $0: nothing runs</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> storage only when paused; $43.80/month kept warm</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> $5/month, always on</td></tr><tr><th scope="row">First request after a quiet night<span class="sub">favours C · One machine</span></th><td class="">instant</td><td class="v-even chosen"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> a cold function start</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> ≈15 s to resume, longer after 24 h</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> instant: always on</td></tr><tr><th scope="row">Same tests as local<span class="sub">favours C · One machine</span></th><td class="">the tests</td><td class="v-poor chosen"><span class="mark" title="counts against it" aria-label="counts against it">−</span> new adapters for every store</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> one SQL adapter, close to today's</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> the same code</td></tr><tr><th scope="row">The work to run it<span class="sub">favours A · AWS serverless</span></th><td class="">none</td><td class="v-good chosen"><span class="mark" title="counts for it" aria-label="counts for it">+</span> no machine to patch</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> a VPC or Data API; 15 s timeouts</td><td class="v-poor"><span class="mark" title="counts against it" aria-label="counts against it">−</span> patching, TLS, restarts, restores</td></tr><tr><th scope="row">Lock-in<span class="sub">favours B · One Postgres</span></th><td class="">none</td><td class="v-poor chosen"><span class="mark" title="counts against it" aria-label="counts against it">−</span> Streams, Pipes, flat-rate plan: AWS only</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> Postgres + S3 API run anywhere</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> runs anywhere</td></tr><tr><th scope="row">Time to build<span class="sub">favours C · One machine</span></th><td class="">built</td><td class="v-poor chosen"><span class="mark" title="counts against it" aria-label="counts against it">−</span> most: 4 stores, presigned links, CDK</td><td class="v-even"><span class="mark" title="neither for nor against" aria-label="neither for nor against">=</span> middle: one database adapter</td><td class="v-good"><span class="mark" title="counts for it" aria-label="counts for it">+</span> least: sign-in, TLS, backups</td></tr></tbody></table></div>
 <p class="legend-line"><span class="mark">+</span> counts for it · <span class="mark">=</span> neither · <span class="mark">−</span> counts against it</p></details>
 </div>
@@ -770,7 +804,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <text class="d-edge-label d-map-label--start" x="260.3" y="358.5">find, fetch</text>
 </svg></div></div></figure></figure></div></section>
 <section><h2>Code and tests</h2>
-<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local"><code>core/src/local/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/catalog.ts"><code>core/src/catalog.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/open.ts"><code>core/src/open.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/http"><code>core/src/http/**</code></a></p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local"><code>core/src/local/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/catalog.ts"><code>core/src/catalog.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/http"><code>core/src/http/**</code></a></p>
 <p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test"><code>core/test/**</code></a></p>
 
 </section>
