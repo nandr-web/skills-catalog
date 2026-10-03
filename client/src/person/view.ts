@@ -189,7 +189,42 @@ function diff({ s, say, m }: Ctx, r: DiffResult): string {
 
 // Errors (terminal only): the sentence without its code, and a next step the person can type. Those with no words of
 // their own here keep their text, only without the leading code (a person has no use for "not_found:").
-function error({ say, m }: Ctx, a: Answer): string {
+/** A publish's refusals in the person's words: what happened and what they do next (the assistant's words tell it what
+ *  to tell them). Undefined for a refusal with no words of its own here. */
+function publishError({ s, say }: Ctx, a: Answer): string | undefined {
+  const e = a.error!;
+  const d = e.data as Record<string, unknown>;
+  const text = (v: unknown) => oneLine(String(v));
+  switch (e.code) {
+    case 'not_owner':
+      return say('errors.not_owner', { name: text(d['name']), owners: ((d['owners'] as string[] | undefined) ?? []).map(text).join(', ') });
+    case 'unauthenticated':
+      return a.text === s.word('errors.unauthenticated_local') ? say('errors.unauthenticated_local') : undefined;
+    case 'invalid_manifest': {
+      if (d['folder'] === undefined) return undefined;
+      const code = String(d['problem'] ?? 'missing');
+      const first = ((d['fields'] as string[] | undefined) ?? [])[0];
+      const phrases = s.word('errors.invalid_manifest_problem') as Record<string, string> | undefined;
+      const key = code === 'missing_fields' && first && phrases?.[first] ? first : code;
+      const phrase = phrases?.[key];
+      if (!phrase) return undefined;
+      const problem = s.format(phrase, { feature: text(d['feature'] ?? ''), field: `"${text(first ?? '')}"` });
+      return say('errors.invalid_manifest', { folder: text(d['folder']), problem });
+    }
+    case 'conflict':
+      if (d['held'] === true) return undefined;
+      return d['folder'] !== undefined ? say('errors.publish_conflict') : say('errors.conflict', { name: text(d['name']), latest: text(d['latest']) });
+    case 'secret_suspected': {
+      const kind = (s.word('errors.secret_kind') as Record<string, string> | undefined)?.[String(d['kind'])];
+      return kind === undefined ? undefined : say('errors.secret_suspected', { path: flagText(String(d['path'])), line: text(d['line']), kind });
+    }
+    default:
+      return undefined;
+  }
+}
+
+function error(c: Ctx, a: Answer): string {
+  const { say, m } = c;
   const { paint } = m;
   const e = a.error!;
   const d = e.data as Record<string, unknown>;
@@ -202,6 +237,8 @@ function error({ say, m }: Ctx, a: Answer): string {
     return out.join('\n');
   }
   if (e.code === 'not_installed' && typeof d['name'] === 'string') return `${mark} ${say('errors.not_installed', { name: oneLine(d['name']) })}`;
+  const publishing = publishError(c, a);
+  if (publishing !== undefined) return `${mark} ${publishing}`;
   return `${mark} ${a.text.replace(/^[a-z_]+: /, '')}`;
 }
 

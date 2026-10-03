@@ -77,6 +77,28 @@ describe('publish <folder> at a terminal (the person)', () => {
   });
 });
 
+describe('a person\'s refusals are in their words (validator: they read the assistant\'s "Tell the person")', () => {
+  const assistantOnly = /Tell the person|to the person|Never choose a name for them|propose/i;
+  it('not_owner, no developer, a malformed SKILL.md and a folder changed since the preview: what happened and what to do, with ✗', async () => {
+    const p = place();
+    await cli(p, ['publish', folder(p, 'notes-draft')], { tty: true, person: true, answers: ['y'], env: AS });
+    const notOwner = await cli(p, ['publish', folder(p, 'notes-draft', 'Changed.\n')], { tty: true, person: true, answers: ['y'], env: { SKILLS_AS: 'bob' } });
+    expect(notOwner.code).toBe(1);
+    expect(notOwner.err).toContain(S.format(S.word('person.errors.not_owner'), { name: 'notes-draft', owners: 'ana' }));
+    const nobody = await cli(p, ['publish', folder(p, 'other-draft')], { tty: true, person: true });
+    expect(nobody.err).toContain(S.word('person.errors.unauthenticated_local'));
+    const dir = join(p.dir, 'work', 'broken');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'SKILL.md'), '---\ndescription: no name here\n---\nBody.\n');
+    const broken = await cli(p, ['publish', dir], { tty: true, person: true, env: AS });
+    expect(broken.err).toContain('SKILL.md');
+    for (const r of [notOwner, nobody, broken]) {
+      expect(r.err).toContain('✗');
+      expect(r.err).not.toMatch(assistantOnly);
+    }
+  });
+});
+
 describe('publish <folder> with no terminal (an assistant in a shell)', () => {
   it('previews only (nothing stored), prints the exact step-2 command, exit 3; that command publishes as printed', async () => {
     const p = place();

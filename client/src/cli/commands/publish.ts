@@ -8,7 +8,9 @@
 // person's (run.ts refuses it with no terminal).
 import { shellQuote } from '@skills-catalog/core';
 import { flagText } from '@skills-catalog/core/skill-tree';
-import { perform } from '../../operations.ts';
+import { perform, type Answer } from '../../operations.ts';
+import { terminal } from '../../person/medium.ts';
+import { personView } from '../../person/view.ts';
 import { exactly, fromSchemaFlags, schemaFlags, type Command, type Env } from '../command.ts';
 
 const own = schemaFlags('publish_skill_to_catalog', ['folder']);
@@ -33,11 +35,13 @@ function step2Command(cli: string, p: Preview['step2']): string {
 
 async function previewFirst(env: Env): Promise<number> {
   const { ctx, s, io, input, withActing } = env;
+  // A refusal for a person reading a terminal: their view of it (person/view.ts), else the operation's words.
+  const refusal = (a: Answer) => (io.person ? withActing(personView(s, terminal(io.color === true), 'publish_skill_to_catalog', a, input) ?? a.text) : a.text);
   const seen = await perform(ctx, 'publish_skill_to_catalog', 'publish', input);
   const view = seen.view as Preview | undefined;
   if (seen.isError || view?.kind !== 'publish_preview') {
     // A refusal, or nothing to publish (identical to the latest): the operation's own words.
-    (seen.isError ? io.stderr : io.stdout)(seen.text + '\n');
+    (seen.isError ? io.stderr : io.stdout)((seen.isError ? refusal(seen) : seen.text) + '\n');
     return seen.isError ? 1 : 0;
   }
   const preview = s.format(s.word('publish.preview_person'), view.fields).trimEnd();
@@ -58,6 +62,6 @@ async function previewFirst(env: Env): Promise<number> {
     ...(message === null ? {} : { message }),
     ...(input['allow_suspected_secrets'] === true ? { allow_suspected_secrets: true } : {}),
   });
-  (a.isError ? io.stderr : io.stdout)(a.text + '\n');
+  (a.isError ? io.stderr : io.stdout)((a.isError ? refusal(a) : a.text) + '\n');
   return a.isError ? 1 : 0;
 }
