@@ -311,3 +311,24 @@ describe('an installed copy edited by hand', () => {
     expect(readFileSync(join(dest, 'SKILL.md'), 'utf8')).toContain('Body, v2.');
   });
 });
+
+// A file that isn't instructions holds an install, but the words don't say it can run things; an image the
+// instructions only link to doesn't hold it at all (review P3.1).
+describe('files that aren\'t instructions', () => {
+  it('an unknown file holds the install in true words; a linked image doesn\'t hold it', async () => {
+    const p = place();
+    const { open, request, skillMd } = await import('./seed.ts');
+    const { actAs } = await import('@skills-catalog/core');
+    const c = await open(p);
+    await c.publish(request('with-data', [{ path: 'SKILL.md', text: skillMd('with-data', 'Has data.') }, { path: 'data.bin', text: 'x\n' }]), actAs('ana'));
+    await c.publish(request('with-logo', [{ path: 'SKILL.md', text: skillMd('with-logo', 'Has a logo.', 'See ![logo](logo.png).\n') }, { path: 'logo.png', text: 'png\n' }]), actAs('ana'));
+    await c.close?.();
+    const ctx = ctxFor(p);
+    const held = await perform(ctx, 'install_shared_skill', 'install_shared_skill', { name: 'with-data' });
+    expect(held.outcome).toBe('held');
+    expect(held.text).toContain('not plain instructions');
+    expect(held.text).not.toContain('can run things');
+    const logo = await perform(ctx, 'install_shared_skill', 'install_shared_skill', { name: 'with-logo' });
+    expect(logo.outcome).toBe('installed');
+  });
+});

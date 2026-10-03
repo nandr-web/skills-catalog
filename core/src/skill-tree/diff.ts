@@ -100,14 +100,32 @@ export function isMarkdown(path: string): boolean {
   return MARKDOWN_EXT.test(path);
 }
 
-// The gate's reason for one added or changed file, if any: one reason per file, runnable_file over non_markdown.
-export function fileRisk(f: TreeFile): RiskFlag | null {
+// An image or data file is inert (review P3.1) only when every one of these holds: its extension is one of these, it
+// isn't executable and has no #!, and no markdown file in the skill names it except as a link's target (`](path)`),
+// since naming it in the instructions is how a skill would have the assistant run it (`python3 tools/x.txt`). Anything
+// else that isn't markdown stays non_markdown: command-position detection isn't built, so this flag is the guard.
+const INERT_EXT = /\.(png|jpe?g|gif|webp|bmp|ico|pdf|txt|csv|tsv|json|ya?ml|toml)$/i;
+function inert(f: TreeFile, tree: readonly TreeFile[]): boolean {
+  if (!INERT_EXT.test(f.path) || f.mode === '0755' || (f.bytes.length >= 2 && f.bytes[0] === 0x23 && f.bytes[1] === 0x21)) return false;
+  const base = f.path.split('/').at(-1)!;
+  for (const m of tree) {
+    if (!isMarkdown(m.path) || !isText(m.bytes)) continue;
+    const text = decodeText(m.bytes).replace(/\]\([^)\s]*\)/g, '](…)');
+    if (text.includes(f.path) || text.includes(base)) return false;
+  }
+  return true;
+}
+
+// The gate's reason for one added or changed file, if any: one reason per file, runnable_file over non_markdown. With the
+// whole tree, an inert image or data file has none.
+export function fileRisk(f: TreeFile, tree?: readonly TreeFile[]): RiskFlag | null {
   const flags = fileFlags(f);
   if (flags.executable || flags.script) {
     const detail = flags.executable && flags.script ? 'executable script' : flags.executable ? 'executable' : 'script';
     return { kind: 'runnable_file', path: f.path, detail };
   }
   if (isMarkdown(f.path)) return null;
+  if (tree && inert(f, tree)) return null;
   const ext = /\.([^./]+)$/.exec(f.path)?.[1];
   return { kind: 'non_markdown', path: f.path, detail: ext ? `.${ext} file` : 'file with no extension' };
 }
@@ -463,7 +481,7 @@ export function diffTrees(
   const grants = grantsOf(to.files, fb.fm, safeKeys, nonGranting);
   const safeChanged = safeKeys.some((k) => JSON.stringify(fa.fm[k]) !== JSON.stringify(fb.fm[k]));
   for (const { a, b, path } of changed) {
-    const own = b ? fileRisk(b) : null;
+    const own = b ? fileRisk(b, to.files) : null;
     if (own?.kind === 'runnable_file') {
       risk.push(own);
       continue;

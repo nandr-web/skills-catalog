@@ -596,7 +596,9 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
     if (flags.length) {
       recordHold(ctx, req.name, version, 'flagged', flags, entry ? version - entry.version : 0);
       // Over an installed copy the sentence names the version installed now.
-      const over = entry ? { word: 'held_over', from: entry.version } : { word: 'held' };
+      // Only files that aren't instructions (no script, nothing that runs at load): not "it can run things" (review P3.1).
+      const filesOnly = flags.every((f) => f.kind === 'non_markdown');
+      const over = entry ? { word: 'held_over', from: entry.version } : { word: filesOnly ? 'held_files' : 'held' };
       const text = s.format(w[ctx.face === 'cli' ? `${over.word}_cli` : over.word], { ...held, ...over, reasons: reasons(s, flags) });
       const view: InstallView = { kind: 'install', name: req.name, version, held: { reason: 'flagged', ...(entry ? { from: entry.version } : {}), flags: [...flags], command: held.command } };
       return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held', view };

@@ -44,7 +44,7 @@ const v1: File[] = [{ path: 'SKILL.md', text: manifest() }, { path: 'notes.md', 
 // v2: a markdown-only change, plus what raises each flag kind against v1 and nothing else.
 const RAISES: Record<string, (files: File[]) => File[]> = {
   runnable_file: (f) => [...f, { path: 'scripts/run.sh', text: '#!/bin/sh\necho run\n', mode: '0755' }],
-  non_markdown: (f) => [...f, { path: 'data.json', text: '{}\n' }],
+  non_markdown: (f) => [...f, { path: 'data.bin', text: 'x\n' }],
   // Only the front matter changes: another file changed while the new version grants something is instructions_changed too.
   capability_frontmatter: (f) => f.map((x) => (x.path === 'SKILL.md' ? { ...x, text: manifest('hooks:\n  Stop:\n    - hooks:\n        - type: command\n          command: echo done\n') } : x.path === 'notes.md' ? v1[1]! : x)),
 };

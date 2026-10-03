@@ -838,7 +838,7 @@ showing (the web UI, a publish preview), and the update hold never reads them. F
     So `allowed-tools`, `hooks`, `context`, `agent`, `shell` and any key Claude Code adds later count: it fails closed like the
     safe list. The detail names the grant (`pre-approves Bash(python3 *)`), and the flag reads "its instructions changed while it
     pre-approves Bash(python3 *)";
-  - `non_markdown`: any other non-markdown file added or changed;
+  - `non_markdown`: any other non-markdown file added or changed, except an inert image or data file (review P3.1: an extension of png, jpg, jpeg, gif, webp, bmp, ico, pdf, txt, csv, tsv, json, yaml, yml or toml; not executable; no `#!`; and no markdown file in the skill names it except as a link's target `](path)`, since naming it is how instructions would have it run). Its hold says the files aren't plain instructions, not that the skill can run things;
   - `new_publisher`: a different publisher {from, to};
 - from the rules reviewer (§10), run by the installer on the fetched version, so the update hold never waits for the catalog:
   prompt-injection patterns (instructions to ignore prior guidance, exfiltration or curl-to-shell, hidden unicode, HTML
