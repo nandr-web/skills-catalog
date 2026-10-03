@@ -23,6 +23,8 @@ export const update: Command = {
   flags: { ...own, accept: { type: 'boolean' }, target: { type: 'string' } },
   personOnly: ['accept'],
   personOnlyOp: 'accept_held_update',
+  // Every installed skill brought up to date: the flagged ones are held for the person, so it's safe unasked.
+  preAllowBare: true,
   input(words, values) {
     // --accept takes one skill; --target says where a held first install goes, so it goes only with --accept. Checked
     // before the person-only step, so a person is never given a command that can't work.

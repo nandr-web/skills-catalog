@@ -64,11 +64,11 @@ export function createHandler(o: HandlerOptions): { handle(req: WebRequest): Pro
     return err.code === 'internal_error' && typeof log === 'string' ? new CatalogError(err.code, { ...err.data, log: basename(log) }) : err;
   }
 
-  /** The developer acting on this request (contract §7): a name setup knows, `me` or one of `demo_developers`. */
+  /** The developer acting on this request (contract §7): the one every face acts as (settings: SKILLS_AS, else setup's
+   *  `me`, else the login), or one of setup's `demo_developers`, named in the request's header. */
   function actor(as: string | undefined): string {
-    // Until setup's own config lands (P1b), config.json's `me` and `demo_developers` are read here.
-    const config = readConfig(o.settings.home) as { me?: unknown; demo_developers?: unknown };
-    const known = [config.me, ...(Array.isArray(config.demo_developers) ? config.demo_developers : [])].filter((d): d is string => typeof d === 'string');
+    const config = readConfig(o.settings.home) as { demo_developers?: unknown };
+    const known = [o.settings.developer, ...(Array.isArray(config.demo_developers) ? config.demo_developers : [])].filter((d): d is string => typeof d === 'string');
     if (as === undefined) throw new CatalogError('unauthenticated', {});
     const name = checkActor(as, 'X-Skills-Catalog-As');
     if (!known.includes(name)) throw new CatalogError('unauthenticated', {});

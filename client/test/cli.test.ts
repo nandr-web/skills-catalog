@@ -8,12 +8,11 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { actAs, renderError, CatalogError, Words } from '@skills-catalog/core';
-import { refuseRealPlaces } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
 import { readLock } from '../src/machine/lock.ts';
 import { cli, S } from './cli-io.ts';
 import { open, request, seed, skillMd } from './seed.ts';
-import { place, type Place } from './server.ts';
+import { childEnv, place, type Place } from './server.ts';
 
 const skills = (p: Place) => join(p.osHome, '.claude', 'skills');
 
@@ -27,11 +26,11 @@ describe('the CLI face', () => {
     expect(held).not.toMatch(/accept_held_update/);
   });
 
-  it('serves the catalog\'s and the installer\'s commands, the MCP server and the local page; preview, publish and setup are still to come', async () => {
+  it('serves the catalog\'s and the installer\'s commands, publish, the MCP server, the local page, setup, teardown and sign-in; preview is still to come', async () => {
     const p = place();
     const u = await cli(p, ['frobnicate']);
-    expect(u.err.split('\n').filter((l) => l.startsWith('  ')).map((l) => l.trim().split(' ')[1])).toEqual(['search', 'read', 'versions', 'diff', 'install', 'update', 'list', 'policy', 'update', 'stats', 'review', 'mcp', 'serve']);
-    for (const word of ['preview', 'publish', 'setup']) {
+    expect(u.err.split('\n').filter((l) => l.startsWith('  ')).map((l) => l.trim().split(' ')[1])).toEqual(['search', 'read', 'versions', 'diff', 'install', 'update', 'list', 'policy', 'publish', 'update', 'stats', 'review', 'mcp', 'serve', 'setup', 'teardown', 'login', 'logout']);
+    for (const word of ['preview']) {
       const r = await cli(p, [word, 'x']);
       expect([r.code, r.err], word).toEqual([1, u.err]);
     }
@@ -336,8 +335,7 @@ describe('the CLI face', () => {
   it('the real command: results on stdout with exit 0, a person-only step with no terminal on stderr with exit 3', async () => {
     const p = place();
     await seed(p);
-    const env = { PATH: process.env['PATH'] ?? '/usr/bin:/bin', HOME: p.osHome, SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl };
-    for (const v of [env.HOME, env.SKILLS_HOME]) refuseRealPlaces(v);
+    const env = childEnv(p);
     const bin = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
     // As the installed command starts it: node:sqlite's experimental warning is off, so stderr carries only our words.
     const run = (args: string[]) => spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', bin, ...args], { env, cwd: p.dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });

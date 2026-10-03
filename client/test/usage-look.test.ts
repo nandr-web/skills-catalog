@@ -13,7 +13,7 @@ import { cli } from './cli-io.ts';
 import { seed } from './seed.ts';
 import { place, type Place } from './server.ts';
 
-const env = (p: Place) => ({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome });
+const env = (p: Place) => ({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed });
 const events = (p: Place, kind: string) => readUsage(p.home).filter((e) => e.event === kind).map(({ v, at, ...e }) => e);
 
 describe('looks and answers', () => {

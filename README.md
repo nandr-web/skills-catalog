@@ -76,8 +76,9 @@ Install the Skills Catalog (https://github.com/nandr-web/skills-catalog). It nee
 1. git clone https://github.com/nandr-web/skills-catalog.git ~/skills-catalog
 2. cd ~/skills-catalog/core && npm ci --ignore-scripts
 3. cd ~/skills-catalog/client && npm ci --ignore-scripts
-4. Register its MCP server for all my projects:
-   claude mcp add skills-catalog --scope user -- "$(command -v node)" --disable-warning=ExperimentalWarning ~/skills-catalog/client/src/cli.ts mcp
+4. Run its guided setup: node ~/skills-catalog/client/src/cli.ts setup
+   Without a terminal it changes nothing and prints its questions, each with its flag:
+   ask me them, then run it again with my answers (or with --yes for every default).
 
 Show me each command before you run it.
 When it's done, tell me to restart Claude Code.
@@ -89,21 +90,23 @@ When it's done, tell me to restart Claude Code.
 git clone https://github.com/nandr-web/skills-catalog.git ~/skills-catalog
 cd ~/skills-catalog/core && npm ci --ignore-scripts
 cd ~/skills-catalog/client && npm ci --ignore-scripts
-claude mcp add skills-catalog --scope user -- "$(command -v node)" --disable-warning=ExperimentalWarning ~/skills-catalog/client/src/cli.ts mcp
+node ~/skills-catalog/client/src/cli.ts setup
 cd ~/skills-catalog
 ```
+
+Setup asks a few questions (Enter takes each default; `--yes` takes them all), shows the files it will change, and says what it did. It connects Claude Code to the catalog, signs you in locally as your login name (for demo purposes; no account), and adds the `skills-catalog` command to `~/.local/bin` (it says so if that folder isn't on your `PATH`). [The setup doc](docs/setup.md) lists every question and flag.
 
 ### Then
 
 Restart Claude Code and ask, for example, *"find a shared skill for release notes"* or *"publish my skill in ./my-skill"*.
 
-- **Catalog:** `~/.skills-catalog/catalog`. To share one with your team, add `-e SKILLS_CATALOG=file:///path/to/a/shared/folder` to the `claude mcp add` line.
+- **Catalog:** `~/.skills-catalog/catalog`; setup's `--catalog <folder>` puts it elsewhere. A folder catalog is for one machine (several people or assistants on it); not a network or synced folder, where versions can be lost. A team on several machines uses a hosted catalog (below).
 - **Installed skills:** `~/.claude/skills`, or the project's `.claude/skills` if you ask for this project.
 
 **Uninstall:**
 
 ```sh
-claude mcp remove skills-catalog --scope user
+node ~/skills-catalog/client/src/cli.ts teardown
 rm -rf ~/skills-catalog ~/.skills-catalog
 ```
 

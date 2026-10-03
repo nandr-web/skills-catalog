@@ -445,6 +445,27 @@ describe('the words file (vendored, recommended variant)', () => {
     expect(unusable).not.toMatch(/[{}]/);
   });
 
+  it('a config.json refusal of one key names the key, never its value; an install folder that isn\'t absolute has its own sentence', () => {
+    const s = Words.load();
+    const w = s.word('errors');
+    const effect = w.local_file_effect['config.json'];
+    const path = '/h/config.json';
+    for (const key of ['update_polcy', 'hooks', 'cooldown']) {
+      expect(renderError(s, new CatalogError('invalid_local_file', { file: 'config.json', why: 'wrong_shape', path, key }))).toBe(s.format(w.invalid_local_file_key, { path, key, effect }));
+    }
+    // A value that reached the data is never shown.
+    expect(renderError(s, new CatalogError('invalid_local_file', { file: 'config.json', why: 'wrong_shape', path, key: 'me', value: 'SECRET-ish' }))).not.toContain('SECRET-ish');
+    // An unknown policy names the setting (update_policy, or a skill's own overrides.<name>).
+    for (const key of ['update_policy', 'overrides.runner']) {
+      expect(renderError(s, new CatalogError('invalid_local_file', { file: 'config.json', why: 'unknown_policy', path, key }))).toBe(s.format(w.invalid_local_file_policy, { path, key, effect }));
+    }
+    // A budget's why names its key already: the plain sentence, as before.
+    const budget = renderError(s, new CatalogError('invalid_local_file', { file: 'config.json', why: 'not_a_budget', path, key: 'context_cost_budget' }));
+    expect(budget).toBe(s.format(w.invalid_local_file, { file: 'config.json', why: w.why.not_a_budget, path, key: 'context_cost_budget', effect }));
+    expect(renderError(s, new CatalogError('invalid_request', { field: 'SKILLS_INSTALL_DIR', why: 'not_absolute' }))).toBe(s.format(w.invalid_request_install_dir));
+    expect(renderError(s, new CatalogError('invalid_request', { field: 'name', why: 'not_absolute' }))).not.toBe(s.format(w.invalid_request_install_dir));
+  });
+
   it('a damaged lock or config file names the file by its path, says why, and what removing it would do', () => {
     const s = Words.load();
     const w = s.word('errors');

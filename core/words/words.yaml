@@ -421,6 +421,7 @@ tools:
         guided: "With confirm: the preview's flags, exactly as it lists them ([] if none)."
 results:
   acting_as: (Acting as {developer}, for demo purposes.)
+  acting_as_local: (Signed in locally as {developer}, this computer's login, for demo purposes. ${cli} setup changes it.)
   policy_name:
     auto: automatic
     notify: tell me first
@@ -725,6 +726,14 @@ results:
     review: "Review: {notes}. "
     older_rules: "The latest version, v{version}, was stored before one of today's rules, so this preview compares with nothing: every file shows as added and every grant is flagged. Publishing a new version is how its owner fixes it."
     published: Published {name} v{version} to the shared catalog (fingerprint checked). Teammates can find it now; installed copies pick it up at their next update.
+    preview_person: |
+      Preview: nothing is published yet. {name} would become v{version} in the shared catalog ({change}).
+      Files it would send ({n_send}): {send}
+      Files it skips ({n_skip}): {skip}
+      {review}
+    ask_person: "Publish these files as {name} v{version}? (y/N) "
+    declined_person: Nothing was published.
+    step2_cli: "Nothing was published: this needs the person's yes. Show them these lists; only after they say yes, run exactly: {command}"
     identical: "Nothing to publish: {folder} is identical to {name} v{latest}, the latest version."
   install:
     held: '{name} v{version} was NOT installed yet: it can run things on this machine without asking, because {reasons}. Tell the person each reason in plain words and ask whether to install it. Only if they agree: ${accept} with name "{name}", target "{target}", version {version}, confirm "{confirm}" and flags {flags}, all exactly as given here.'
@@ -808,6 +817,8 @@ results:
       unknown_field_cut: isn't a field this tool takes (its name is cut here to its first 200 characters)
       required: is required
       contradicting_flags: was set by two flags that contradict each other (use one)
+      not_through_setup: is a setting only the person turns on, by editing config.json themselves; setup never sets it
+      unknown_setting: isn't a setting config.json takes (the setup doc lists them)
       not_a_confirm: isn't a confirm value a preview gives
       not_a_held_confirm: isn't one a held install or update gives
       not_a_cursor: isn't a cursor an earlier page gave
@@ -934,12 +945,12 @@ results:
     invalid_request_catalog: "invalid_request: there's no catalog at {path}, the place SKILLS_CATALOG or --catalog names, so nothing was read. Most likely the path is mistyped. Tell the person so they can check it; don't change that setting or create anything there yourself. If they meant a new catalog, publishing their first skill to it creates it."
     invalid_request_catalog_unreadable: "invalid_request: the catalog at {path} is there but couldn't be opened (its permissions don't allow it, it's in the middle of a change in a folder this user can't write, or the file isn't laid out as a catalog should be), so nothing was read or changed. Tell the person so they can check it; if it may be mid-change, try once more after a moment. Don't change permissions or anything in that folder yourself."
     unauthenticated: "unauthenticated: the catalog needs the person to sign in, so nothing was done. Ask them to run ${cli} login in their own terminal; never ask for a password or token in the chat."
-    invalid_developer_setting: "invalid_developer_setting: the developer name in {setting} isn't a valid name (lowercase letters, digits and single hyphens), so nothing was done. It's a setting, not something in this call: don't retry or change the call. Tell the person; they fix it there, or run ${cli} setup in their own terminal."
+    invalid_developer_setting: "invalid_developer_setting: the developer name in {setting} isn't a valid name (lowercase letters, digits and single hyphens), so nothing was done. It's a setting, not something in this call: don't retry or change the call. Tell the person; they fix it there, or remove it so the name ${cli} setup saved is used."
     developer_setting:
       SKILLS_AS: the SKILLS_AS setting
       mcp_config: this assistant's settings for ${cli}
       me: the settings saved by ${cli} setup
-    unauthenticated_local: "unauthenticated: no developer name is set for this catalog, so nothing was published. Tell the person; they set theirs by running ${cli} setup in their own terminal. Never choose a name for them."
+    unauthenticated_local: "unauthenticated: no developer name is set for this catalog, so nothing was published. Tell the person; they set theirs by running ${cli} setup in their own terminal, or with SKILLS_AS in this assistant's settings for ${cli}. Never choose a name for them."
     forbidden: "forbidden: the catalog doesn't allow this for the person signed in, so nothing was done. Tell them; don't look for another way around it."
     forbidden_hosted: "forbidden: {catalog} is a hosted catalog, and this version runs locally only, so nothing was done. Tell the person; ${cli} setup points it at a local folder."
     forbidden_read_only: "forbidden: publishing isn't turned on here (this page's server was started without --publish), so nothing was published. To allow it, stop the server and start it again with ${cli} serve --publish."
@@ -991,6 +1002,7 @@ results:
     install_unsafe_path_characters: "install_unsafe: {path} has a character setup can't safely put into a command (a control character, $ or a backtick), so setup changed nothing. Tell the person: install skills-catalog (or Node) in a folder whose path doesn't, then run setup from there."
     install_unsafe_writable_by_others: "install_unsafe: {path} can be changed by other users on this machine, and the session-start hook would run the code there each time a session starts, so setup changed nothing. Tell the person: install skills-catalog (or Node) in a folder only they can change, then run setup from there. Don't change permissions yourself."
     install_unsafe_too_many_files: "install_unsafe: skills-catalog's installed files at {path} are too many, or nested too deep, for setup to check them all, and the session-start hook would run them each time a session starts, so setup changed nothing. Tell the person: install skills-catalog somewhere with an ordinary package tree (for example a fresh clone, then npm ci), then run setup from there. Don't delete or move files yourself."
+    install_unsafe_unreadable: "install_unsafe: setup couldn't look inside {path} (a folder it can't list, a link it can't follow, or a dependency it can't find), and the session-start hook would run what's there each time a session starts, so setup changed nothing: what it can't check, it can't call safe. Tell the person: install skills-catalog somewhere with an ordinary package tree (for example a fresh clone, then npm ci), then run setup from there. Don't change permissions yourself."
     assistant_config_elsewhere: "assistant_config_elsewhere: {setting} is set, so Claude Code may keep its settings and MCP servers somewhere other than where setup would write, and setup changed nothing. Tell the person; there are two ways on: set SKILLS_ASSISTANT_HOME to the folder Claude Code really uses and run setup again, or add the entries below by hand."
   person:
     list:
@@ -1159,6 +1171,12 @@ results:
         bad_name: "Fix: name it {suggestion} in its front matter, then publish again."
         missing: "Fix: add a SKILL.md with a name and a one-line description in its front matter, then publish again."
         other: "Fix: correct SKILL.md as described, then publish again."
+      not_owner: "{name} belongs to {owners}, and only they publish new versions of it, so nothing was published. Ask them to publish your change, or publish it as a new skill under another name."
+      unauthenticated_local: "No developer name is set here, so nothing was published. Set yours with ${cli} setup --me <name>, or SKILLS_AS=<name> for one command."
+      invalid_manifest: "{folder}/SKILL.md {problem}, so nothing was published. Fix it, then publish again."
+      publish_conflict: "Something the preview showed has changed since (the files, the message or the latest version), so nothing was published. Publish again to see the new preview."
+      conflict: "{name} has a newer version, v{latest}, than this change started from, so nothing was published. Read it first: ${cli} read {name}"
+      secret_suspected: "{path} line {line} looks like {kind}, so nothing was published. Remove it and publish again; if it isn't a secret, publish with --allow-suspected-secrets."
     accept_title: "{name} v{from} → v{to} is waiting for your OK"
     accept_title_install: "{name} v{to} is waiting for your OK"
     accept_where: "It would be installed to {path}."
@@ -1208,6 +1226,11 @@ setup:
     - ask: Add two demo developers, dev1 and dev2, to try it?
       default: "no"
       flag: --demo-developers
+    - ask: Add the skills-catalog command to your terminal? Setup puts a two-line launcher in {command_folder}, never over a file already there.
+      default: "yes"
+      flag: --terminal-command yes|no
+  welcome: "Welcome to Skills Catalog: your team's skills, found, shared and kept up to date by your assistant. {n} questions; press Enter to take the answer in [brackets]."
+  answers_heading: "Your answers:"
   no_terminal: |
     Skills Catalog setup has {n} questions and there's no terminal to ask them in, so nothing was changed.
     Ask the person these, then run setup again with their answers:
@@ -1226,11 +1249,27 @@ setup:
   settings_unusable:
     unreadable: "it can't be read: check its permissions"
     too_big: it's over 1 MiB
+    too_many_files: it's a folder with more than 64 entries, more than the installer reads
     not_json: it isn't a JSON object of settings
     link: it's a link, which isn't followed
     wrong_type: the setting {key} has the wrong type
     not_absolute: CLAUDE_CONFIG_DIR, which says where it is, isn't an absolute path
   updates_off: only when you ask (${cli} update)
+  per_skill: "- one skill differently (each can update its own way): ${cli} policy <auto|notify|pin> <name>"
+  assistant_claude_code: "Claude Code ({files})"
+  done_me: "- you: {me}, the name the catalog shows as who published what"
+  done_me_none: "- you: no name yet; publishing asks for one (run ${cli} setup --me <name>)"
+  done_demo: "- demo developers: {names}; act as one with --as <name> on a command, or SKILLS_AS=<name>"
+  catalog_hosted: "- {catalog} is a hosted catalog: sign in with ${cli} login before you publish."
+  catalog_shared_folder: "- Careful: {path} looks like a {kind} folder. A folder catalog works on one machine only; two machines writing it through a network or a sync service can lose versions without any error. For a team, use a hosted catalog."
+  shared_folder_kind:
+    network: network
+    synced: synced
+  command_added: "- terminal: {path} runs skills-catalog"
+  command_taken: "- terminal: {path} is already there and isn't setup's, so setup left it. To run this copy: {runnable}"
+  command_unsafe: "- terminal: others on this machine can change {folder}, so setup didn't put the skills-catalog command there. To run it: {runnable}"
+  command_off_path: "{folder} isn't on your PATH, so a terminal won't find skills-catalog yet. Add this line to your shell's startup file (for zsh, ~/.zshrc), then open a new terminal: export PATH={folder}:\"$PATH\""
+  command_none: "- terminal: no command added; to run skills-catalog: {runnable}"
   handoff_prompt: "Set up our team's Skills Catalog on this machine: run `${cli} setup` and ask me the questions it prints."
   handoff_prompt_fast: "Set up our team's Skills Catalog on this machine with the defaults: run `${cli} setup --yes`."
   next_claude_code: quit Claude Code if it's open, then start a new session (the catalog's tools load when a session starts) and ask it "is there a skill for ...?".
@@ -1243,7 +1282,11 @@ setup:
     mcp_replace: "- {path}: update the skills-catalog MCP server setup added before (Node or a setting has moved)"
     hook_add: "- {path}: add one session-start hook (it tells you when an update waits for your yes) and {rules} allow rule(s), so your assistant can search, read, install and update skills without asking you each time"
     hook_replace: "- {path}: update the session-start hook setup added before (Node or a setting has moved)"
+    rules_add: "- {path}: add {rules} allow rule(s), so your assistant can search, read, install and update skills without asking you each time (no session-start hook: session_start_hook is false)"
     record: "- {path}: a record of exactly what setup added, so teardown can remove just that"
+    command: "- {path}: add the skills-catalog command for your terminal (a launcher for this copy of skills-catalog)"
+    command_taken: "- {path} is already there and isn't setup's: it stays as it is, and no terminal command is added"
+    config_same: "- {path}: the catalog's settings stay as they are"
     backup: Before changing a file, setup saves a copy of it in {folder}.
     unchanged: Everything is already set up as it would be; nothing to change.
     ask: Go ahead? (Y/n)
@@ -1293,6 +1336,7 @@ setup:
       rule: the allow rule {rule}
       file: the file (setup had created it)
       skill: the companion skill
+      command: the skills-catalog command for your terminal
     nothing: Setup's record lists nothing left to remove; nothing was changed.
     record_unusable: "Setup's record ({path}) couldn't be used, so teardown removed nothing: it can't tell setup's entries from yours. These look like setup's; remove them by hand if you want them gone:"
     record_unusable_line: "- {path}: {what}"

@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, chmodSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CatalogError, Words, actAs, renderError, shellQuote } from '@skills-catalog/core';
-import { loadGolden } from '@skills-catalog/core/testing';
+import { loadGolden, mkfifo, processEnv, sandbox } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
 import { contextFor } from '../src/operations.ts';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
@@ -46,7 +46,7 @@ function plant(dir: string, files: Record<string, any>, p: Place): void {
     if (typeof v === 'string') writeFileSync(full, sub(v, p));
     else if (v.symlink) symlinkSync(sub(v.symlink, p), full);
     else if (v.hardlink) linkSync(sub(v.hardlink, p), full);
-    else if (v.fifo) execFileSync('mkfifo', [full]);
+    else if (v.fifo) mkfifo(full);
     else {
       writeFileSync(full, v.text);
       if (v.mode) chmodSync(full, parseInt(v.mode, 8));
@@ -54,7 +54,7 @@ function plant(dir: string, files: Record<string, any>, p: Place): void {
   }
 }
 
-const ctxFor = (p: Place, home = p.home) => contextFor(settingsFrom({ SKILLS_HOME: home, SKILLS_CATALOG: p.catalogUrl, SKILLS_AS: AS }), S, 'mcp').ctx;
+const ctxFor = (p: Place, home = p.home) => contextFor(settingsFrom({ SKILLS_HOME: home, SKILLS_CATALOG: p.catalogUrl, SKILLS_MANAGED_SETTINGS: p.managed, SKILLS_AS: AS }), S, 'mcp').ctx;
 
 // The values a preview gives for step 2, read from its words.
 function step2Of(text: string) {
@@ -278,7 +278,7 @@ describe('a folder in a command the person is told to run is one shell word (gol
       const dir = sub(c.folder, p);
       const arg = shellQuote(dir);
       expect(shellWords(arg)).toEqual([dir]);
-      expect(execFileSync('/bin/sh', ['-c', `printf '%s\\n' ${arg}`], { cwd: join(p.dir, 'work'), encoding: 'utf8' })).toBe(`${dir}\n`);
+      expect(execFileSync('/bin/sh', ['-c', `printf '%s\\n' ${arg}`], { cwd: join(p.dir, 'work'), env: processEnv(sandbox()), encoding: 'utf8' })).toBe(`${dir}\n`);
       if (c.expect.quoted !== undefined && p.dir === p.dir.replace(/[^A-Za-z0-9@%+=:,./_-]/g, '')) expect(arg.startsWith("'"), arg).toBe(c.expect.quoted);
       if (c.expect.contains) expect(arg).toContain(c.expect.contains);
       if (c.expect.ends_with) expect(arg.endsWith(c.expect.ends_with)).toBe(true);

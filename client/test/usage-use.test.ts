@@ -81,7 +81,7 @@ describe('the use event', () => {
   it('the assistant\'s tools count installs, updates and a held install taken the same way', async () => {
     const p = place();
     await seed(p);
-    const { ctx, close } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, p.dir), Words.load(), 'mcp');
+    const { ctx, close } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, p.dir), Words.load(), 'mcp');
     try {
       await perform(ctx, 'install_shared_skill', 'install', { name: 'sql-migration-helper' });
       const held = await perform(ctx, 'install_shared_skill', 'install', { name: 'release-notes-kit' });
@@ -103,7 +103,7 @@ describe('the use event', () => {
   it('the assistant\'s tools count the same way', async () => {
     const p = place();
     await seed(p);
-    const { ctx, close } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, p.dir), Words.load(), 'mcp');
+    const { ctx, close } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, p.dir), Words.load(), 'mcp');
     try {
       await perform(ctx, 'search_shared_skills', 'search', { query: 'zzz-nothing-like-this' });
       await perform(ctx, 'read_shared_skill', 'read', { name: 'no-such-skill' });

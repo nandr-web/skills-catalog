@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Words, renderError, type CatalogError } from '@skills-catalog/core';
+import { processEnv, sandbox } from '@skills-catalog/core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { holdLock, startFromEtime, withLock } from '../src/machine/lock.ts';
 import { race } from './race-fs.ts';
@@ -27,7 +28,7 @@ const home = () => {
   return p.home;
 };
 const lockPath = (h: string) => join(h, 'lock.json.lock');
-const deadPid = () => Number(spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' }).stdout);
+const deadPid = () => Number(spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { env: processEnv(sandbox()), encoding: 'utf8' }).stdout);
 // A clock that moves a second each time it's read, so a wait ends at once.
 const fast = () => {
   let t = Date.parse('2026-09-29T12:00:00Z');

@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { inlineFiles } from '../src/catalog.ts';
 import { openLocalCatalog } from '../src/local/index.ts';
+import { processEnv } from './process-env.ts';
 import { sandbox } from './sandbox.ts';
 
 /** How far ahead of "every process is ready" the shared start is: time for each one to read it. */
@@ -16,8 +17,9 @@ const START_AHEAD_MS = 100;
 /** One process per argument list (a fixture that calls startTogether), started together; each settles with what it
  *  printed after "ready", or its exit code and stderr. Resolves once every process is ready (or has already ended). */
 async function together(script: string, argLists: string[][]): Promise<Promise<string>[]> {
+  const env = processEnv(sandbox());
   const children = argLists.map((args) => {
-    const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', script, ...args], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', script, ...args], { env, stdio: ['pipe', 'pipe', 'pipe'] });
     child.stdin.on('error', () => {}); // a process that already ended can't take the start time; its exit says why
     let out = '';
     let err = '';

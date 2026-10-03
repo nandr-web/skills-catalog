@@ -7,7 +7,7 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
 import { Words, actAs, type CatalogError } from '@skills-catalog/core';
-import { loadGolden } from '@skills-catalog/core/testing';
+import { loadGolden, processEnv, sandbox } from '@skills-catalog/core/testing';
 import { describe, expect, it, vi } from 'vitest';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
 import { readLock } from '../src/machine/lock.ts';
@@ -47,7 +47,7 @@ type Row = {
 };
 const rows = table.cases as Row[];
 
-const ctxFor = (p: Place): Context => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), S, 'mcp').ctx;
+const ctxFor = (p: Place): Context => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project')), S, 'mcp').ctx;
 const lockPath = (p: Place) => join(p.home, 'lock.json.lock');
 const dest = (p: Place) => join(p.osHome, '.claude', 'skills', NAME);
 const read = (path: string) => (race.fs.existsSync(path) ? race.fs.readFileSync(path, 'utf8') : undefined);
@@ -69,12 +69,12 @@ async function helper(lock?: { path: string; releaseMs: number }): Promise<Child
   const script = lock
     ? `const fs = require('fs'); fs.writeFileSync(${JSON.stringify(lock.path)}, JSON.stringify({ pid: process.pid, started: Date.now() - Math.round(process.uptime() * 1000) }), { flag: 'wx', mode: 0o600 }); process.stdout.write('held\\n'); setTimeout(() => fs.unlinkSync(${JSON.stringify(lock.path)}), ${lock.releaseMs}); setTimeout(() => {}, 60000);`
     : `process.stdout.write('up\\n'); setTimeout(() => {}, 60000);`;
-  const child = spawn(process.execPath, ['-e', script], { stdio: ['ignore', 'pipe', 'inherit'] });
+  const child = spawn(process.execPath, ['-e', script], { env: processEnv(sandbox()), stdio: ['ignore', 'pipe', 'inherit'] });
   children.push(child);
   await new Promise<void>((resolve) => child.stdout!.once('data', () => resolve()));
   return child;
 }
-const deadPid = () => Number(spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' }).stdout);
+const deadPid = () => Number(spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { env: processEnv(sandbox()), encoding: 'utf8' }).stdout);
 
 async function plantLock(p: Place, f: LockFile): Promise<number | null> {
   const path = lockPath(p);
@@ -139,7 +139,7 @@ describe('one writer at a time on the installed-skills lock (golden histories.lo
           race.fs.unlinkSync(path);
           // A live writer takes the lock in its place (this runs inside the removal's look, so it waits for the file).
           const script = `const fs = require('fs'); fs.writeFileSync(${JSON.stringify(path)}, JSON.stringify({ pid: process.pid, started: Date.now() - Math.round(process.uptime() * 1000) }), { flag: 'wx', mode: 0o600 }); setTimeout(() => fs.unlinkSync(${JSON.stringify(path)}), ${release_after_s * 1000}); setTimeout(() => {}, 60000);`;
-          const child = spawn(process.execPath, ['-e', script], { stdio: 'ignore' });
+          const child = spawn(process.execPath, ['-e', script], { env: processEnv(sandbox()), stdio: 'ignore' });
           children.push(child);
           helperPid = child.pid!;
           while (!race.fs.existsSync(path)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);

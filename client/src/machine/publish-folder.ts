@@ -29,7 +29,13 @@ const STEP2 = ['name', 'version', 'files', 'flags'] as const;
 // Skipped entries shown, then how many more (contract §3).
 /** What a person reads about a publish (review V3.2): the preview's files, sent and skipped, and anything worth a look; or
  *  what was published. */
-export type PublishView = { kind: 'publish'; stage: 'preview' | 'published'; name: string; version: number; latest: number; send: string[]; skipped: string[]; changed: string[]; notes: string[] };
+/** A publish as data for a person's view. A preview also carries the words file's fields and the step-2 values, for the
+ *  CLI's own preview and its step-2 command (cli/commands/publish.ts). */
+export type PublishView = {
+  kind: 'publish'; stage: 'preview' | 'published'; name: string; version: number; latest: number; send: string[]; skipped: string[]; changed: string[]; notes: string[];
+  fields?: Record<string, unknown>;
+  step2?: { folder: string; confirm: string; name: string; version: number; files: number; flags: string[]; message: string | null };
+};
 
 export const SKIPPED_SHOWN = 50;
 // `why` names each skipped path's reason; `modes` each sent file whose mode isn't one the catalog keeps (review P2.3,
@@ -251,7 +257,7 @@ export async function publishFolder(ctx: Context, args: unknown): Promise<Done> 
       const shown = skipped.slice(0, SKIPPED_SHOWN).map((p) => (why[p] ? `${quoted(flagText(p))} (${w.skip_why[why[p]!]})` : quoted(flagText(p))));
       const changed = (r.diff_from_latest?.files ?? []).map((f) => quoted(f.path));
       const notes = r.risk_flags.map((f: RiskFlag) => s.format(s.word('quality.note')[f.kind], { path: flagText(f.path ?? ''), detail: flagText(f.detail) }));
-      const text = s.format(w.preview, {
+      const fields = {
         name,
         version: r.version,
         change: latest === 0 ? w.new_skill : s.format(w.change_from, { latest, files: list(changed) }),
@@ -271,8 +277,13 @@ export async function publishFolder(ctx: Context, args: unknown): Promise<Done> 
         flags: JSON.stringify(flags),
         // The message is part of what the confirm binds: say it, or that there is none, so an assistant adds nothing.
         message_part: message === null ? w.no_message : s.format(w.with_message, { message: JSON.stringify(message) }),
-      });
-      const view: PublishView = { kind: 'publish', stage: 'preview', name, version: r.version, latest, send: files.map((f) => f.path), skipped: [...skipped], changed: (r.diff_from_latest?.files ?? []).map((f) => f.path), notes };
+      };
+      const text = s.format(w.preview, fields);
+      // The same preview as data: the person's view (person/view.ts), and the CLI's step-2 command (cli/commands/publish.ts).
+      const view: PublishView = {
+        kind: 'publish', stage: 'preview', name, version: r.version, latest, send: files.map((f) => f.path), skipped: [...skipped], changed: (r.diff_from_latest?.files ?? []).map((f) => f.path), notes,
+        fields, step2: { folder: real, confirm, name, version: r.version, files: files.length, flags, message },
+      };
       return { text, target: `${name} v${r.version}`, result: log.result('publish', 'preview'), view };
     }
 

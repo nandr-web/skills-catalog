@@ -351,7 +351,7 @@ describe('folders another user could control are refused (target_not_private)', 
         await publish(p, 'alpha', 'Body.\n');
         const path = t.at(p);
         race.fs.mkdirSync(path, { recursive: true });
-        const { ctx, close } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), words, face);
+        const { ctx, close } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project')), words, face);
         race.stats = (at) => (at === path ? t.change : undefined);
         let answer;
         try {
@@ -425,6 +425,35 @@ describe('folders another user could control are refused (target_not_private)', 
         expect(race.fs.readdirSync(real)).toEqual([]);
       } else expect(race.fs.existsSync(join(real, '.claude', 'skills', 'alpha', 'SKILL.md'))).toBe(true);
     }
+  });
+
+  // An update's one word (its log result, its outcome, the `use` event's result) is the one that most needs the person:
+  // a refused skill outranks a held one, so a CLI update with any refusal exits 1.
+  it('an update with a refused skill and a held one has the refusal as its outcome', async () => {
+    const p = place();
+    const ctx = ctxFor(p);
+    await publish(p, 'alpha', 'First.\n');
+    await install(ctx, { name: 'alpha', target: 'project' });
+    await publish(p, 'alpha', 'Second.\n');
+    await publish(p, 'beta', 'First.\n');
+    await install(ctx, { name: 'beta' });
+    const c = await open(p);
+    try {
+      await c.publish(request('beta', [{ path: 'SKILL.md', text: skillMd('beta', 'The beta skill.') }, { path: 'run.sh', text: '#!/bin/sh\n', mode: '0755' }]), actAs('ana'));
+    } finally {
+      c.close();
+    }
+    const project = join(p.dir, 'project');
+    race.stats = (at) => (at === project ? { mode: 0o040777 } : undefined);
+    let r: { text: string; result: string; outcome?: string };
+    try {
+      r = await update(ctx, {});
+    } finally {
+      clearHooks();
+    }
+    expect(codeOf(r)).toBe('target_not_private');
+    expect(r.text).toContain(S.format(S.word('update').held_flagged.split('{')[0]!));
+    expect([r.outcome, r.result]).toEqual(['refused', S.fill(S.doc.log).error.target_not_private]);
   });
 
   it('update and accept refuse the same way when the assistant home stopped being private, and change nothing', async () => {
@@ -509,7 +538,7 @@ describe('a target that can\'t be made (target_unavailable)', () => {
     { what: 'a folder on the way to the home', home: (d) => join(d, 'locked', 'a', 'home'), fails: (d) => join(d, 'locked', 'a'), prepare: (d) => race.fs.mkdirSync(join(d, 'locked'), { mode: 0o555 }) },
     { what: '.claude in a home the person can\'t write', home: (d) => join(d, 'home'), fails: (d) => join(d, 'home', '.claude'), prepare: (d) => race.fs.mkdirSync(join(d, 'home'), { mode: 0o555 }) },
   ];
-  const ctxAt = (p: Place, home: string) => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: home }, join(p.dir, 'project')), S, 'mcp').ctx;
+  const ctxAt = (p: Place, home: string) => contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: home, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project')), S, 'mcp').ctx;
 
   it.skipIf(process.getuid?.() === 0)('install refuses with the folder that couldn\'t be made, and changes nothing', async () => {
     for (const h of homes) {
@@ -1012,6 +1041,25 @@ describe('the lock entry a decision used, changed by another run before the lock
     const lines = await updating(ctx);
     expect(lines[1]!.startsWith(upToReasons(W.held_flagged, { name: 'alpha', from: 1, to: 3 }, 'reasons'))).toBe(true);
     expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('One.\n');
+  });
+
+  it('update, an older version installed meanwhile, with accept_flagged_updates: let through on the flags against that version, and the lock records those', async () => {
+    const p = place();
+    await versionsOf(p, [NOTES('One.\n')], [RUN, NOTES('One.\n')]);
+    const ctx = ctxFor(p);
+    await install(ctx, { name: 'alpha', version: 1 });
+    const held = await pendingHold(ctx, 'alpha');
+    const { target, version, confirm, flags } = held as { target: 'user'; version: number; confirm: string; flags: string[] };
+    await accept(ctx, { name: 'alpha', target, version, confirm, flags });
+    await versionsOf(p, [RUN, NOTES('Three.\n')]);
+    race.fs.writeFileSync(join(p.home, 'config.json'), JSON.stringify({ accept_flagged_updates: true }));
+    // Against the installed v2 the script isn't new; against v1, put back meanwhile, it is: only the fresh gate sees it.
+    const dest = meanwhile(p, (e) => recorded(e!, 1, [NOTES('One.\n')]));
+    await updating(ctx);
+    expect(race.fs.readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('Three.\n');
+    const entry = (JSON.parse(race.fs.readFileSync(join(p.home, 'lock.json'), 'utf8')) as { skills: Record<string, { version: number; accepted: { version: number; flags: string[]; by?: string }[] }> }).skills[dest]!;
+    expect(entry.version).toBe(3);
+    expect(entry.accepted.at(-1)).toEqual({ version: 3, flags: expect.arrayContaining(['runnable_file']), by: 'accept_flagged_updates' });
   });
 
   // A hold is a decision too: taken again under the lock, so one another run's install made moot goes through.

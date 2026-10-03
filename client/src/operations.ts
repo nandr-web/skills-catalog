@@ -109,6 +109,13 @@ export const RUNS: Record<string, true> = Object.fromEntries(
 /** The line after every result and error while a developer is set (contract §7, "acting as"). */
 export const actingAs = (s: Words, developer: string) => s.format(s.word('acting_as'), { developer });
 
+/** Who acts, as the last line of a result: "acting as" for a name the person set (SKILLS_AS, --as, setup's `me`); for
+ *  the login default, one discreet line saying it's a local sign-in for demo purposes. None when no one acts. */
+export function actingLine(s: Words, settings: Settings): string | undefined {
+  if (!settings.developer) return undefined;
+  return settings.developerSource === 'machine' ? s.format(s.word('acting_as_local'), { developer: settings.developer }) : actingAs(s, settings.developer);
+}
+
 /** `text`: the face's words ('' on the web face, which presents nothing); `data`: the operation's data, on success
  *  only; `error`: the error, on failure only; `outcome`: the operation's outcome code, or the error's code. */
 export type Answer = { text: string; isError: boolean; outcome: string; data?: unknown; view?: unknown; error?: CatalogError };
@@ -130,6 +137,7 @@ export async function perform(ctx: Context, op: string, name: string, args: unkn
   try {
     // SKILLS_AS that isn't a developer's name is a setting to fix, not a call to retry.
     if (settings.developerInvalid) throw new CatalogError('invalid_developer_setting', { setting: 'SKILLS_AS' });
+    if (settings.configError) throw settings.configError;
     ctx.refuse?.(op, args);
     const ran = await run(ctx, op, args);
     ({ target, result } = ran);
@@ -144,7 +152,8 @@ export async function perform(ctx: Context, op: string, name: string, args: unkn
   }
   appendActivity(settings.activityLog, { at: ctx.now(), who: settings.developer, tool: name, target, result }, { ownFolder: settings.activityLogInHome, resultWidth: log.width });
   recordUsage(settings.home, { event: 'use', op, result: answer.outcome }, ctx.now());
-  if (settings.developer && !web) answer.text = `${answer.text}\n${actingAs(words, settings.developer)}`;
+  const acting = web ? undefined : actingLine(words, settings);
+  if (acting) answer.text = `${answer.text}\n${acting}`;
   return answer;
 }
 

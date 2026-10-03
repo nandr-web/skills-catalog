@@ -390,6 +390,8 @@ export function renderError(s: Words, e: CatalogError): string {
       // A confirm that didn't come from a preview on this machine has its own sentence: preview again.
       if (e.data['why'] === 'not_a_confirm') return fill(w.invalid_confirm, d);
       if (e.data['why'] === 'not_a_held_confirm') return fill(w.invalid_confirm_held, d);
+      // The install folder setting isn't a call's field: its sentence says what to tell the person.
+      if (e.data['field'] === 'SKILLS_INSTALL_DIR') return fill(w.invalid_request_install_dir, d);
       return fill(d['limit'] !== undefined ? w.invalid_request_limit : w.invalid_request, d);
     case 'invalid_path':
       // A link, a hard link or a special file in a folder being published: its own sentence proposes a plain copy.
@@ -421,7 +423,10 @@ export function renderError(s: Words, e: CatalogError): string {
     case 'invalid_local_file': {
       // A damaged lock or config file: what removing it would do depends on which file it is.
       const effect = w.local_file_effect?.[String(d['file'])];
-      return effect === undefined ? asData(e.code, d) : fill(w.invalid_local_file, { ...d, effect });
+      // A config key that can't be used (unknown, added to a key list, or of the wrong type), or a policy setting that
+      // isn't one, is named, never its value; any other why is said as before.
+      const keyed = d['key'] === undefined ? undefined : e.data['why'] === 'wrong_shape' ? 'invalid_local_file_key' : e.data['why'] === 'unknown_policy' ? 'invalid_local_file_policy' : undefined;
+      return effect === undefined ? asData(e.code, d) : fill(w[keyed ?? 'invalid_local_file'], { ...d, effect });
     }
     case 'target_changed': {
       // Whether the folder moved aside is back or sits in staging (named, whatever changed), whether what changed was the
@@ -448,6 +453,22 @@ export function renderError(s: Words, e: CatalogError): string {
     // With no holder to name (another user's file, a link, anything but a regular file), the file is named instead.
     case 'lock_busy':
       return d['pid'] === null && typeof w.lock_busy_unusable === 'string' ? fill(w.lock_busy_unusable, d) : typeof w.lock_busy === 'string' ? fill(w.lock_busy, d) : asData(e.code, d);
+    // An assistant file setup can't use: why in setup's own words, with the key it has wrong where there is one; never
+    // anything of the file's text.
+    case 'assistant_file_unusable': {
+      const why = s.setup.file_why?.[String(data['why'])];
+      if (typeof why !== 'string') return asData(e.code, d);
+      try {
+        return s.format(w.assistant_file_unusable, { ...d, why: s.format(why, d) });
+      } catch {
+        return asData(e.code, d);
+      }
+    }
+    // An install folder that isn't safe to run from: the way on differs by why, so each has its sentence.
+    case 'install_unsafe': {
+      const t = w[`install_unsafe_${String(data['why'])}`];
+      return typeof t === 'string' ? fill(t, d) : asData(e.code, d);
+    }
     default: {
       const t = w[e.code];
       return typeof t === 'string' ? fill(t, d) : asData(e.code, d);

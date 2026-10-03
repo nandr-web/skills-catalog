@@ -16,7 +16,7 @@ export async function cli(p: Place, argv: string[], o: { tty?: boolean; person?:
   const asked: string[] = [];
   const answers = [...(o.answers ?? [])];
   const io: Io = {
-    env: { SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, ...o.env },
+    env: { SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed, ...o.env },
     cwd: o.cwd ?? join(p.dir, 'project'),
     tty: o.tty ?? false,
     ...(o.person === undefined ? {} : { person: o.person }),

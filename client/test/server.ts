@@ -4,7 +4,7 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { refuseRealPlaces, sandbox } from '@skills-catalog/core/testing';
+import { processEnv, refuseRealPlaces, sandbox, tripwireBin as coreTripwireBin } from '@skills-catalog/core/testing';
 import { onTestFinished } from 'vitest';
 
 const CLI = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
@@ -14,13 +14,35 @@ const CLI = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
  *  server, so a plain unit test keeps the default and still fails fast if it hangs. */
 export const PROCESS_TEST_MS = 30_000;
 
-/** A place for one test: the server's SKILLS_HOME, the local catalog's folder and an OS home, all in one sandbox. */
-export type Place = { dir: string; home: string; catalogDir: string; catalogUrl: string; osHome: string };
+/** A place for one test: the server's SKILLS_HOME, the local catalog's folder, an OS home and a folder standing in for
+ *  Claude Code's managed settings (never the machine's own), all in one sandbox. */
+export type Place = { dir: string; home: string; catalogDir: string; catalogUrl: string; osHome: string; managed: string };
 
 export function place(): Place {
   const dir = sandbox();
   const catalogDir = join(dir, 'catalog');
-  return { dir, home: join(dir, 'skills-home'), catalogDir, catalogUrl: pathToFileURL(catalogDir).href, osHome: join(dir, 'os-home') };
+  return { dir, home: join(dir, 'skills-home'), catalogDir, catalogUrl: pathToFileURL(catalogDir).href, osHome: join(dir, 'os-home'), managed: join(dir, 'managed-settings') };
+}
+
+/** The tripwire `claude` in a place's own bin folder (core's, in the place's sandbox): it notes each run and fails. */
+export const tripwireBin = (p: Place): string => coreTripwireBin(p.dir);
+
+/** The whole environment of a process a test starts, nothing inherited: core's built one for the place's sandbox (the
+ *  tripwire first on PATH, then the system's folders and node's own; HOME, the place's os-home, and the other home-like
+ *  places in the sandbox), and every SKILLS_ root in the place, each refused by the fail-safe if it's anywhere else.
+ *  CLAUDE_CONFIG_DIR is the product's input, so it's unset unless given. */
+export function childEnv(p: Place, env: Record<string, string> = {}): Record<string, string> {
+  const full: Record<string, string> = {
+    ...processEnv(p.dir),
+    SKILLS_HOME: p.home,
+    SKILLS_CATALOG: p.catalogUrl,
+    SKILLS_ASSISTANT_HOME: p.osHome,
+    SKILLS_MANAGED_SETTINGS: p.managed,
+    ...env,
+  };
+  for (const k of ['HOME', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'TMPDIR', 'SKILLS_HOME', 'SKILLS_ACTIVITY_LOG', 'SKILLS_ASSISTANT_HOME', 'SKILLS_MANAGED_SETTINGS', 'CLAUDE_CONFIG_DIR'] as const) if (full[k] !== undefined) refuseRealPlaces(full[k]);
+  if (full['SKILLS_CATALOG']!.startsWith('file:')) refuseRealPlaces(fileURLToPath(full['SKILLS_CATALOG']!));
+  return full;
 }
 
 export type ToolResult = { content: { type: string; text: string }[]; isError?: boolean };
@@ -50,20 +72,12 @@ export interface Server {
   close(): Promise<number | null>;
 }
 
-export function startServer(p: Place, env: Record<string, string> = {}): Server {
-  const full: Record<string, string> = {
-    PATH: process.env['PATH'] ?? '/usr/bin:/bin',
-    HOME: p.osHome,
-    SKILLS_HOME: p.home,
-    SKILLS_CATALOG: p.catalogUrl,
-    // Not UTC, so a local time anywhere (the activity log's clock) differs from UTC even on a machine set to UTC.
-    TZ: 'Asia/Kolkata',
-    ...env,
-  };
-  for (const k of ['HOME', 'SKILLS_HOME', 'SKILLS_ACTIVITY_LOG', 'SKILLS_ASSISTANT_HOME'] as const) if (full[k] !== undefined) refuseRealPlaces(full[k]);
-  if (full['SKILLS_CATALOG']!.startsWith('file:')) refuseRealPlaces(fileURLToPath(full['SKILLS_CATALOG']!));
+/** `run`: the command and arguments to start, as an assistant's MCP config names them (default: this package's server). */
+export function startServer(p: Place, env: Record<string, string> = {}, run: { command: string; args: string[] } = { command: process.execPath, args: [CLI, 'mcp'] }): Server {
+  // Not UTC, so a local time anywhere (the activity log's clock) differs from UTC even on a machine set to UTC.
+  const full = childEnv(p, { TZ: 'Asia/Kolkata', ...env });
 
-  const child = spawn(process.execPath, [CLI, 'mcp'], { env: full, cwd: p.dir, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(run.command, run.args, { env: full, cwd: p.dir, stdio: ['pipe', 'pipe', 'pipe'] });
   // Never left behind: however the test ends (a timeout, a failure, a server stuck in a system call that can't see its
   // input close), the server it started is killed once the test is over.
   onTestFinished(() => {

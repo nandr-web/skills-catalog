@@ -22,6 +22,20 @@ const USAGE = `skills-catalog: your team's shared skills catalog, on this machin
 `;
 
 const [command, ...rest] = process.argv.slice(2);
+
+/** One question to the person at the terminal; Ctrl-D or Ctrl-C at it is an empty answer (a no), not a crash. */
+async function askPerson(question: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return await rl.question(question);
+  } catch (e) {
+    if ((e as Error).name !== 'AbortError') throw e;
+    process.stdout.write('\n');
+    return '';
+  } finally {
+    rl.close();
+  }
+}
 // One terminal check, for every command that asks the person something or refuses without them.
 const tty = Boolean(process.stdin.isTTY && process.stdout.isTTY);
 if (command === 'mcp' && rest.length === 0) {
@@ -37,6 +51,18 @@ if (command === 'mcp' && rest.length === 0) {
     return text;
   };
   process.exitCode = await runLogin(rest, { settings: settingsFrom(process.env), env: process.env, stdout: (t) => void process.stdout.write(t), stderr: (t) => void process.stderr.write(t), readStdin });
+} else if (command === 'hook') {
+  // Setup's session-start hook: always exit 0, and once its 2 seconds are up, don't wait for a sync still running (the
+  // next session start or the MCP server's start finishes it).
+  const { runHook } = await import('./cli/hook.ts');
+  await runHook(rest, cliWords(Words.load()), { env: process.env, cwd: process.cwd(), stdin: process.stdin, stdout: (t) => void process.stdout.write(t) });
+  process.stdout.write('', () => process.exit(0));
+} else if (command === 'setup') {
+  const { runSetupCommand } = await import('./cli/setup.ts');
+  process.exitCode = await runSetupCommand(rest, { env: process.env, cwd: process.cwd(), tty, color: wantsColor(Boolean(process.stdout.isTTY), process.env), ask: askPerson, stdout: (t) => void process.stdout.write(t), stderr: (t) => void process.stderr.write(t) });
+} else if (command === 'teardown') {
+  const { runTeardownCommand } = await import('./cli/teardown.ts');
+  process.exitCode = await runTeardownCommand(rest, { env: process.env, cwd: process.cwd(), color: wantsColor(Boolean(process.stdout.isTTY), process.env), stdout: (t) => void process.stdout.write(t), stderr: (t) => void process.stderr.write(t) });
 } else if (command === 'logout') {
   process.exitCode = runLogout({ settings: settingsFrom(process.env), stdout: (t) => void process.stdout.write(t) });
 } else if (command === 'serve') {
@@ -57,19 +83,7 @@ if (command === 'mcp' && rest.length === 0) {
     // A person reads stdout: results are laid out for them, in colour unless NO_COLOR is set.
     person: Boolean(process.stdout.isTTY),
     color: wantsColor(Boolean(process.stdout.isTTY), process.env),
-    ask: async (question) => {
-      const rl = createInterface({ input: process.stdin, output: process.stdout });
-      try {
-        return await rl.question(question);
-      } catch (e) {
-        // Ctrl-D or Ctrl-C at the question is a no, not a crash.
-        if ((e as Error).name !== 'AbortError') throw e;
-        process.stdout.write('\n');
-        return '';
-      } finally {
-        rl.close();
-      }
-    },
+    ask: askPerson,
     stdout: (t) => void process.stdout.write(t),
     stderr: (t) => void process.stderr.write(t),
   });

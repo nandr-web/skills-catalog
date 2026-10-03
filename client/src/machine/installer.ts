@@ -15,11 +15,13 @@
 
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { closeSync, constants, existsSync, fchmodSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync, writeSync, type BigIntStats } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { CatalogError, inlineFiles, shellQuote, validateInput, type Catalog, type Words, type VersionsResult } from '@skills-catalog/core';
 import { DEFAULT_LIMITS, checkFetched, checkName, diffTrees, fingerprint, flagText, sha256Hex, type RiskFlag, type TreeDiff, type TreeFile } from '@skills-catalog/core/skill-tree';
 import { reasons, reviewOnly } from '@skills-catalog/core';
 import { logWords } from '../activity.ts';
+import { permissiveMode } from './permissive.ts';
+import { isPrivate, writableOnlyAsPrivate } from './private.ts';
 import { holdWithinADay, recordUsage, type HoldReason, type UsageEvent } from '../usage/record.ts';
 import type { Context, Done } from '../operations.ts';
 import { holdLock, policyOf, readRecords, withLock, writeConfig, type Config, type FolderId, type Lock, type LockEntry, type Policy, type Target } from './lock.ts';
@@ -30,8 +32,20 @@ const TARGETS: readonly Target[] = ['user', 'project'];
 // ---------- where skills go ----------
 
 const rootOf = (ctx: Context, t: Target) => (t === 'user' ? ctx.settings.assistantHome : ctx.settings.projectDir);
-export const skillsDir = (ctx: Context, t: Target) => join(rootOf(ctx, t), '.claude', 'skills');
+/** SKILLS_INSTALL_DIR stands in for the user target's .claude/skills (§8): an absolute path, whose parent takes .claude's
+ *  checks and the folder above that the private-folder test (it isn't the assistant home). A limit, stated: pointed at
+ *  the current project's .claude/skills, both targets are one folder. */
+const standsIn = (ctx: Context, t: Target) => t === 'user' && ctx.settings.installDir !== undefined;
+export function skillsDir(ctx: Context, t: Target): string {
+  if (!standsIn(ctx, t)) return join(rootOf(ctx, t), '.claude', 'skills');
+  const dir = ctx.settings.installDir!;
+  if (!isAbsolute(dir)) throw new CatalogError('invalid_request', { field: 'SKILLS_INSTALL_DIR', why: 'not_absolute' });
+  return dir;
+}
 const destOf = (ctx: Context, t: Target, name: string) => join(skillsDir(ctx, t), name);
+/** Each call on the installed skills checks the user folder's setting first, before the lock, the config or the catalog
+ *  is read: every one of them needs that folder (a project install to check the name there too). */
+const userFolderChecked = (ctx: Context) => void skillsDir(ctx, 'user');
 
 function isLink(path: string): boolean {
   try {
@@ -45,7 +59,7 @@ function isLink(path: string): boolean {
 // command of the same name that this one would replace for the assistant. Returns where the skill goes.
 function checkTarget(ctx: Context, target: Target, name: string, lock: Lock): string {
   const root = rootOf(ctx, target);
-  for (const p of [join(root, '.claude'), skillsDir(ctx, target)]) if (isLink(p)) throw new CatalogError('target_symlink', { path: p });
+  for (const p of [dirname(skillsDir(ctx, target)), skillsDir(ctx, target)]) if (isLink(p)) throw new CatalogError('target_symlink', { path: p });
   const dest = destOf(ctx, target, name);
   if (isLink(dest)) throw new CatalogError('target_symlink', { path: dest });
   if (existsSync(dest) && !lock.skills[dest]) throw new CatalogError('exists_untracked', { path: dest });
@@ -65,7 +79,7 @@ function checkTarget(ctx: Context, target: Target, name: string, lock: Lock): st
 // checkTarget is refused, not followed. writeSkill checks these identities again after every move. The folders it makes
 // are 0755 whatever the umask (madeAs), so they pass the privacy check (a umask of 002 would make them group-writable).
 type Anchor = { path: string; id: Id };
-function skillsFolderFor(dest: string, target: Target): Anchor[] {
+function skillsFolderFor(dest: string, target: Target, standIn = false): Anchor[] {
   const skills = dirname(dest);
   const claude = dirname(skills);
   const root = dirname(claude);
@@ -76,7 +90,7 @@ function skillsFolderFor(dest: string, target: Target): Anchor[] {
       makeFolder(at, 0o755);
     } catch (e) {
       if (!UNMAKEABLE.has((e as NodeJS.ErrnoException).code ?? '')) throw e;
-      throw new CatalogError('target_unavailable', { path: at, target, ...(at === root && target === 'user' ? { home: true } : {}) });
+      throw new CatalogError('target_unavailable', { path: at, target, ...(at === root && target === 'user' && !standIn ? { home: true } : {}) });
     }
   };
   const missing: string[] = [];
@@ -90,7 +104,7 @@ function skillsFolderFor(dest: string, target: Target): Anchor[] {
   const uid = process.getuid?.();
   const ownedWell = uid !== undefined && (r.uid === BigInt(uid) || r.uid === 0n);
   const open = target === 'user' ? !isPrivate(r) : uid !== undefined && (!ownedWell || ((r.mode & 0o1000n) === 0n && !writableOnlyAsPrivate(r)));
-  if (open) throw notPrivate(root, target, r, target === 'user');
+  if (open) throw notPrivate(root, target, r, target === 'user' && !standIn);
   return [claude, skills].map((path) => {
     make(path);
     return realFolder(path, target);
@@ -146,20 +160,6 @@ function notPrivate(path: string, target: Target, s: Stats, home = false): Catal
   return new CatalogError('target_not_private', { path, target, ...(home ? { home: true } : {}), own: s.uid === BigInt(process.getuid?.() ?? -1) });
 }
 
-// Private to the person (§4.5): owned by them, never world-writable, and group-writable only with their own private group
-// (a umask of 002 with per-user groups). Otherwise another user could swap what the installer writes there.
-function isPrivate(s: Stats): boolean {
-  const uid = process.getuid?.();
-  if (uid === undefined) return true;
-  return s.uid === BigInt(uid) && writableOnlyAsPrivate(s);
-}
-// Never world-writable, and group-writable only with the user's private group (its gid is the uid); never a shared group
-// such as macOS's staff (20).
-function writableOnlyAsPrivate(s: Stats): boolean {
-  const uid = BigInt(process.getuid?.() ?? -1);
-  if ((s.mode & 0o002n) !== 0n) return false;
-  return (s.mode & 0o020n) === 0n || (s.gid === uid && s.gid !== 20n);
-}
 
 // A folder's identity on disk, to tell whether a path still names the folder that was checked or installed: device,
 // inode and birth time (left out where the file system reads it as 0). Entries recorded without a birth time compare on
@@ -230,12 +230,12 @@ function moved(from: string, to: string): boolean {
 // owner's decision: an update replaces a copy you changed), but kept in staging and named, never deleted (review P11.2).
 const editedHere = (dest: string, entry: LockEntry | undefined): boolean => entry !== undefined && existsSync(dest) && folderFingerprint(dest) !== entry.fingerprint;
 
-function writeSkill(dest: string, target: Target, files: readonly TreeFile[], entry: LockEntry | undefined): { copy: Id; kept?: string } {
+function writeSkill(dest: string, target: Target, files: readonly TreeFile[], entry: LockEntry | undefined, standIn = false): { copy: Id; kept?: string } {
   const keep = editedHere(dest, entry);
   // A staging folder already there is checked before anything is made, so a refusal for it leaves nothing behind.
   const early = join(dirname(dirname(dest)), STAGING);
   if (existsSync(early)) realFolder(early, target);
-  const anchors = skillsFolderFor(dest, target);
+  const anchors = skillsFolderFor(dest, target, standIn);
   const stagingDir = join(anchors[0]!.path, STAGING);
   const made = makeFolder(stagingDir, 0o700);
   const staging = realFolder(stagingDir, target);
@@ -508,6 +508,7 @@ export type Pending = {
 };
 
 export async function pendingHold(ctx: Context, name: string, target: Target = 'user', targetGiven = false): Promise<Pending | { installed: number } | null> {
+  userFolderChecked(ctx);
   const { lock, config } = readRecords(ctx.settings.home);
   // A target the person named picks the copy there (none: a first install into it), never another target's copy.
   const e = installedHere(ctx, lock).find((x) => x.name === name && (!targetGiven || x.target === target));
@@ -570,6 +571,7 @@ function catalogThere(ctx: Context): void {
 export async function install(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<InstallInput>('install_shared_skill', args, ctx.face, 'local');
   catalogThere(ctx);
+  userFolderChecked(ctx);
   const s = ctx.words;
   const log = logWords(s);
   const target = req.target ?? 'user';
@@ -641,7 +643,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
       const held = heldOver(existing, flags);
       if (held) return held;
     }
-    const written = writeSkill(dest, target, to.files, now);
+    const written = writeSkill(dest, target, to.files, now, standsIn(ctx, target));
     return { written, entry: record(ctx, fresh, dest, { name: req.name, target }, to, req.policy ?? now?.policy, now?.accepted ?? [], toLock(written.copy)) };
   });
   if (!('written' in done)) return done;
@@ -724,7 +726,7 @@ function folderFingerprint(dir: string): string | undefined {
 async function recordAgain(ctx: Context, dest: string, target: Target, e: LockEntry, write: <T>(fn: (lock: Lock) => T) => Promise<T> = (fn) => withLock(ctx.settings.home, clockOf(ctx), fn)): Promise<void> {
   const now = idOf(dest);
   if (now === undefined || same(now, fromLock(e.copy))) return;
-  skillsFolderFor(dest, target);
+  skillsFolderFor(dest, target, standsIn(ctx, target));
   if (!isCopy(lstatOf(dest), now)) return;
   // Only onto the entry this was decided from: another run may have installed, updated or recorded it since (§4.5).
   await write((fresh) => {
@@ -764,6 +766,7 @@ type AcceptInput = { name: string; target: Target; version: number; confirm: str
 export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<AcceptInput>('accept_held_update', args, ctx.face, 'local');
   catalogThere(ctx);
+  userFolderChecked(ctx);
   const s = ctx.words;
   const { lock, config } = readRecords(ctx.settings.home);
   const t = decode(req.confirm);
@@ -783,7 +786,7 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const { written, entry } = await withLock(ctx.settings.home, clockOf(ctx), (fresh) => {
     const now = fresh.skills[dest];
     if (!sameDecision(existing, now)) throw conflict();
-    const written = writeSkill(dest, t.target, to.files, now);
+    const written = writeSkill(dest, t.target, to.files, now, standsIn(ctx, t.target));
     return { written, entry: record(ctx, fresh, dest, { name: req.name, target: t.target }, to, now?.policy, [...(now?.accepted ?? []), { version: to.version, flags: kinds(flags) }], toLock(written.copy)) };
   });
   // The person's yes, wherever it was given (§3's usage metrics).
@@ -838,14 +841,15 @@ type UpdateInput = { names?: string[]; dry_run?: boolean; latest?: boolean };
 export async function update(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<UpdateInput>('update_installed_skills', args, ctx.face, 'local');
   catalogThere(ctx);
+  userFolderChecked(ctx);
   const s = ctx.words;
   const w = s.word('update');
   const log = logWords(s);
   const { lock, config } = readRecords(ctx.settings.home);
   const here = installedHere(ctx, lock);
   for (const name of req.names ?? []) if (!here.some((e) => e.name === name)) throw new CatalogError('not_installed', { name });
-  // Each sync counts (the mode itself once permissive modes are detected, §5.3).
-  recordUsage(ctx.settings.home, { event: 'mode', face: 'update' }, ctx.now());
+  // Each sync counts, with the permissive mode Claude Code's settings turn on, if any (§5.3).
+  recordUsage(ctx.settings.home, { event: 'mode', mode: permissiveMode(ctx.settings).mode ?? 'default', face: 'update' }, ctx.now());
   const chosen = req.names ? here.filter((e) => req.names!.includes(e.name)) : here;
   if (!chosen.length) {
     const none = s.word('update.none_installed');
@@ -861,8 +865,9 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
     lines.push(...said);
     items.push({ kind, ...at, flags: [...flags], lines: said });
   };
-  // The log's one word for the call: the outcome that most needs the person, else updated, else up to date.
-  const RANK = ['unchanged', 'updated', 'refused', 'held_pin', 'held_notify', 'held_flagged', 'held_other_catalog'];
+  // The log's one word for the call: the outcome that most needs the person (a refusal first, then a hold), else updated,
+  // else up to date.
+  const RANK = ['unchanged', 'updated', 'held_pin', 'held_notify', 'held_flagged', 'held_other_catalog', 'refused'];
   let outcome = 'unchanged';
   const saw = (o: string) => {
     if (RANK.indexOf(o) > RANK.indexOf(outcome)) outcome = o;
@@ -960,7 +965,9 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
           saw('held_notify');
           return true;
         }
-        if (d.risk_flags.length) {
+        // accept_flagged_updates (only ever `true` from the person's own setup) lets a flagged update through, never an
+        // install; the lock records each one it let through (§5.3).
+        if (d.risk_flags.length && config.accept_flagged_updates !== true) {
           recordHold(ctx, e.name, to.version, 'flagged', d.risk_flags, to.version - entry.version);
           item('held_flagged', at, d.risk_flags, s.format(w.held_flagged, { ...at, reasons: reasons(s, d.risk_flags) }), s.format(ctx.face === 'cli' ? w.held_next_cli : w.held_next, take));
           saw('held_flagged');
@@ -992,8 +999,9 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
           }
           const entry = now ?? e;
           if (heldOver(entry, dNow)) return 'held';
-          const w = writeSkill(dest, e.target, to.files, entry);
-          record(ctx, fresh, dest, entry, to, entry.policy, entry.accepted, toLock(w.copy));
+          const w = writeSkill(dest, e.target, to.files, entry, standsIn(ctx, e.target));
+          const accepted = dNow.risk_flags.length ? [...entry.accepted, { version: to.version, flags: kinds(dNow.risk_flags), by: 'accept_flagged_updates' as const }] : entry.accepted;
+          record(ctx, fresh, dest, entry, to, entry.policy, accepted, toLock(w.copy));
           return { written: w, from: entry.version, d: dNow };
         });
       } catch (err) {
@@ -1028,6 +1036,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
 }
 
 export async function list(ctx: Context): Promise<Done> {
+  userFolderChecked(ctx);
   const s = ctx.words;
   const { lock, config } = readRecords(ctx.settings.home);
   const here = installedHere(ctx, lock);
@@ -1055,6 +1064,7 @@ type PolicyInput = { policy: Policy; name?: string };
 
 export async function setPolicy(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<PolicyInput>('set_skill_update_policy', args, ctx.face, 'local');
+  userFolderChecked(ctx);
   const s = ctx.words;
   const home = ctx.settings.home;
   const w = s.word('policy_set');

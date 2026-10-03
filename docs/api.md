@@ -31,7 +31,7 @@ Every operation, grouped by what it acts on; the chips say where each one can be
 | Operation | Signature | Tool | CLI | HTTP status |
 |---|---|---|---|---|
 | [preview_skill_publish](#preview_skill_publish-on-a-branch) | `preview_skill_publish(folder, message?)` → files to send and skip + diff + confirm | on a branch | on a branch | never |
-| [publish_skill_to_catalog](#publish_skill_to_catalog) | `publish_skill_to_catalog(folder, message?, confirm?, name?, version?, files?, flags[]?)` → text only: a preview (no confirm), or "Published … v{n}" | built | on a branch | never |
+| [publish_skill_to_catalog](#publish_skill_to_catalog) | `publish_skill_to_catalog(folder, message?, confirm?, name?, version?, files?, flags[]?)` → text only: a preview (no confirm), or "Published … v{n}" | built | built | never |
 | [install_shared_skill](#install_shared_skill) | `install_shared_skill(name, version = latest, target = user)` → text only: installed \| unchanged \| held for a yes | built | built | never |
 | [update_installed_skills](#update_installed_skills) | `update_installed_skills(names[] = all, dry_run = false)` → text only, per skill: updated \| unchanged \| held \| refused | built | built | never |
 | [accept_held_update](#accept_held_update) | `accept_held_update(name, target, version, confirm, flags[])` → text only: the held update, installed | built | built, for a person at a terminal | never |
@@ -426,8 +426,10 @@ Assistant's tool
     "files": 3, "flags": ["runnable_file"]}
 
 CLI
-  no command on main (on a branch: skills-catalog preview <folder>, and
-  skills-catalog publish <folder> --confirm … --name … --version … --files … --flags …)
+  skills-catalog publish ./pr-review-checklist
+    (a person at a terminal: the preview, "Publish these files as pr-review-checklist v3? (y/N)", then the publish;
+    with no terminal: the preview only, nothing stored, and the exact step-2 command, exit 3)
+  skills-catalog publish …/pr-review-checklist --confirm=lQwMW_XZ… --name=pr-review-checklist --version=3 --files=3 --flags=runnable_file
 
 HTTP
   none: the web page never gets a machine operation
@@ -442,13 +444,13 @@ HTTP
 | version | whole number | — | from 1 | step 2 |
 | files | whole number | — | from 0 | step 2 |
 | flags | list of flag kinds | — | 20; each one of 9 kinds | step 2 |
-| allow_suspected_secrets (CLI only; no command takes it yet) | yes or no | no | — | no |
+| allow_suspected_secrets (CLI only, a person at a terminal) | yes or no | no | — | no |
 
 #### Output
 
 Text only today. Step 1 reports the version it would become and the change from the latest, the files it would send and the ones it skips (50 named at most), what can run, and the values for step 2; or "Nothing to publish" when the folder matches the latest. Step 2 reports "Published {name} v{n} to the shared catalog".
 
-*Differs from [the design](contract.md):* the design moves step 1 to preview_skill_publish and makes confirm, name, version, files and flags required here, with a CLI command for each (on a branch); and it returns publish_version's data, where the code returns text.
+*Differs from [the design](contract.md):* the design moves step 1 to preview_skill_publish and makes confirm, name, version, files and flags required here, with a CLI command for each (the CLI here has one command, publish, for both steps, as the tool does); and it returns publish_version's data, where the code returns text.
 
 #### Errors
 
@@ -718,10 +720,10 @@ Commands a person runs. None is an Assistant's tool today, and none has an HTTP 
 
 | Command | Status | What it does | Takes |
 |---|---|---|---|
-| skills-catalog setup | ON A BRANCH | Connects the Assistant to the catalog (its tool server entry, a session-start notice of held updates, the tools it may use without asking); asks its questions at a terminal | --yes, --config &lt;file>, --dry-run, --print-mcp-entry |
-| skills-catalog teardown | ON A BRANCH | Removes exactly what setup added; keeps the catalog, the installed skills and their records | nothing |
+| skills-catalog setup | BUILT | Connects the Assistant to the catalog (its tool server entry, a session-start notice of held updates, the tools it may use without asking), saves your name and update setting, and can add the skills-catalog command to your terminal; asks its questions at a terminal, in colour | --yes, --config &lt;file>, --dry-run, --print-mcp-entry, one flag per question (--auto-update, --catalog, --for, --me, --demo-developers, --terminal-command) |
+| skills-catalog teardown | BUILT | Removes exactly what setup added (and the terminal command, while unchanged); keeps the catalog, the installed skills, config.json and the backups | nothing |
 | skills-catalog serve | PLANNED | The local web page and its HTTP API, on 127.0.0.1, for a local catalog only; reads and dry runs unless started with --publish | --port, --publish |
-| skills-catalog stats | BUILT | This machine's usage summary: held updates, looks, answers; nothing leaves the machine | nothing |
+| skills-catalog stats | BUILT | This machine's usage summary: held updates, looks, answers; nothing leaves the machine. A person's only, on purpose (no Assistant's tool): it measures how the person answers held updates, including whether a hold changed their answer, which is a check on the Assistant's influence rather than a step it takes for them | nothing |
 | skills-catalog mcp | BUILT | Starts the Assistant's tools (the MCP server, over stdio) | nothing |
 
 Also planned, for later: login and logout (a hosted catalog only) and clear-kept (delete copies kept aside).
@@ -1105,7 +1107,7 @@ Served by local and hosted catalogs. Called through HTTP (`web`). It changes not
 
 ### `publish_skill_to_catalog`
 
-Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`). It changes the catalog (`writes_catalog`).
+Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`), the CLI (`cli`). It changes the catalog (`writes_catalog`).
 
 **Input**
 

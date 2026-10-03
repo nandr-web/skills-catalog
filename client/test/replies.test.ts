@@ -31,7 +31,7 @@ function folder(p: Place, name: string, files: Record<string, string | { text: s
 }
 
 const ctxFor = (p: Place, face: 'mcp' | 'cli' = 'mcp'): Context =>
-  contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_AS: 'ana', SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), S, face).ctx;
+  contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_AS: 'ana', SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project')), S, face).ctx;
 
 const views = (a: Answer, op = OP, args: Record<string, unknown> = {}) => ({ terminal: personView(S, terminal(false), op, a, args), markdown: personView(S, markdown, op, a, args) });
 

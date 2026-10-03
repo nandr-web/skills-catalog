@@ -136,6 +136,58 @@ permissive_settings:
   - {files: {"user": {"sandbox": {"enabled": true}, "permissions": {"allow": ["Bash(python3 *)"]}}}, mode: sandbox_auto_allow}
   - {files: {"project": {"permissions": {"defaultMode": "auto", "allow": ["Bash(*)"]}}}, mode: broad_bash_rule, note: "the project's auto is ignored; its broad rule counts"}
   - {files: {}, mode: null, note: "no settings at all"}
+  # managed settings in full (contract §5.3 "How the installer tells", §8 SKILLS_MANAGED_SETTINGS, which the tests point at a
+  # sandbox folder): managed-settings.json first, then managed-settings.d/*.json in name order; a later single value wins,
+  # lists combine, blocks merge key by key. File keys: "managed", "managed.d/<name>", "project_local", "project", "user".
+  - {files: {"managed": {"permissions": {"defaultMode": "auto"}}, "managed.d/10-a.json": {"permissions": {"defaultMode": "default"}}}, mode: null, note: "a drop-in read after managed-settings.json wins"}
+  - {files: {"managed.d/10-a.json": {"permissions": {"defaultMode": "bypassPermissions"}}, "managed.d/20-b.json": {"permissions": {"defaultMode": "default"}}}, mode: null, note: "drop-ins in name order: 20-b after 10-a"}
+  - {files: {"managed.d/10-a.json": {"permissions": {"allow": ["Bash(git *)"]}}, "managed.d/20-b.json": {"permissions": {"allow": ["Bash(env *)"]}}}, mode: broad_bash_rule, note: "lists combine across drop-ins"}
+  - {files: {"managed": {"sandbox": {"enabled": true}}, "managed.d/10-a.json": {"sandbox": {"autoAllowBashIfSandboxed": false}}}, mode: null, note: "blocks merge key by key: enabled from one file, auto-allow off from the other"}
+  - {files: {"managed.d/notes.txt": {"$raw": "not json"}, "user": {}}, mode: null, note: "only .json names count in the folder; this one is never read"}
+  # managed settings narrow the others
+  - {files: {"managed": {"permissions": {"disableBypassPermissionsMode": "disable"}}, "user": {"permissions": {"defaultMode": "bypassPermissions"}}}, mode: null, note: "bypass turned off by managed settings isn't counted"}
+  - {files: {"managed": {"permissions": {"disableAutoMode": "disable"}}, "user": {"permissions": {"defaultMode": "auto"}}}, mode: null}
+  - {files: {"managed": {"permissions": {"disableAutoMode": "disable"}}, "user": {"permissions": {"defaultMode": "auto", "allow": ["Bash(*)"]}}}, mode: broad_bash_rule, note: "auto isn't counted, the next in the order is"}
+  - {files: {"user": {"permissions": {"disableBypassPermissionsMode": "disable", "defaultMode": "bypassPermissions"}}}, mode: bypass, note: "the narrowing keys count only from managed settings"}
+  - {files: {"managed": {"allowManagedPermissionRulesOnly": true}, "user": {"permissions": {"allow": ["Bash(*)"]}}}, mode: null, note: "only managed allow rules count"}
+  - {files: {"managed": {"allowManagedPermissionRulesOnly": true, "permissions": {"allow": ["Bash(python3 *)"]}}}, mode: broad_bash_rule}
+  - {files: {"managed": {"allowManagedPermissionRulesOnly": true}, "user": {"sandbox": {"enabled": true}}}, mode: sandbox_auto_allow, note: "it narrows allow rules only"}
+  # unknown: a file that is there but can't be used; setup's summary names each such file and why, never its contents
+  - {files: {"user": {"$raw": "{\"permissions\": QA-SENTINEL-$RUN_ID"}}, mode: unknown, unusable: [{file: user, why: not_json}]}
+  - {files: {"user": {"$raw": "[]"}}, mode: unknown, unusable: [{file: user, why: not_json}], note: "JSON, but not an object at the top"}
+  - {files: {"user": {"permissions": {"defaultMode": 5}}}, mode: unknown, unusable: [{file: user, why: wrong_type, key: permissions.defaultMode}]}
+  - {files: {"user": {"permissions": []}}, mode: unknown, unusable: [{file: user, why: wrong_type, key: permissions}], note: "a block that isn't an object: named by the block"}
+  - {files: {"project": {"permissions": {"allow": "Bash(*)"}}}, mode: unknown, unusable: [{file: project, why: wrong_type, key: permissions.allow}], note: "a string where a list goes"}
+  - {files: {"user": {"permissions": {"allow": ["Bash(git *)", 7]}}}, mode: unknown, unusable: [{file: user, why: wrong_type, key: permissions.allow}], note: "an item that isn't a string"}
+  - {files: {"user": {"sandbox": {"enabled": "true"}}}, mode: unknown, unusable: [{file: user, why: wrong_type, key: sandbox.enabled}]}
+  - {files: {"managed": {"allowManagedPermissionRulesOnly": "yes"}}, mode: unknown, unusable: [{file: managed, why: wrong_type, key: allowManagedPermissionRulesOnly}]}
+  - {files: {"user": {"$over_bytes": 1048577}}, mode: unknown, unusable: [{file: user, why: too_big}], note: "1 MiB + 1: valid JSON padded with spaces"}
+  - {files: {"user": {"$link_to": {"permissions": {"defaultMode": "default"}}}}, mode: unknown, unusable: [{file: user, why: link}], note: "never followed, whatever it points at"}
+  - {files: {"user": {"$unreadable": {"permissions": {"defaultMode": "default"}}}}, mode: unknown, unusable: [{file: user, why: unreadable}], note: "mode 000; skipped when the tests run as root"}
+  - {files: {"user": {"model": 5, "permissions": {"defaultMode": "banana"}}}, mode: null, note: "a key the check doesn't read is ignored whatever its type; an unknown mode string isn't a wrong type"}
+  - {files: {"managed.d/10-a.json": {"$raw": "{"}, "user": {"permissions": {"defaultMode": "auto"}}}, mode: auto, unusable: [{file: managed.d/10-a.json, why: not_json}], note: "a mode found in usable files wins over unknown; the summary still names the broken file"}
+  - {files: {"managed": {"$raw": "x"}, "project": {"$raw": "y"}}, mode: unknown, unusable: [{file: managed, why: not_json}, {file: project, why: not_json}], note: "each unusable file, in reading order"}
+  # CLAUDE_CONFIG_DIR (contract §5.3 9f73a75a; setup's recorded claude_config_dir b8522dc3): that folder's settings.json is a
+  # second user file, `user_config_dir`, read once however many name it (`claude_config_dir`: env and/or config, each
+  # abs, rel (not absolute), "" (unset) or home (~/.claude itself)); the mode is worked out with each user file as the
+  # user layer and a mode found in either counts; a relative value is unusable, and unknown is only ever beaten by a
+  # permissive mode (auto, bypass, sandbox_auto_allow, broad_bash_rule) from a usable file, never by the default.
+  - {claude_config_dir: {env: abs}, files: {"user_config_dir": {"permissions": {"defaultMode": "auto"}}}, mode: auto, note: "auto only in $CLAUDE_CONFIG_DIR/settings.json", pending: "CLAUDE_CONFIG_DIR in the check (contract §5.3, 9f73a75a, b8522dc3)"}
+  - {claude_config_dir: {env: abs}, files: {"user_config_dir": {"permissions": {"defaultMode": "bypassPermissions"}}}, mode: bypass, pending: "CLAUDE_CONFIG_DIR in the check (contract §5.3, 9f73a75a, b8522dc3)"}
+  - {claude_config_dir: {env: abs}, files: {"user": {"permissions": {"defaultMode": "auto"}}}, mode: auto, note: "~/.claude/settings.json still counts, the other folder's file absent", pending: "CLAUDE_CONFIG_DIR in the check (contract §5.3, 9f73a75a, b8522dc3)"}
+  - {claude_config_dir: {env: abs}, files: {"user": {"permissions": {"defaultMode": "default"}}, "user_config_dir": {"permissions": {"defaultMode": "auto"}}}, mode: auto, note: "a mode found in either counts", pending: "CLAUDE_CONFIG_DIR in the check (contract §5.3, 9f73a75a, b8522dc3)"}
+  - {claude_config_dir: {env: abs}, files: {"user": {"sandbox": {"enabled": false}}, "user_config_dir": {"sandbox": {"enabled": true}}}, mode: sandbox_auto_allow, note: "either counts, not the higher of the two", pending: "CLAUDE_CONFIG_DIR in the check (contract §5.3, 9f73a75a, b8522dc3)"}
+  - {claude_config_dir: {env: abs}, files: {"project": {"sandbox": {"enabled": false}}, "user_config_dir": {"sandbox": {"enabled": true}}}, mode: null, note: "the project's value is still higher than either user file", pending: "CLAUDE_CONFIG_DIR in the check (contract §5.3, 9f73a75a, b8522dc3)"}
+  - {claude_config_dir: {env: abs}, files: {"user_config_dir": {"permissions": {"allow": ["Bash(*)"]}}}, mode: broad_bash_rule, note: "its allow rules merge with the rest", pending: "CLAUDE_CONFIG_DIR in the check (contract §5.3, 9f73a75a, b8522dc3)"}
+  - {claude_config_dir: {env: abs}, files: {"user_config_dir": {"permissions": {"defaultMode": "auto"}}, "managed": {"permissions": {"disableAutoMode": "disable"}}}, mode: null, note: "managed narrowing covers it too", pending: "CLAUDE_CONFIG_DIR in the check (contract §5.3, 9f73a75a, b8522dc3)"}
+  - {claude_config_dir: {env: rel}, files: {}, mode: unknown, unusable: [{file: user_config_dir, why: not_absolute}], note: "a value that isn't an absolute path", pending: "CLAUDE_CONFIG_DIR in the check (contract §5.3, 9f73a75a, b8522dc3)"}
+  - {claude_config_dir: {env: rel}, files: {"user": {"permissions": {"defaultMode": "auto"}}}, mode: auto, unusable: [{file: user_config_dir, why: not_absolute}], note: "a permissive mode from a usable file beats unknown; the relative value is still named", pending: "CLAUDE_CONFIG_DIR in the check (contract §5.3, 9f73a75a, b8522dc3)"}
+  - {claude_config_dir: {env: rel}, files: {"user": {"permissions": {"defaultMode": "default"}}}, mode: unknown, unusable: [{file: user_config_dir, why: not_absolute}], note: "the default never beats unknown", pending: "CLAUDE_CONFIG_DIR in the check (contract §5.3, 9f73a75a, b8522dc3)"}
+  - {claude_config_dir: {env: ""}, files: {"user_config_dir": {"permissions": {"defaultMode": "auto"}}}, mode: null, note: "an empty value is unset: only ~/.claude/settings.json is read", pending: "CLAUDE_CONFIG_DIR in the check (contract §5.3, 9f73a75a, b8522dc3)"}
+  - {claude_config_dir: {env: home}, files: {"user": {"$raw": "x"}}, mode: unknown, unusable: [{file: user, why: not_json}], note: "~/.claude itself: one file, read and named once", pending: "CLAUDE_CONFIG_DIR in the check (contract §5.3, 9f73a75a, b8522dc3)"}
+  - {claude_config_dir: {env: abs}, files: {"user_config_dir": {"$link_to": {"permissions": {"defaultMode": "default"}}}}, mode: unknown, unusable: [{file: user_config_dir, why: link}], note: "the same reader: a link is never followed", pending: "CLAUDE_CONFIG_DIR in the check (contract §5.3, 9f73a75a, b8522dc3)"}
+  - {claude_config_dir: {config: abs}, files: {"user_config_dir": {"permissions": {"defaultMode": "auto"}}}, mode: auto, note: "the folder setup recorded as claude_config_dir, read from a terminal without the variable", pending: "CLAUDE_CONFIG_DIR in the check (contract §5.3, 9f73a75a, b8522dc3)"}
+  - {claude_config_dir: {env: abs, config: abs}, files: {"user_config_dir": {"$raw": "x"}}, mode: unknown, unusable: [{file: user_config_dir, why: not_json}], note: "the variable and the record naming the same folder: read and named once", pending: "CLAUDE_CONFIG_DIR in the check (contract §5.3, 9f73a75a, b8522dc3)"}
 
 # command_instruction in the policy table (contract e22d154): it's a flag like any other. With auto-updates on,
 # every surface asks only when an update is flagged; there is no blanket hold in a permissive mode. Order: pin, notify,
@@ -143,7 +195,7 @@ permissive_settings:
 command_instruction_cases:
   - {policy: auto,   override: none, flags: [command_instruction], accept: false, mode: interactive, outcome: "held:flagged"}
   - {policy: auto,   override: none, flags: [command_instruction], accept: false, mode: unattended,  outcome: "held:flagged", notice: true}
-  - {policy: auto,   override: none, flags: [command_instruction], accept: true,  mode: unattended,  outcome: updated, note: "accept_flagged_updates lets it through like any flag; the lock records it"}
+  - {policy: auto,   override: none, flags: [command_instruction], accept: true,  mode: unattended,  outcome: updated, lock_accepted_last: {version: 2, flags: [command_instruction], by: accept_flagged_updates}, note: "accept_flagged_updates lets it through like any flag; the lock records it, by the setting (60b6532b)"}
   - {policy: auto,   override: none, flags: [],                    accept: false, mode: unattended,  outcome: updated, notice: false, note: "nothing flagged in a permissive mode: applied silently, no question on any surface"}
   - {policy: auto,   override: pin,  flags: [command_instruction], accept: false, mode: unattended,  outcome: "held:pin", notice: false, note: "a pinned skill asks nothing and gives no notice"}
   - {policy: notify, override: none, flags: [command_instruction], accept: false, mode: interactive, outcome: "held:notify"}
@@ -213,12 +265,22 @@ accept_cases:
 # config.json holding {"update_policy": "auto"}, then `damage` rewrites one of them. `entry.<field>` changes that field of
 # the one lock entry and nothing else. Then every command in `commands` refuses with the expected error, and afterwards:
 # the damaged file is byte-identical (never repaired or replaced), no skill folder changed, no other file in $SKILLS_HOME
-# changed, and no output (sentence, JSON, log line) contains QA-SENTINEL-$RUN_ID, planted inside each damaged file where
+# changed but the day's usage file and the activity log, which gain the call's line (a refused call is counted: `use` with
+# its error code, §3), and no output (sentence, JSON, log line) contains QA-SENTINEL-$RUN_ID, planted inside each damaged file where
 # JSON allows it. path = the file's full path. teardown still runs (exit 0); the session-start hook exits 0 and prints
 # exactly one line, fixed words naming the file. `ok_cases` are not damage: the commands work as usual.
+# config.json's keys are exactly §6's (contract 80fc7a14): any other key is wrong_shape with `key` naming the first one in
+# JSON.parse's order (integer-like keys first, then the file's order), and so is a cooldown that isn't a whole number of
+# seconds from 0 to 31,536,000, targets that isn't a list from ["claude-code"], and a key added to safe_frontmatter_keys
+# or non_granting_keys (config can only remove; compared
+# case-sensitively; duplicates and an empty list are fine). wrong_shape wins over unknown_policy and not_a_budget. A case's
+# `key` is the error's `key` (absent: the error has none): every config.json refusal tied to one key names it, a known key
+# with a wrong value included (§9); lock.json and a config that isn't JSON or isn't an object have none. A refused config.json also leaves lock.json's bytes and mtime
+# unchanged. accepted[].by is absent or "accept_flagged_updates" (60b6532b); anything else is wrong_shape.
 local_files:
   commands: [install_shared_skill, update_installed_skills, accept_held_update, list_installed_skills, set_skill_update_policy, setup]
   expect_every_command: {error: invalid_local_file, same_file: true, path: "$SKILLS_HOME/<file>", file_byte_identical: true, skills_unchanged: true, output_never_contains: "QA-SENTINEL-$RUN_ID"}
+  expect_config_cases: {lock_json_byte_identical: true, lock_json_mtime_unchanged: true}
   teardown: {exit: 0}
   session_start_hook: {exit: 0, stdout_lines: 1, names_file: true, output_never_contains: "QA-SENTINEL-$RUN_ID"}
   cases:
@@ -237,12 +299,38 @@ local_files:
     - {id: lock-policy-typo, file: lock.json, damage: {entry.policy: "pinn"}, why: unknown_policy, note: "a mistyped pin never falls back to auto: nothing updates"}
     - {id: lock-policy-case, file: lock.json, damage: {entry.policy: "Pin"}, why: unknown_policy, note: "policies are lowercase"}
     - {id: config-not-json, file: config.json, damage: {bytes: "update_policy: pin  # QA-SENTINEL-$RUN_ID\n"}, why: not_json, note: "YAML where JSON is expected"}
-    - {id: config-policy-number, file: config.json, damage: {bytes: "{\"update_policy\": 3}"}, why: wrong_shape}
-    - {id: config-policy-unknown, file: config.json, damage: {bytes: "{\"update_policy\": \"manual\", \"note\": \"QA-SENTINEL-$RUN_ID\"}"}, why: unknown_policy}
-    - {id: config-policy-case, file: config.json, damage: {bytes: "{\"update_policy\": \"Auto\"}"}, why: unknown_policy}
+    - {id: config-policy-number, file: config.json, damage: {bytes: "{\"update_policy\": 3}"}, why: wrong_shape, key: update_policy}
+    - {id: config-policy-unknown, file: config.json, damage: {bytes: "{\"update_policy\": \"manual QA-SENTINEL-$RUN_ID\"}"}, why: unknown_policy, key: update_policy, note: "the sentinel is in the policy's own value (80fc7a14: \"note\" would be an unknown key)"}
+    - {id: config-policy-case, file: config.json, damage: {bytes: "{\"update_policy\": \"Auto\"}"}, why: unknown_policy, key: update_policy}
     - {id: config-array, file: config.json, damage: {bytes: "[]"}, why: wrong_shape}
+    # a key §6 doesn't define (80fc7a14), and a key added to a key list (60b6532b): wrong_shape {key}
+    - {id: config-unknown-key, file: config.json, damage: {bytes: "{\"update_policy\": \"auto\", \"theme\": \"QA-SENTINEL-$RUN_ID\"}"}, why: wrong_shape, key: theme, note: "was an ok case (kept and ignored) before 80fc7a14"}
+    - {id: config-misspelled-policy, file: config.json, damage: {bytes: "{\"update_polcy\": \"pin\"}"}, why: wrong_shape, key: update_polcy, note: "a misspelled update_policy set to pin never falls back to automatic updates"}
+    - {id: config-key-case, file: config.json, damage: {bytes: "{\"Update_policy\": \"pin\"}"}, why: wrong_shape, key: Update_policy, note: "keys are compared exactly"}
+    - {id: config-unknown-keys-file-order, file: config.json, damage: {bytes: "{\"update_policy\": \"auto\", \"zeta\": 1, \"alpha\": 2}"}, why: wrong_shape, key: zeta, note: "the first unknown key in JSON.parse's order, not sorted"}
+    - {id: config-unknown-key-beats-policy, file: config.json, damage: {bytes: "{\"update_policy\": \"manual\", \"theme\": \"dark\"}"}, why: wrong_shape, key: theme, note: "wrong_shape wins over unknown_policy"}
+    - {id: config-unknown-key-beats-budget, file: config.json, damage: {bytes: "{\"context_cost_budget\": 0, \"theme\": \"dark\"}"}, why: wrong_shape, key: theme, note: "wrong_shape wins over not_a_budget"}
+    - {id: config-safe-key-added, file: config.json, damage: {bytes: "{\"update_policy\": \"auto\", \"safe_frontmatter_keys\": [\"name\", \"description\", \"allowed-tools\"]}"}, why: wrong_shape, key: allowed-tools, note: "config can only remove from the safe list"}
+    - {id: config-safe-key-case, file: config.json, damage: {bytes: "{\"safe_frontmatter_keys\": [\"name\", \"Description\"]}"}, why: wrong_shape, key: Description, note: "compared case-sensitively: fails closed"}
+    - {id: config-non-granting-key-added, file: config.json, damage: {bytes: "{\"non_granting_keys\": [\"model\", \"hooks\"]}"}, why: wrong_shape, key: hooks, note: "hooks grants: config can only remove from the list"}
+    - {id: lock-accepted-by-other, file: lock.json, damage: {entry.accepted: [{version: 1, flags: [], by: "QA-SENTINEL-$RUN_ID"}]}, why: wrong_shape, note: "by is absent (the person's yes) or accept_flagged_updates (60b6532b)"}
+    - {id: lock-accepted-by-null, file: lock.json, damage: {entry.accepted: [{version: 1, flags: [], by: null}]}, why: wrong_shape, note: "null isn't absent"}
+    - {id: config-unknown-key-integer-first, file: config.json, damage: {bytes: "{\"theme\": \"x\", \"10\": \"y\"}"}, why: wrong_shape, key: "10", note: "a stated limit: JSON.parse puts integer-like keys first, so \"first\" is in its order, not the text's"}
+    # cooldown: a whole number of seconds, 0 to 31,536,000; targets: a list from ["claude-code"]; else wrong_shape {key}
+    - {id: config-cooldown-negative, file: config.json, damage: {bytes: "{\"cooldown\": -1}"}, why: wrong_shape, key: cooldown}
+    - {id: config-cooldown-fraction, file: config.json, damage: {bytes: "{\"cooldown\": 1.5}"}, why: wrong_shape, key: cooldown}
+    - {id: config-cooldown-over-a-year, file: config.json, damage: {bytes: "{\"cooldown\": 31536001}"}, why: wrong_shape, key: cooldown, note: "one second past 365 days"}
+    - {id: config-cooldown-string, file: config.json, damage: {bytes: "{\"cooldown\": \"3d\"}"}, why: wrong_shape, key: cooldown}
+    - {id: config-targets-unknown, file: config.json, damage: {bytes: "{\"targets\": [\"claude-code\", \"cursor\"]}"}, why: wrong_shape, key: targets, note: "phase 1 has one target"}
+    - {id: config-targets-not-a-list, file: config.json, damage: {bytes: "{\"targets\": \"claude-code\"}"}, why: wrong_shape, key: targets}
   ok_cases:
     - {id: lock-copy-big-ino, file: lock.json, damage: {entry.copy.ino: "9007199254740993"}, expect: {list_installed_skills: {installed: 1}}, note: "an ino past 2^53 is kept as a decimal string, read without error (e24f202); that it matches its folder by value is replace_safely's ino-past-safe-integer"}
     - {id: lock-absent, remove: lock.json, expect: {list_installed_skills: {installed: []}}, note: "no lock yet: nothing installed, not an error"}
     - {id: config-absent, remove: config.json, expect: {update_policy_effective: auto}, note: "no config: the default"}
-    - {id: config-extra-key, file: config.json, damage: {bytes: "{\"update_policy\": \"notify\", \"theme\": \"dark\"}"}, expect: {update_policy_effective: notify}, note: "a key the config doesn't define is kept and ignored"}
+    - {id: lock-accepted-by-setting, file: lock.json, damage: {entry.accepted: [{version: 1, flags: [runnable_file], by: accept_flagged_updates}]}, expect: {list_installed_skills: {installed: 1}}, note: "the setting let it through (60b6532b)"}
+    - {id: config-setup-keys, file: config.json, damage: {bytes: "{\"hosting\": \"local\", \"update_policy\": \"notify\", \"session_start_hook\": true}"}, expect: {update_policy_effective: notify}, note: "keys setup writes and the installer doesn't use are §6's, not unknown (80fc7a14)"}
+    - {id: config-safe-keys-narrowed, file: config.json, damage: {bytes: "{\"update_policy\": \"auto\", \"safe_frontmatter_keys\": [\"name\", \"description\"]}"}, expect: {list_installed_skills: {installed: 1}}, note: "removing keys works"}
+    - {id: config-key-lists-empty, file: config.json, damage: {bytes: "{\"safe_frontmatter_keys\": [], \"non_granting_keys\": []}"}, expect: {update_policy_effective: auto}, note: "an empty list removes every key: every key then counts"}
+    - {id: config-key-list-duplicates, file: config.json, damage: {bytes: "{\"non_granting_keys\": [\"model\", \"model\"]}"}, expect: {update_policy_effective: auto}}
+    - {id: config-cooldown-bounds, file: config.json, damage: {bytes: "{\"cooldown\": 31536000, \"targets\": [\"claude-code\"]}"}, expect: {update_policy_effective: auto}, note: "365 days exactly, and the one target"}
+    - {id: config-cooldown-zero, file: config.json, damage: {bytes: "{\"cooldown\": 0}"}, expect: {update_policy_effective: auto}}

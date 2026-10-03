@@ -350,10 +350,45 @@ function diff({ s, say, m }: Ctx, r: DiffResult): string {
   return out.join('\n');
 }
 
+/** A publish's refusals in the person's words: what happened and what they do next (the assistant's words tell it what
+ *  to tell them). Undefined for a refusal with no words of its own here. */
+function publishError({ s, say }: Ctx, a: Answer): string | undefined {
+  const e = a.error!;
+  const d = e.data as Record<string, unknown>;
+  const text = (v: unknown) => oneLine(String(v));
+  switch (e.code) {
+    case 'not_owner':
+      return say('errors.not_owner', { name: text(d['name']), owners: ((d['owners'] as string[] | undefined) ?? []).map(text).join(', ') });
+    case 'unauthenticated':
+      return a.text === s.word('errors.unauthenticated_local') ? say('errors.unauthenticated_local') : undefined;
+    case 'invalid_manifest': {
+      if (d['folder'] === undefined) return undefined;
+      const code = String(d['problem'] ?? 'missing');
+      const first = ((d['fields'] as string[] | undefined) ?? [])[0];
+      const phrases = s.word('errors.invalid_manifest_problem') as Record<string, string> | undefined;
+      const key = code === 'missing_fields' && first && phrases?.[first] ? first : code;
+      const phrase = phrases?.[key];
+      if (!phrase) return undefined;
+      const problem = s.format(phrase, { feature: text(d['feature'] ?? ''), field: `"${text(first ?? '')}"` });
+      return say('errors.invalid_manifest', { folder: text(d['folder']), problem });
+    }
+    case 'conflict':
+      if (d['held'] === true) return undefined;
+      return d['folder'] !== undefined ? say('errors.publish_conflict') : say('errors.conflict', { name: text(d['name']), latest: text(d['latest']) });
+    case 'secret_suspected': {
+      const kind = (s.word('errors.secret_kind') as Record<string, string> | undefined)?.[String(d['kind'])];
+      return kind === undefined ? undefined : say('errors.secret_suspected', { path: flagText(String(d['path'])), line: text(d['line']), kind });
+    }
+    default:
+      return undefined;
+  }
+}
+
 // Errors: the sentence without its code, and what the person can do next: a command to type in a terminal, words in a
 // reply. In a reply only the errors with words of their own here have a view; in a terminal the rest keep their text,
 // only without the leading code (a person has no use for "not_found:").
-function error({ s, say, m }: Ctx, a: Answer): string | undefined {
+function error(c: Ctx, a: Answer): string | undefined {
+  const { s, say, m } = c;
   const { paint } = m;
   const e = a.error!;
   const d = e.data as Record<string, unknown>;
@@ -393,6 +428,8 @@ function error({ s, say, m }: Ctx, a: Answer): string | undefined {
   if (e.code === 'invalid_request' && d['why'] === 'not_a_catalog') return shown(say('errors.no_catalog', { path: m.text(String(d['path'] ?? '')) }), ...next(say('errors.no_catalog_next')));
   if (m.kind !== 'terminal') return undefined;
   if (e.code === 'not_installed' && typeof d['name'] === 'string') return `${mark} ${say('errors.not_installed', { name: oneLine(d['name']) })}`;
+  const publishing = publishError(c, a);
+  if (publishing !== undefined) return `${mark} ${publishing}`;
   // The rest keep their text, without the leading code and without the "acting as" line the CLI adds once itself.
   const acting = new RegExp(`\\n?${s.word('acting_as').replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace('{developer}', '[^\\n]*')}$`);
   return `${mark} ${a.text.replace(acting, '').replace(/^[a-z_]+: /, '')}`;

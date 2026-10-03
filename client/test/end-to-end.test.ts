@@ -53,7 +53,7 @@ describe("the PRD's end to end: Developer 1 publishes, Developer 2's assistant d
       }
 
       // Developer 2: another machine (its own SKILLS_HOME and home), the same catalog, no file from ana's.
-      const bob = startServer(p, { SKILLS_AS: 'bob', SKILLS_HOME: join(p.dir, 'bob-skills-home'), HOME: join(p.dir, 'bob-home') });
+      const bob = startServer(p, { SKILLS_AS: 'bob', SKILLS_HOME: join(p.dir, 'bob-skills-home'), HOME: join(p.dir, 'bob-home'), SKILLS_ASSISTANT_HOME: join(p.dir, 'bob-home') });
       try {
         await bob.initialize();
         // FR-02's example: "is there a skill for writing release notes?" → release-note-draft with its description.

@@ -26,7 +26,7 @@ const policy = run('set_skill_update_policy');
 type File = { path: string; text: string; mode?: string };
 
 function ctxFor(p: Place, o: { face?: 'mcp' | 'cli'; catalog?: (c: Catalog) => Catalog } = {}): Context {
-  const settings = settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project'));
+  const settings = settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project'));
   const { ctx } = contextFor(settings, S, o.face ?? 'mcp');
   if (!o.catalog) return ctx;
   const wrap = o.catalog;
@@ -978,7 +978,7 @@ describe('update (contract §3 update_installed_skills, §5.3)', () => {
 // file is never repaired or rewritten, and an unknown policy never falls back to automatic updates.
 describe('a damaged lock or config file (contract §4.5 invalid_local_file)', () => {
   const entry = (p: Place, name: string) => lockOf(p)[join(userSkills(p), name)]!;
-  const damages: { file: 'lock.json' | 'config.json'; why: string; bytes: (p: Place) => string }[] = [
+  const damages: { file: 'lock.json' | 'config.json'; why: string; bytes: (p: Place) => string; key?: string }[] = [
     { file: 'lock.json', why: 'not_json', bytes: () => '{"skills": {' },
     { file: 'lock.json', why: 'wrong_shape', bytes: () => '[]' },
     { file: 'lock.json', why: 'wrong_shape', bytes: () => 'null' },
@@ -989,15 +989,97 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
     // A folder identity is a number, or a decimal string of digits past 2^53 (no sign, no leading zeros).
     ...['-1', '01', '1.5', '1e3', 'x', '', ' 1'].map((ino) => ({ file: 'lock.json' as const, why: 'wrong_shape', bytes: (p: Place) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), copy: { ...entry(p, 'runner').copy!, ino } } } }) })),
     { file: 'lock.json', why: 'unknown_policy', bytes: (p) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), policy: 'pinn' } } }) },
+    // An acceptance's `by` is absent (the person's yes) or accept_flagged_updates; nothing else.
+    { file: 'lock.json', why: 'wrong_shape', bytes: (p) => JSON.stringify({ skills: { [join(userSkills(p), 'runner')]: { ...entry(p, 'runner'), accepted: [{ version: 1, flags: [], by: 'someone' }] } } }) },
     { file: 'config.json', why: 'not_json', bytes: () => 'update_policy: pin\n' },
     { file: 'config.json', why: 'wrong_shape', bytes: () => '"pin"' },
     { file: 'config.json', why: 'wrong_shape', bytes: () => 'null' },
     { file: 'config.json', why: 'wrong_shape', bytes: () => '{"update_policy": null}' },
     { file: 'config.json', why: 'wrong_shape', bytes: () => '{"update_policy": ["pin"]}' },
     { file: 'config.json', why: 'unknown_policy', bytes: () => '{"update_policy": "Pin"}' },
+    // The setup keys (§6): a budget that isn't a number, a switch that isn't true or false, or a key list that isn't a list
+    // of names has the wrong shape; a number that isn't a positive whole one below 2^53 isn't a budget.
+    ...['"5000"', 'true', 'null', '[5000]'].map((b) => ({ file: 'config.json' as const, why: 'wrong_shape', bytes: () => `{"context_cost_budget": ${b}}` })),
+    ...['0', '-1', '1.5', '1e400', '9007199254740992'].map((b) => ({ file: 'config.json' as const, why: 'not_a_budget', bytes: () => `{"context_cost_budget": ${b}}` })),
+    ...['"true"', '1', 'null'].map((b) => ({ file: 'config.json' as const, why: 'wrong_shape', bytes: () => `{"accept_flagged_updates": ${b}}` })),
+    ...['safe_frontmatter_keys', 'non_granting_keys'].flatMap((k) => ['"name"', '[1]', '["model", null]', '{}'].map((b) => ({ file: 'config.json' as const, why: 'wrong_shape', bytes: () => `{"${k}": ${b}}` }))),
+    // config.json holds exactly §6's keys, fail closed: an unknown key (a misspelled update_policy set to pin must never
+    // mean auto), or a key added to safe_frontmatter_keys (config can only remove), is wrong_shape naming that key.
+    { file: 'config.json', why: 'wrong_shape', key: 'update_polcy', bytes: () => '{"update_polcy": "pin"}' },
+    { file: 'config.json', why: 'wrong_shape', key: 'hooks', bytes: () => '{"safe_frontmatter_keys": ["name", "hooks"]}' },
+    // The keys known to grant nothing can only be narrowed too: a key added names itself, compared case-sensitively.
+    { file: 'config.json', why: 'wrong_shape', key: 'hooks', bytes: () => '{"non_granting_keys": ["model", "hooks"]}' },
+    { file: 'config.json', why: 'wrong_shape', key: 'Model', bytes: () => '{"non_granting_keys": ["Model"]}' },
+    // aws goes only with hosting: aws (local is the default).
+    { file: 'config.json', why: 'wrong_shape', key: 'aws', bytes: () => '{"aws": {}}' },
+    { file: 'config.json', why: 'wrong_shape', key: 'aws', bytes: () => '{"hosting": "local", "aws": {"region": "us-east-1"}}' },
+    // The first unknown key in JSON.parse's order, which puts integer-like keys first (a stated limit).
+    { file: 'config.json', why: 'wrong_shape', key: '10', bytes: () => '{"zeta": 1, "10": 2}' },
+    // Each known key has its shape.
+    ...[
+      '{"hosting": "cloud"}',
+      '{"catalog": 5}',
+      '{"catalog": ""}',
+      '{"overrides": ["pin"]}',
+      '{"session_start_hook": "yes"}',
+      '{"claude_config_dir": "relative/claude"}',
+      '{"me": "Not A Name"}',
+      '{"demo_developers": ["dev1", 2]}',
+      '{"demo_developers": "dev1"}',
+      '{"aws": "us-east-1"}',
+      '{"targets": ["cursor"]}',
+      '{"targets": "claude-code"}',
+      '{"cooldown": "3d"}',
+      '{"cooldown": -1}',
+      '{"cooldown": 31536001}',
+      '{"cooldown": 1.5}',
+    ].map((b) => ({ file: 'config.json' as const, why: 'wrong_shape', bytes: () => b })),
+    { file: 'config.json', why: 'unknown_policy', key: 'overrides.runner', bytes: () => '{"overrides": {"runner": "Pin"}}' },
   ];
 
-  // Every damage runs a publish, an install and each installer call (about 2 s alone, over 6 s in a loaded full run).
+  it('the setup keys, well formed, are read as they are (a whole budget written as 5000.0, the largest safe one, empty lists)', async () => {
+    // Every key of §6, well formed, as setup writes them.
+    const all = JSON.stringify({ hosting: 'local', catalog: '/somewhere/catalog', update_policy: 'notify', overrides: { runner: 'pin' }, cooldown: 31536000, accept_flagged_updates: false, safe_frontmatter_keys: ['name', 'description'], non_granting_keys: ['model'], context_cost_budget: 5000, command_instruction_patterns: [], targets: ['claude-code'], session_start_hook: true, claude_config_dir: '/somewhere/claude', me: 'ana', demo_developers: ['dev1', 'dev2'] });
+    // aws is set only with hosting: aws.
+    const allAws = JSON.stringify({ hosting: 'aws', catalog: 'https://catalog.example/', update_policy: 'notify', overrides: { runner: 'pin' }, cooldown: 31536000, accept_flagged_updates: false, safe_frontmatter_keys: ['name', 'description'], non_granting_keys: ['model'], context_cost_budget: 5000, command_instruction_patterns: [], targets: ['claude-code'], session_start_hook: true, claude_config_dir: '/somewhere/claude', me: 'ana', demo_developers: ['dev1', 'dev2'], aws: {} });
+    for (const bytes of [all, allAws, '{"context_cost_budget": 5000.0, "accept_flagged_updates": false}', '{"context_cost_budget": 9007199254740991, "safe_frontmatter_keys": [], "non_granting_keys": ["model"]}', '{"command_instruction_patterns": []}']) {
+      const p = place();
+      await publish(p, 'runner', plain('runner'));
+      mkdirSync(p.home, { recursive: true, mode: 0o700 });
+      writeFileSync(join(p.home, 'config.json'), bytes);
+      expect((await install(ctxFor(p), { name: 'runner' })).outcome).toBe('installed');
+      expect(readFileSync(join(p.home, 'config.json'), 'utf8')).toBe(bytes);
+    }
+  });
+
+  // Nothing reads command_instruction_patterns yet (the rules that use it aren't built): a value there, even one that isn't a
+  // valid pattern, is never compiled or used, and no source but the config check names the key.
+  it('command_instruction_patterns is inert: a present value is never compiled or used, and only the config check names it', async () => {
+    const p = place();
+    await publish(p, 'runner', plain('runner'));
+    mkdirSync(p.home, { recursive: true, mode: 0o700 });
+    const bytes = JSON.stringify({ command_instruction_patterns: ['(', '[z-a]', { phrase: 'please run zzz-marker now', instruction: 'shell' }] });
+    writeFileSync(join(p.home, 'config.json'), bytes);
+    const ctx = ctxFor(p);
+    expect((await install(ctx, { name: 'runner' })).outcome).toBe('installed');
+    await publish(p, 'runner', plain('runner', 'Body.\nplease run zzz-marker now\n'));
+    expect((await update(ctx, {})).outcome).toBe('updated');
+    expect(lockOf(p)[join(userSkills(p), 'runner')]).toMatchObject({ version: 2, accepted: [] });
+    const src = join(import.meta.dirname, '..', 'src');
+    const naming = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? naming(join(dir, e.name)) : readFileSync(join(dir, e.name), 'utf8').includes('command_instruction_patterns') ? [join(dir, e.name).slice(src.length + 1)] : []));
+    expect(naming(src)).toEqual(['machine/lock.ts']);
+  });
+
+  // A config.json refusal tied to one key names it (§9): the row's own key, else the one key its file sets. A lock.json
+  // refusal, and a file that isn't JSON or an object, name none.
+  const keyOf = (d: (typeof damages)[number], bytes: string): string | undefined => {
+    if (d.key || d.file !== 'config.json' || d.why === 'not_json') return d.key;
+    const v = JSON.parse(bytes) as unknown;
+    const keys = typeof v === 'object' && v !== null && !Array.isArray(v) ? Object.keys(v) : [];
+    return keys.length === 1 ? keys[0] : undefined;
+  };
+
+  // Every damage runs a publish, an install and each installer call (about 14 s alone for all of them, more in a loaded full run).
   it('every installer call refuses it with the file and why, and nothing changes', async () => {
     for (const d of damages) {
       const p = place();
@@ -1021,7 +1103,7 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
       ];
       for (const [what, call] of calls) {
         const e = await refusal(call);
-        expect([what, d.why, e.code, e.data]).toEqual([what, d.why, 'invalid_local_file', { file: d.file, why: d.why, path: file }]);
+        expect([what, d.why, e.code, e.data]).toEqual([what, d.why, 'invalid_local_file', { file: d.file, why: d.why, path: file, ...(keyOf(d, bytes) ? { key: keyOf(d, bytes) } : {}) }]);
       }
       expect(readFileSync(file, 'utf8')).toBe(bytes);
       expect(tree(join(userSkills(p), 'runner'))).toEqual(installed);
@@ -1029,7 +1111,7 @@ describe('a damaged lock or config file (contract §4.5 invalid_local_file)', ()
       expect(existsSync(join(projectSkills(p), 'other'))).toBe(false);
       expect(nothingStaged(p)).toBe(true);
     }
-  }, 30_000);
+  }, 90_000);
 
   it('a mistyped pin never applies an update', async () => {
     const p = place();

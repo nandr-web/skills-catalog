@@ -6,6 +6,8 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { processEnv } from './process-env.ts';
+import { sandbox } from './sandbox.ts';
 import { EMOJI_PROPERTIES_FILE, EMOJI_MODIFIER, EXTENDED_PICTOGRAPHIC, SPACE_SEPARATORS, reviewFlags } from '../src/skill-tree/index.ts';
 
 const core = join(import.meta.dirname, '..');
@@ -50,10 +52,12 @@ describe('the emoji table', () => {
   });
 
   // The script needs no Unicode data from Python itself, so any python3 runs it; without one the test says it skipped, and why.
-  const python = spawnSync('python3', ['--version'], { encoding: 'utf8' });
+  // A built environment, as every process a test starts (process-env.test.ts); python3 from the system's folders.
+  const env = processEnv(sandbox());
+  const python = spawnSync('python3', ['--version'], { encoding: 'utf8', env });
   it('matches a fresh run of scripts/emoji-properties.py, which checks the totals and the version line', (ctx) => {
     if (python.status !== 0) ctx.skip('no python3 on this machine, so the table was not compared with a fresh run');
-    const r = spawnSync('python3', [join(core, 'scripts', 'emoji-properties.py'), '--check'], { encoding: 'utf8' });
+    const r = spawnSync('python3', [join(core, 'scripts', 'emoji-properties.py'), '--check'], { encoding: 'utf8', env });
     expect([r.status, r.stderr]).toEqual([0, '']);
   });
 

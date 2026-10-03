@@ -12,13 +12,14 @@ import { parseArgs } from 'node:util';
 import { CatalogError, Words, checkActor, renderError, shellQuote } from '@skills-catalog/core';
 import { NAME_RE, flagText } from '@skills-catalog/core/skill-tree';
 import { logWords } from '../activity.ts';
-import { actingAs, contextFor, perform } from '../operations.ts';
+import { actingLine, contextFor, perform } from '../operations.ts';
 import { settingsFrom } from '../settings.ts';
 import { Usage, type Command, type Io, type Values } from './command.ts';
 import { diff } from './commands/diff.ts';
 import { install } from './commands/install.ts';
 import { list } from './commands/list.ts';
 import { policy } from './commands/policy.ts';
+import { publish } from './commands/publish.ts';
 import { read } from './commands/read.ts';
 import { search } from './commands/search.ts';
 import { review } from './commands/review.ts';
@@ -35,7 +36,7 @@ import { terminal } from '../person/medium.ts';
 export type { Io } from './command.ts';
 
 /** The commands, keyed by the word after the command's name (as the words file's CLI names write it). */
-export const COMMANDS: Record<string, Command> = { search, read, versions, diff, install, list, update, policy, stats, review };
+export const COMMANDS: Record<string, Command> = { search, read, versions, diff, install, list, update, policy, stats, review, publish };
 
 /** Every command word served: the operation commands and the process commands (process.ts). */
 export const SERVED: readonly string[] = [...Object.keys(COMMANDS), ...Object.keys(PROCESS_COMMANDS)];
@@ -47,7 +48,7 @@ export const flagsFor = (word: string): string[] =>
 /** The commands this CLI serves, as the words file names them, and the process commands (the MCP server, the page). */
 export function usage(s: Words): string {
   const served = Object.values(s.names).filter((n) => Object.keys(COMMANDS).includes(n.split(' ')[1] ?? ''));
-  const processes = Object.entries(PROCESS_COMMANDS).map(([word, p]) => [s.cli, word, ...p.flags.map((f) => (f === 'port' ? '[--port N]' : `[--${f}]`))].join(' '));
+  const processes = Object.entries(PROCESS_COMMANDS).map(([word, p]) => [s.cli, word, ...(p.shown ?? p.flags).map((f) => (f === 'port' ? '[--port N]' : `[--${f}]`))].join(' '));
   return `${s.cli}\n${served.map((n) => `  ${n}`).join('\n')}\n${processes.map((n) => `  ${n}`).join('\n')}\n`;
 }
 
@@ -115,7 +116,8 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
     }
   }
   const settings = settingsFrom({ ...io.env, ...(developer ? { SKILLS_AS: developer } : {}) }, io.cwd);
-  const withActing = (text: string) => (settings.developer ? `${text}\n${actingAs(s, settings.developer)}` : text);
+  const acting = actingLine(s, settings);
+  const withActing = (text: string) => (acting ? `${text}\n${acting}` : text);
 
   let input: Record<string, unknown>;
   try {

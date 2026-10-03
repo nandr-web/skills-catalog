@@ -26,6 +26,8 @@ import {
 } from '../src/skill-tree/index.ts';
 import { GOLDEN, catalogNameOf, filesOf, generated, historyVersion, loadGolden, rawFilesOf, type RawFile } from './golden.ts';
 import { expectLinear, times } from './linear.ts';
+import { processEnv } from './process-env.ts';
+import { sandbox } from './sandbox.ts';
 
 const skills = loadGolden('skills.yaml');
 const histories = loadGolden('histories.yaml');
@@ -65,7 +67,7 @@ describe('fingerprint (contract §4.3)', () => {
       .sort((a, b) => (a.path < b.path ? -1 : 1)) // ASCII paths: sorting strings is sorting bytes
       .map((f) => `${f.mode} ${createHash('sha256').update(f.bytes).digest('hex')} ${f.path}\n`)
       .join('');
-    const shasum = spawnSync('shasum', ['-a', '256'], { input: listing, encoding: 'utf8' });
+    const shasum = spawnSync('shasum', ['-a', '256'], { env: processEnv(sandbox()), input: listing, encoding: 'utf8' });
     expect(shasum.status).toBe(0);
     expect(fingerprint(tree(files).map(entryOf))).toBe('sha256:' + shasum.stdout.split(' ')[0]);
   });

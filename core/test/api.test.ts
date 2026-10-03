@@ -51,7 +51,7 @@ const FACES: Record<string, readonly string[]> = {
   sign_in_with_github: ['web'], // hosted only
   list_tokens: ['web'], // hosted only
   revoke_token: ['web'], // hosted only
-  publish_skill_to_catalog: ['mcp'], // its CLI command is on a branch
+  publish_skill_to_catalog: ['mcp', 'cli'],
   install_shared_skill: ['mcp', 'cli'],
   update_installed_skills: ['mcp', 'cli'],
   accept_held_update: ['mcp', 'cli'],

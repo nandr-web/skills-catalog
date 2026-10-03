@@ -4,13 +4,14 @@ import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CatalogError, Words, actAs } from '@skills-catalog/core';
+import { processEnv, sandbox } from '@skills-catalog/core/testing';
 import { describe, expect, it } from 'vitest';
 import { MACHINE_RUNS } from '../src/machine/index.ts';
 import { holdLock, withLock } from '../src/machine/lock.ts';
 import { contextFor, type Context } from '../src/operations.ts';
 import { settingsFrom } from '../src/settings.ts';
 import { open, request, skillMd } from './seed.ts';
-import { place, type Place } from './server.ts';
+import { childEnv, place, type Place } from './server.ts';
 
 // The lock file names its holder: its process id and when that process started. A holder that's gone, or a process id now
 // used by a process started at another time, leaves a stale lock, which the next run removes and takes. A live holder is
@@ -19,7 +20,7 @@ describe('the lock file', () => {
   const S = Words.load();
   const install = MACHINE_RUNS['install_shared_skill']!;
   const ctxFor = (p: Place, now?: () => Date): Context => {
-    const { ctx } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, join(p.dir, 'project')), S, 'mcp');
+    const { ctx } = contextFor(settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, SKILLS_MANAGED_SETTINGS: p.managed }, join(p.dir, 'project')), S, 'mcp');
     return now ? { ...ctx, now } : ctx;
   };
   const lockPath = (p: Place) => join(p.home, 'lock.json.lock');
@@ -42,7 +43,7 @@ describe('the lock file', () => {
 
   it('left by a process that is gone: removed, taken, and the install goes through', async () => {
     const p = await published('alpha');
-    const gone = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' });
+    const gone = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { env: processEnv(sandbox()), encoding: 'utf8' });
     hold(p, Number(gone.stdout), startedHere);
     expect((await install(ctxFor(p), { name: 'alpha' })).outcome).toBe('installed');
     expect(existsSync(lockPath(p))).toBe(false);
@@ -63,7 +64,7 @@ describe('the lock file', () => {
     writeFileSync(join(bin, 'ps'), `#!/bin/sh\ntouch '${marker}'\necho 00:01\n`, { mode: 0o755 });
     // A live child named with a start an hour off: the only way to a stale verdict is asking ps about it (this process's
     // own pid would return early, and its start is cached by then).
-    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30_000)'], { stdio: 'ignore' });
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30_000)'], { stdio: 'ignore', env: childEnv(p) });
     hold(p, child.pid!, Date.now() - 3_600_000);
     const before = process.env['PATH'];
     process.env['PATH'] = `${bin}:${before ?? '/usr/bin:/bin'}`;
@@ -77,7 +78,7 @@ describe('the lock file', () => {
   });
 
   it('held by a live process: waited for up to 5 seconds, then lock_busy {path, pid}, and nothing changes', async () => {
-    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], { stdio: 'ignore' });
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], { env: processEnv(sandbox()), stdio: 'ignore' });
     const started = Date.now();
     try {
       const p = await published('alpha');
@@ -106,7 +107,7 @@ describe('the lock file', () => {
   // A holder this user can't signal (another user's process, here root's pid 1) is alive all the same: waited for, never
   // taken as stale, while its start matches.
   it.skipIf(process.getuid?.() === 0)('held by another user\'s live process: waited for, then lock_busy', async () => {
-    const etime = spawnSync('ps', ['-o', 'etime=', '-p', '1'], { encoding: 'utf8' }).stdout.trim();
+    const etime = spawnSync('ps', ['-o', 'etime=', '-p', '1'], { env: processEnv(sandbox()), encoding: 'utf8' }).stdout.trim();
     const [s = 0, m = 0, h = 0, d = 0] = etime.split(/[-:]/).map(Number).reverse();
     const started = Date.now() - (((d * 24 + h) * 60 + m) * 60 + s) * 1000;
     const p = await published('alpha');
@@ -119,7 +120,7 @@ describe('the lock file', () => {
 
   // The MCP server answers other calls while one waits for the lock: the wait never blocks the event loop.
   it('a run waiting for the lock leaves the event loop free', async () => {
-    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], { stdio: 'ignore' });
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], { env: processEnv(sandbox()), stdio: 'ignore' });
     let ticks = 0;
     const tick = setInterval(() => ticks++, 5);
     try {
@@ -139,7 +140,7 @@ describe('the lock file', () => {
   // A holder's start, as the system reports it, is compared without a time zone: whatever TZ this run has, a live holder
   // is never taken for a stale one (two runs would then write at once).
   it('held by a live process in any time zone: still waited for, then lock_busy', async () => {
-    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], { stdio: 'ignore' });
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], { env: processEnv(sandbox()), stdio: 'ignore' });
     const started = Date.now();
     const tz = process.env['TZ'];
     try {

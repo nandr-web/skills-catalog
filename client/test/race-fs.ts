@@ -17,6 +17,8 @@ export const race = {
   onWrite: undefined as undefined | ((fd: number) => void),
   // Runs before every openSync, with its path and flags (the lock file is made with 'wx').
   onOpen: undefined as undefined | ((path: string, flags: unknown) => void),
+  // Runs before every fchownSync; throwing makes it fail (a group this user isn't in).
+  onFchown: undefined as undefined | ((fd: number) => void),
 };
 
 export function mockFs(fs: Fs): Fs {
@@ -45,5 +47,23 @@ export function mockFs(fs: Fs): Fs {
     race.onOpen?.(String(path), flags);
     return (fs.openSync as (...a: unknown[]) => number)(path, flags, ...rest);
   }) as Fs['openSync'];
-  return { ...fs, lstatSync, statSync, renameSync, writeSync, openSync, default: { ...fs, lstatSync, statSync, renameSync, writeSync, openSync } } as Fs;
+  const fchownSync = ((fd: number, ...rest: unknown[]) => {
+    race.onFchown?.(fd);
+    return (fs.fchownSync as (...a: unknown[]) => void)(fd, ...rest);
+  }) as Fs['fchownSync'];
+  return { ...fs, lstatSync, statSync, renameSync, writeSync, openSync, fchownSync, default: { ...fs, lstatSync, statSync, renameSync, writeSync, openSync, fchownSync } } as Fs;
+}
+
+/** The runner's folders, the OS temp folder and each folder above it (on Linux /tmp, written by everyone with the
+ *  sticky bit), seen as root's own and 0755, so a test of the install check is judged by the folders it made alone.
+ *  `rewrite` is the test's own, which wins where it says something. */
+export function runnerFolders(rewrite?: (path: string, s: Stats) => Partial<Stats> | undefined): void {
+  const { tmpdir } = process.getBuiltinModule('node:os');
+  const { dirname } = process.getBuiltinModule('node:path');
+  const runner = new Set<string>();
+  for (let at = race.fs.realpathSync(tmpdir()); ; at = dirname(at)) {
+    runner.add(at);
+    if (dirname(at) === at) break;
+  }
+  race.stats = (p, s) => rewrite?.(p, s) ?? (runner.has(p) && (Number(s.mode) & 0o022) !== 0 ? ({ mode: (Number(s.mode) & ~0o7777) | 0o755, uid: 0 } as Partial<Stats>) : undefined);
 }

@@ -42,3 +42,5 @@ afterEach(() => {
 
 // The QA goldens, read as they are, for the client's tests too.
 export { historyVersion, loadGolden } from './golden.ts';
+// The built environment of a process a test starts, and the scan that keeps every start on it.
+export { mkfifo, onRunnerPath, processEnv, spawnsWithoutEnv, tripwireBin } from './process-env.ts';

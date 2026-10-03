@@ -4,16 +4,18 @@
 
 import { spawnSync } from 'node:child_process';
 import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, writeSync, type Stats } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { CatalogError } from '@skills-catalog/core';
+import { ACTOR, CatalogError } from '@skills-catalog/core';
+import { DEFAULT_NON_GRANTING_KEYS, DEFAULT_SAFE_FRONTMATTER_KEYS } from '@skills-catalog/core/skill-tree';
 
 export type Policy = 'auto' | 'notify' | 'pin';
 export type Target = 'user' | 'project';
 export const POLICY_DEFAULT: Policy = 'auto';
 
 /** One acceptance of a held install or update: the version and the kinds of flag the person let through. */
-export type Accepted = { version: number; flags: string[] };
+// `by`: set when the person's accept_flagged_updates let it through (§5.3), absent for their yes to a hold.
+export type Accepted = { version: number; flags: string[]; by?: 'accept_flagged_updates' };
 
 export type LockEntry = {
   name: string;
@@ -42,9 +44,10 @@ export type Config = { update_policy?: Policy; [key: string]: unknown };
 const lockFile = (home: string) => join(home, 'lock.json');
 const configFile = (home: string) => join(home, 'config.json');
 
-// A file that isn't JSON, has the wrong shape (a wrong-typed field anywhere) or names an unknown policy is refused with
-// invalid_local_file {file, why, path}: never repaired or rewritten, and an unknown policy never taken as automatic.
-type Why = 'wrong_shape' | 'unknown_policy';
+// A file that isn't JSON, has the wrong shape (a wrong-typed field anywhere), names an unknown policy or holds a budget
+// that isn't one is refused with invalid_local_file {file, why, path}: never repaired or rewritten, and an unknown policy
+// never taken as automatic.
+type Why = 'wrong_shape' | 'unknown_policy' | 'not_a_budget';
 const POLICIES: readonly string[] = ['auto', 'notify', 'pin'];
 const TARGETS: readonly string[] = ['user', 'project'];
 
@@ -57,13 +60,17 @@ const policyWhy = (x: unknown): Why | undefined => (x === undefined ? undefined 
 
 // A part of a folder's identity: a non-negative safe integer, or a decimal string of digits (no sign, no leading zeros).
 const isIdPart = (n: unknown) => (typeof n === 'number' && Number.isSafeInteger(n) && n >= 0) || (typeof n === 'string' && /^(0|[1-9][0-9]*)$/.test(n));
+/** A folder or file identity as recorded: dev and ino, and birth when there is one (a fraction of a millisecond kept). */
+export const isCopyIdentity = (c: unknown): boolean =>
+  isObject(c) && [c['dev'], c['ino']].every(isIdPart) && (c['birth'] === undefined || isIdPart(c['birth']) || (typeof c['birth'] === 'number' && Number.isFinite(c['birth']) && c['birth'] > 0));
 
 function entryWhy(e: unknown): Why | undefined {
   if (!isObject(e)) return 'wrong_shape';
   const strings = ['name', 'fingerprint', 'publisher', 'path', 'installed_at', 'catalog'].every((k) => typeof e[k] === 'string');
-  const accepted = Array.isArray(e['accepted']) && e['accepted'].every((a) => isObject(a) && isCount(a['version']) && isStrings(a['flags']));
+  // `by` is absent (the person's yes) or the setting that let it through, nothing else (§4.5).
+  const accepted = Array.isArray(e['accepted']) && e['accepted'].every((a) => isObject(a) && isCount(a['version']) && isStrings(a['flags']) && (a['by'] === undefined || a['by'] === 'accept_flagged_updates'));
   const c = e['copy'];
-  const copy = c === undefined || (isObject(c) && [c['dev'], c['ino']].every(isIdPart) && (c['birth'] === undefined || isIdPart(c['birth']) || (typeof c['birth'] === 'number' && Number.isFinite(c['birth']) && c['birth'] > 0)));
+  const copy = c === undefined || isCopyIdentity(c);
   if (!strings || !TARGETS.includes(e['target'] as string) || !isCount(e['version']) || !accepted || !copy) return 'wrong_shape';
   return policyWhy(e['policy']);
 }
@@ -74,9 +81,85 @@ function lockWhy(x: unknown): Why | undefined {
   return whys.includes('wrong_shape') ? 'wrong_shape' : whys.find((w) => w !== undefined);
 }
 
-const configWhy = (x: unknown): Why | undefined => (isObject(x) ? policyWhy(x['update_policy']) : 'wrong_shape');
+// config.json's keys are exactly §6's; any other is refused naming it, so a misspelled update_policy set to pin never
+// falls back to automatic updates. Each key has its shape; the key lists can only remove keys the code holds.
+type Refusal = Why | { why: Why; key: string };
+const HOSTING: readonly string[] = ['local', 'aws'];
+const MAX_COOLDOWN_S = 365 * 24 * 3600;
+// The assistants setup writes for in this phase.
+const SETUP_TARGETS: readonly string[] = ['claude-code'];
+const isName = (x: unknown) => typeof x === 'string' && ACTOR.test(x);
 
-function readJson<T>(home: string, name: 'lock.json' | 'config.json', empty: T, why: (x: unknown) => Why | undefined): T {
+/** A catalog's place as config.json keeps it (§6): a local folder, as an absolute path or file:///…, or a hosted
+ *  catalog's https://host… address; never a control character (it can't carry a line of its own or a terminal escape
+ *  into what's shown), and an address has no space either. */
+export function isCatalogAddress(x: unknown): x is string {
+  if (typeof x !== 'string' || /[\u0000-\u001f\u007f-\u009f]/.test(x)) return false;
+  if (isAbsolute(x)) return true;
+  if (/\s/.test(x)) return false;
+  if (!x.startsWith('file:///') && !x.startsWith('https://')) return false;
+  try {
+    const u = new URL(x);
+    return u.protocol === 'file:' || (u.protocol === 'https:' && u.hostname !== '');
+  } catch {
+    return false;
+  }
+}
+// A key list config can only narrow: a key the code doesn't hold is named (compared case-sensitively, so it fails closed).
+const narrowed = (x: unknown, held: readonly string[]): Refusal | undefined => {
+  if (!isStrings(x)) return 'wrong_shape';
+  const added = (x as string[]).find((k) => !held.includes(k));
+  return added === undefined ? undefined : { why: 'wrong_shape', key: added };
+};
+export const CONFIG_KEYS: Record<string, (x: unknown, config: Record<string, unknown>) => Refusal | undefined> = {
+  hosting: (x) => (typeof x === 'string' && HOSTING.includes(x) ? undefined : 'wrong_shape'),
+  catalog: (x) => (isCatalogAddress(x) ? undefined : 'wrong_shape'),
+  update_policy: policyWhy,
+  // A skill's own policy is named by its path in the file, overrides.<name>.
+  overrides: (x) => {
+    if (!isObject(x)) return 'wrong_shape';
+    const whys = Object.entries(x).flatMap(([name, p]) => {
+      const why = policyWhy(p);
+      return why ? [{ why, key: `overrides.${name}` }] : [];
+    });
+    return whys.find((w) => w.why === 'wrong_shape') ?? whys[0];
+  },
+  // A wait in whole seconds, up to a year (§5.3's cooldown; built with shared and hosted catalogs).
+  cooldown: (x) => (Number.isSafeInteger(x) && (x as number) >= 0 && (x as number) <= MAX_COOLDOWN_S ? undefined : 'wrong_shape'),
+  accept_flagged_updates: (x) => (typeof x === 'boolean' ? undefined : 'wrong_shape'),
+  safe_frontmatter_keys: (x) => narrowed(x, DEFAULT_SAFE_FRONTMATTER_KEYS),
+  non_granting_keys: (x) => narrowed(x, DEFAULT_NON_GRANTING_KEYS),
+  // A number that isn't a positive whole one below 2^53 isn't a budget; 5000.0 is 5000 once parsed.
+  context_cost_budget: (x) => (typeof x !== 'number' ? 'wrong_shape' : Number.isSafeInteger(x) && x >= 1 ? undefined : 'not_a_budget'),
+  // Only checked as a list for now, and read by nothing: the full check (at most 50 literal phrases, each with its kind)
+  // comes with the rules that turn these phrases into patterns, so a value here is never compiled or used until then.
+  command_instruction_patterns: (x) => (Array.isArray(x) ? undefined : 'wrong_shape'),
+  targets: (x) => (Array.isArray(x) && x.every((t) => typeof t === 'string' && SETUP_TARGETS.includes(t)) ? undefined : 'wrong_shape'),
+  session_start_hook: (x) => (typeof x === 'boolean' ? undefined : 'wrong_shape'),
+  claude_config_dir: (x) => (typeof x === 'string' && isAbsolute(x) ? undefined : 'wrong_shape'),
+  me: (x) => (isName(x) ? undefined : 'wrong_shape'),
+  demo_developers: (x) => (Array.isArray(x) && x.every(isName) ? undefined : 'wrong_shape'),
+  // Setup's launcher for the person's terminal (<assistant home>/.local/bin/skills-catalog); on unless set to false.
+  terminal_command: (x) => (typeof x === 'boolean' ? undefined : 'wrong_shape'),
+  // Only with hosting: aws; local is the default.
+  aws: (x, config) => (isObject(x) && config['hosting'] === 'aws' ? undefined : 'wrong_shape'),
+};
+
+/** Why config.json is refused, if it is, naming the key (§9) so the person knows which line to fix: the first unknown
+ *  key (in the order JSON.parse keeps, which puts integer-like keys first), else the first key whose value is wrong (the
+ *  wrong shape before an unknown policy or a bad budget). */
+export function configWhy(x: unknown): Refusal | undefined {
+  if (!isObject(x)) return 'wrong_shape';
+  const unknown = Object.keys(x).find((k) => !Object.hasOwn(CONFIG_KEYS, k));
+  if (unknown !== undefined) return { why: 'wrong_shape', key: unknown };
+  const whys = Object.entries(x).flatMap(([k, v]) => {
+    const w = CONFIG_KEYS[k]!(v, x);
+    return w === undefined ? [] : [typeof w === 'string' ? { why: w, key: k } : w];
+  });
+  return whys.find((w) => w.why === 'wrong_shape') ?? whys[0];
+}
+
+function readJson<T>(home: string, name: 'lock.json' | 'config.json', empty: T, why: (x: unknown) => Refusal | undefined): T {
   const path = join(home, name);
   let text: string;
   try {
@@ -92,7 +175,7 @@ function readJson<T>(home: string, name: 'lock.json' | 'config.json', empty: T, 
     throw new CatalogError('invalid_local_file', { file: name, why: 'not_json', path });
   }
   const refused = why(value);
-  if (refused) throw new CatalogError('invalid_local_file', { file: name, why: refused, path });
+  if (refused) throw new CatalogError('invalid_local_file', typeof refused === 'string' ? { file: name, why: refused, path } : { file: name, why: refused.why, path, key: refused.key });
   return value as T;
 }
 
@@ -306,6 +389,19 @@ export function holdLock(home: string, now: () => number): { change<T>(fn: (lock
       mine = undefined;
     },
   };
+}
+
+/** `fn` run holding the lock file at `path` by the same discipline (made only if absent, this process's id and start,
+ *  stale holders removed, lock_busy after 5 s), removed afterwards whether `fn` succeeded or not. Setup and teardown hold
+ *  $SKILLS_HOME/setup.lock with it. */
+export async function withLockFile<T>(path: string, now: () => number, fn: () => T | Promise<T>): Promise<T> {
+  const mine = await take(path, now);
+  try {
+    return await fn();
+  } finally {
+    heldHere.delete(path);
+    removeIfSame(path, mine);
+  }
 }
 
 /** One change to lock.json under the lock, which is removed afterwards whether the change succeeded or not. */
