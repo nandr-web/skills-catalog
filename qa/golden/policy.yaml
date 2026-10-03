@@ -74,13 +74,13 @@ cases:
   - {install_over: true, policy: pin,    override: none,   flags: [], older: true,          local: same, accept: false, mode: interactive, outcome: held:pin, note: "an older version is another version too"}
   - {install_over: true, policy: auto,   override: pin,    flags: [runnable_file],          local: same, accept: false, mode: interactive, outcome: held:pin, note: "pin before the flags; the hold lists them and accept names them"}
   - {install_over: true, policy: notify, override: none,   flags: [],                       local: same, accept: false, mode: interactive, outcome: held:notify}
-  - {install_over: true, policy: auto,   override: notify, flags: [runs_at_load],           local: same, accept: false, mode: interactive, outcome: held:notify, note: "shown with its flags", pending: "the installer's flag check raising runs_at_load"}
+  - {install_over: true, policy: auto,   override: notify, flags: [runs_at_load],           local: same, accept: false, mode: interactive, outcome: held:notify, note: "shown with its flags"}
   - {install_over: true, policy: auto,   override: none,   flags: [],                       local: same, accept: false, mode: interactive, outcome: installed, note: "the lock's version moves; its accepted flags are unchanged"}
   - {install_over: true, policy: auto,   override: none,   flags: [], older: true,          local: same, accept: false, mode: interactive, outcome: installed, note: "an unflagged downgrade installs, diffed from the installed version"}
   - {install_over: true, policy: auto,   override: none,   flags: [non_markdown],           local: same, accept: false, mode: interactive, outcome: held:flagged}
   - {install_over: true, policy: pin,    override: auto,   flags: [capability_frontmatter], local: same, accept: false, mode: interactive, outcome: held:flagged}
   - {install_over: true, policy: auto,   override: none,   flags: [non_markdown],           local: same, accept: true,  mode: unattended,  outcome: held:flagged, note: "accept_flagged_updates never applies to an install over an installed skill either (241c647)"}
-  - {install_over: true, policy: auto,   override: none,   flags: [prompt_injection],       local: same, accept: true,  mode: unattended,  outcome: held:flagged, note: "every flag kind, the reviewer's too", pending: "the rules reviewer in the installer's flag check (prompt_injection)"}
+  - {install_over: true, policy: auto,   override: none,   flags: [prompt_injection],       local: same, accept: true,  mode: unattended,  outcome: held:flagged, note: "every flag kind, the reviewer's too"}
   - {install_over: true, policy: pin,    override: none,   flags: [], newer: false,         local: same, accept: false, mode: interactive, outcome: unchanged, note: "the same version: unchanged {version}, nothing written, the lock byte-identical"}
   - {install_over: true, policy: auto,   override: none,   flags: [], newer: false,         local: same, accept: false, mode: interactive, outcome: unchanged}
   - {install_over: true, policy: pin,    override: none,   flags: [], newer: false, intact: false, local: changed_here, accept: false, mode: interactive, outcome: installed, note: "the same version written again over a changed or incomplete copy, whatever the policy (123377d)"}
@@ -201,7 +201,7 @@ accept_cases:
     cases:
       - {hold: {from: install, reason: pin}, flags: [], lock_version_after: 2, policy_after: pin}
       - {hold: {from: update, reason: pin}, flags: [], lock_version_after: 2, policy_after: pin}
-      - {hold: {from: install, reason: notify, risk_flags: [runs_at_load]}, flags: [runs_at_load], lock_version_after: 2, policy_after: notify, pending: "the installer's flag check raising runs_at_load"}
+      - {hold: {from: install, reason: notify, risk_flags: [runs_at_load]}, flags: [runs_at_load], lock_version_after: 2, policy_after: notify}
       - {hold: {from: install, reason: pin}, flags: [runnable_file], outcome: conflict, installed_unchanged: true, note: "a kind the hold didn't list"}
   other_catalog:
     note: "accepting a held other_catalog records the catalog in use now in the lock entry (c5b03b4); the policy is kept"
