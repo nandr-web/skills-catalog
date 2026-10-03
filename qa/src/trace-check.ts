@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
+import { skipReason } from './agent/skips.ts';
 
 type Doc = Record<string, any>;
 const load = (p: string): Doc => parse(readFileSync(p, 'utf8'));
@@ -50,6 +51,14 @@ export function traceCheck({ qa, backlog = DEFAULT_BACKLOG }: { qa: string; back
       if (stray.length) problems.push(`${r.id}: check ${JSON.stringify(c.name)} has the key${stray.length > 1 ? 's' : ''} ${stray.join(', ')}, outside ${CHECK_KEYS.slice(0, -1).join(', ')} and ${CHECK_KEYS.at(-1)} (quote a name that holds a comma)`);
       if (!c.auto && !c.automate_by) problems.push(`${r.id}: manual check without automate_by`);
       for (const ref of c.golden ? String(c.golden).split(/,\s*/) : []) if (!resolves(ref)) problems.push(`${r.id}: golden '${ref}' does not resolve`);
+      // An agent check is automated only if the runner runs its scenario (review P3.2, P11.3).
+      if (c.auto && c.layer === 'agent') {
+        for (const ref of c.golden ? String(c.golden).split(/,\s*/) : []) {
+          const s = ref.startsWith('agent.') ? scenarios.find((x) => x.id === ref.slice('agent.'.length)) : undefined;
+          const skip = s && skipReason(s);
+          if (skip) problems.push(`${r.id}: check ${JSON.stringify(c.name)} is marked auto, but the runner skips ${s.id} (${skip})`);
+        }
+      }
     }
   }
 
