@@ -268,8 +268,14 @@ describe('each operation\'s output (contract §1)', () => {
       for (const [k, v] of Object.entries(s.properties)) walk(v, `${at}.${k}`);
     };
     for (const def of Object.values(OPERATIONS)) if (def.output !== 'text') walk(def.output, def.name);
-    // An upload link's headers are named by the link's issuer (the storage's own), so any header name goes.
-    expect(open).toEqual(['read_shared_skill.skills[]|0.manifest.frontmatter', 'read_shared_skill.skills[]|1.error', 'request_upload_links.files[]|0.headers']);
+    // An upload link's headers are named by the link's issuer (the storage's own), so any header name goes. A review's
+    // measurements are named by its reviewer (contract §10: pluggable), each a number.
+    expect(open).toEqual([
+      'read_shared_skill.skills[]|0.manifest.frontmatter',
+      'read_shared_skill.skills[]|0.reviews[].measurements',
+      'read_shared_skill.skills[]|1.error',
+      'request_upload_links.files[]|0.headers',
+    ]);
   });
 
   it('what each catalog operation really returns fits its schema, every shape it takes', async () => {
