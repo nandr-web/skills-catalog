@@ -117,6 +117,7 @@ function underLock(input: RunInput): SetupResult {
     entries: [],
     created_files: [...(plan.record?.created_files ?? [])],
     backups: [...(plan.record?.backups ?? [])],
+    ...(plan.record?.created_dirs ? { created_dirs: [...plan.record.created_dirs] } : {}),
   };
   const files: Record<FileKind, FilePlan> = { ...plan.files };
   const state: Record<FileKind, RecordEntry['state']> = { claudeJson: 'written', settingsJson: 'written' };
@@ -180,8 +181,9 @@ function underLock(input: RunInput): SetupResult {
 
   let command: CommandOutcome | undefined;
   if (input.terminalCommand) {
+    const dirsBefore = record.created_dirs?.length ?? 0;
     command = placeCommand(places, commandLauncher(plan.run), record);
-    if (command === 'added') saveRecord();
+    if (command === 'added' || (record.created_dirs?.length ?? 0) !== dirsBefore) saveRecord();
   }
 
   for (const dir of [H, places.backups]) {
@@ -194,7 +196,7 @@ function underLock(input: RunInput): SetupResult {
 
 /** A folder for the launcher: absent (made 0700), or the person's own that no one else can write, followed if it's a
  *  link (a dotfiles manager's ~/.local/bin often is). */
-function commandFolder(path: string): boolean {
+function commandFolder(path: string, record: SetupRecord): boolean {
   const me = BigInt(process.getuid?.() ?? -1);
   try {
     const s = statSync(path, { bigint: true });
@@ -202,6 +204,7 @@ function commandFolder(path: string): boolean {
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== 'ENOENT') return false;
     makeFolder(path);
+    record.created_dirs = [...new Set([...(record.created_dirs ?? []), path])];
     return true;
   }
 }
@@ -210,7 +213,7 @@ function commandFolder(path: string): boolean {
  *  overwrite"): a launcher setup recorded and nobody changed is brought up to date (node or the script moved); a file
  *  that isn't setup's is left and named. Recorded as a file setup created, so teardown removes it only while unchanged. */
 function placeCommand(places: SetupPlan['places'], text: string, record: SetupRecord): CommandOutcome {
-  if (!commandFolder(dirname(places.commandDir)) || !commandFolder(places.commandDir)) return 'unsafe';
+  if (!commandFolder(dirname(places.commandDir), record) || !commandFolder(places.commandDir, record)) return 'unsafe';
   const path = places.command;
   const s = lstatOr(path);
   const recorded = record.created_files.find((c) => c.file === path);

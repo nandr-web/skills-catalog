@@ -762,6 +762,7 @@ results:
       required: is required
       contradicting_flags: was set by two flags that contradict each other (use one)
       not_through_setup: is a setting only the person turns on, by editing config.json themselves; setup never sets it
+      unknown_setting: isn't a setting config.json takes (the setup doc lists them)
       not_a_confirm: isn't a confirm value a preview gives
       not_a_cursor: isn't a cursor an earlier page gave
       not_a_developer_name: isn't a valid developer name (lowercase letters, digits and single hyphens)
@@ -1103,6 +1104,7 @@ setup:
     rules_add: "- {path}: add {rules} allow rule(s), so your assistant can search, read, install and update skills without asking you each time (no session-start hook: session_start_hook is false)"
     record: "- {path}: a record of exactly what setup added, so teardown can remove just that"
     command: "- {path}: add the skills-catalog command for your terminal (a launcher for this copy of skills-catalog)"
+    command_taken: "- {path} is already there and isn't setup's: it stays as it is, and no terminal command is added"
     config_same: "- {path}: the catalog's settings stay as they are"
     backup: Before changing a file, setup saves a copy of it in {folder}.
     unchanged: Everything is already set up as it would be; nothing to change.

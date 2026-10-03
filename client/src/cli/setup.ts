@@ -8,7 +8,7 @@
 // what it means in words. Exit 0 done, 1 refused (nothing changed), 3 needs answers.
 
 import { randomBytes } from 'node:crypto';
-import { accessSync, constants, realpathSync, statfsSync } from 'node:fs';
+import { accessSync, constants, lstatSync, realpathSync, statfsSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -205,7 +205,7 @@ function readConfigFile(path: string, cwd: string): Config {
   const refused = configWhy(value);
   if (refused) {
     const r = typeof refused === 'string' ? { why: refused, key: '--config' } : refused;
-    throw bad(r.key, Object.hasOwn(CONFIG_KEYS, r.key) ? r.why : 'unknown_field');
+    throw bad(r.key, Object.hasOwn(CONFIG_KEYS, r.key) ? r.why : 'unknown_setting');
   }
   if (value['accept_flagged_updates'] === true) throw bad('accept_flagged_updates', 'not_through_setup');
   return value as Config;
@@ -416,7 +416,7 @@ function planLines(s: Words, paint: Paint, plan: SetupPlan, config: Config, exis
     f.claudeJson.text === undefined ? undefined : s.format(recorded('mcp_entry') ? w.mcp_replace : w.mcp_add, { path: f.claudeJson.path }),
     f.settingsJson.text === undefined ? undefined : s.format(!plan.hook ? w.rules_add : recorded('hook_group') ? w.hook_replace : w.hook_add, { path: f.settingsJson.path, rules: allowRules(s).length }),
     f.claudeJson.text === undefined && f.settingsJson.text === undefined ? undefined : s.format(w.record, { path: plan.places.record }),
-    terminalCommand && !(plan.record?.created_files ?? []).some((c) => c.file === plan.places.command) ? s.format(w.command, { path: plan.places.command }) : undefined,
+    terminalCommand && !(plan.record?.created_files ?? []).some((c) => c.file === plan.places.command) ? s.format(exists(plan.places.command) ? w.command_taken : w.command, { path: plan.places.command }) : undefined,
   ].filter((l): l is string => l !== undefined);
   if (!changes.length) return [...out, paint('ok', `✓ ${w.unchanged}`)];
   out.push(paint('bold', w.header), ...changes);
@@ -487,6 +487,15 @@ async function summary(s: Words, paint: Paint, ran: Awaited<ReturnType<typeof ru
   if ((ran.command === 'added' || ran.command === 'same') && !(env['PATH'] ?? '').split(':').some((p) => p && samePath(p, folder))) out.push(paint('attention', `▲ ${s.format(w.command_off_path, { folder: shellQuote(folder) })}`));
   return out;
 }
+
+const exists = (path: string) => {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /** Whether `name` is an executable in a folder on PATH. */
 function onPath(env: SetupIo['env'], name: string): string | undefined {

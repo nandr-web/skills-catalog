@@ -68,6 +68,24 @@ describe('teardown', () => {
     expect(w.out()).toContain(S.format(T.removed, { path: join(w.A, '.local', 'bin', 'skills-catalog'), what: T.what.command }).replace(/^- /, ''));
   });
 
+  it('the launcher\'s folders setup made go once empty; ones that were there, or hold something else, stay', async () => {
+    const a = world();
+    await runSetupCommand(['--yes'], a.io);
+    await a.teardown();
+    expect(existsSync(join(a.A, '.local'))).toBe(false);
+    const b = world();
+    mkdirSync(join(b.A, '.local'), { mode: 0o700 });
+    await runSetupCommand(['--yes'], b.io);
+    writeFileSync(join(b.A, '.local', 'bin', 'other-tool'), 'x');
+    await b.teardown();
+    expect(existsSync(join(b.A, '.local', 'bin', 'other-tool'))).toBe(true);
+    const c = world();
+    mkdirSync(join(c.A, '.local'), { mode: 0o700 });
+    await runSetupCommand(['--yes'], c.io);
+    await c.teardown();
+    expect([existsSync(join(c.A, '.local', 'bin')), existsSync(join(c.A, '.local'))]).toEqual([false, true]);
+  });
+
   it('fresh: the files setup created from nothing are deleted; .claude stays', async () => {
     const w = world();
     await runSetupCommand(['--yes'], w.io);

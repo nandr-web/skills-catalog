@@ -298,6 +298,24 @@ describe('a catalog address is one address (review: an escape sequence was store
   });
 });
 
+describe('small things the validator found', () => {
+  it('the plan doesn\'t promise the launcher when its place is taken; says it stays', async () => {
+    const w = world();
+    file(join(w.A, '.local', 'bin', 'skills-catalog'), '#!/bin/sh\necho mine\n', 0o755);
+    await runSetupCommand(['--dry-run'], w.io);
+    expect(w.out()).not.toContain(S.format(S.setup.plan.command, { path: join(w.A, '.local', 'bin', 'skills-catalog') }));
+    expect(w.out()).toContain(S.format(S.setup.plan.command_taken, { path: join(w.A, '.local', 'bin', 'skills-catalog') }));
+  });
+
+  it('an unknown key in a --config file is a setting setup doesn\'t know, not "a field this tool takes"', async () => {
+    const w = world();
+    const path = join(w.dir, 'answers.json');
+    writeFileSync(path, JSON.stringify({ colour: 'blue' }));
+    expect(await runSetupCommand(['--yes', '--config', path], w.io)).toBe(1);
+    expect(w.err()).toContain(S.word('errors.why.unknown_setting'));
+  });
+});
+
 describe('--dry-run', () => {
   it('prints the plan and changes nothing, in any mode', async () => {
     const w = world();

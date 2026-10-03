@@ -9,7 +9,7 @@
 // catalog, installed skills, config.json and the backups.
 
 import { createHash, randomBytes } from 'node:crypto';
-import { closeSync, constants, fchmodSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, unlinkSync, writeSync, type BigIntStats } from 'node:fs';
+import { closeSync, constants, fchmodSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, rmdirSync, unlinkSync, writeSync, type BigIntStats } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { CatalogError } from '@skills-catalog/core';
 import { jsonEqual } from './json-equal.ts';
@@ -262,6 +262,23 @@ function underLock(input: TeardownInput): TeardownResult {
     if (r === 'changed') createdLeft.push(launcher);
   }
 
+  // The launcher's folders setup made, innermost first, each removed only while it's an empty real folder.
+  const dirsLeft: string[] = [];
+  for (const dir of [...(record.created_dirs ?? [])].filter((d) => !away.has(d)).sort((a, b) => b.length - a.length)) {
+    const s = lstatOr(dir);
+    if (!s) continue;
+    try {
+      if (!s.isDirectory()) throw new Error('not a folder');
+      rmdirSync(dir);
+    } catch {
+      dirsLeft.push(dir);
+    }
+  }
+  if (record.created_dirs) {
+    if (dirsLeft.length) record.created_dirs = dirsLeft;
+    else delete record.created_dirs;
+  }
+
   // Two backups of each file kept, as setup keeps them; only copies in the backups folder, under the names setup gives
   // them, are ever deleted (a record naming any other path proves nothing: it's "not here").
   const ownCopy = (b: SetupRecord['backups'][number]) => isOwnBackupCopy(b, places.backups, away);
@@ -274,7 +291,7 @@ function underLock(input: TeardownInput): TeardownResult {
   record.entries = left;
   record.created_files = createdLeft;
   // The record stays while anything is left for a later teardown to name, or a backup it lists is kept.
-  if (left.length || createdLeft.length || record.backups.length) saveRecord();
+  if (left.length || createdLeft.length || record.backups.length || record.created_dirs?.length) saveRecord();
   else deleteIfSame(places.record, sha256(readFileSync(places.record)));
   lines.push(...damaged(places));
   return { places, lines, backups };

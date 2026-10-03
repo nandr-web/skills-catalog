@@ -2,7 +2,7 @@
 // written, so teardown removes only what deep-equals it; the files setup created from nothing; and the backups it made.
 // A record that isn't this shape proves nothing, so it's refused whole, never read in part.
 
-import { basename, isAbsolute, join } from 'node:path';
+import { basename, dirname, isAbsolute, join } from 'node:path';
 import { isCopyIdentity } from './lock.ts';
 import { isOwnHookGroup, isOwnMcpEntry } from './setup-values.ts';
 
@@ -31,6 +31,8 @@ export type SetupRecord = {
   created_files: { file: string; sha256: string }[];
   /** Each copy made before a change: the file it copies, where the copy is, its sha256 and its identity. */
   backups: { file: string; path: string; sha256: string; dev: number | string; ino: number | string; birth: number | string }[];
+  /** Folders setup made for the terminal's launcher (~/.local, ~/.local/bin): teardown removes each once it's empty. */
+  created_dirs?: string[];
 };
 
 // Which containers each kind of entry can make.
@@ -56,7 +58,8 @@ function isEntry(e: unknown): boolean {
 
 /** Why the record can't be used, if it can't: wrong_shape for anything but the shape above. */
 export function recordWhy(x: unknown): 'wrong_shape' | undefined {
-  if (!isObject(x) || !onlyKeys(x, ['version', 'setup_id', 'entries', 'created_files', 'backups'])) return 'wrong_shape';
+  if (!isObject(x) || !onlyKeys(x, ['version', 'setup_id', 'entries', 'created_files', 'backups', 'created_dirs'])) return 'wrong_shape';
+  if (x['created_dirs'] !== undefined && !(Array.isArray(x['created_dirs']) && x['created_dirs'].every(isPath))) return 'wrong_shape';
   if (x['version'] !== RECORD_VERSION || typeof x['setup_id'] !== 'string' || !/^[0-9a-f]{32}$/.test(x['setup_id'])) return 'wrong_shape';
   const { entries, created_files: created, backups } = x;
   if (!Array.isArray(entries) || !entries.every(isEntry)) return 'wrong_shape';
@@ -84,6 +87,7 @@ export function elsewhere(r: SetupRecord, p: Places): string[] {
   const out = [
     ...r.entries.filter((e) => e.file !== p[FILE_OF[e.kind]]).map((e) => e.file),
     ...r.created_files.filter((f) => !files.includes(f.file) && f.file !== p.command).map((f) => f.file),
+    ...(r.created_dirs ?? []).filter((d) => d !== dirname(p.command) && d !== dirname(dirname(p.command))),
     ...r.backups.filter((b) => !files.includes(b.file)).map((b) => b.file),
     ...r.backups.filter((b) => b.path !== join(p.backups, basename(b.path)) || !BACKUP_NAME.test(basename(b.path)) || !basename(b.path).endsWith(b.file === p.claudeJson ? '-claude.json' : '-settings.json')).map((b) => b.path),
   ];
