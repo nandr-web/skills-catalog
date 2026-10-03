@@ -115,8 +115,16 @@ function renderItem(s: Words, item: ReadItem, token: string, budget: InlineBudge
   const publisher = oneLine(item.publisher);
   const lines = [s.format(w.header, { name: item.name, version: item.version, latest_mark: item.version === item.latest_version ? w.latest_mark.latest : s.format(w.latest_mark.older, { latest: item.latest_version }), publisher, published_at: day(s, item.published_at) })];
   // What the reviews found, before the skill's own text (contract §10); a review with no findings says nothing.
+  // Past the read's budget the findings are left out: their notes, and how to read them. Past a review's own limits, the
+  // findings not listed are counted.
   const findings = item.reviews.flatMap((r) => r.findings);
-  if (findings.length) lines.push(s.format(w.review, { findings: findings.map((f) => findingWords(s, f)).join('; ') }));
+  const more = item.reviews.reduce((n, r) => n + (r.omitted ?? []).reduce((m, o) => m + o.count, 0), 0);
+  if (item.reviews_omitted) {
+    const notes = qualityNotes(s, item.reviews.flatMap((r) => r.flags));
+    lines.push(s.format(w.review_omitted, { notes, used: size(budget.used), limit: size(budget.limit), name: item.name }));
+  } else if (findings.length) {
+    lines.push(s.format(w.review, { findings: [...findings.map((f) => findingWords(s, f)), ...(more ? [s.format(w.findings_more, { n: more })] : [])].join('; ') }));
+  }
   const body = item.manifest.body;
   const shown = body !== undefined;
   if (shown) {

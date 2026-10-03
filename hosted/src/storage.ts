@@ -125,7 +125,15 @@ export class HostedStorage implements Storage {
           ConsistentRead: true,
         }),
       );
-      for (const i of r.Items ?? []) out.push(JSON.parse(i['data']!.S!) as Review);
+      for (const i of r.Items ?? []) {
+        // An item that can't be read is skipped (as locally, a row that isn't JSON): as if that reviewer hadn't run.
+        try {
+          const review = JSON.parse(i['data']?.S ?? '') as Review;
+          if (review && typeof review === 'object' && typeof review.reviewer === 'string') out.push(review);
+        } catch {
+          // unreadable
+        }
+      }
       start = r.LastEvaluatedKey;
     } while (start);
     return out;

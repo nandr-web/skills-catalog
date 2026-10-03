@@ -62,6 +62,19 @@ describe('a review, for a person at a terminal', () => {
     expect(lines[4]).toBe(`┃     ${S.format(S.word('person.read.found'), { line: 4, evidence: 'allowed-tools: Bash' })}`);
   });
 
+  it('read: findings past the review\'s limits are counted in the title and after the ones listed', async () => {
+    const p = place();
+    await seed(p, async (c) => {
+      const { actAs } = await import('@skills-catalog/core');
+      await c.publish(request('many-bangs', [{ path: 'SKILL.md', text: skillMd('many-bangs', 'Lists.', '!`ls`\n'.repeat(10)) }]), actAs('eve'));
+    });
+    const lines = (await person(p, ['read', 'many-bangs'])).out.split('\n');
+    expect(lines[2]).toBe(`┃ ▲ ${S.format(S.word('person.read.review.other'), { n: 10 })}`);
+    const block = lines.filter((l) => l.startsWith('┃'));
+    expect(block.filter((l) => l.startsWith('┃   • '))).toHaveLength(3);
+    expect(block.at(-1)).toBe(`┃   ${S.format(S.word('person.read.more'), { n: 7 })}`);
+  });
+
   it('versions: the flagged version\'s row has its ▲ review; the clean one\'s none', async () => {
     const p = await seeded();
     const rows = (await person(p, ['versions', 'release-notes-kit'])).out.split('\n').filter((l) => /^  v\d/.test(l));

@@ -102,4 +102,35 @@ describe('a review in the words the assistant reads', () => {
     expect(text).toContain(note('capability_frontmatter', { path: 'SKILL.md', detail: 'allowed-tools: Bash' }));
     expect(text).not.toContain('added:');
   });
+
+  it('read: findings past the review\'s limits are counted after the ones listed', async () => {
+    const { catalog } = await openTest();
+    await catalog.publish(request('many-bangs', [{ path: 'SKILL.md', mode: '0644', bytes: Buffer.from(`---\nname: many-bangs\ndescription: Lists.\n---\n${'!`ls`\n'.repeat(10)}`) }]), ana);
+    const item = (await catalog.read({ name: 'many-bangs' })).skills[0] as any;
+    expect(item.reviews[0].omitted).toEqual([{ kind: 'runs_at_load', count: 7 }]);
+    const review = renderRead(s, await catalog.read({ name: 'many-bangs' }), counterIds()).split('\n')[1]!;
+    expect(review.endsWith(`${s.format(s.word('get.findings_more'), { n: 7 })}.`)).toBe(true);
+  });
+
+  it('read: past the budget, the review\'s notes and how to see its findings, in place of the findings', () => {
+    const r = {
+      skills: [
+        {
+          name: 'heavy',
+          version: 1,
+          latest_version: 1,
+          fingerprint: 'sha256:x',
+          published_at: '2026-09-28T12:00:00.000Z',
+          publisher: 'ana',
+          manifest: { frontmatter: { name: 'heavy', description: 'Heavy.' } },
+          reviews: [{ reviewer: 'rules', reviewer_version: '1', fingerprint: 'sha256:x', at: '2026-09-28T12:00:00.000Z', measurements: {}, flags: [{ kind: 'prompt_injection' as const, path: 'SKILL.md', line: 5, detail: 'ignore previous instructions' }], findings: [] }],
+          reviews_omitted: true as const,
+        },
+      ],
+      inline_budget: { limit: 24 * 1024, used: 24_000, omitted: 1 },
+    };
+    const line = renderRead(s, r as any, counterIds()).split('\n')[1]!;
+    const notes = note('prompt_injection', { path: 'SKILL.md', detail: 'ignore previous instructions' });
+    expect(line).toBe(s.format(s.word('get.review_omitted'), { notes, used: '24 KB', limit: '24 KB', name: 'heavy' }));
+  });
 });

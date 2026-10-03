@@ -160,12 +160,21 @@ function read({ s, say, m }: Ctx, r: ReadResult): string | undefined {
       return { f, flag: own ?? { kind: f.kind, ...(f.path !== undefined ? { path: f.path } : {}), detail: f.why } };
     }),
   );
-  if (findings.length) {
-    const block = [paint('attention', paint('bold', `${MARK.attention} ${say('read.review', { n: findings.length })}`))];
+  // Past a review's own limits the findings not listed are counted; past the read's budget only the notes come.
+  const more = item.reviews.reduce((n, rv) => n + (rv.omitted ?? []).reduce((k, o) => k + o.count, 0), 0);
+  if (item.reviews_omitted) {
+    const flags = item.reviews.flatMap((rv) => rv.flags);
+    const block = [paint('attention', paint('bold', `${MARK.attention} ${say('read.review', { n: flags.length })}`))];
+    for (const f of flags) block.push(`  • ${qualityNotes(s, [f])}`);
+    block.push(paint('dim', `  ${say('read.review_left_out', { name: item.name })}`));
+    out.push('', ...m.callout(block));
+  } else if (findings.length) {
+    const block = [paint('attention', paint('bold', `${MARK.attention} ${say('read.review', { n: findings.length + more })}`))];
     for (const { f, flag } of findings) {
       block.push(`  • ${qualityNotes(s, [flag])}`);
       if (f.line !== undefined) block.push(paint('dim', `    ${say('read.found', { line: f.line, evidence: f.evidence })}`));
     }
+    if (more) block.push(paint('dim', `  ${say('read.more', { n: more })}`));
     out.push('', ...m.callout(block));
   }
   const skillMd = skillMdOf(item);

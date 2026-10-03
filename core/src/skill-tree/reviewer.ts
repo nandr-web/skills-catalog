@@ -10,7 +10,7 @@
 // installer's diff flags it for each update, so a review card stays quiet about it.
 
 import { MANIFEST, parseFrontmatter } from './manifest.ts';
-import { DEFAULT_NON_GRANTING_KEYS, DEFAULT_SAFE_FRONTMATTER_KEYS, diffTrees, flagText, type DiffSide, type RiskFlag, type RiskKind } from './diff.ts';
+import { DEFAULT_NON_GRANTING_KEYS, DEFAULT_SAFE_FRONTMATTER_KEYS, FLAG_TEXT_MAX, diffTrees, flagText, type DiffSide, type RiskFlag, type RiskKind } from './diff.ts';
 import { DEFAULT_CONTEXT_COST_BUDGET, estimatedTokens } from './review.ts';
 import { decodeText, isText, type TreeFile } from './tree.ts';
 
@@ -23,13 +23,82 @@ export interface Finding {
   why: string;
 }
 
+/** Findings a review doesn't list, by kind: past REVIEW_LIMITS (one kind in one file, or all of them). */
+export interface Omitted {
+  kind: RiskKind;
+  count: number;
+}
+
 /** What a reviewer says of one version. `measurements` are numbers (never findings); `flags` are the findings in the risk
- *  flags' shape, so every face shows one verdict; `notes` only when they help the publisher. */
+ *  flags' shape, so every face shows one verdict; `notes` only when they help the publisher; `omitted` only when some
+ *  findings are past the limits. */
 export interface ReviewOutcome {
   measurements: Record<string, number>;
   flags: RiskFlag[];
   findings: Finding[];
   notes?: string;
+  omitted?: Omitted[];
+}
+
+/** How much one review keeps, so it stays small whatever the skill holds (a DynamoDB item is at most 400 KB; a read has a
+ *  24 KB budget): a few findings of each kind in each file, a few in all, the rest counted by kind; each text cut as flag
+ *  text is (200 code points); a few measurements; short notes. `bytes` is what the JSON of any bounded review stays under
+ *  (worst case, every text at its longest: tested). */
+export const REVIEW_LIMITS = { per_kind_and_file: 3, findings: 20, measurements: 32, measurement_name: 64, notes: 2000, bytes: 256 * 1024 } as const;
+
+// Which of a list to keep, in order: up to the limit for each kind in each file and in all; the rest counted by kind.
+function select<T extends { kind: RiskKind; path?: string }>(items: readonly T[]): { kept: number[]; omitted: Map<RiskKind, number> } {
+  const per = new Map<string, number>();
+  const kept: number[] = [];
+  const omitted = new Map<RiskKind, number>();
+  items.forEach((x, i) => {
+    const key = `${x.kind}\u0000${x.path ?? ''}`;
+    const n = per.get(key) ?? 0;
+    if (n < REVIEW_LIMITS.per_kind_and_file && kept.length < REVIEW_LIMITS.findings) {
+      per.set(key, n + 1);
+      kept.push(i);
+    } else omitted.set(x.kind, (omitted.get(x.kind) ?? 0) + 1);
+  });
+  return { kept, omitted };
+}
+
+// A flag's value (a front matter key's old or new value) as kept: itself when short, else its JSON as flag text.
+const boundValue = (v: unknown): unknown => (typeof v === 'string' ? flagText(v) : v === undefined || JSON.stringify(v).length <= FLAG_TEXT_MAX ? v : flagText(JSON.stringify(v)));
+
+function boundFlag(f: RiskFlag): RiskFlag {
+  const out: RiskFlag = { ...f, detail: flagText(f.detail) };
+  if (f.path !== undefined) out.path = flagText(f.path);
+  if (f.field !== undefined) out.field = flagText(f.field);
+  if ('from' in f) out.from = boundValue(f.from);
+  if ('to' in f) out.to = boundValue(f.to);
+  return out;
+}
+
+function boundFinding(f: Finding): Finding {
+  const out: Finding = { ...f, evidence: flagText(f.evidence), why: flagText(f.why) };
+  if (f.path !== undefined) out.path = flagText(f.path);
+  return out;
+}
+
+/** Any reviewer's outcome, kept within REVIEW_LIMITS (the catalog bounds every reviewer's before storing it). Where the
+ *  flags are the findings one for one (the rules reviewer's), the same ones are kept of both. */
+export function boundOutcome(o: ReviewOutcome): ReviewOutcome {
+  const paired = o.flags.length === o.findings.length && o.flags.every((f, i) => f.kind === o.findings[i]!.kind && f.path === o.findings[i]!.path);
+  const byFindings = select(o.findings);
+  const byFlags = paired ? byFindings : select(o.flags);
+  const omitted = new Map<RiskKind, number>();
+  for (const x of o.omitted ?? []) omitted.set(x.kind, (omitted.get(x.kind) ?? 0) + x.count);
+  for (const [k, n] of (o.findings.length ? byFindings : byFlags).omitted) omitted.set(k, (omitted.get(k) ?? 0) + n);
+  const measurements = Object.fromEntries(
+    Object.entries(o.measurements)
+      .filter(([, v]) => typeof v === 'number' && Number.isFinite(v))
+      .slice(0, REVIEW_LIMITS.measurements)
+      .map(([k, v]) => [k.slice(0, REVIEW_LIMITS.measurement_name), v]),
+  );
+  const out: ReviewOutcome = { measurements, flags: byFlags.kept.map((i) => boundFlag(o.flags[i]!)), findings: byFindings.kept.map((i) => boundFinding(o.findings[i]!)) };
+  if (o.notes !== undefined) out.notes = o.notes.length <= REVIEW_LIMITS.notes ? o.notes : o.notes.slice(0, REVIEW_LIMITS.notes - 1) + '…';
+  if (omitted.size) out.omitted = [...omitted].map(([kind, count]) => ({ kind, count }));
+  return out;
 }
 
 /** What a reviewer reads: one version's checked files, who published it, and the version before it (null for a first
@@ -86,7 +155,13 @@ export function rulesReviewer(config: Partial<RulesConfig> = {}): Reviewer {
       if (previous && previous.publisher !== publisher) {
         flags.push({ kind: 'new_publisher', from: flagText(previous.publisher), to: flagText(publisher), detail: flagText(`${previous.publisher} → ${publisher}`) });
       }
-      return { measurements: measure(files), flags, findings: flags.map((f) => finding(f, files)) };
+      // Only the flags kept get a finding, each file read into lines once: a file of 20,000 flagged lines costs one pass.
+      const { kept, omitted } = select(flags);
+      const lines = linesOf(files);
+      const keptFlags = kept.map((i) => flags[i]!);
+      const out: ReviewOutcome = { measurements: measure(files), flags: keptFlags, findings: keptFlags.map((f) => finding(f, files, lines)) };
+      if (omitted.size) out.omitted = [...omitted].map(([kind, count]) => ({ kind, count }));
+      return boundOutcome(out);
     },
   };
 }
@@ -111,17 +186,29 @@ function measure(files: readonly TreeFile[]): Record<string, number> {
 
 // A finding's evidence is the text it rests on: the flagged line as written (escaped and cut as every flag text is, so a
 // hidden character shows as \u{XXXX}); for a flag with no line, what was measured or found.
-function finding(f: RiskFlag, files: readonly TreeFile[]): Finding {
-  const out: Finding = { kind: f.kind, evidence: evidenceOf(f, files), why: f.detail };
+// Each text file's lines, split on first use.
+function linesOf(files: readonly TreeFile[]): (path: string) => string[] | undefined {
+  const split = new Map<string, string[] | undefined>();
+  return (path) => {
+    if (!split.has(path)) {
+      const file = files.find((x) => x.path === path);
+      split.set(path, file && isText(file.bytes) ? decodeText(file.bytes).split(LINE_BREAK) : undefined);
+    }
+    return split.get(path);
+  };
+}
+
+function finding(f: RiskFlag, files: readonly TreeFile[], lines: (path: string) => string[] | undefined): Finding {
+  const out: Finding = { kind: f.kind, evidence: evidenceOf(f, files, lines), why: f.detail };
   if (f.path !== undefined) out.path = f.path;
   if (f.line !== undefined) out.line = f.line;
   return out;
 }
 
-function evidenceOf(f: RiskFlag, files: readonly TreeFile[]): string {
+function evidenceOf(f: RiskFlag, files: readonly TreeFile[], lines: (path: string) => string[] | undefined): string {
   const file = f.path === undefined ? undefined : files.find((x) => x.path === f.path);
-  if (file && f.line !== undefined && isText(file.bytes)) {
-    const line = decodeText(file.bytes).split(LINE_BREAK)[f.line - 1];
+  if (file && f.line !== undefined) {
+    const line = lines(file.path)?.[f.line - 1];
     if (line) return flagText(line);
   }
   if (f.kind === 'context_cost' && file) return flagText(`${MANIFEST}: ${estimatedTokens(file.bytes.length)} estimated tokens (${file.bytes.length} bytes)`);

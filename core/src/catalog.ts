@@ -25,6 +25,7 @@ import {
   hasLineBreakOrControl,
   isText,
   decodeText,
+  boundOutcome,
   rulesReviewer,
   sha256Hex,
   scanSecrets,
@@ -183,6 +184,8 @@ export interface ReadItem {
   // paths[] only when SKILL.md is one of them (no body_omitted then).
   manifest: { frontmatter: Record<string, unknown>; body?: string; body_omitted?: true };
   reviews: Review[];
+  // Past the read's budget, the reviews' findings are left out (each review keeps one flag of each kind): read it alone.
+  reviews_omitted?: true;
   files?: ReadFile[];
 }
 
@@ -446,8 +449,19 @@ export class Catalog {
     const out: Review[] = [];
     for (const r of reviewers) {
       try {
-        const o = await r.review(subject);
-        out.push({ reviewer: r.id, reviewer_version: r.version, fingerprint, at, measurements: o.measurements, flags: o.flags, findings: o.findings, ...(o.notes !== undefined ? { notes: o.notes } : {}) });
+        // Every reviewer's outcome is kept within REVIEW_LIMITS, so a review fits a DynamoDB item and a read's budget.
+        const o = boundOutcome(await r.review(subject));
+        out.push({
+          reviewer: r.id,
+          reviewer_version: r.version,
+          fingerprint,
+          at,
+          measurements: o.measurements,
+          flags: o.flags,
+          findings: o.findings,
+          ...(o.notes !== undefined ? { notes: o.notes } : {}),
+          ...(o.omitted !== undefined ? { omitted: o.omitted } : {}),
+        });
       } catch {
         // left for the offline run
       }
@@ -639,13 +653,29 @@ export class Catalog {
       if (bytes === undefined) return [];
       return [{ bytes: bytes.byteLength, put: () => (f.content = decodeText(bytes)), omit: () => (f.content_omitted = true) }];
     };
+    // A skill's review findings (publisher text: the lines they rest on) come first, before any body: past the budget they
+    // are left out and each review keeps one flag of each kind, so the read still says what was flagged.
+    const review = (i: ReadItem): Slot[] => {
+      if (!i.reviews.some((r) => r.findings.length)) return [];
+      return [
+        {
+          bytes: Buffer.byteLength(JSON.stringify(i.reviews.map((r) => r.findings)), 'utf8'),
+          put: () => {},
+          omit: () => {
+            i.reviews = i.reviews.map((r) => ({ ...r, findings: [], flags: qualityOf([r])?.flags ?? [] }));
+            i.reviews_omitted = true;
+          },
+        },
+      ];
+    };
     const byPath = (i: ReadItem) => [...(i.files ?? []).filter((f) => f.path === MANIFEST), ...(i.files ?? []).filter((f) => f.path !== MANIFEST)];
-    const order =
+    const inlined =
       paths !== undefined
         ? items.flatMap((i) => (i.files ?? []).flatMap((f) => [...(f.path === MANIFEST ? body(i) : []), ...file(f)]))
         : [...items.flatMap(body), ...items.flatMap((i) => byPath(i).flatMap(file))];
     // With paths[] but without include: files or contents there are no files to walk: the body still comes for SKILL.md.
-    if (paths !== undefined && order.length === 0) for (const i of items) order.push(...body(i));
+    if (paths !== undefined && inlined.length === 0) for (const i of items) inlined.push(...body(i));
+    const order = [...items.flatMap(review), ...inlined];
     const alone = paths?.length === 1;
     let used = 0;
     let omitted = 0;

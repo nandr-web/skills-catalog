@@ -4,7 +4,8 @@
 // `hostile` list theirs, each grounded at {kind, path, line, evidence}, evidence a substring of that line).
 
 import { describe, expect, it } from 'vitest';
-import { checkTree, estimatedTokens, flagText, rulesReviewer, RULES_REVIEWER_ID, type Reviewer, type ReviewOutcome, type TreeFile } from '../src/skill-tree/index.ts';
+import { boundOutcome, checkTree, estimatedTokens, flagText, REVIEW_LIMITS, rulesReviewer, RULES_REVIEWER_ID, type Reviewer, type ReviewOutcome, type TreeFile } from '../src/skill-tree/index.ts';
+import { cpuMs } from './linear.ts';
 import { filesOf, generated, loadGolden, type RawFile } from './golden.ts';
 
 const skills = loadGolden('skills.yaml');
@@ -143,5 +144,60 @@ describe('what the stored review flags: what a skill is, not how it changed', ()
     const r = review(md(`${long}\n`));
     expect(r.findings[0]!.evidence).toBe(flagText(long));
     expect([...r.findings[0]!.evidence].length).toBeLessThanOrEqual(200);
+  });
+});
+
+// A review's size is bounded whatever the skill holds (validator V-D1): a 200 KB SKILL.md of 20,000 flagged lines once gave
+// 20,001 findings, took 11-25 s and was 3-4.7 MB of JSON (past DynamoDB's 400 KB item and any read's budget). A review
+// keeps at most REVIEW_LIMITS.per_kind_and_file findings of each kind in each file and REVIEW_LIMITS.findings in all,
+// counting the rest by kind in `omitted`; it is read in one pass over each file, and its JSON stays under
+// REVIEW_LIMITS.bytes for any skill within the size limits.
+describe('a review stays small and quick, whatever the skill holds', () => {
+  const lines = (line: string, n: number) => md(line.repeat(n), '---\nname: x\ndescription: A skill.\n---\n');
+  for (const [label, line, kind] of [
+    ['a command run at load', '!`ls`\n', 'runs_at_load'],
+    ['a zero-width space', 'a\u200bb\n', 'prompt_injection'],
+  ] as const) {
+    it(`20,000 lines of ${label}: under a second, a few findings, the rest counted`, () => {
+      const files = lines(line, 20_000);
+      expect(files[0]!.bytes.length).toBeGreaterThan(100_000);
+      const t = tree(files);
+      const ms = cpuMs(() => rules.review({ files: t, publisher: 'ana', previous: null }));
+      expect(ms).toBeLessThan(1000);
+      const r = rules.review({ files: t, publisher: 'ana', previous: null }) as ReviewOutcome;
+      const ofKind = r.findings.filter((f) => f.kind === kind);
+      expect(ofKind).toHaveLength(REVIEW_LIMITS.per_kind_and_file);
+      expect(ofKind.map((f) => f.line)).toEqual([5, 6, 7]);
+      expect(r.flags.filter((f) => f.kind === kind)).toHaveLength(REVIEW_LIMITS.per_kind_and_file);
+      expect(r.omitted).toEqual([{ kind, count: 20_000 - REVIEW_LIMITS.per_kind_and_file }]);
+      expect(Buffer.byteLength(JSON.stringify(r))).toBeLessThan(10_000);
+    });
+  }
+
+  it('the most a review can hold: every file at the longest path, every line flagged, a huge grant: still under the byte cap', () => {
+    const dir = `${'d'.repeat(250)}/${'e'.repeat(250)}`;
+    const path = (i: number) => `${dir}/${'\u00e9'.repeat(120)}${String(i).padStart(3, '0')}.md`;
+    const hostile = `${'"\\\u200b'.repeat(400)}\n`.repeat(20);
+    const grant = `allowed-tools: [${Array.from({ length: 2000 }, (_, i) => `"Tool${i}\\u200b\\\\"`).join(', ')}]\n`;
+    const files: RawFile[] = [
+      { path: 'SKILL.md', mode: '0644', bytes: Buffer.from(`---\nname: x\ndescription: A skill.\n${grant}hooks: {"a": "${'"'.repeat(0)}x"}\n---\n${hostile}`) },
+      ...Array.from({ length: 98 }, (_, i) => ({ path: path(i), mode: '0644', bytes: Buffer.from(hostile) })),
+      { path: 'run.sh', mode: '0755', bytes: Buffer.from('#!/bin/sh\n') },
+    ];
+    const r = rules.review({ files: tree(files), publisher: 'ana', previous: { files: tree(md('Hi.\n')), publisher: `b${'\u200b'.repeat(500)}` } }) as ReviewOutcome;
+    expect(r.findings.length).toBeLessThanOrEqual(REVIEW_LIMITS.findings);
+    expect(Buffer.byteLength(JSON.stringify(r))).toBeLessThan(REVIEW_LIMITS.bytes);
+    expect(r.omitted!.reduce((n, o) => n + o.count, 0)).toBeGreaterThan(1000);
+  });
+
+  it('any reviewer\'s outcome is bounded the same way before it is kept (a phase-2 reviewer too)', () => {
+    const many = Array.from({ length: 500 }, (_, i) => ({ kind: 'prompt_injection' as const, path: `f${i % 3}.md`, line: i + 1, evidence: 'x'.repeat(5000), why: 'y'.repeat(5000) }));
+    const b = boundOutcome({ measurements: Object.fromEntries(Array.from({ length: 100 }, (_, i) => [`m${i}`, i])), flags: many.map(({ evidence: _, why, ...f }) => ({ ...f, detail: why })), findings: many, notes: 'n'.repeat(50_000) });
+    expect(b.findings).toHaveLength(REVIEW_LIMITS.per_kind_and_file * 3);
+    expect(b.flags).toHaveLength(b.findings.length);
+    expect(b.omitted).toEqual([{ kind: 'prompt_injection', count: 500 - b.findings.length }]);
+    expect(Object.keys(b.measurements)).toHaveLength(REVIEW_LIMITS.measurements);
+    expect(b.notes!.length).toBeLessThanOrEqual(REVIEW_LIMITS.notes);
+    expect(Buffer.byteLength(JSON.stringify(b))).toBeLessThan(REVIEW_LIMITS.bytes);
   });
 });

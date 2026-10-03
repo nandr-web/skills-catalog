@@ -1148,6 +1148,36 @@
                           },
                           "notes": {
                             "type": "string"
+                          },
+                          "omitted": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "runnable_file",
+                                    "runs_at_load",
+                                    "command_instruction",
+                                    "capability_frontmatter",
+                                    "instructions_changed",
+                                    "non_markdown",
+                                    "new_publisher",
+                                    "prompt_injection",
+                                    "context_cost"
+                                  ]
+                                },
+                                "count": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "count"
+                              ],
+                              "additionalProperties": false
+                            }
                           }
                         },
                         "required": [
@@ -1161,6 +1191,9 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "reviews_omitted": {
+                      "type": "boolean"
                     },
                     "files": {
                       "type": "array",

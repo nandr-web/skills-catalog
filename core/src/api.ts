@@ -112,8 +112,10 @@ const review = obj(
     flags: list(riskFlag),
     findings: list(finding),
     notes: str,
+    // Findings past the review's limits (a few of each kind in each file, a few in all), counted by kind.
+    omitted: list(obj({ kind: oneOf(...FLAG_KINDS), count: int })),
   },
-  ['notes'],
+  ['notes', 'omitted'],
 );
 // A card's quality: only when a review flagged something (contract §10).
 const quality = obj({ flags: list(riskFlag) });
@@ -145,9 +147,10 @@ const readItem = obj(
     publisher: str,
     manifest: obj({ frontmatter: { type: 'object', properties: {}, required: [], additionalProperties: true }, body: str, body_omitted: bool }, ['body', 'body_omitted']),
     reviews: list(review),
+    reviews_omitted: bool,
     files: list(obj({ path: str, mode, size: int, sha256: str, type: oneOf('text', 'binary'), content: str, content_omitted: bool }, ['content', 'content_omitted'])),
   },
-  ['files'],
+  ['reviews_omitted', 'files'],
 );
 // A name a read of several couldn't give: its own error, with the fields that error has.
 const readMissing = obj({ name: str, error: { type: 'object', properties: { code: oneOf(...ERROR_CODES) }, required: ['code'], additionalProperties: true } });

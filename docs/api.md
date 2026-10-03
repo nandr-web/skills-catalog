@@ -821,6 +821,10 @@ Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`)
           - `evidence`: text
           - `why`: text
         - `notes`: text (not always there)
+        - `omitted`: a list, each an object with (not always there)
+          - `kind`: one of `runnable_file`, `runs_at_load`, `command_instruction`, `capability_frontmatter`, `instructions_changed`, `non_markdown`, `new_publisher`, `prompt_injection`, `context_cost`
+          - `count`: a whole number
+      - `reviews_omitted`: true or false (not always there)
       - `files`: a list, each an object with (not always there)
         - `path`: text
         - `mode`: one of `0644`, `0755`
