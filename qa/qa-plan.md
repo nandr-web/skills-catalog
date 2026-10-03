@@ -6,7 +6,7 @@ How we know the catalog works. It was written from the PRD and the owner's notes
 - **Write every expected result by hand, before the code.** The golden sets below are oracles: they are never filled in from the system's output.
 - **Leave nothing behind.** "Reproducible automation … that automatically cleans up after itself / doesn't make permanent changes" (the owner). Every run happens in a throwaway sandbox, and a before/after check proves nothing else changed.
 
-The API it tests is the contract; the words assistants see are in the agent-experience notes (`surface.yaml`). Operation, field and error names below are the contract's.
+The API it tests is the contract; the words assistants see are in the words file (`core/words/words.yaml`), and the agent-experience notes say how they were tried. Operation, field and error names below are the contract's.
 
 What each kind of test drives: agent-level tests ask a real assistant; the other three enter lower down and check one part each, so a failure points at the part that broke.
 
@@ -18,9 +18,9 @@ flowchart TD
   conf["<b>storage tests</b><br/>one suite, every storage"]
   subgraph sandbox["sandbox, one per run"]
     asst(["AI assistant<br/>headless Claude Code"])
-    faces["MCP · CLI<br/>a skill guides the assistant"]
+    faces["MCP · CLI"]
     core["catalog<br/>publish, find, get, history"]
-    store[("storage<br/>SQLite + files; AWS later")]
+    store[("storage<br/>SQLite + files, or DynamoDB + S3 hosted")]
   end
   agent == asks ==> asst
   asst -- tool calls --> faces
@@ -35,11 +35,12 @@ flowchart TD
 
 The owner's direction: "Focus on phase 1 / local work." Everything in Phase 1 runs on one machine, with no account and no network beyond the assistant's own sign-in. Phases follow the requirement list, and `qa trace-check` keeps the two in step.
 
-| Phase | Checks |
-|---|---|
-| **1: all local** | Unit tests (the shared skill-tree module, validation, held updates, the rules reviewer); storage tests on SQLite + files, with fault injection and concurrency; interface tests through MCP and the CLI; setup and teardown; the README walked word for word; the clean-run harness and its canaries; all 24 assistant asks in their setups |
-| **2: local, later** | The web UI served locally (Playwright, the delta view), bundles, agent reviewers, usage metrics |
-| **AWS and later** | Storage tests on DynamoDB + S3 (moto) and on a throwaway stack, signed-in reads, the update cooldown on shared catalogs, maintainers, votes |
+| Phase | Tested now | Not yet |
+|---|---|---|
+| **1: all local** | Unit tests (the shared skill-tree module, validation, held updates, the rules reviewer); storage tests on SQLite + files, with fault injection and concurrency; interface tests through MCP and the CLI; setup and teardown; the README walked word for word; the clean-run harness and its canaries; 7 of the 24 assistant asks through the agent runner | 17 assistant asks: the runner can't seed their starting catalog through publish yet, so their agent checks are manual; the agent-level runs aren't scheduled (each spends money on a real Claude login) |
+| **2: local** | Usage metrics (the recorder, the summary, `stats`) | The web UI served locally (Playwright, the delta view), bundles, agent reviewers |
+| **AWS** | The hosted catalog's suites on the DynamoDB and S3 stand-in (moto), the shared storage, catalog and discovery suites among them; signed-in reads and tokens; the stack's template, its cdk-nag pack and the deploy kit | A throwaway stack in a real account as a test; the update cooldown on shared catalogs |
+| **Later** | — | Maintainers, votes, merge and share suggestions, recommendations from sessions |
 
 ## 2. Test layers
 
@@ -118,7 +119,7 @@ One pass/fail rule per requirement, and what the rule trusts. The tests compute 
 | Oracle | The rule | Trusts |
 |---|---|---|
 | **Round trip** | `install_shared_skill` and `fetch_version` give back exactly what was published: same paths (NFC), bytes and file modes. `read_shared_skill` types each file by its bytes (text is valid UTF-8 with no NUL byte, so an empty file is text), and with `include: contents` gives every text file's content, SKILL.md included, encoding back to the same bytes (BOM and CRLF kept); never a binary's | The fixture on disk |
-| **All or nothing** | An invalid or refused publish (`not_owner`, `conflict`) returns a typed error with its reason, and a logical storage snapshot (rows and blobs, not database file bytes) is unchanged: no orphan blob, even when a refused publish had already stored its blobs. When a storage write fails, the publish stores no version and deletes the blobs it created; only a killed process or a failed delete leaves any, and those are removed when the catalog is next opened once over an hour old (tested with an injected clock), never a blob a version or a publish in flight uses. No version ever points at a missing blob, even when a retry of hour-old leftovers or a publish stalled for over an hour meets that cleanup (both still land), and one publish's failure never breaks another publishing the same content | A snapshot taken by the test |
+| **All or nothing** | An invalid or refused publish (`not_owner`, `conflict`) returns a typed error with its reason, and a logical storage snapshot (rows and blobs) is unchanged, with no orphan blob ([in detail](#all-or-nothing-in-detail)) | A snapshot taken by the test |
 | **Append-only history** | After N accepted publishes, the version list shows N in order, each with its publisher's message; each old version still equals its fixture; reads default to the latest, and reading an old version also says `latest_version` | The fixtures published |
 | **Idempotent republish** | Bytes identical to the latest create nothing (`created: false`); identical to an older version is a revert, a new version | Same |
 | **Nothing lost** | 20 publishes of one name from separate processes give versions 1 to 20 with no gaps; a stale `expected_latest` gives `conflict` and stores nothing, and `0` means a new name; of two publishes racing on one `expected_latest`, one lands and the other conflicts, and every version stays retrievable | The count sent |
@@ -126,7 +127,7 @@ One pass/fail rule per requirement, and what the rule trusts. The tests compute 
 | **Found** | For every question a word search should answer, and the reworded term of each one it can't, the labelled skill is in the top 5, and each card has a name and description. Every page says how many skills match (`total_matches`, all pages counted) out of how many (`catalog_size`, names not versions). At agent level all must pass: the assistant must reword | The hand-labelled questions |
 | **Nothing matches** | For a no-match question the page's `match` is `partial` or `none`, and no card matched every content word. At agent level the answer says plainly that nothing fits; a partial match may be named only as "not a match" | Same |
 | **Not found** | A missing name gives `not_found` (never an empty success), with suggestions by spelling only. At agent level: says so, installs nothing, invents nothing | The fixture catalog's names |
-| **Limits on reads** | Read takes up to 20 names or 20 paths, search up to 50 results, and its tags filter up to 10 tags of up to 32 characters; one more gives `invalid_request`, never clamped. A read inlines at most 24 KiB of text, in every mode: each named skill's body first, then (with contents) its files, SKILL.md first, then by path; each whole or marked omitted, never cut. `paths[]` reads just the files asked for, in that order (the body just before SKILL.md when SKILL.md is asked), and a read of one path inlines that file whatever its size, so a file over the whole budget is named with a sentence that says to read it on its own. The skill's text sits inside a fence that planted markers can't close | The contract; exact byte sizes |
+| **Limits on reads** | Read takes up to 20 names or 20 paths, search up to 50 results, a tags filter up to 10 tags of up to 32 characters; one more gives `invalid_request`, never clamped. A read inlines at most 24 KiB of text ([in detail](#limits-on-reads-in-detail)) | The contract; exact byte sizes |
 | **Through the assistant** | The transcript shows a catalog call before the answer; when a skill is named without the word "skill", the first call is still the catalog | The transcript |
 | **Two-step publish** | The preview (`publish_skill_to_catalog` without a confirm, or the CLI's `publish` at a terminal; never pre-allowed) runs every check a publish runs and shows the files, the skipped files (an ignored folder once, never read; at most 50), the diff and risk flags, and stores nothing; `publish_skill_to_catalog` takes back the confirm, name, version, file count and flags, so the permission prompt shows what the person agrees to, and publishes only when the confirm verifies for the folder as it is now: any change is `conflict`, a hand-made confirm too. At agent level the assistant previews and asks, never confirms in the same turn, and copies step 1's values into step 2 | The fixture; the transcript |
 | **Stays in the skill folder** | Publish reads regular files inside the folder only and skips the ignore list; a path that would make the skill something else is refused (`.claude`, `.claude-plugin` and `.git` folders, and memory files, CLAUDE.md, CLAUDE.local.md or AGENTS.md, at any depth, in any spelling); install writes only inside the install folder, and never over or in place of a skill or command it didn't install; the assistant never edits the person's files unasked | A sentinel and a canary folder |
@@ -149,6 +150,20 @@ One pass/fail rule per requirement, and what the rule trusts. The tests compute 
 | **Budgets** | §7's numbers | The perf script and the runner |
 | **Clean run** | Nothing outside the sandbox differs before and after (§6) | A snapshot before the run |
 | **No secrets in the run** | The assistant and every MCP server it starts get only the allow-listed environment (§6, step 3); markers planted in the runner's own environment, under credential names and an ordinary one, never reach either process, a tool result or an answer | The markers planted |
+
+### All or nothing in detail
+
+- The snapshot is logical: rows and blobs, not the database file's bytes. No orphan blob, even when a refused publish had already stored its blobs.
+- When a storage write fails, the publish stores no version and deletes the blobs it created. Only a killed process or a failed delete leaves any; those are removed when the catalog is next opened, once over an hour old (tested with an injected clock), never a blob a version or a publish in flight uses.
+- No version ever points at a missing blob, even when a retry of hour-old leftovers or a publish stalled for over an hour meets that cleanup (both still land).
+- One publish's failure never breaks another publishing the same content.
+
+### Limits on reads in detail
+
+- A read inlines at most 24 KiB of text, in every mode: each named skill's body first, then (with contents) its files, SKILL.md first, then by path; each whole or marked omitted, never cut.
+- `paths[]` reads just the files asked for, in that order (the body just before SKILL.md when SKILL.md is asked).
+- A read of one path inlines that file whatever its size, so a file over the whole budget is named with a sentence that says to read it on its own.
+- The skill's text sits inside a fence that planted markers can't close.
 
 ### Held updates in detail
 
