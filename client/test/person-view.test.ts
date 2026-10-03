@@ -98,7 +98,7 @@ describe('the CLI for a person at a terminal', () => {
   it('a search that only partly matches says so first, and names the shared words on each card', async () => {
     const p = await installedBehind();
     const r = await person(p, ['search', 'graphql', 'schema']);
-    expect(r.out.split('\n')[0]).toBe('▲ Nothing matches every word of "graphql schema". Closest, sharing only some words:');
+    expect(r.out.split('\n')[0]).toBe('≈ Nothing matches every word of "graphql schema". Closest, sharing only some words:');
     expect(r.out).toContain('shares only: schema');
   });
 
@@ -154,8 +154,10 @@ describe('the CLI for a person at a terminal', () => {
     expect(r.out).toContain('To see exactly what changes first:  skills-catalog diff release-notes-kit --from 1 --to 2');
     expect(r.out).not.toMatch(/ask your assistant/);
     // What waits and why sits behind the bar; the answer and the result follow it.
-    expect(r.out.split('\n').slice(0, 3)).toEqual([
-      '┃ ▲ release-notes-kit v1 → v2 is waiting for your OK, because it adds or changes scripts/collect.sh, which can run on this machine.',
+    // A short title, then the reason as a bullet, inside the bar (review V4.6: one long sentence wrapped outside it).
+    expect(r.out.split('\n').slice(0, 4)).toEqual([
+      '┃ ▲ release-notes-kit v1 → v2 is waiting for your OK',
+      '┃   • it adds or changes scripts/collect.sh, which can run on this machine',
       '┃ ',
       '┃ To see exactly what changes first:  skills-catalog diff release-notes-kit --from 1 --to 2',
     ]);

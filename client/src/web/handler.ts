@@ -145,6 +145,8 @@ export function createHandler(o: HandlerOptions): { handle(req: WebRequest): Pro
 
   async function handle(req: WebRequest): Promise<WebResponse> {
     if (req.headers['host'] !== host) return refuse('refused', sentences);
+    // The bare address says what it is, rather than "Not found." (review V6.2): plain text, nothing to run.
+    if (req.method === 'GET' && req.path === '/') return { status: 200, headers: { ...SECURITY_HEADERS, 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }, body: o.words.format(o.words.word('person.serve.root')) + '\n' };
     const r = route(req.method, req.path, 'local');
     if (r.kind === 'not_found' && !r.operationPath) return refuse('not_found', sentences);
     if (r.kind === 'file') return file(req, r.sha256);

@@ -420,7 +420,14 @@ describe('diffs (golden/histories.yaml diffs, golden/diffs/)', () => {
     expect(got.files.find((f) => f.path === 'logo.png')!.unified).toBeUndefined();
     // With no grant, the same file is non_markdown.
     const plain = diffTrees({ files: a, publisher: 'alice' }, { files: tree([md(), { path: 'logo.png', mode: '0644', bytes: Buffer.from([0x89, 0x50, 0]) }]), publisher: 'alice' });
-    expect(plain.risk_flags).toEqual([{ kind: 'non_markdown', path: 'logo.png', detail: '.png file' }]);
+    // An image the instructions don't name is inert (review P3.1); one they name, or a file of another kind, is flagged.
+    expect(plain.risk_flags).toEqual([]);
+    const named = diffTrees({ files: a, publisher: 'alice' }, { files: tree([{ path: 'SKILL.md', mode: '0644', bytes: Buffer.from('---\nname: x\ndescription: y\n---\nRun logo.png with python3.\n') }, { path: 'logo.png', mode: '0644', bytes: Buffer.from([0x89, 0x50, 0]) }]), publisher: 'alice' });
+    expect(named.risk_flags).toEqual([{ kind: 'non_markdown', path: 'logo.png', detail: '.png file' }]);
+    const linked = diffTrees({ files: a, publisher: 'alice' }, { files: tree([{ path: 'SKILL.md', mode: '0644', bytes: Buffer.from('---\nname: x\ndescription: y\n---\nSee ![the logo](logo.png).\n') }, { path: 'logo.png', mode: '0644', bytes: Buffer.from([0x89, 0x50, 0]) }]), publisher: 'alice' });
+    expect(linked.risk_flags).toEqual([]);
+    const other = diffTrees({ files: a, publisher: 'alice' }, { files: tree([md(), { path: 'tool.bin', mode: '0644', bytes: Buffer.from([0x89, 0x50, 0]) }]), publisher: 'alice' });
+    expect(other.risk_flags).toEqual([{ kind: 'non_markdown', path: 'tool.bin', detail: '.bin file' }]);
   });
 
   it('flags a change to any front matter key not on the safe list, and none on it (the gate fails closed)', () => {

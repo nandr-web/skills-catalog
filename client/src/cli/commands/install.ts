@@ -7,6 +7,7 @@ const own = schemaFlags('install_shared_skill', ['name']);
 export const install: Command = {
   op: 'install_shared_skill',
   flags: { ...own, project: { type: 'boolean' } },
+  needsPersonOn: ['held'],
   input(words, values) {
     const args = { ...exactly(words, ['name']), ...fromSchemaFlags(own, values) };
     if (values['project']) {

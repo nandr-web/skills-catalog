@@ -6,7 +6,7 @@ import { stringify } from 'yaml';
 import { cursorOffset, type DiffResult, type InlineBudget, type ReadItem, type ReadResult, type SearchInput, type SearchResult, type VersionsResult } from './catalog.ts';
 import { CatalogError } from './errors.ts';
 import type { Ids } from './ports.ts';
-import { MANIFEST, flagText, oneLine, type RiskFlag } from './skill-tree/index.ts';
+import { MANIFEST, flagText, nameProblem, oneLine, type RiskFlag } from './skill-tree/index.ts';
 import type { Words } from './words-file.ts';
 
 // Words the words file doesn't have yet (asked for). A test fails when one of them appears in the words file,
@@ -102,7 +102,7 @@ function renderItem(s: Words, item: ReadItem, token: string, budget: InlineBudge
   const omitted = left.filter((f) => f.size <= budget.limit).map((f) => f.path);
   if (omitted.length) lines.push(s.format(w.omitted, { used: size(budget.used), limit: size(budget.limit), files: list(omitted.map(quoted)), name: item.name }));
   if (tooBig.length) lines.push(s.format(w.too_big, { limit: size(budget.limit), files: list(tooBig.map(quoted)), name: item.name }));
-  lines.push(s.format(w.next, { name: item.name }));
+  lines.push(item.version === item.latest_version ? s.format(w.next, { name: item.name }) : s.format(w.next_version, { name: item.name, version: item.version, latest: item.latest_version }));
   return lines.join('\n');
 }
 
@@ -173,6 +173,55 @@ export function shellQuote(text: string): string {
   return /^[A-Za-z0-9@%+=:,./_-]+$/.test(text) ? text : `'${text.replaceAll("'", "'\\''")}'`;
 }
 
+/** A template filled, or undefined when it has no template or a slot has no value. */
+function tryFill(s: Words, template: unknown, fields: Record<string, unknown>): string | undefined {
+  if (typeof template !== 'string') return undefined;
+  try {
+    return s.format(template, fields);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Items as one phrase, "a, b and c", in the words file's words. */
+export function listAnd(s: Words, items: readonly string[]): string {
+  if (items.length < 2) return items.join('');
+  return s.format(s.word('errors.list_and'), { items: items.slice(0, -1).join(', '), last: items.at(-1) });
+}
+
+/** A skill's name made from a folder's (its last part, lowercase words joined by hyphens), when that is a valid name. */
+export function nameFromFolder(folder: string): string | undefined {
+  const base = folder.replace(/[\\/]+$/, '').split(/[\\/]/).at(-1) ?? '';
+  const slug = base.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64).replace(/-+$/, '');
+  return slug && nameProblem(slug) === null ? slug : undefined;
+}
+
+/** How a refused SKILL.md is worded (invalid_manifest's data): the words key of its problem and of its fix, the problem
+ *  phrase, and what fills the fix. Missing fields are worded per field when one is missing, together when several are;
+ *  a missing name gets a suggestion made from the folder's name. Undefined when the words file has no words for it.
+ *  The person's view (client person/view.ts) words the same refusal from the same keys. */
+export function manifestRefusal(s: Words, d: Record<string, unknown>): { key: string; fixKey: string; problem: string; slots: Record<string, unknown> } | undefined {
+  const w = s.word('errors');
+  const code = String(d['problem'] ?? 'missing');
+  const fields = ((d['fields'] as string[] | undefined) ?? []).map(String);
+  const first = fields[0];
+  const phrases = w.invalid_manifest_problem ?? {};
+  const key = code !== 'missing_fields' ? code : fields.length === 1 && phrases[first!] ? first! : fields.length > 1 && fields.every((f) => w.invalid_manifest_field_words?.[f]) ? 'missing_several' : code;
+  const phrase = phrases[key];
+  if (typeof phrase !== 'string') return undefined;
+  const folder = typeof d['folder'] === 'string' ? d['folder'] : undefined;
+  const suggestion = d['suggestion'] ?? (key === 'name' && folder !== undefined ? nameFromFolder(folder) : undefined);
+  const slots = {
+    feature: w.yaml_feature_words?.[String(d['feature'])] ?? d['feature'],
+    field: first === undefined ? undefined : quoted(first),
+    fields: listAnd(s, fields.map((f) => w.invalid_manifest_field_words?.[f] ?? quoted(f))),
+    suggestion,
+  };
+  const problem = tryFill(s, phrase, slots);
+  if (problem === undefined) return undefined;
+  return { key, fixKey: key === 'name' && suggestion === undefined ? 'name_no_suggestion' : key, problem, slots };
+}
+
 export function renderError(s: Words, e: CatalogError): string {
   if (!s.guided) return JSON.stringify({ error: e.toJSON() });
   const w = s.word('errors');
@@ -194,32 +243,32 @@ export function renderError(s: Words, e: CatalogError): string {
     case 'not_found': {
       // A token (revoke_token) is named by its id only, never whose it is.
       if (d['id'] !== undefined) return fill(w.not_found_token, d);
+      // A file or a version the skill doesn't have: the skill is there, so its own sentence, never "no skill named".
+      if (d['path'] !== undefined && d['version'] !== undefined) return fill(w.not_found_path, { ...d, path: quoted(String(d['path'])) });
+      if (d['version'] !== undefined && d['latest'] !== undefined) return fill(w.not_found_version, d);
       const names = (d['suggestions'] as string[] | undefined) ?? [];
       const suggest = names.length ? s.format(w.not_found_suggest, { names: list(names) }) : '';
       const name = d['version'] !== undefined ? `${d['name']} v${d['version']}` : String(d['name'] ?? d['fingerprint']);
       return s.format(w.not_found, { name, suggest }) + '\n' + s.format(w.not_found_next);
     }
     case 'invalid_manifest': {
-      // Problem and fix are worded per problem code; missing fields are worded per field (name, description) when the
-      // first missing one has its own words. The folder is known to the machine operation (publish a folder), while a
-      // raw publish_version has none and renders as data.
-      const code = String(d['problem'] ?? 'missing');
-      const first = ((d['fields'] as string[] | undefined) ?? [])[0];
-      const key = code === 'missing_fields' && first && w.invalid_manifest_problem?.[first] ? first : code;
-      const phrase = w.invalid_manifest_problem?.[key];
-      const fix = w.invalid_manifest_fix?.[key];
-      if (d['folder'] === undefined || !phrase || !fix) return asData(e.code, d);
-      // Two problem phrases have their own slots: the YAML feature in words, and the key at fault (quoted).
-      const problem = fill(phrase, {
-        feature: w.yaml_feature_words?.[String(d['feature'])] ?? d['feature'],
-        field: first === undefined ? undefined : quoted(first),
-      });
-      return fill(w.invalid_manifest, { folder: d['folder'], problem, fix: fill(fix, { suggestion: d['suggestion'] }) });
+      // The folder is known to the machine operation (publish a folder), while a raw publish_version has none and renders
+      // as data. A fix that can't be filled falls back to the general one: data is never spliced into a sentence.
+      const r = manifestRefusal(s, d);
+      if (d['folder'] === undefined || !r) return asData(e.code, d);
+      const fixes = w.invalid_manifest_fix ?? {};
+      const fix = tryFill(s, fixes[r.fixKey], r.slots) ?? tryFill(s, fixes.missing_fields, r.slots);
+      return fix === undefined ? asData(e.code, d) : fill(w.invalid_manifest, { folder: d['folder'], problem: r.problem, fix });
     }
     case 'invalid_name': {
       // A bad name in the front matter of a folder being published reads as a manifest problem, with a suggestion.
       if (d['folder'] !== undefined && d['suggestion'] !== undefined) {
         return fill(w.invalid_manifest, { folder: d['folder'], problem: w.invalid_manifest_problem.bad_name, fix: fill(w.invalid_manifest_fix.bad_name, { suggestion: d['suggestion'] }) });
+      }
+      // A name looked up (read, install, versions, diff) comes with the names it likely means: nothing was published.
+      if (Array.isArray(d['suggestions'])) {
+        const names = d['suggestions'] as string[];
+        return fill(w.invalid_name_lookup, { ...d, suggest: names.length ? s.format(w.not_found_suggest, { names: list(names) }) : '' });
       }
       return fill(w.invalid_name, d);
     }
@@ -230,6 +279,7 @@ export function renderError(s: Words, e: CatalogError): string {
     case 'invalid_request':
       // A confirm that didn't come from a preview on this machine has its own sentence: preview again.
       if (e.data['why'] === 'not_a_confirm') return fill(w.invalid_confirm, d);
+      if (e.data['why'] === 'not_a_held_confirm') return fill(w.invalid_confirm_held, d);
       return fill(d['limit'] !== undefined ? w.invalid_request_limit : w.invalid_request, d);
     case 'invalid_path':
       // A link, a hard link or a special file in a folder being published: its own sentence proposes a plain copy.

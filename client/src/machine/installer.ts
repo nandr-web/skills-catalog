@@ -13,6 +13,7 @@
 // Node has no directory-relative file operations, so another program running as the same person can still race these
 // checks; the installer narrows the window.
 
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { closeSync, constants, existsSync, fchmodSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync, writeSync, type BigIntStats } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CatalogError, inlineFiles, shellQuote, validateInput, type Catalog, type Words, type VersionsResult } from '@skills-catalog/core';
@@ -21,7 +22,7 @@ import { reasons } from '@skills-catalog/core';
 import { logWords } from '../activity.ts';
 import { holdWithinADay, recordUsage, type HoldReason, type UsageEvent } from '../usage/record.ts';
 import type { Context, Done } from '../operations.ts';
-import { holdLock, policyOf, readRecords, withLock, writeConfig, type FolderId, type Lock, type LockEntry, type Policy, type Target } from './lock.ts';
+import { holdLock, policyOf, readRecords, withLock, writeConfig, type Config, type FolderId, type Lock, type LockEntry, type Policy, type Target } from './lock.ts';
 
 const quoted = (p: string) => JSON.stringify(p);
 const TARGETS: readonly Target[] = ['user', 'project'];
@@ -225,7 +226,12 @@ function moved(from: string, to: string): boolean {
 //   may have gone where a swapped-in link pointed. It never reports success after a failed check.
 // - Nothing is removed by path unless its identity is one recorded here.
 // Returns the new copy's identity, for the lock, and where a replaced copy was kept, if it was.
+// A copy edited by hand since it was installed: its files no longer the lock's fingerprint. Replaced like any copy (the
+// owner's decision: an update replaces a copy you changed), but kept in staging and named, never deleted (review P11.2).
+const editedHere = (dest: string, entry: LockEntry | undefined): boolean => entry !== undefined && existsSync(dest) && folderFingerprint(dest) !== entry.fingerprint;
+
 function writeSkill(dest: string, target: Target, files: readonly TreeFile[], entry: LockEntry | undefined): { copy: Id; kept?: string } {
+  const keep = editedHere(dest, entry);
   // A staging folder already there is checked before anything is made, so a refusal for it leaves nothing behind.
   const early = join(dirname(dirname(dest)), STAGING);
   if (existsSync(early)) realFolder(early, target);
@@ -360,7 +366,7 @@ function writeSkill(dest: string, target: Target, files: readonly TreeFile[], en
     }
     if (!old) return { copy };
     // Deleted only when it's still the recorded copy; otherwise it's kept, and named.
-    if (entry?.copy === undefined || !removeIfOurs(old.path, fromLock(entry.copy))) return { copy, kept: old.path };
+    if (keep || entry?.copy === undefined || !removeIfOurs(old.path, fromLock(entry.copy))) return { copy, kept: old.path };
     return { copy };
   } finally {
     removeIfOurs(tmp, copy);
@@ -443,7 +449,8 @@ function decode(confirm: string): Token {
   } catch {
     // falls through
   }
-  throw new CatalogError('invalid_request', { field: 'confirm', why: 'not_a_confirm' });
+  // A hold's own reason, so the recovery is the hold's (run it again), not a publish's (review V3.6).
+  throw new CatalogError('invalid_request', { field: 'confirm', why: 'not_a_held_confirm' });
 }
 
 const kinds = (flags: readonly RiskFlag[]) => [...new Set(flags.map((f) => f.kind))].sort();
@@ -480,7 +487,7 @@ function refusalReason(s: Words, e: CatalogError): string {
 // ---------- what waits for the person ----------
 
 /** The change waiting for the person's yes for `name`, as the installer would hold it now: an update of the copy
- *  installed here (either target), else a first install into `target`. `installed` is the installed version (none for
+ *  installed here (either target, or the one in `target` when the person named it), else a first install into `target`. `installed` is the installed version (none for
  *  a first install); null when nothing would be held (up to date, or nothing to flag). `reason` is why it waits, in
  *  §5.3's order: a copy from another catalog (`was`, where it came from; `now`, the catalog in use), pinned, "tell me
  *  first" (`notify`; held with or without flags), else its flags. `path` is where it goes. Its confirm and flags are
@@ -500,9 +507,10 @@ export type Pending = {
   flags: string[];
 };
 
-export async function pendingHold(ctx: Context, name: string, target: Target = 'user'): Promise<Pending | { installed: number } | null> {
+export async function pendingHold(ctx: Context, name: string, target: Target = 'user', targetGiven = false): Promise<Pending | { installed: number } | null> {
   const { lock, config } = readRecords(ctx.settings.home);
-  const e = installedHere(ctx, lock).find((x) => x.name === name);
+  // A target the person named picks the copy there (none: a first install into it), never another target's copy.
+  const e = installedHere(ctx, lock).find((x) => x.name === name && (!targetGiven || x.target === target));
   const catalog = await ctx.catalog();
   const v = await allVersions(catalog, name);
   // The same version from another catalog still waits (an install held it as other_catalog).
@@ -534,15 +542,34 @@ const acceptCommand = (s: Words, name: string, target: Target) => [s.cli, ...['u
 // ---------- operations ----------
 
 /** An update's result as data, for a person's view (person/view.ts). An item's `lines` are the words the text gives it. */
-export type UpdateItem = { kind: 'updated' | 'would_update' | 'held_flagged' | 'held_notify' | 'held_pin' | 'held_other_catalog' | 'refused'; name: string; from: number; to: number; flags: RiskFlag[]; lines: string[] };
+export type UpdateItem = { kind: 'updated' | 'would_update' | 'held_flagged' | 'held_notify' | 'held_pin' | 'held_other_catalog' | 'refused'; name: string; from: number; to: number; flags: RiskFlag[]; lines: string[]; kept?: string };
+/** What a person reads about one install or one yes taken (a held install in its box, or what was installed and
+ *  where), the CLI's and the reply's view (review V4.1, V3.2). */
+export type InstallView = {
+  kind: 'install';
+  name: string;
+  version: number;
+  held?: { reason: 'flagged' | 'pin' | 'notify' | 'other_catalog'; from?: number; flags: RiskFlag[]; command: string };
+  done?: { path: string; policy_words: string; from?: number; latest: number; older: boolean; new_folder?: boolean; kept?: string };
+};
 export type UpdateView = { kind: 'update'; checked: number; unchanged: number; dry_run: boolean; items: UpdateItem[] };
 /** The installed skills as data, for a person's view. */
-export type ListView = { kind: 'list'; rows: { name: string; target: Target; version: number; latest: number; policy: Policy; policy_words: string; state: 'same' | 'behind' }[] };
+export type ListView = { kind: 'list'; rows: { name: string; target: Target; version: number; latest: number; policy: Policy; policy_words: string; state: 'same' | 'behind'; edited: boolean }[] };
 
 type InstallInput = { name: string; version?: number; target?: Target; policy?: Policy };
 
+// The installer only reads the catalog: a SKILLS_CATALOG naming a local place with no catalog in it is refused (the
+// read commands' not_a_catalog), never made there by an install or an update (review V4.3).
+function catalogThere(ctx: Context): void {
+  const url = ctx.settings.catalog;
+  if (!url.startsWith('file:') || url === pathToFileURL(join(ctx.settings.home, 'catalog')).href) return;
+  const dir = fileURLToPath(url);
+  if (!existsSync(join(dir, 'catalog.sqlite'))) throw new CatalogError('invalid_request', { field: 'catalog', why: 'not_a_catalog', path: dir });
+}
+
 export async function install(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<InstallInput>('install_shared_skill', args, ctx.face, 'local');
+  catalogThere(ctx);
   const s = ctx.words;
   const log = logWords(s);
   const target = req.target ?? 'user';
@@ -551,6 +578,8 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   const v = await allVersions(catalog, req.name);
   const version = req.version ?? v.latest;
   const dest = checkTarget(ctx, target, req.name, lock);
+  // A skills folder made by this install isn't watched by a session that started before it (review F3).
+  const newFolder = unwatched(ctx, skillsDir(ctx, target));
   const existing = lock.skills[dest];
   const to = await fetchListed(catalog, req.name, v, version);
   const w = s.word('install');
@@ -575,14 +604,18 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
       recordHold(ctx, req.name, version, reason, flags, version - entry.version);
       const also = flags.length ? s.format(s.word('update.held_also'), { reasons: reasons(s, flags) }) : '';
       const text = s.format(w[ctx.face === 'cli' ? `held_${reason}_cli` : `held_${reason}`], { ...held, from: entry.version, also, was: entry.catalog, now: ctx.settings.catalog });
-      return { text, target: `${req.name} v${version}`, result: log.result('install', `held_${reason}`), outcome: 'held' };
+      const view: InstallView = { kind: 'install', name: req.name, version, held: { reason, from: entry.version, flags: [...flags], command: held.command } };
+      return { text, target: `${req.name} v${version}`, result: log.result('install', `held_${reason}`), outcome: 'held', view };
     }
     if (flags.length) {
       recordHold(ctx, req.name, version, 'flagged', flags, entry ? version - entry.version : 0);
       // Over an installed copy the sentence names the version installed now.
-      const over = entry ? { word: 'held_over', from: entry.version } : { word: 'held' };
+      // Only files that aren't instructions (no script, nothing that runs at load): not "it can run things" (review P3.1).
+      const filesOnly = flags.every((f) => f.kind === 'non_markdown');
+      const over = entry ? { word: 'held_over', from: entry.version } : { word: filesOnly ? 'held_files' : 'held' };
       const text = s.format(w[ctx.face === 'cli' ? `${over.word}_cli` : over.word], { ...held, ...over, reasons: reasons(s, flags) });
-      return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held' };
+      const view: InstallView = { kind: 'install', name: req.name, version, held: { reason: 'flagged', ...(entry ? { from: entry.version } : {}), flags: [...flags], command: held.command } };
+      return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held', view };
     }
     return undefined;
   };
@@ -610,8 +643,13 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   });
   if (!('written' in done)) return done;
   const { written, entry } = done;
-  const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + keptLine(s, req.name, written.kept) + '\n' + s.format(w.live, { name: req.name });
-  return { text, target: `${req.name} v${version}`, result: log.result('install', 'installed'), outcome: 'installed' };
+  // Another version over an installed copy says which it replaced, and a newer one is named as newer (review P7.4).
+  const over = existing && existing.catalog === ctx.settings.catalog ? existing.version : undefined;
+  const replaced = over !== undefined && over > version ? '\n' + s.format(w.replaced_newer, { from: over }) : '';
+  const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + replaced + keptLine(s, req.name, written.kept) + olderLine(s, entry, config, v.latest) + '\n' + liveLine(s, ctx, target, req.name, newFolder);
+  const policy = policyOf(entry, config);
+  const view: InstallView = { kind: 'install', name: req.name, version, done: { path: dest, policy_words: policyWords(s, policy), ...(over !== undefined ? { from: over } : {}), latest: v.latest, older: version < v.latest && policy.policy === 'auto', new_folder: newFolder, ...(written.kept !== undefined ? { kept: written.kept } : {}) } };
+  return { text, target: `${req.name} v${version}`, result: log.result('install', 'installed'), outcome: 'installed', view };
 }
 
 /** An update's line for a skill whose folder failed a check: the reason worded per code, else shown as its data. */
@@ -722,6 +760,7 @@ type AcceptInput = { name: string; target: Target; version: number; confirm: str
 
 export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<AcceptInput>('accept_held_update', args, ctx.face, 'local');
+  catalogThere(ctx);
   const s = ctx.words;
   const { lock, config } = readRecords(ctx.settings.home);
   const t = decode(req.confirm);
@@ -732,6 +771,7 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const v = await allVersions(catalog, req.name);
   if (v.latest !== t.latest) throw conflict();
   const dest = checkTarget(ctx, t.target, req.name, lock);
+  const newFolder = unwatched(ctx, skillsDir(ctx, t.target));
   const existing = lock.skills[dest];
   const to = await fetchListed(catalog, req.name, v, t.version);
   if (to.fingerprint !== t.fingerprint) throw conflict();
@@ -748,8 +788,38 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const text =
     (existing
       ? s.format(s.word('update.accepted'), { name: req.name, from: existing.version, to: to.version, path: quoted(dest) })
-      : s.format(s.word('install.installed_after_yes'), { name: req.name, version: to.version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) })) + keptLine(s, req.name, written.kept);
-  return { text, target: `${req.name} v${to.version}`, result: logWords(s).result('accept'), outcome: existing ? 'updated' : 'installed' };
+      : s.format(s.word('install.installed_after_yes'), { name: req.name, version: to.version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) +
+        olderLine(s, entry, config, v.latest) +
+        '\n' +
+        liveLine(s, ctx, t.target, req.name, newFolder)) + keptLine(s, req.name, written.kept);
+  const policy = policyOf(entry, config);
+  const view: InstallView = { kind: 'install', name: req.name, version: to.version, done: { path: dest, policy_words: policyWords(s, policy), ...(existing ? { from: existing.version } : {}), latest: t.latest, older: !existing && to.version < t.latest && policy.policy === 'auto', new_folder: newFolder, ...(written.kept !== undefined ? { kept: written.kept } : {}) } };
+  return { text, target: `${req.name} v${to.version}`, result: logWords(s).result('accept'), outcome: existing ? 'updated' : 'installed', view };
+}
+
+/** A skills folder the running assistant session isn't watching yet: missing, or made since this process started (the
+ *  MCP server starts with the session, so a folder an earlier install made in the same session counts; review F3, the
+ *  B validator). A file system that keeps no birth time gives 0, read as a folder from before. */
+function unwatched(ctx: Context, dir: string): boolean {
+  if (!existsSync(dir)) return true;
+  try {
+    return statSync(dir).birthtimeMs > (ctx.sessionStart ?? performance.timeOrigin);
+  } catch {
+    return false;
+  }
+}
+
+/** How to use a skill just installed in this session: at once, or, in a skills folder made just now, after /reload-skills
+ *  (Claude Code doesn't watch a folder made after its session started; review F3). */
+function liveLine(s: Words, ctx: Context, target: Target, name: string, newFolder: boolean): string {
+  return newFolder ? s.format(s.word('install.live_new_folder'), { name, folder: quoted(skillsDir(ctx, target)) }) : s.format(s.word('install.live'), { name });
+}
+
+/** An earlier version installed with automatic updates moves to the latest at the next update: said once, with how to
+ *  keep it (review P7.3; pinning it for the person would override their auto-updates choice). */
+function olderLine(s: Words, entry: LockEntry, config: Config, latest: number): string {
+  if (entry.version >= latest || policyOf(entry, config).policy !== 'auto') return '';
+  return '\n' + s.format(s.word('install.older_auto'), { name: entry.name, version: entry.version, latest });
 }
 
 /** The lock's entries for this machine's user folder and this project, by name. */
@@ -764,6 +834,7 @@ type UpdateInput = { names?: string[]; dry_run?: boolean; latest?: boolean };
 
 export async function update(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<UpdateInput>('update_installed_skills', args, ctx.face, 'local');
+  catalogThere(ctx);
   const s = ctx.words;
   const w = s.word('update');
   const log = logWords(s);
@@ -940,6 +1011,8 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
         continue;
       }
       item('updated', { ...at, from: done.from }, done.d.risk_flags, s.format(w.updated, { ...at, from: done.from, changes: changesOf(s, done.d) }) + keptLine(s, e.name, done.written.kept));
+      // The copy changed here, kept aside, is named in the person's view too (review P11.2, the B validator).
+      if (done.written.kept !== undefined) items[items.length - 1]!.kept = done.written.kept;
       saw('updated');
     }
   } finally {
@@ -955,18 +1028,19 @@ export async function list(ctx: Context): Promise<Done> {
   const s = ctx.words;
   const { lock, config } = readRecords(ctx.settings.home);
   const here = installedHere(ctx, lock);
+  if (here.length) catalogThere(ctx);
   const catalog = here.length ? await ctx.catalog() : undefined;
   const rows = [];
   for (const e of here) {
     const latest = (await catalog!.versions({ name: e.name })).latest;
-    rows.push({ name: e.name, target: e.target, version: e.version, latest, policy: policyOf(e, config), state: latest === e.version ? ('same' as const) : ('behind' as const) });
+    rows.push({ name: e.name, target: e.target, version: e.version, latest, policy: policyOf(e, config), state: latest === e.version ? ('same' as const) : ('behind' as const), edited: editedHere(destOf(ctx, e.target, e.name), e) });
   }
   const w = s.word('status');
   let text: string;
   if (!w || typeof w.header !== 'string') text = asData('list_installed_skills', rows.map((r) => ({ ...r, policy: r.policy.policy })));
   else if (!rows.length) text = s.format(w.empty);
   else {
-    const lines = rows.map((r) => s.format(w.line, { name: r.name, version: r.version, state: s.format(w.state[r.state], { latest: r.latest }), policy: policyWords(s, r.policy) }));
+    const lines = rows.map((r) => s.format(w.line, { name: r.name, version: r.version, state: s.format(w.state[r.state], { latest: r.latest }), where: (r.target === 'project' ? w.where_project : '') + (r.edited ? w.edited : ''), policy: policyWords(s, r.policy) }));
     if (rows.some((r) => r.state === 'behind')) lines.push(s.format(w.next_behind));
     text = [s.format(w.header, { n: rows.length }), ...lines].join('\n');
   }

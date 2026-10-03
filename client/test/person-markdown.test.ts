@@ -44,7 +44,7 @@ describe('the MCP result, laid out for the person', () => {
     expect(box[0]).toBe('> **▲ Waiting for your OK: 1 update**');
     expect(box).toContain('> **release-notes-kit v1 → v2, not installed:**');
     expect(box).toContain('> - it adds or changes scripts/collect.sh, which can run on this machine');
-    expect(box.at(-1)).toBe('> It stays on v1 until you say yes.');
+    expect(box.slice(-2)).toEqual(['> It stays on v1 until you say yes.', '> Ask to see the change first, if you want to.']);
     // The one question is the assistant's to ask, in its own words: a question here too made two (measured on Opus).
     expect(shown).not.toMatch(/\?/);
     for (const re of NOT_FOR_PERSON) expect(shown, String(re)).not.toMatch(re);
@@ -54,10 +54,10 @@ describe('the MCP result, laid out for the person', () => {
     const s = await started();
     await s.call(T['install']!, { name: 'release-notes-kit', version: 1 });
     const found = person(await s.text(T['search']!, { query: 'graphql schema' }));
-    expect(found.split('\n')[0]).toBe('**▲ Nothing matches every word of "graphql schema". Closest, sharing only some words:**');
+    expect(found.split('\n')[0]).toBe('**≈ Nothing matches every word of "graphql schema". Closest, sharing only some words:**');
     expect(found).toContain('| Skill | Version | Publisher | Shares only | What it does |');
     const list = person(await s.text(T['status']!, {}));
-    expect(list).toMatch(/^\| ↑ \| \*\*release-notes-kit\*\* \| v1 \| v2 available \|/m);
+    expect(list).toMatch(/^\| ↑ \| \*\*release-notes-kit\*\* \| v1 \| v2 available(, updates on its own)? \|/m);
     const versions = person(await s.text(T['versions']!, { name: 'release-notes-kit' }));
     expect(versions).toContain('| Version | Published | By | Note |');
     const diff = person(await s.text(T['diff']!, { name: 'release-notes-kit', from: 1, to: 2 }));

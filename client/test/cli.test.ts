@@ -65,12 +65,64 @@ describe('the CLI face', () => {
     expect(readFileSync(join(p.dir, 'project', '.claude', 'skills', 'release-notes-kit', 'SKILL.md'), 'utf8')).toBe(skillMd('release-notes-kit', 'Draft release notes from merged pull requests.'));
   });
 
-  it('install from a hosted catalog that can\'t be reached fails and writes nothing (its log says it could not be reached)', async () => {
+  // Review P7.4: an earlier version over a newer installed copy says it replaced the newer one (it was silent).
+  it('install of an earlier version over a newer copy says which newer version it replaced, in a terminal and without one', async () => {
+    const p = place();
+    await seed(p);
+    await cli(p, ['install', 'release-notes-kit']);
+    expect((await cli(p, ['update', 'release-notes-kit', '--accept'], { tty: true, answers: ['y'] })).code).toBe(0);
+    const tty = await cli(p, ['install', 'release-notes-kit', '--version', '1'], { tty: true, person: true });
+    expect(tty.code).toBe(0);
+    expect(tty.out).toContain(S.format(S.word('person.install.done_older'), { name: 'release-notes-kit', version: 1, from: 2 }));
+    const q = place();
+    await seed(q);
+    await cli(q, ['install', 'release-notes-kit']);
+    await cli(q, ['update', 'release-notes-kit', '--accept'], { tty: true, answers: ['y'] });
+    const plain = await cli(q, ['install', 'release-notes-kit', '--version', '1']);
+    expect(plain.code).toBe(0);
+    expect(plain.out).toContain(S.format(S.word('install.replaced_newer'), { from: 2 }));
+  });
+
+  // The B validator (P6.6/V4.2): several names, or a miss among them, got the assistant's text in a terminal.
+  it('read of several names, and of a name with a file typed after it, is laid out for the person: no data fence, no error code', async () => {
+    const p = place();
+    await seed(p);
+    const two = await cli(p, ['read', 'release-notes-kit', 'sql-migration-helper'], { tty: true, person: true });
+    expect(two.code).toBe(0);
+    expect(two.out).toMatch(/^release-notes-kit v2, published by ana on /m);
+    expect(two.out).toMatch(/^sql-migration-helper v1, published by ben on /m);
+    expect(two.out).toContain(S.format(S.word('person.read.as_written'), { publisher: 'ana' }));
+    expect(two.out).toContain(S.format(S.word('person.read.as_written'), { publisher: 'ben' }));
+    expect(two.out).not.toContain('unless the user asks');
+    const file = await cli(p, ['read', 'release-notes-kit', 'nope.md'], { tty: true, person: true });
+    expect(file.out).not.toMatch(/invalid_name:|unless the user asks/);
+    expect(file.out).toContain(S.format(S.word('person.read.path_hint'), { skill: 'release-notes-kit', path: 'nope.md' }));
+  });
+
+  // The B validator: the diff named the field ("front matter description:"); the plain list didn't say which copy is
+  // the project's when a skill is in both (review P11.5).
+  it('diff names a known front-matter field in words; list says which copy is only for this project', async () => {
+    const p = place();
+    await seed(p);
+    const d = await cli(p, ['diff', 'release-notes-kit', '--from', '1', '--to', '2'], { tty: true, person: true });
+    expect(d.out).toContain('• Description: Draft release notes from merged pull requests. → Draft release notes and a changelog from merged pull requests.');
+    expect(d.out).not.toContain('front matter description');
+    await cli(p, ['install', 'release-notes-kit', '--version', '1']);
+    await cli(p, ['install', 'release-notes-kit', '--version', '1', '--target', 'project']);
+    const l = await cli(p, ['list']);
+    const lines = l.out.split('\n').filter((x) => x.includes('release-notes-kit'));
+    expect(lines).toHaveLength(2);
+    expect(lines.filter((x) => x.includes(S.word('status.where_project') as string))).toHaveLength(1);
+  });
+
+  it('install from a hosted catalog that can\'t be reached fails and writes nothing, and says which catalog (not a bug: review V4.3)', async () => {
     const p = place();
     const catalog = 'https://127.0.0.1:1';
     const r = await cli(p, ['install', 'release-notes-kit'], { env: { SKILLS_CATALOG: catalog } });
     expect(r.code).toBe(1);
-    expect(r.err).toContain('internal_error');
+    expect(r.err).toContain('catalog_unreachable');
+    expect(r.err).toContain(catalog);
+    expect(r.err).not.toContain('internal_error');
     expect(existsSync(skills(p))).toBe(false);
     expect(existsSync(join(p.dir, 'project', '.claude'))).toBe(false);
   });
@@ -82,7 +134,7 @@ describe('the CLI face', () => {
     expect(plain.code).toBe(0);
     expect(readFileSync(join(skills(p), 'sql-migration-helper', 'SKILL.md'), 'utf8')).toBe(skillMd('sql-migration-helper', 'Write and review SQL schema migrations.'));
     const held = await cli(p, ['install', 'release-notes-kit']);
-    expect(held.code).toBe(0);
+    expect(held.code).toBe(3); // held: it waits for the person (review V4.1)
     expect(held.out).toContain('skills-catalog update release-notes-kit --accept');
     expect(existsSync(join(skills(p), 'release-notes-kit'))).toBe(false);
   });
@@ -125,7 +177,7 @@ describe('the CLI face', () => {
     const p = place();
     await seed(p);
     const held = await cli(p, ['install', 'release-notes-kit', '--target', 'project']);
-    expect(held.code).toBe(0);
+    expect(held.code).toBe(3); // held: it waits for the person (review V4.1)
     expect(held.out).toContain('skills-catalog update release-notes-kit --accept --target project');
     const dest = join(p.dir, 'project', '.claude', 'skills', 'release-notes-kit');
     const yes = await cli(p, ['update', 'release-notes-kit', '--accept', '--target', 'project'], { tty: true, answers: ['y'] });
@@ -140,6 +192,23 @@ describe('the CLI face', () => {
     const r = await cli(q, ['update', 'release-notes-kit', '--accept', '--target', 'project']);
     expect(r.code).toBe(3);
     expect(r.err).toContain(S.format(S.word('errors.person_only'), { command: 'skills-catalog update release-notes-kit --accept --target project' }));
+  });
+
+  // With a user copy installed too, the project's yes goes to the project, never over the user copy (a bug the B
+  // validator found on V4.1's path: the accept took the first installed copy, whatever --target said).
+  it('a held project install, with a user copy of the same skill: the yes installs into the project and leaves the user copy alone', async () => {
+    const p = place();
+    await seed(p);
+    expect((await cli(p, ['install', 'release-notes-kit', '--version', '1'])).code).toBe(0);
+    const user = join(skills(p), 'release-notes-kit');
+    const before = readFileSync(join(user, 'SKILL.md'), 'utf8');
+    expect((await cli(p, ['install', 'release-notes-kit', '--target', 'project'])).code).toBe(3);
+    const yes = await cli(p, ['update', 'release-notes-kit', '--accept', '--target', 'project'], { tty: true, answers: ['y'] });
+    expect(yes.code).toBe(0);
+    const dest = join(p.dir, 'project', '.claude', 'skills', 'release-notes-kit');
+    expect(readFileSync(join(dest, 'scripts', 'collect.sh'), 'utf8')).toBe('#!/bin/sh\necho collecting\n');
+    expect(readFileSync(join(user, 'SKILL.md'), 'utf8')).toBe(before);
+    expect(existsSync(join(user, 'scripts'))).toBe(false);
   });
 
   it('a "tell me first" skill: update names the command, and update <name> --accept shows it and takes it on a yes', async () => {
@@ -283,10 +352,21 @@ describe('the CLI face', () => {
 
   it('an unknown command or flag prints the usage and exits 1', async () => {
     const p = place();
-    for (const argv of [['frobnicate'], ['list', '--no-such-flag'], []]) {
+    for (const argv of [['frobnicate'], ['list', '--no-such-flag']]) {
       const r = await cli(p, argv);
       expect(r.code, argv.join(' ')).toBe(1);
       expect(r.err).toContain('skills-catalog');
+    }
+  });
+
+  it('asked for help (or nothing typed): what each command is for, on stdout, exit 0 (review V4.4)', async () => {
+    const p = place();
+    for (const argv of [[], ['help'], ['--help'], ['-h']]) {
+      const r = await cli(p, argv);
+      expect(r.code, argv.join(' ')).toBe(0);
+      expect(r.out).toContain('Find shared skills by what they do');
+      expect(r.out).toContain('skills-catalog login');
+      expect(r.out).not.toContain("didn't understand");
     }
   });
 });

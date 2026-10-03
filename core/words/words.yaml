@@ -429,11 +429,13 @@ results:
     skill: " (set for this skill)"
   status:
     header: "Installed from the shared catalog: {n} skill(s)."
-    line: "- {name} v{version}{state}; updates: {policy}"
+    line: "- {name} v{version}{state}{where}; updates: {policy}"
+    where_project: " (in this project only)"
+    edited: " (its files were changed here since it was installed: an update replaces them and keeps this copy aside, named)"
     state:
       same: " (the latest)"
       behind: " (v{latest} is available)"
-    next_behind: "To bring them up to date: ${update}."
+    next_behind: "To bring them up to date: ${update}. Those whose updates are automatic need no question first; anything that could run something new still waits for the person."
     empty: "No skills from the shared catalog are installed on this machine yet. To find one: ${search}; to add one: ${install}."
     empty_cli: "No skills from the shared catalog are installed on this machine yet. To add one: ${install} (to find one first, search the catalog)."
   stats:
@@ -566,6 +568,8 @@ results:
     size: "{kb} KB"
     next: 'To use it here: ${install} with name "{name}".'
     next_cli: "To use it here: ${cli} install {name}."
+    next_version: 'To use this version here: ${install} with name "{name}" and version {version} (the latest is v{latest}).'
+    next_version_cli: "To use this version here: ${cli} install {name} --version {version} (the latest is v{latest})."
   quality:
     card_flagged: "- {name} (v{version}, {publisher}; tags: {tags}). Review: {notes}. {description}"
     next: "Some cards have a review note: mention it when you recommend that skill."
@@ -677,7 +681,7 @@ results:
       {review}Show the person these lists, ask whether to publish them, and end your turn: their request to publish isn't a yes to these lists. Only after they say yes: ${publish} with folder {folder}, confirm "{confirm}", name "{name}", version {version}, files {n_send} and flags {flags}{message_part}, all exactly as given here.
     new_skill: a new skill
     with_message: "; message {message}"
-    no_message: "; no message (adding one needs a new preview)"
+    no_message: "; no message: history will say no note for this version, so offer the person a one-line note of what changed (a new preview with message)"
     change_from: "changes from v{latest}: {files}"
     skip_none: none
     skip_more: " and {n} more"
@@ -695,19 +699,30 @@ results:
     held_other_catalog_cli: "{name} v{version} was NOT installed yet: the {name} here came from another catalog ({was}) and this one comes from {now}, so it may be a different skill that shares the name.{also} Tell the person. Don't install it yourself: the person does, by running {command} in their own terminal."
     held_over: '{name} v{version} was NOT installed: {name} v{from} is installed here, and v{version} can run things on this machine without asking, because {reasons}. Tell the person each reason in plain words and ask whether to take v{version}. Only if they agree: ${accept} with name "{name}", target "{target}", version {version}, confirm "{confirm}" and flags {flags}, all exactly as given here.'
     held_over_cli: "{name} v{version} was NOT installed: {name} v{from} is installed here, and v{version} can run things on this machine without asking, because {reasons}. Tell the person each reason in plain words. Don't install it yourself: the person does, by running {command} in their own terminal."
+    held_files: '{name} v{version} was NOT installed yet: it includes files that are not plain instructions ({reasons}), and the person decides whether those reach this machine. Tell the person each reason in plain words and ask whether to install it. Only if they agree: ${accept} with name "{name}", target "{target}", version {version}, confirm "{confirm}" and flags {flags}, all exactly as given here.'
+    held_files_cli: "{name} v{version} was NOT installed yet: it includes files that are not plain instructions ({reasons}), and the person decides whether those reach this machine. Tell the person each reason in plain words. Don't install it yourself: the person does, by running {command} in their own terminal."
     held_cli: "{name} v{version} was NOT installed yet: it can run things on this machine without asking, because {reasons}. Tell the person each reason in plain words. Don't install it yourself: the person does, by running {command} in their own terminal."
     installed_after_yes: "Installed {name} v{version} to {path} after the person agreed (fingerprint checked). Updates: {policy}."
     done: "Installed {name} v{version} to {path} (fingerprint checked). Updates: {policy}."
     unchanged: "{name} v{version} is already installed here and unchanged, so nothing was written."
+    older_auto: 'This is an earlier version (the latest is v{latest}), and its updates are automatic, so the next update moves it to v{latest}. Tell the person; to keep v{version}: ${policy} with policy "pin" and name "{name}".'
+    older_auto_cli: "This is an earlier version (the latest is v{latest}), and its updates are automatic, so the next update moves it to v{latest}. To keep v{version}: ${cli} policy pin {name}."
+    replaced_newer: "It replaced v{from}, a newer version."
+    live_new_folder: "{folder} was made just now, and Claude Code doesn't watch a skills folder made after its session started: to use /{name} in this session, the person runs /reload-skills (or starts a new session). Tell them."
     live: "You can use it in this session as /{name}. If the Skill tool says it is unknown, wait a moment and try once more: the assistant notices new skills shortly after they are installed."
   errors:
     not_found: 'not_found: no skill named "{name}" in the shared catalog.{suggest} Nothing was changed.'
-    not_found_suggest: " Names spelled like it: {names}."
+    not_found_suggest: " Names like it: {names}."
     not_found_next: "Next: ${search} with words from the task, or tell the user it isn't in the catalog."
     not_found_next_cli: "Next: search the catalog with a few words from the task, or tell the user it isn't in the catalog."
+    invalid_confirm_held: "invalid_request: that confirm value isn't one a held install or update gives (it may have been cut or changed in copying), so nothing was installed. Run the install or update again, tell the person what it holds and why, and use the new values once they say yes."
+    invalid_confirm_held_cli: "invalid_request: that confirm value isn't one a held install or update gives, so nothing was installed. Run the install or update again; a held one is taken with ${cli} update <name> --accept in the person's own terminal."
     invalid_confirm: "invalid_request: that confirm value isn't one a preview gives (it may have been cut or changed in copying), so nothing was published. Preview again (${publish} with just the folder), show the person the lists, and use the new values once they say yes."
     not_installed: "not_installed: {name} isn't installed on this machine, so nothing was changed. To see what is: ${status}; to add it: ${install}."
     not_found_path: "not_found: {name} v{version} has no file {path}. Nothing was changed; its files are listed in a read with include files."
+    not_found_path_cli: "not_found: {name} v{version} has no file {path}. Nothing was changed; its files are listed by ${cli} read {name} --files."
+    not_found_version: "not_found: {name} has no v{version}; the latest is v{latest}. Nothing was changed. Next: read it without a version, or ${versions} to see every version."
+    not_found_version_cli: "not_found: {name} has no v{version}; the latest is v{latest}. Nothing was changed. To see every version: ${cli} versions {name}"
     not_found_token: "not_found: no token of the signed-in person has the id {id}, so nothing was revoked. list_tokens shows the ids of their tokens."
     invalid_manifest: "invalid_manifest: {folder}/SKILL.md {problem}. Nothing was published. Fix: {fix} Then preview again."
     why:
@@ -753,6 +768,7 @@ results:
       required: is required
       contradicting_flags: was set by two flags that contradict each other (use one)
       not_a_confirm: isn't a confirm value a preview gives
+      not_a_held_confirm: isn't one a held install or update gives
       not_a_cursor: isn't a cursor an earlier page gave
       not_a_developer_name: isn't a valid developer name (lowercase letters, digits and single hyphens)
       not_base64: isn't base64 text
@@ -775,6 +791,9 @@ results:
       missing: is missing
       name: has no name in its front matter
       description: has no description in its front matter
+      body: has no instructions below its front matter (the body is empty)
+      name_not_text: has a name that YAML reads as a number or true/false, not as text
+      missing_several: is missing {fields}
       bad_name: has a name that isn't lowercase letters, digits and single hyphens (64 at most)
       missing_fields: is missing required fields in its front matter
       not_utf8: isn't valid UTF-8 text
@@ -798,10 +817,19 @@ results:
       tag: a custom tag (!something)
       duplicate_key: the same key twice
       multiple_documents: more than one YAML document (a second --- line)
+    invalid_manifest_field_words:
+      name: a name
+      description: a one-line description
+      body: instructions below the front matter
+    list_and: "{items} and {last}"
     invalid_manifest_fix:
       missing: the folder needs a SKILL.md with a name and a description in its front matter; ask the person to add one, or offer to draft it with them.
       name: suggest a name to the person (lowercase words joined by hyphens, like {suggestion}) and add it to the front matter once they agree.
       description: propose a one-line description to the person (what the skill does, and when to use it); add it to the front matter only once they agree.
+      body: propose the skill's instructions to the person (what the assistant should do, step by step) and add them below the front matter only once they agree.
+      name_no_suggestion: suggest a name to the person (lowercase words joined by hyphens) and add it to the front matter once they agree.
+      name_not_text: "propose the name written as text to the person (in quotes, or as lowercase words joined by hyphens); change it only once they agree."
+      missing_several: "propose what's missing to the person ({fields}); add it only once they agree."
       bad_name: suggest {suggestion} to the person and change the front matter once they agree.
       missing_fields: propose the missing fields to the person (a name, and a one-line description of what the skill does and when to use it); add them only once they agree.
       not_utf8: ask the person to save SKILL.md as UTF-8 text; offer to convert it, and do it only once they agree.
@@ -844,6 +872,8 @@ results:
     accept_flags_conflict: "conflict: the flags given for {name} aren't the ones it is held for ({flags}), so nothing was installed. Show the person these reasons again, and only if they agree call ${accept} again with exactly these flags."
     not_owner: "not_owner: {name} belongs to {owners}; only they publish new versions of it, so nothing was published. Tell the person: they can ask {owners} to publish the change, or publish it as a new skill under another name (propose one; use it only once they agree)."
     invalid_name: "invalid_name: the name \"{name}\" {why}, so it can't be a skill name. Names are lowercase letters, digits and single hyphens, at most 64 characters. Nothing was published. Propose a valid name to the person and use it only once they agree."
+    invalid_name_lookup: "invalid_name: \"{name}\" {why}, so no skill has that name.{suggest} Nothing was changed. Next: ${search} with words from the task, or use one of the names above."
+    invalid_name_lookup_cli: "invalid_name: \"{name}\" {why}, so no skill has that name.{suggest} Nothing was changed. Next: search the catalog with a few words from the task."
     invalid_path_not_regular: "invalid_path: {path} isn't a plain file (a link, a file with more than one hard link, or a special file), so it wasn't read and nothing was published. Tell the person which file it is and propose replacing it with a plain copy of the file it points to (cp makes a new one); change it only once they agree."
     invalid_path: "invalid_path: {path} {why}, so nothing was published. Tell the person which file or folder it is and propose moving or removing it; change it only once they agree."
     too_large: "too_large: {limit} is {value}, over the limit of {max}, so nothing was published. Tell the person; they decide what to leave out (for example large examples or generated files)."
@@ -852,6 +882,7 @@ results:
       file_bytes: the size of one file
       skill_bytes: the size of the whole skill
     invalid_request: "invalid_request: {field} {why}, so nothing was done. Correct the call and try again."
+    catalog_unreachable: "catalog_unreachable: the catalog at {catalog} couldn't be reached ({detail}), so nothing was done. This is the network or the catalog's address (the SKILLS_CATALOG setting), not a bug. Tell the person what to check; try once more later."
     invalid_request_cli: "invalid_request: {field} {why}, so nothing was done. Correct the command and run it again."
     invalid_request_limit: "invalid_request: {field} {why}; the limit is {limit}. Nothing was done: call again within it (for example in batches)."
     invalid_request_budget: "invalid_request: the context_cost_budget setting must be a positive whole number of estimated tokens (the default is 5000), so setup changed nothing: a budget can't turn the size check off. Tell the person, and use a number only once they agree."
@@ -874,7 +905,7 @@ results:
     forbidden_read_scope: "forbidden: the sign-in token in use can only read, so nothing was changed. Publishing, or revoking a publish token, needs a token with the publish scope: tell the person; don't look for another token yourself."
     forbidden_too_many_tokens: "forbidden: this person already has {limit} live catalog tokens (not revoked, not expired), so no sign-in was made and no token was issued. Revoking some makes room: list_tokens shows their ids and revoke_token revokes one by id. Tell the person; don't revoke any yourself."
     port_in_use: "port_in_use: port {port} is already in use on this machine, so the server didn't start. Choose another with --port, or leave --port out to take a free one."
-    person_only_serve: "The local web page runs only in the person's own terminal: it prints a private link for their browser, so nothing was started. Give them the command to run there: {command}"
+    person_only_serve: "serve runs only in the person's own terminal: it serves the catalog's API on this machine and prints a private link with its pairing code, so nothing was started. Give them the command to run there: {command}"
     internal_error: "internal_error: this tool (${cli}) hit a bug (the details are in {log}). The bug is in ${cli}, not in the person's setup: nothing on this machine needs fixing, and don't edit ${cli}'s files. Tell the person, and give them the log's path."
     fingerprint_mismatch: "fingerprint_mismatch: the files the catalog sent for {name} v{version} don't match that version's fingerprint, so the catalog's copy is damaged or has been altered. Nothing was written on this machine, and any copy already installed stays as it was. It isn't something the person did, and it isn't a bug in ${cli}: don't retry or work around it. Tell the person, so whoever runs the catalog can check it."
     internal_error_no_log: "internal_error: this tool (${cli}) hit a bug, and couldn't write its log either. The bug is in ${cli}, not in the person's setup: nothing on this machine needs fixing, and don't edit ${cli}'s files. Tell the person."
@@ -925,6 +956,8 @@ results:
       title: "Installed from the shared catalog: {n}"
       same: latest
       behind: v{latest} available
+      behind_auto: v{latest} available, updates on its own
+      edited: changed here
       project: this project only
       columns: " | Skill | Installed | Latest | Where | Updates"
       empty_reply: Nothing from the shared catalog is installed here yet.
@@ -950,6 +983,8 @@ results:
       files: "Files: {files}"
       left_out: "Not shown, to keep this short: {files}. Read one: ${cli} read {name} --path <file>"
       next: "To install it: ${cli} install {name}"
+      next_version: "To install this version: ${cli} install {name} --version {version}   (the latest is v{latest})"
+      path_hint: "To read a file of {skill}: ${cli} read {skill} --path {path}"
     versions:
       header:
         one: "{name}: 1 version"
@@ -973,15 +1008,58 @@ results:
         executable: can run
         script: a script
         binary: binary, not shown
-      frontmatter: "front matter {field}: {from} → {to}"
+      frontmatter: "{field} (in SKILL.md's header): {from} → {to}"
+      frontmatter_named: "{label}: {from} → {to}"
+      field_label:
+        name: Name
+        description: Description
+        license: License
+        version: Its own version field
+      none: none
+      more_lines: "… {n} more lines. The whole change: ${cli} diff {name} --from {from} --to {to}"
+      more_lines_reply: "… {n} more lines not shown here."
+      tools:
+        added: it now lets the skill use {to} without asking
+        changed: "it changes what the skill may use without asking: {from} → {to}"
+        removed: it no longer lets the skill use {from} without asking
       publisher: "publisher: {from} → {to}"
       same: "{name} v{from} and v{to} have the same content."
+    publish:
+      title_new: "Preview: {name} would be published as v{version}, a new skill"
+      title: "Preview: {name} would become v{version} (changed since v{latest}: {changed})"
+      columns: "File | Sent or skipped"
+      sent: sent
+      skipped: skipped
+      look: "Worth a look before publishing:"
+      stays_reply: Nothing is published until you say yes.
+      published: "Published {name} v{version} to the shared catalog, its files checked."
+      published_next: Teammates can find it now; installed copies pick it up at their next update.
+    install:
+      held_title: "Waiting for your OK: {name} v{version}, not installed"
+      held_title_over: "Waiting for your OK: {name} v{from} → v{version}, not installed"
+      see: "See it first:  ${cli} read {name} --version {version}"
+      take: "Take it:       {command}"
+      stays: Nothing is installed until then.
+      stays_over: Until then it stays on v{from}.
+      stays_reply: Nothing is installed until you say yes.
+      stays_reply_over: It stays on v{from} until you say yes.
+      done: "Installed {name} v{version}, its files checked against the catalog's"
+      done_over: "Updated {name} v{from} → v{version}, its files checked against the catalog's"
+      done_older: "Installed {name} v{version} in place of v{from}, a newer version, its files checked against the catalog's"
+      where: "In {path}. Updates: {policy}."
+      older: "An earlier version (the latest is v{latest}): the next update moves it to v{latest}. To keep it: ${cli} policy pin {name}"
+      older_reply: "An earlier version (the latest is v{latest}): the next update moves it to v{latest} unless you pin it."
+      live: Use it in this session as /{name}.
+      live_new_folder: "A new skills folder: run /reload-skills in Claude Code (or start a new session) to use /{name}."
     update:
       checked:
         one: "Checked 1 installed skill against the shared catalog"
         other: "Checked {n} installed skills against the shared catalog"
       updated: "{name} v{from} → v{to}"
-      would_update: "{name} v{from} → v{to} (dry run: nothing changed)"
+      would_update: "{name} v{from} → v{to}"
+      dry_run_title: "Dry run: nothing was changed. These would update:"
+      pinned: "{name} stays on v{from} (you pinned it; v{to} is available)"
+      pinned_take: "To take v{to}: ${cli} update {name} --accept"
       unchanged:
         one: 1 already up to date
         other: "{n} already up to date"
@@ -998,17 +1076,67 @@ results:
       take: "Take it:         ${cli} update {name} --accept"
       stays: Until then it stays on v{from}.
       stays_reply: It stays on v{from} until you say yes.
+      look_reply: Ask to see the change first, if you want to.
       refused_title: "Not updated:"
+      kept: "Your changed copy of {name} is kept at {path}. Delete it once you've checked it."
     errors:
+      unreachable: "Can't reach the catalog at {catalog} ({detail})."
+      unreachable_next: "Check your connection, or the SKILLS_CATALOG setting."
+      no_catalog: "No catalog at {path}: the SKILLS_CATALOG setting names a place that has none."
+      no_catalog_next: "Check SKILLS_CATALOG, or unset it to use the catalog on this machine."
       not_found: 'No skill named "{name}" in the shared catalog.'
       not_found_suggest: "Did you mean: {names}?"
+      not_found_suggest_reply: "Names like it: {names}."
+      not_found_version: "{name} has no v{version}; the latest is v{latest}."
+      not_found_version_next: "See its versions: ${cli} versions {name}"
+      not_found_path: "{name} v{version} has no file {path}."
+      not_found_path_next: "See its files: ${cli} read {name} --files"
+      invalid_name: "\"{name}\" isn't a skill name: names are lowercase words joined by hyphens."
       not_found_next: "Search by words instead: ${search}"
       not_installed: "{name} isn't installed here. See what is: ${status}"
+      rejected: "{file} {problem}. Nothing was published."
+      rejected_file: SKILL.md in {folder}
+      rejected_fix:
+        name: "Fix: add a name to its front matter (lowercase words joined by hyphens, like {suggestion}), then publish again."
+        name_no_suggestion: "Fix: add a name to its front matter (lowercase words joined by hyphens), then publish again."
+        description: "Fix: add a one-line description to its front matter (what the skill does, and when to use it), then publish again."
+        body: "Fix: write the skill's instructions below its front matter, then publish again."
+        missing_several: "Fix: add {fields}, then publish again."
+        name_not_text: "Fix: write the name as text (in quotes, or as lowercase words joined by hyphens), then publish again."
+        bad_name: "Fix: name it {suggestion} in its front matter, then publish again."
+        missing: "Fix: add a SKILL.md with a name and a one-line description in its front matter, then publish again."
+        other: "Fix: correct SKILL.md as described, then publish again."
+    accept_title: "{name} v{from} → v{to} is waiting for your OK"
+    accept_title_install: "{name} v{to} is waiting for your OK"
+    accept_where: "It would be installed to {path}."
     accept_look: "To see exactly what changes first:  ${cli} diff {name} --from {from} --to {to}"
     accepted: "Took it: {name} v{from} → v{to}, its files checked against the catalog's."
     accepted_install: "Installed {name} v{to}, its files checked against the catalog's."
     accept_look_install: "To read it first:  ${cli} read {name} --version {to}"
     usage: "skills-catalog didn't understand that. It takes:"
+    serve:
+      started: "Serving the catalog's API on this machine only (127.0.0.1). The web page isn't built yet: the address above answers with how to call the API. Stop: Ctrl-C"
+      root: "Skills Catalog on this machine. This address serves the catalog's API only (POST /api/v1/<operation>, after pairing with the code in the link serve printed); the web page isn't built yet. The operations: docs/api.md in the repository."
+    bad_input: "{field} {why}. Nothing was done."
+    bad_input_usage: "It takes:  {usage}"
+    help:
+      title: "skills-catalog: your team's shared skills catalog, from this terminal"
+      commands:
+        search: Find shared skills by what they do
+        get: Read a skill before you install it (--version N for an earlier one)
+        versions: List a skill's versions
+        diff: See what changed between two versions
+        install: Install a skill here (--version N, --project for this project only)
+        update: Bring installed skills up to date
+        status: See the skills installed here
+        policy: "Choose how skills update: auto, notify (tell me first) or pin"
+        accept: Take an update or install that waits for your yes
+        stats: See how skills are used on this machine (nothing leaves it)
+        mcp: Serve the catalog's tools to an assistant (MCP, over stdio)
+        serve: Serve the catalog's API on this machine (127.0.0.1 only)
+        login: Sign in to a hosted catalog with GitHub
+        logout: Forget the saved sign-in
+      footer: "Settings: SKILLS_CATALOG (which catalog), SKILLS_HOME (this tool's folder), SKILLS_AS (who you act as locally, for demo purposes)."
     for_person: "Laid out for the person:"
 setup:
   questions:

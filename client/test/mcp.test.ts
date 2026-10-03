@@ -302,7 +302,8 @@ describe('the same result as the core, in the words file\'s words', () => {
         continue;
       }
       expect(r.isError, `${tool} ${JSON.stringify(args)}`).toBe(true);
-      expect(r.content).toEqual([{ type: 'text', text: renderError(S, await errorOf(() => ops[tool]!(args))) }]);
+      // The assistant's part; a person's view of the error may follow it (person/view.ts).
+      expect(r.content.map((c) => ({ ...c, text: assistant(c.text) }))).toEqual([{ type: 'text', text: renderError(S, await errorOf(() => ops[tool]!(args))) }]);
     }
   });
 });
@@ -330,13 +331,15 @@ describe('when something is wrong', () => {
     expect((await s.call(N.search, { query: 'release' })).isError).toBeUndefined();
   });
 
-  it('a hosted catalog (https) that can\'t be reached: an internal error with its log, and the server goes on', async () => {
+  it('a hosted catalog (https) that can\'t be reached: its own error naming the catalog (not a bug, review V4.3), and the server goes on', async () => {
     const p = place();
     const s = start(p, { SKILLS_CATALOG: 'https://127.0.0.1:1' });
     await s.initialize();
     const r = await s.call(N.search, { query: 'release' });
     expect(r.isError).toBe(true);
-    expect(r.content[0]!.text).toContain('internal_error');
+    expect(r.content[0]!.text).toContain('catalog_unreachable');
+    expect(r.content[0]!.text).toContain('https://127.0.0.1:1');
+    expect(r.content[0]!.text).toContain("Can't reach the catalog at https://127.0.0.1:1");
     expect((await s.call(N.search, { query: 'release' })).isError).toBe(true);
   });
 });
@@ -347,7 +350,7 @@ describe('the acting developer (SKILLS_AS, the server\'s config)', () => {
     const line = '\n' + S.format(S.word('acting_as'), { developer: 'dev2' });
     expect(line).toContain('dev2');
     expect(assistant(await s.text(N.search, { query: 'release notes' }))).toBe(renderSearch(S, await c.search({ query: 'release notes' }), { query: 'release notes' }) + line);
-    expect(await s.text(N.get, { name: 'relase-notes-kit' })).toBe(renderError(S, await errorOf(() => c.read({ name: 'relase-notes-kit' }))) + line);
+    expect(assistant(await s.text(N.get, { name: 'relase-notes-kit' }))).toBe(renderError(S, await errorOf(() => c.read({ name: 'relase-notes-kit' }))) + line);
   });
 
   it('with no SKILLS_AS, reads work and no result names a developer', async () => {

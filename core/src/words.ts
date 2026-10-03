@@ -47,3 +47,14 @@ export function spelledLike(name: string, names: readonly string[], limit = 3): 
     .slice(0, limit)
     .map((x) => x.n);
 }
+
+// not_found's suggestions, a little wider than spelling (review 2026-10-02): names spelled like it, then names the typed
+// name starts as whole words (release-note for release-note-draft), then names made of the same words in another order.
+// Still never a search's closest match: every suggestion shares all of the typed name's words, or its spelling.
+export function similarNames(name: string, names: readonly string[], limit = 3): string[] {
+  const words = name.split('-').filter(Boolean);
+  const sorted = (xs: readonly string[]) => [...xs].sort().join('-');
+  const prefix = names.filter((n) => n !== name && words.length > 0 && n.startsWith(`${words.join('-')}-`)).sort();
+  const reordered = names.filter((n) => n !== name && words.length > 1 && sorted(n.split('-')) === sorted(words)).sort();
+  return [...new Set([...spelledLike(name, names, limit), ...prefix, ...reordered])].slice(0, limit);
+}

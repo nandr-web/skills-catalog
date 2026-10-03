@@ -61,6 +61,7 @@ export async function runServe(argv: readonly string[], s: Words, io: ServeIo, u
     throw e;
   }
   io.stdout(`${serving.url}\n`);
+  io.stdout(`${s.format(s.word('person.serve.started'))}\n`);
   await io.stopped;
   await serving.close();
   return 0;

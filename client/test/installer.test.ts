@@ -2,7 +2,7 @@
 // computes every flag itself (a first install is an update from nothing), holds a flagged change until the person's
 // yes, never overwrites or shadows what it didn't install, and records what it did in the lock.
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { CatalogError, Words, actAs, reasons, renderError, type Catalog } from '@skills-catalog/core';
 import { checkTree, diffTrees, fingerprint, sha256Hex, type Mode } from '@skills-catalog/core/skill-tree';
 import { loadGolden } from '@skills-catalog/core/testing';
@@ -124,7 +124,7 @@ describe('install (contract §3 install_shared_skill)', () => {
     const dest = join(userSkills(p), 'notes-helper');
     expect(tree(dest)).toEqual({ 'SKILL.md 644': skillMd('notes-helper', 'The notes-helper skill.'), 'reference.md 644': 'More.\n' });
     expect(r.text).toBe(
-      S.format(S.word('install.done'), { name: 'notes-helper', version: 1, path: JSON.stringify(dest), policy: AUTO_DEFAULT }) + '\n' + S.format(S.word('install.live'), { name: 'notes-helper' }),
+      S.format(S.word('install.done'), { name: 'notes-helper', version: 1, path: JSON.stringify(dest), policy: AUTO_DEFAULT }) + '\n' + S.format(S.word('install.live_new_folder'), { name: 'notes-helper', folder: JSON.stringify(dirname(dest)) }),
     );
     expect(r.result).toBe(S.doc.log.result.install.installed);
     const e = lockOf(p)[dest]!;
@@ -236,7 +236,8 @@ describe('install (contract §3 install_shared_skill)', () => {
 
     const taken = await accept(ctx, { name: 'runner', confirm, target, version, flags: ['runnable_file', 'runnable_file'] });
     const dest = join(userSkills(p), 'runner');
-    expect(taken.text).toBe(S.format(S.word('install.installed_after_yes'), { name: 'runner', version: 1, path: JSON.stringify(dest), policy: AUTO_DEFAULT }));
+    // Then how to use it in this session, as a direct install says (review P3.4).
+    expect(taken.text).toBe(S.format(S.word('install.installed_after_yes'), { name: 'runner', version: 1, path: JSON.stringify(dest), policy: AUTO_DEFAULT }) + '\n' + S.format(S.word('install.live_new_folder'), { name: 'runner', folder: JSON.stringify(dirname(dest)) }));
     expect(taken.result).toBe(S.doc.log.result.accept);
     expect(tree(dest)['scripts/run.sh 755']).toBe('#!/bin/sh\necho run\n');
     expect(lockOf(p)[dest]!.accepted).toEqual([{ version: 1, flags: ['runnable_file'] }]);
@@ -949,7 +950,7 @@ describe('update (contract §3 update_installed_skills, §5.3)', () => {
     for (const name of ['a-skill', 'b-skill']) await install(ctx, { name });
     await publish(p, 'b-skill', plain('b-skill', 'Second.\n'));
     const r = await list(ctx, {});
-    const line = (name: string, state: string) => S.format(S.word('status.line'), { name, version: 1, state, policy: AUTO_DEFAULT });
+    const line = (name: string, state: string) => S.format(S.word('status.line'), { name, version: 1, state, where: '', policy: AUTO_DEFAULT });
     expect(r.text).toBe(
       [
         S.format(S.word('status.header'), { n: 2 }),

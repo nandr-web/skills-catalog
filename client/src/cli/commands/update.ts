@@ -12,6 +12,8 @@ import type { Settings } from '../../settings.ts';
 import { recordUsage } from '../../usage/record.ts';
 import { fromSchemaFlags, schemaFlags, Usage, type Command, type Env } from '../command.ts';
 import { MARK, barred, painter } from '../../person/terminal.ts';
+import { terminal } from '../../person/medium.ts';
+import { personView } from '../../person/view.ts';
 
 const own = schemaFlags('update_installed_skills', ['names']);
 const TARGETS: readonly unknown[] = ['user', 'project'];
@@ -51,7 +53,10 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
   const used = (result: string) => recordUsage(ctx.settings.home, { event: 'use', op: 'accept_held_update', result }, ctx.now());
   const fail = (e: unknown) => {
     const err = toCatalogError(e, ctx.settings.home, ctx.now());
-    io.stderr(withActing(renderError(s, err)) + '\n');
+    // A person reads the error laid out for them, as on every other command.
+    const text = renderError(s, err);
+    const shown = io.person ? personView(s, terminal(io.color === true), 'accept_held_update', { text, isError: true, outcome: err.code, error: err }, {}) : undefined;
+    io.stderr(withActing(shown ?? text) + '\n');
     used(err.code);
     return 1;
   };
@@ -59,7 +64,7 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
   const target = (values['target'] as Target | undefined) ?? 'user';
   let hold: Awaited<ReturnType<typeof pendingHold>>;
   try {
-    hold = await pendingHold(ctx, name, target);
+    hold = await pendingHold(ctx, name, target, values['target'] !== undefined);
   } catch (e) {
     return fail(e);
   }
@@ -80,7 +85,13 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
   const look = io.person ? (first ? 'person.accept_look_install' : 'person.accept_look') : first ? 'update.accept_look_install' : 'update.accept_look';
   // A person sees what waits and why behind the orange bar every "needs your OK" has (person/view.ts).
   const paint = painter(io.color === true);
-  const shown = io.person ? barred(paint, 'attention', [paint('attention', paint('bold', `${MARK.attention} `)) + paint('bold', said(s, intro, at)), '', said(s, look, at)]).join('\n') : `${said(s, intro, at)}\n${said(s, look, at)}`;
+  // Held for its flags: a short title, then one bullet per reason, as the update view lays it out (review V4.6); the other
+  // holds keep their one sentence, which is itself the reason.
+  const flagged = intro === 'update.accept_intro' || intro === 'update.accept_intro_install';
+  const head = flagged
+    ? [paint('attention', paint('bold', `${MARK.attention} `)) + paint('bold', said(s, first ? 'person.accept_title_install' : 'person.accept_title', at)), ...String(hold.reasons).split('; ').map((r) => `  • ${r}`), ...(first ? [said(s, 'person.accept_where', at)] : [])]
+    : [paint('attention', paint('bold', `${MARK.attention} `)) + paint('bold', said(s, intro, at))];
+  const shown = io.person ? barred(paint, 'attention', [...head, '', said(s, look, at)]).join('\n') : `${said(s, intro, at)}\n${said(s, look, at)}`;
   io.stdout(shown + '\n');
   // Showing the person the reasons is a look (usage metrics); their no is an answer. Their yes is an answer too, for the
   // installer to record where a held update is taken, on every face: not recorded yet (usage-look.test.ts says so).

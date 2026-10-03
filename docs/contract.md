@@ -838,7 +838,7 @@ showing (the web UI, a publish preview), and the update hold never reads them. F
     So `allowed-tools`, `hooks`, `context`, `agent`, `shell` and any key Claude Code adds later count: it fails closed like the
     safe list. The detail names the grant (`pre-approves Bash(python3 *)`), and the flag reads "its instructions changed while it
     pre-approves Bash(python3 *)";
-  - `non_markdown`: any other non-markdown file added or changed;
+  - `non_markdown`: any other non-markdown file added or changed, except an inert image or data file (review P3.1: an extension of png, jpg, jpeg, gif, webp, bmp, ico, pdf, txt, csv, tsv, json, yaml, yml or toml; not executable; no `#!`; and no markdown file in the skill names it except as a link's target `](path)`, since naming it is how instructions would have it run). Its hold says the files aren't plain instructions, not that the skill can run things;
   - `new_publisher`: a different publisher {from, to};
 - from the rules reviewer (§10), run by the installer on the fetched version, so the update hold never waits for the catalog:
   prompt-injection patterns (instructions to ignore prior guidance, exfiltration or curl-to-shell, hidden unicode, HTML
@@ -1379,7 +1379,8 @@ now and its inputs, §3), `forbidden` (or {catalog, why: `hosted_not_available`}
 `fingerprint_mismatch` {name, version, expected, got} (§5.3), `lock_busy` {path, pid} (another run is changing the installed
 skills, §4.5), `not_installed` {name} (§3), `invalid_local_file` {file, why, path, key?: in `config.json`, the key the refusal is about: unknown, added to a key list, or holding a value of the wrong shape; absent for `lock.json` and for a file that isn't JSON} (§4.5), `target_changed` {path, staging?, elsewhere?, temp?: true when `path` is a staging folder}, `target_not_private` {path, target: `user` \| `project`, home?: true when
 `path` is the assistant's home above `.claude`, own: whether this user owns the folder} (§4.5), `target_unavailable`
-{path, target, home?: true when `path` is the assistant's home} (the target's root doesn't exist and can't be made, §4.5);
+{path, target, home?: true when `path` is the assistant's home} (the target's root doesn't exist and can't be made, §4.5),
+`catalog_unreachable` {catalog, detail} (a hosted catalog that couldn't be reached: the network or the `SKILLS_CATALOG` address, never a bug);
 setup's own (§6 "What setup writes"): `assistant_file_unusable` {path, why: `unreadable` \| `too_big` \| `not_json` \|
 `link` \| `wrong_type` {key} \| `duplicate_key` {key} \| `other_user` \| `hard_linked`}, `assistant_file_changed` {path},
 `name_taken` {path, name}, `install_unsafe` {path, why: `path_characters` \| `temporary` \| `writable_by_others` \| `too_many_files`},

@@ -303,13 +303,13 @@ describe('the words file (vendored, recommended variant)', () => {
     for (const path of WORD_GAPS) expect(s.word(path), `the words file now has ${path}: wire it in render.ts and drop it from WORD_GAPS`).toBeUndefined();
   });
 
-  it('every reason (why) the core can raise has words, and so do the two a face raises (not_regular_file, not_a_confirm)', () => {
+  it('every reason (why) the core can raise has words, and so do the three a face raises (not_regular_file, not_a_confirm, not_a_held_confirm)', () => {
     const s = Words.load();
     // Read from the source: every literal why, every path refusal, and the path reasons' type.
     const src = join(import.meta.dirname, '..', 'src');
     const files = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(join(dir, e.name)) : e.name.endsWith('.ts') ? [join(dir, e.name)] : []));
     const text = files(src).map((f) => readFileSync(f, 'utf8')).join('\n');
-    const whys = new Set<string>(['not_regular_file', 'not_a_confirm']);
+    const whys = new Set<string>(['not_regular_file', 'not_a_confirm', 'not_a_held_confirm']);
     for (const m of text.matchAll(/why: '([a-z0-9_]+)'|refuse\([\w.!]+, '([a-z0-9_]+)'/g)) whys.add((m[1] ?? m[2])!);
     const pathWhy = /export type PathWhy =([^;]+);/.exec(text)![1]!;
     for (const m of pathWhy.matchAll(/'([a-z0-9_]+)'/g)) whys.add(m[1]!);
@@ -348,6 +348,8 @@ describe('the words file (vendored, recommended variant)', () => {
     const w = s.word('errors');
     expect(renderError(s, new CatalogError('invalid_path', { path: 'notes/link.md', why: 'not_regular_file', folder: '/work/x' }))).toBe(s.format(w.invalid_path_not_regular, { path: 'notes/link.md' }));
     expect(renderError(s, new CatalogError('invalid_request', { field: 'confirm', why: 'not_a_confirm' }))).toBe(s.format(w.invalid_confirm));
+    // A hold's confirm has its own recovery: run the install or update again, not a publish preview (review V3.6).
+    expect(renderError(s, new CatalogError('invalid_request', { field: 'confirm', why: 'not_a_held_confirm' }))).toBe(s.format(w.invalid_confirm_held));
     expect(renderError(s, new CatalogError('invalid_path', { path: 'a/../b', why: 'dot_segment' }))).toBe(s.format(w.invalid_path, { path: 'a/../b', why: w.why.dot_segment }));
   });
 

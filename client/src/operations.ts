@@ -16,7 +16,9 @@ export type { Face };
 /** Everything an operation needs, the same on every face. `face` says which one asks: an input only a person may give
  *  (the CLI's) is refused from the assistant's (MCP). `ids` makes the fence tokens around a publisher's text. `refuse`:
  *  a face's own refusal of this call (e.g. the local page's read-only rule), raised like any error, so it's logged too. */
-export type Context = { catalog: () => Promise<Catalog>; words: Words; settings: Settings; face: Face; now: () => Date; ids: Ids; refuse?: (op: string, args: unknown) => void };
+/** `sessionStart`: when the assistant's session began, in ms since the epoch (default: when this process started, as the
+ *  MCP server starts with the session); a skills folder made after it isn't watched yet (review F3). */
+export type Context = { catalog: () => Promise<Catalog>; words: Words; settings: Settings; face: Face; now: () => Date; ids: Ids; refuse?: (op: string, args: unknown) => void; sessionStart?: number };
 
 /** What a run gives: its data, and the activity log's target and result (the result in the words file's log words:
  *  logWords(ctx.words).result). `outcome`, a code, where the operation has one worth counting or acting on (a search's

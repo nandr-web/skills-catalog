@@ -27,6 +27,10 @@ type Input = {
 // What step 2 repeats from step 1, in the order a missing one is named.
 const STEP2 = ['name', 'version', 'files', 'flags'] as const;
 // Skipped entries shown, then how many more (contract §3).
+/** What a person reads about a publish (review V3.2): the preview's files, sent and skipped, and anything worth a look; or
+ *  what was published. */
+export type PublishView = { kind: 'publish'; stage: 'preview' | 'published'; name: string; version: number; latest: number; send: string[]; skipped: string[]; changed: string[]; notes: string[] };
+
 export const SKIPPED_SHOWN = 50;
 type Folder = { files: { path: string; mode: Mode; bytes: Buffer }[]; skipped: string[] };
 
@@ -235,7 +239,8 @@ export async function publishFolder(ctx: Context, args: unknown): Promise<Done> 
         // The message is part of what the confirm binds: say it, or that there is none, so an assistant adds nothing.
         message_part: message === null ? w.no_message : s.format(w.with_message, { message: JSON.stringify(message) }),
       });
-      return { text, target: `${name} v${r.version}`, result: log.result('publish', 'preview') };
+      const view: PublishView = { kind: 'publish', stage: 'preview', name, version: r.version, latest, send: files.map((f) => f.path), skipped: [...skipped], changed: (r.diff_from_latest?.files ?? []).map((f) => f.path), notes };
+      return { text, target: `${name} v${r.version}`, result: log.result('publish', 'preview'), view };
     }
 
     // Step 2: the folder as it is now and step 2's own values must be what step 1 showed; then the catalog's latest.
@@ -244,7 +249,8 @@ export async function publishFolder(ctx: Context, args: unknown): Promise<Done> 
     const expected = mac(key, bound);
     if (given.length !== expected.length || !timingSafeEqual(given, expected)) throw new CatalogError('conflict', { name, folder: real });
     const r = await catalog.publish({ ...input, expected_latest: bound.latest }, undefined, ctx.face);
-    return { text: s.format(w.published, { name, version: r.version }), target: `${name} v${r.version}`, result: log.result('publish', 'published') };
+    const view: PublishView = { kind: 'publish', stage: 'published', name, version: r.version, latest: bound.latest, send: [], skipped: [], changed: [], notes: [] };
+    return { text: s.format(w.published, { name, version: r.version }), target: `${name} v${r.version}`, result: log.result('publish', 'published'), view };
   } catch (e) {
     throw inFolder(e, real);
   }

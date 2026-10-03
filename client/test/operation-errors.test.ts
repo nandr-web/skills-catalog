@@ -58,7 +58,9 @@ describe('each operation\'s errors no other row reaches, through its tool and it
         const def = OPERATIONS[row.call]!;
         if (def.faces.includes('mcp')) {
           const r = await s.call((S.names as Record<string, string>)[def.words!]!, row.args);
-          expect([row.id, r.isError, r.content]).toEqual([row.id, true, [{ type: 'text', text: renderError(S, e) }]]);
+          // The assistant's part; a person's view of the error may follow it (person/view.ts).
+          const assistantPart = r.content.map((x) => ({ ...x, text: x.text.split(`\n\n${S.format(S.word('person.for_person'))}\n\n`)[0]! }));
+          expect([row.id, r.isError, assistantPart]).toEqual([row.id, true, [{ type: 'text', text: renderError(S, e) }]]);
         }
         if (def.faces.includes('cli')) {
           const r = await cli(p, ARGV[row.call]!(row.args));
