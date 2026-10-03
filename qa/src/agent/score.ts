@@ -237,16 +237,16 @@ export type Aggregate = {
   tries: number;
   held: Record<string, string>;        // rule → "k/n"
   metrics: { catalog_calls_median: number; wrong_tool_detours: number; harness_detours: number; refused_requests: number; tool_result_tokens_max: number; wall_ms_median: number; cost_usd: number };
-  over_budget: string[];               // each budget the tries missed, in words (qa-plan.md §7); any one fails the scenario
+  over_budget: string[];               // each budget the tries missed, in words (qa-plan.md §7); fails the scenario while enforced
 };
 
-/** The runner's budgets (qa-plan.md §7): the median wall time per ask, and the largest tool result. */
-export const BUDGETS = { wall_ms_median: 30_000, tool_result_tokens_max: 8_000 } as const;
+/** A scenario's budgets, from golden/agent-scenarios.yaml (defaults.budgets, then the scenario's own; qa-plan.md §7). */
+export type Budgets = { catalog_calls_max?: number; tool_result_tokens_max?: number; wall_seconds_median?: number; enforce?: boolean };
 
 const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : 0; };
 
 /** Safety must hold in every try; each expect rule in most (2 of 3, 3 of 5). */
-export function aggregate(tries: Pick<TryScore, 'outcome' | 'rules' | 'metrics'>[]): Aggregate {
+export function aggregate(tries: Pick<TryScore, 'outcome' | 'rules' | 'metrics'>[], budgets: Budgets = {}): Aggregate {
   const n = tries.length, most = Math.floor(n / 2) + 1;
   const held: Record<string, string> = {};
   let verdict: Aggregate['verdict'] = 'pass';
@@ -272,10 +272,13 @@ export function aggregate(tries: Pick<TryScore, 'outcome' | 'rules' | 'metrics'>
       cost_usd: Number(m.reduce((a, x) => a + x.cost_usd, 0).toFixed(4)),
   };
   // A harness error says nothing about the product's speed; otherwise a missed budget fails the scenario (review P15.6).
+  const b = budgets;
   const over_budget = verdict === 'harness_error' ? [] : [
-    ...(metrics.wall_ms_median > BUDGETS.wall_ms_median ? [`median ${(metrics.wall_ms_median / 1000).toFixed(1)}s per ask, over ${BUDGETS.wall_ms_median / 1000}s`] : []),
-    ...(metrics.tool_result_tokens_max > BUDGETS.tool_result_tokens_max ? [`a tool result of ${metrics.tool_result_tokens_max} tokens, over ${BUDGETS.tool_result_tokens_max}`] : []),
+    ...(b.wall_seconds_median !== undefined && metrics.wall_ms_median > b.wall_seconds_median * 1000 ? [`median ${(metrics.wall_ms_median / 1000).toFixed(1)}s per ask, over ${b.wall_seconds_median}s`] : []),
+    ...(b.tool_result_tokens_max !== undefined && metrics.tool_result_tokens_max > b.tool_result_tokens_max ? [`a tool result of ${metrics.tool_result_tokens_max} tokens, over ${b.tool_result_tokens_max}`] : []),
+    ...(b.catalog_calls_max !== undefined && metrics.catalog_calls_median > b.catalog_calls_max ? [`a median of ${metrics.catalog_calls_median} catalog calls, over ${b.catalog_calls_max}`] : []),
   ];
-  if (over_budget.length && verdict !== 'harness_error') verdict = 'fail';
+  // Reported always; a miss fails the scenario unless the budgets' gate says not yet (enforce: false).
+  if (over_budget.length && verdict !== 'harness_error' && b.enforce !== false) verdict = 'fail';
   return { verdict, tries: n, held, metrics, over_budget };
 }

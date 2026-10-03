@@ -6,6 +6,7 @@ import { parse } from 'yaml';
 import { loadPhrases, says } from '../src/agent/phrases.ts';
 import { parseTrace } from '../src/agent/trace.ts';
 import { aggregate, LATER, RULES, ruleCheck, score, type Names, type Rule } from '../src/agent/score.ts';
+import { budgetsOf } from '../src/agent/budgets.ts';
 
 const at = (p: string) => new URL(`../${p}`, import.meta.url);
 const phrases = loadPhrases(at('golden/phrases.yaml'));
@@ -22,6 +23,7 @@ describe('phrases (the runner\'s first unit test: golden/phrases.yaml cases)', (
 });
 
 describe('scorer on the recorded spike traces (fixtures/traces/expected.yaml)', () => {
+  const golden = parse(readFileSync(at('golden/agent-scenarios.yaml'), 'utf8'));
   const expected = parse(readFileSync(at('fixtures/traces/expected.yaml'), 'utf8'));
   const names: Names = { ops: expected.names, server: 'catalog' };
   // "Expected rules (as scenario A1)": the header of expected.yaml
@@ -42,7 +44,7 @@ describe('scorer on the recorded spike traces (fixtures/traces/expected.yaml)', 
       expect(s.metrics.wall_ms).toBe(trace.result!.durationMs);
       expect(s.metrics.cost_usd).toBe(trace.result!.costUsd);
       // Replayed at no cost on every check (review P16.4): the recorded run, aggregated, against the plan's budgets.
-      expect(aggregate([s]).over_budget).toEqual(want.over_budget ?? []);
+      expect(aggregate([s], { ...budgetsOf(golden, {}), enforce: true }).over_budget).toEqual(want.over_budget ?? []);
     });
   }
 });
@@ -252,12 +254,23 @@ describe('aggregate: safety in every try, expect in most (2 of 3, 3 of 5)', () =
   // Review P15.6: the plan's budgets (median ≤ 30 s per ask, no tool result over 8,000 tokens) fail a scenario, in words.
   it('fails a scenario over its budgets, saying which; at the budget passes; a harness error is not a budget miss', () => {
     const timed = (wall_ms: number, tool_result_tokens_max = 0) => ({ ...tryWith([true]), metrics: { ...tryWith([true]).metrics, wall_ms, tool_result_tokens_max } });
-    expect(aggregate([timed(30_000), timed(29_000), timed(45_000)])).toMatchObject({ verdict: 'pass', over_budget: [] });
-    const slow = aggregate([timed(31_000), timed(29_000), timed(45_000)]);
+    // The golden's own budgets (defaults, and A11's override of catalog calls), gate set to always for the test.
+    const doc = parse(readFileSync(at('golden/agent-scenarios.yaml'), 'utf8'));
+    const B = budgetsOf({ defaults: { budgets: { ...doc.defaults.budgets, gate: 'always' } } }, {});
+    expect(B).toEqual({ catalog_calls_max: 3, tool_result_tokens_max: 8000, wall_seconds_median: 30, enforce: true });
+    expect(budgetsOf({ defaults: { budgets: { ...doc.defaults.budgets, gate: 'always' } } }, doc.scenarios.find((x: any) => x.id === 'A11')).catalog_calls_max).toBe(4);
+    expect(aggregate([timed(30_000), timed(29_000), timed(45_000)], B)).toMatchObject({ verdict: 'pass', over_budget: [] });
+    const slow = aggregate([timed(31_000), timed(29_000), timed(45_000)], B);
     expect(slow.verdict).toBe('fail');
     expect(slow.over_budget).toEqual(['median 31.0s per ask, over 30s']);
-    expect(aggregate([timed(1000, 8001)]).over_budget).toEqual(['a tool result of 8001 tokens, over 8000']);
-    expect(aggregate([{ ...timed(60_000), outcome: 'harness_error' as never }])).toMatchObject({ verdict: 'harness_error', over_budget: [] });
+    expect(aggregate([timed(1000, 8001)], B).over_budget).toEqual(['a tool result of 8001 tokens, over 8000']);
+    const chatty = { ...tryWith([true]), metrics: { ...tryWith([true]).metrics, catalog_calls: 4 } };
+    expect(aggregate([chatty], B).over_budget).toEqual(['a median of 4 catalog calls, over 3']);
+    expect(aggregate([{ ...timed(60_000), outcome: 'harness_error' as never }], B)).toMatchObject({ verdict: 'harness_error', over_budget: [] });
+    // As the golden is today (gate: when_feature_complete): reported, not failing.
+    const gated = budgetsOf(doc, {});
+    expect(gated.enforce).toBe(doc.defaults.budgets.gate === 'always');
+    if (!gated.enforce) expect(aggregate([timed(31_000)], gated)).toMatchObject({ verdict: 'pass', over_budget: ['median 31.0s per ask, over 30s'] });
   });
 });
 

@@ -4,6 +4,7 @@
 // fails its safety rule `nothing_left_behind`. Writes report.json and summary.txt.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { skipReason } from './skips.ts';
+import { budgetsOf } from './budgets.ts';
 import { signalGroup } from '../groups.ts';
 import { chmodSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -73,6 +74,7 @@ export async function runScenarios(o: RunnerOptions): Promise<Report> {
     if (skip) { report.skipped.push({ scenario: s.id, why: skip }); continue; }
     const rules = { expect: (s.expect ?? []) as Rule[], safety: [...(doc.defaults.safety ?? []), ...(s.safety ?? [])] as Rule[] };
     const agreesTo: string[] = s.person?.agrees_to ?? doc.defaults.person?.agrees_to ?? [];
+    const budgets = budgetsOf(doc, s);
     for (const setupName of (s.setups as string[] | undefined) ?? Object.keys(setups)) {
       if (o.setups && !o.setups.includes(setupName)) continue;
       const setup = setups[setupName];
@@ -82,7 +84,7 @@ export async function runScenarios(o: RunnerOptions): Promise<Report> {
         for (let n = 1; n <= tries; n++) {
           if (o.signal?.aborted) {
             report.stopped = 'interrupted';
-            if (done.length) report.summary.push({ scenario: s.id, setup: setupName, model, ...aggregate(done) });
+            if (done.length) report.summary.push({ scenario: s.id, setup: setupName, model, ...aggregate(done, budgets) });
             break matrix;
           }
           const id: TryId = { scenario: s.id, setup: setupName, model, try: n };
@@ -91,10 +93,10 @@ export async function runScenarios(o: RunnerOptions): Promise<Report> {
           o.afterTry?.(id);
           report.runs.push(r);
           done.push(r);
-          if (o.signal?.aborted) { report.stopped = 'interrupted'; report.summary.push({ scenario: s.id, setup: setupName, model, ...aggregate(done) }); break matrix; }
-          if (r.harness?.action === 'stop_the_matrix') { report.stopped = r.harness.reason; report.summary.push({ scenario: s.id, setup: setupName, model, ...aggregate(done) }); break matrix; }
+          if (o.signal?.aborted) { report.stopped = 'interrupted'; report.summary.push({ scenario: s.id, setup: setupName, model, ...aggregate(done, budgets) }); break matrix; }
+          if (r.harness?.action === 'stop_the_matrix') { report.stopped = r.harness.reason; report.summary.push({ scenario: s.id, setup: setupName, model, ...aggregate(done, budgets) }); break matrix; }
         }
-        report.summary.push({ scenario: s.id, setup: setupName, model, ...aggregate(done) });
+        report.summary.push({ scenario: s.id, setup: setupName, model, ...aggregate(done, budgets) });
       }
     }
   }
