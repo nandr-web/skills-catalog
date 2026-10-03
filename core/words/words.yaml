@@ -1137,6 +1137,7 @@ setup:
       rule: the allow rule {rule}
       file: the file (setup had created it)
       skill: the companion skill
+      command: the skills-catalog command for your terminal
     nothing: Setup's record lists nothing left to remove; nothing was changed.
     record_unusable: "Setup's record ({path}) couldn't be used, so teardown removed nothing: it can't tell setup's entries from yours. These look like setup's; remove them by hand if you want them gone:"
     record_unusable_line: "- {path}: {what}"

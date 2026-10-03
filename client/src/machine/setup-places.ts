@@ -35,6 +35,9 @@ export type PlacesInput = {
   uid: number;
   /** The allow rules setup can write (setup-entries' allowRules, with the read rules): a recorded rule must be one. */
   allowed?: readonly string[];
+  /** Teardown's reading: a record that can't be used, or that names paths outside setup's places, is reported (so
+   *  teardown removes nothing it can't prove, and names those paths "not here") instead of refusing the run. */
+  lenient?: boolean;
 };
 export type Places = {
   places: SetupPlaces;
@@ -42,6 +45,9 @@ export type Places = {
   record: SetupRecord | undefined;
   /** What the record file was when read, for writing it back. */
   recordWas: Snapshot | 'absent';
+  /** Lenient only: why the record couldn't be used, and the paths it names outside setup's places. */
+  recordUnusable?: string;
+  elsewhere?: string[];
 };
 
 const statOr = (path: string, follow: boolean): BigIntStats | undefined => {
@@ -92,7 +98,7 @@ function aboveHome(path: string, uid: number): void {
   }
 }
 
-export function checkPlaces({ assistantHome: A, skillsHome: H, env, uid, allowed }: PlacesInput): Places {
+export function checkPlaces({ assistantHome: A, skillsHome: H, env, uid, allowed, lenient = false }: PlacesInput): Places {
   if (env['CLAUDE_CONFIG_DIR'] !== undefined && env['SKILLS_ASSISTANT_HOME'] === undefined) throw new CatalogError('assistant_config_elsewhere', { setting: 'CLAUDE_CONFIG_DIR' });
   // sudo keeps the person's HOME on macOS: setup would write root-owned files Claude Code can't.
   if (uid === 0 && env['SUDO_USER'] !== undefined) throw notOwn(A);
@@ -137,17 +143,26 @@ export function checkPlaces({ assistantHome: A, skillsHome: H, env, uid, allowed
 
   let record: SetupRecord | undefined;
   let recordWas: Snapshot | 'absent' = 'absent';
+  const out = (): Places => ({ places, missing: { claudeDir, skillsHome: !h, backups }, record, recordWas });
   if (h) {
     const bad = (why: string) => new CatalogError('invalid_local_file', { file: 'setup-record.json', why, path: places.record });
     const f = readJsonFile(places.record, RECORD_CAP, { forWrite: true });
-    if ('why' in f) throw bad(f.why);
+    if ('why' in f) {
+      if (lenient) return { ...out(), recordUnusable: f.why };
+      throw bad(f.why);
+    }
     if ('value' in f) {
-      if (recordWhy(f.value)) throw bad('wrong_shape');
+      if (recordWhy(f.value)) {
+        if (lenient) return { ...out(), recordUnusable: 'wrong_shape' };
+        throw bad('wrong_shape');
+      }
       record = f.value as unknown as SetupRecord;
-      if (elsewhere(record, places).length) throw bad('wrong_shape');
-      if (allowed && record.entries.some((e) => e.kind === 'allow_rule' && !allowed.includes(e.value as string))) throw bad('wrong_shape');
       recordWas = f.snapshot;
+      const away = elsewhere(record, places);
+      if (lenient) return { ...out(), elsewhere: away };
+      if (away.length) throw bad('wrong_shape');
+      if (allowed && record.entries.some((e) => e.kind === 'allow_rule' && !allowed.includes(e.value as string))) throw bad('wrong_shape');
     }
   }
-  return { places, missing: { claudeDir, skillsHome: !h, backups }, record, recordWas };
+  return out();
 }

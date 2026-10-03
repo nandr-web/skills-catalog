@@ -60,6 +60,9 @@ if (command === 'mcp' && rest.length === 0) {
 } else if (command === 'setup') {
   const { runSetupCommand } = await import('./cli/setup.ts');
   process.exitCode = await runSetupCommand(rest, { env: process.env, cwd: process.cwd(), tty, color: wantsColor(Boolean(process.stdout.isTTY), process.env), ask: askPerson, stdout: (t) => void process.stdout.write(t), stderr: (t) => void process.stderr.write(t) });
+} else if (command === 'teardown') {
+  const { runTeardownCommand } = await import('./cli/teardown.ts');
+  process.exitCode = await runTeardownCommand(rest, { env: process.env, cwd: process.cwd(), color: wantsColor(Boolean(process.stdout.isTTY), process.env), stdout: (t) => void process.stdout.write(t), stderr: (t) => void process.stderr.write(t) });
 } else if (command === 'logout') {
   process.exitCode = runLogout({ settings: settingsFrom(process.env), stdout: (t) => void process.stdout.write(t) });
 } else if (command === 'serve') {
