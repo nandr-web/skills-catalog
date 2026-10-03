@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { S3Client } from '@aws-sdk/client-s3';
 import { SSMClient } from '@aws-sdk/client-ssm';
-import { Catalog, Words, actAs, randomIds, type Clock, type GitHubSignIn } from '@skills-catalog/core';
+import { Catalog, Words, actAs, indexSkill, randomIds, type Clock, type GitHubSignIn, type Storage } from '@skills-catalog/core';
 import { createHostedHandler } from '../api/handler.ts';
 import { lambdaAdapter, type HttpApiEvent, type HttpApiResult } from '../api/lambda.ts';
 import { originGuard } from '../api/origin.ts';
@@ -36,13 +36,15 @@ export async function openHostedCatalog(p: {
 }): Promise<{ catalog: Catalog; tokens: HostedTokenStore }> {
   const { ddb, s3, place, clock } = p;
   const tokens = new HostedTokenStore({ ddb, place, clock, ...(p.log ? { log: p.log } : {}) });
+  const storage = new HostedStorage({ ddb, s3, place, clock });
+  const index = new S3SearchIndex({ s3, place });
   const catalog = await Catalog.open({
     where: 'hosted',
     links: new HostedBlobLinks({ s3, place, clock }),
     tokens,
     signIn: p.signIn,
-    storage: new HostedStorage({ ddb, s3, place, clock }),
-    index: new S3SearchIndex({ s3, place }),
+    storage: indexedOnPublish(storage, index, p.log),
+    index,
     events: deliveredByTheStream,
     // Nobody acts by default: each request's caller comes from its token.
     identity: actAs(undefined),
@@ -51,6 +53,26 @@ export async function openHostedCatalog(p: {
     config: { signInLogins: p.signInLogins },
   });
   return { catalog, tokens };
+}
+
+/** The storage as the API function uses it: a version it creates is put in the search file straight away (review F1), so
+ *  "teammates can find it now" is true the moment the publish answers, not once the indexer's queue gets to it. Best
+ *  effort: a failure is logged and the publish still succeeds; the stream and the indexer stay the backstop, and
+ *  indexing is idempotent (it reads the skill's latest card from storage; the search file's writes are conditional). */
+export function indexedOnPublish(storage: Storage, index: S3SearchIndex, log?: (line: string) => void): Storage {
+  return Object.assign(Object.create(storage) as Storage, {
+    commit: async (...args: Parameters<Storage['commit']>) => {
+      const r = await storage.commit(...args);
+      if (r.kind === 'created') {
+        try {
+          await indexSkill({ storage, index }, args[0].name);
+        } catch (e) {
+          log?.(`search: indexing ${args[0].name} at publish failed; the indexer will (${e instanceof Error ? e.name : 'error'})`);
+        }
+      }
+      return r;
+    },
+  });
 }
 
 export async function openApi(p: {
