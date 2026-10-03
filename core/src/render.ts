@@ -6,7 +6,7 @@ import { stringify } from 'yaml';
 import { cursorOffset, type DiffResult, type InlineBudget, type ReadItem, type ReadResult, type SearchInput, type SearchResult, type VersionsResult } from './catalog.ts';
 import { CatalogError } from './errors.ts';
 import type { Ids } from './ports.ts';
-import { MANIFEST, flagText, oneLine, type RiskFlag } from './skill-tree/index.ts';
+import { MANIFEST, flagText, oneLine, type Finding, type RiskFlag } from './skill-tree/index.ts';
 import type { Words } from './words-file.ts';
 
 // Words the words file doesn't have yet (asked for). A test fails when one of them appears in the words file,
@@ -35,6 +35,27 @@ const day = (s: Words, iso: string) => {
   return s.format(s.word('date'), { yyyy, mm, dd });
 };
 
+/** What a review flagged, as the notes a card, a version line and the person's views share (results.quality.note): one
+ *  per kind, the first flag of each, joined by "; ". A publisher's text in a flag (a path, a key) is escaped and cut. */
+export function qualityNotes(s: Words, flags: readonly RiskFlag[]): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const f of flags) {
+    if (seen.has(f.kind)) continue;
+    seen.add(f.kind);
+    out.push(s.format(s.word('quality.note')[f.kind], { path: flagText(f.path ?? ''), detail: flagText(noteDetail(f)) }));
+  }
+  return out.join('; ');
+}
+
+// A review reads a whole version, so a key that grants something is said by what it grants ("allowed-tools: Bash"),
+// not as the change a diff words it as ("allowed-tools added: Bash").
+function noteDetail(f: RiskFlag): string {
+  if (f.kind !== 'capability_frontmatter' || f.field === undefined || f.to === undefined || f.to === null) return f.detail;
+  const v = f.to;
+  return `${f.field}: ${Array.isArray(v) ? v.map(String).join(', ') : typeof v === 'object' ? JSON.stringify(v) : String(v)}`;
+}
+
 // `req` is the search as asked: its words and, for a later page, its cursor (read here, so no face parses one).
 export function renderSearch(s: Words, r: SearchResult, req: SearchInput): string {
   if (!s.guided) return JSON.stringify(r);
@@ -49,22 +70,34 @@ export function renderSearch(s: Words, r: SearchResult, req: SearchInput): strin
     return s.format(w.empty, { query, ranking, total: r.catalog_size, hint });
   }
   const tags = (t: string[]) => list(t) || w.no_tags;
+  // A card a review flagged says so right after its name (contract §10); a clean card is worded as ever.
+  const q = s.word('quality');
+  const reviewed = (c: SearchResult['results'][number]) => (c.quality ? { notes: qualityNotes(s, c.quality.flags) } : undefined);
   let lines: string[];
   if (r.match === 'partial') {
     // Nothing matched every word: the closest cards, each with the words it shares, never presented as a fit.
     lines = [
       s.format(w.partial_header, { query, ranking }),
-      ...r.results.map((c) => s.format(w.partial_card, { name: c.name, version: c.latest_version, publisher: oneLine(c.publisher), shared: list(c.matched_words), description: oneLine(c.description) })),
+      ...r.results.map((c) => {
+        const fields = { name: c.name, version: c.latest_version, publisher: oneLine(c.publisher), shared: list(c.matched_words), description: oneLine(c.description) };
+        const review = reviewed(c);
+        return review ? s.format(q.partial_card_flagged, { ...fields, ...review }) : s.format(w.partial_card, fields);
+      }),
     ];
   } else {
     lines = [
       r.ranking === 'none'
         ? s.format(w.header_all, { total: r.catalog_size, first: offset + 1, last: offset + r.results.length })
         : s.format(w.header, { count: r.total_matches, total: r.catalog_size, query, ranking }),
-      ...r.results.map((c) => s.format(w.card, { name: c.name, version: c.latest_version, publisher: oneLine(c.publisher), tags: tags(c.tags), description: oneLine(c.description) })),
+      ...r.results.map((c) => {
+        const fields = { name: c.name, version: c.latest_version, publisher: oneLine(c.publisher), tags: tags(c.tags), description: oneLine(c.description) };
+        const review = reviewed(c);
+        return review ? s.format(q.card_flagged, { ...fields, ...review }) : s.format(w.card, fields);
+      }),
     ];
   }
   if (r.next_cursor) lines.push(s.format(w.more, { cursor: r.next_cursor }));
+  if (r.results.some((c) => c.quality)) lines.push(s.format(q.next));
   lines.push(s.format(r.match === 'partial' ? w.partial_next : w.next));
   return lines.join('\n');
 }
@@ -81,6 +114,9 @@ function renderItem(s: Words, item: ReadItem, token: string, budget: InlineBudge
   const size = (bytes: number) => s.format(w.size, { kb: Math.ceil(bytes / 1024) });
   const publisher = oneLine(item.publisher);
   const lines = [s.format(w.header, { name: item.name, version: item.version, latest_mark: item.version === item.latest_version ? w.latest_mark.latest : s.format(w.latest_mark.older, { latest: item.latest_version }), publisher, published_at: day(s, item.published_at) })];
+  // What the reviews found, before the skill's own text (contract §10); a review with no findings says nothing.
+  const findings = item.reviews.flatMap((r) => r.findings);
+  if (findings.length) lines.push(s.format(w.review, { findings: findings.map((f) => findingWords(s, f)).join('; ') }));
   const body = item.manifest.body;
   const shown = body !== undefined;
   if (shown) {
@@ -106,6 +142,16 @@ function renderItem(s: Words, item: ReadItem, token: string, budget: InlineBudge
   return lines.join('\n');
 }
 
+// One grounded finding: its file and line with the text it rests on (JSON-quoted, as data outside a fence is), its file
+// alone when it has no line, or the kind's note when it has neither (a publisher change).
+function findingWords(s: Words, f: Finding): string {
+  const w = s.word('get');
+  const why = flagText(f.why);
+  if (f.path !== undefined && f.line !== undefined) return s.format(w.finding, { path: quoted(f.path), line: f.line, why, evidence: quoted(f.evidence) });
+  if (f.path !== undefined) return s.format(w.finding_file, { path: quoted(f.path), why });
+  return s.format(s.word('quality.note')[f.kind], { path: '', detail: why });
+}
+
 /** A read's SKILL.md as its text (front matter, then body), when the read carries its body; control characters are
  *  still the caller's to show escaped (fenced). */
 export const skillMdOf = (item: ReadItem): string | undefined =>
@@ -129,7 +175,10 @@ export function renderVersions(s: Words, r: VersionsResult): string {
   const w = s.word('versions');
   const lines = [
     s.format(w.header, { name: r.name, n: r.latest, latest: r.latest }),
-    ...r.versions.map((v) => s.format(w.line, { version: v.version, published_at: day(s, v.published_at), publisher: oneLine(v.publisher), message: oneLine(v.message) || w.no_message })),
+    ...r.versions.map((v) => {
+      const fields = { version: v.version, published_at: day(s, v.published_at), publisher: oneLine(v.publisher), message: oneLine(v.message) || w.no_message };
+      return v.flags.length ? s.format(w.line_reviewed, { ...fields, notes: qualityNotes(s, v.flags) }) : s.format(w.line, fields);
+    }),
   ];
   if (r.next_cursor) lines.push(s.format(w.more, { cursor: r.next_cursor }));
   if (r.latest > 1) lines.push(s.format(w.next));

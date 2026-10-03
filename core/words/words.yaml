@@ -566,8 +566,12 @@ results:
     size: "{kb} KB"
     next: 'To use it here: ${install} with name "{name}".'
     next_cli: "To use it here: ${cli} install {name}."
+    review: "The catalog's review of this version found what to know before using it; mention it when you recommend this skill: {findings}."
+    finding: "{path} line {line}: {why} ({evidence})"
+    finding_file: "{path}: {why}"
   quality:
     card_flagged: "- {name} (v{version}, {publisher}; tags: {tags}). Review: {notes}. {description}"
+    partial_card_flagged: "- {name} (v{version}, {publisher}; shares only: {shared}). Review: {notes}. {description}"
     next: "Some cards have a review note: mention it when you recommend that skill."
     note:
       runnable_file: includes something that can run ({path})
