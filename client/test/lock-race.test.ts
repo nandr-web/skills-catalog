@@ -11,7 +11,7 @@ import { holdLock, withLock } from '../src/machine/lock.ts';
 import { contextFor, type Context } from '../src/operations.ts';
 import { settingsFrom } from '../src/settings.ts';
 import { open, request, skillMd } from './seed.ts';
-import { place, type Place } from './server.ts';
+import { childEnv, place, type Place } from './server.ts';
 
 // The lock file names its holder: its process id and when that process started. A holder that's gone, or a process id now
 // used by a process started at another time, leaves a stale lock, which the next run removes and takes. A live holder is
@@ -64,7 +64,7 @@ describe('the lock file', () => {
     writeFileSync(join(bin, 'ps'), `#!/bin/sh\ntouch '${marker}'\necho 00:01\n`, { mode: 0o755 });
     // A live child named with a start an hour off: the only way to a stale verdict is asking ps about it (this process's
     // own pid would return early, and its start is cached by then).
-    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30_000)'], { stdio: 'ignore' });
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30_000)'], { stdio: 'ignore', env: childEnv(p) });
     hold(p, child.pid!, Date.now() - 3_600_000);
     const before = process.env['PATH'];
     process.env['PATH'] = `${bin}:${before ?? '/usr/bin:/bin'}`;
