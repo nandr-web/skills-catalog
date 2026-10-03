@@ -120,9 +120,27 @@ describe('the hosted client', () => {
         puts.length = 0;
         const e = await errorOf(ana.publish({ name: 'no-description', files: b.files, dry_run }, undefined as never, 'mcp'));
         expect(e?.code, JSON.stringify(b.files[0]!.content_base64)).toBe(b.code);
-        expect(apiCalls).toEqual([]);
+        expect(apiCalls).toEqual(['/api/v1/publish_version']); // the dry-run probe for an earlier refusal, no files
         expect(puts).toEqual([]);
       }
+    }
+  });
+
+  // The C validator: the local check must not jump the contract's order (§5.1): who may publish, then the latest, then
+  // the files. A bad SKILL.md from someone who may not publish still gets that refusal, and nothing is uploaded.
+  it('a bad SKILL.md from a non-owner, a read-only token or a stale latest gets that refusal first, uploading nothing', async () => {
+    const bad = [{ path: 'SKILL.md', mode: '0644', content_base64: b64('---\nname: release-note-draft\n---\nNo description.\n') }];
+    const cases: [string, Record<string, unknown>, string][] = [
+      ['t-bob', {}, 'not_owner'],
+      ['t-reader', {}, 'forbidden'],
+      ['t-ana', { expected_latest: 1 }, 'conflict'],
+      ['t-ana', {}, 'invalid_manifest'],
+    ];
+    for (const [token, extra, code] of cases) {
+      puts.length = 0;
+      const e = await errorOf((await as(token)).publish({ name: 'release-note-draft', files: bad, ...extra }, undefined as never, 'mcp'));
+      expect(e?.code, `${token} ${JSON.stringify(extra)}`).toBe(code);
+      expect(puts).toEqual([]);
     }
   });
 

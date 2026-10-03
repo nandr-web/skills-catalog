@@ -60,7 +60,8 @@ describe('round trip over generated trees (paths, bytes, modes)', () => {
     } finally {
       catalog.close();
     }
-  });
+    // 50 publishes and fetches: 1-2 s alone, 6-9 s on a busy machine (the C validator saw vitest's 5 s default fail).
+  }, 60_000);
 });
 
 // A read shows SKILL.md as it was published: quotes, comments, flow lists and trailing spaces kept (review P8.1).
