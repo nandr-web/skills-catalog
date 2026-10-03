@@ -62,12 +62,12 @@ function untouched(): AsyncIterable<Buffer> & { read: boolean } {
 }
 
 /** A fixture home with setup's developers (config.json), a seeded catalog, and a handler paired once. */
-async function served(o: { publish?: boolean; config?: Record<string, unknown> | null } = {}) {
+async function served(o: { publish?: boolean; config?: Record<string, unknown> | null; env?: Record<string, string> } = {}) {
   const p = place();
   await seed(p);
   mkdirSync(p.home, { recursive: true });
   if (o.config !== null) writeFileSync(join(p.home, 'config.json'), JSON.stringify(o.config ?? { me: 'dev1', demo_developers: ['dev2'] }));
-  const settings = settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome }, p.dir);
+  const settings = settingsFrom({ SKILLS_HOME: p.home, SKILLS_CATALOG: p.catalogUrl, SKILLS_ASSISTANT_HOME: p.osHome, ...o.env }, p.dir);
   const h = createHandler({ port: PORT, pairingCode: CODE, publish: o.publish ?? false, settings, words: W });
   const paired = await h.handle({ method: 'POST', path: '/api/pair', headers: base(), body: bytes(JSON.stringify({ code: CODE })) });
   const token = JSON.parse(String(paired.body)).data.token as string;
@@ -245,6 +245,20 @@ describe('who is acting (contract §7): setup\'s me or one of its demo developer
   it('with no developers set up, no one acts', async () => {
     const { h, token } = await served({ config: null });
     expect(json(await h.handle(api(token, 'search_shared_skills', {}))).error.code).toBe('unauthenticated');
+  });
+
+  it('the same source as the MCP server and the CLI: SKILLS_AS, else setup\'s me, else the login, plus the demo developers', async () => {
+    const asked = async (o: Parameters<typeof served>[0], as: string) => {
+      const { h, token } = await served(o);
+      const r = json(await h.handle(api(token, 'search_shared_skills', {}, {}, as)));
+      return r.ok ? 'ok' : r.error.code;
+    };
+    expect(await asked({ config: null, env: { USER: 'nan' } }, 'nan')).toBe('ok');
+    expect(await asked({ config: null, env: { USER: 'nan' } }, 'dev1')).toBe('unauthenticated');
+    expect(await asked({ config: null, env: { SKILLS_AS: 'ana', USER: 'nan' } }, 'ana')).toBe('ok');
+    expect(await asked({ config: null, env: { SKILLS_AS: 'ana', USER: 'nan' } }, 'nan')).toBe('unauthenticated');
+    expect(await asked({ config: { me: 'dev1', demo_developers: ['dev2'] }, env: { USER: 'nan' } }, 'nan')).toBe('unauthenticated');
+    expect(await asked({ config: { me: 'dev1', demo_developers: ['dev2'] }, env: { USER: 'nan' } }, 'dev2')).toBe('ok');
   });
 });
 

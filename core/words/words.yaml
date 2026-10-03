@@ -420,6 +420,7 @@ tools:
         guided: "With confirm: the preview's flags, exactly as it lists them ([] if none)."
 results:
   acting_as: (Acting as {developer}, for demo purposes.)
+  acting_as_local: (Signed in locally as {developer}, this computer's login, for demo purposes. ${cli} setup changes it.)
   policy_name:
     auto: automatic
     notify: tell me first
@@ -862,12 +863,12 @@ results:
     invalid_request_catalog: "invalid_request: there's no catalog at {path}, the place SKILLS_CATALOG or --catalog names, so nothing was read. Most likely the path is mistyped. Tell the person so they can check it; don't change that setting or create anything there yourself. If they meant a new catalog, publishing their first skill to it creates it."
     invalid_request_catalog_unreadable: "invalid_request: the catalog at {path} is there but couldn't be opened (its permissions don't allow it, it's in the middle of a change in a folder this user can't write, or the file isn't laid out as a catalog should be), so nothing was read or changed. Tell the person so they can check it; if it may be mid-change, try once more after a moment. Don't change permissions or anything in that folder yourself."
     unauthenticated: "unauthenticated: the catalog needs the person to sign in, so nothing was done. Ask them to run ${cli} login in their own terminal; never ask for a password or token in the chat."
-    invalid_developer_setting: "invalid_developer_setting: the developer name in {setting} isn't a valid name (lowercase letters, digits and single hyphens), so nothing was done. It's a setting, not something in this call: don't retry or change the call. Tell the person; they fix it there, or run ${cli} setup in their own terminal."
+    invalid_developer_setting: "invalid_developer_setting: the developer name in {setting} isn't a valid name (lowercase letters, digits and single hyphens), so nothing was done. It's a setting, not something in this call: don't retry or change the call. Tell the person; they fix it there, or remove it so the name ${cli} setup saved is used."
     developer_setting:
       SKILLS_AS: the SKILLS_AS setting
       mcp_config: this assistant's settings for ${cli}
       me: the settings saved by ${cli} setup
-    unauthenticated_local: "unauthenticated: no developer name is set for this catalog, so nothing was published. Tell the person; they set theirs by running ${cli} setup in their own terminal. Never choose a name for them."
+    unauthenticated_local: "unauthenticated: no developer name is set for this catalog, so nothing was published. Tell the person; they set theirs by running ${cli} setup in their own terminal, or with SKILLS_AS in this assistant's settings for ${cli}. Never choose a name for them."
     forbidden: "forbidden: the catalog doesn't allow this for the person signed in, so nothing was done. Tell them; don't look for another way around it."
     forbidden_hosted: "forbidden: {catalog} is a hosted catalog, and this version runs locally only, so nothing was done. Tell the person; ${cli} setup points it at a local folder."
     forbidden_read_only: "forbidden: publishing isn't turned on here (this page's server was started without --publish), so nothing was published. To allow it, stop the server and start it again with ${cli} serve --publish."

@@ -12,7 +12,7 @@ import { parseArgs } from 'node:util';
 import { CatalogError, Words, checkActor, renderError, shellQuote } from '@skills-catalog/core';
 import { NAME_RE, flagText } from '@skills-catalog/core/skill-tree';
 import { logWords } from '../activity.ts';
-import { actingAs, contextFor, perform } from '../operations.ts';
+import { actingLine, contextFor, perform } from '../operations.ts';
 import { settingsFrom } from '../settings.ts';
 import { Usage, type Command, type Io, type Values } from './command.ts';
 import { diff } from './commands/diff.ts';
@@ -84,7 +84,8 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
     }
   }
   const settings = settingsFrom({ ...io.env, ...(developer ? { SKILLS_AS: developer } : {}) }, io.cwd);
-  const withActing = (text: string) => (settings.developer ? `${text}\n${actingAs(s, settings.developer)}` : text);
+  const acting = actingLine(s, settings);
+  const withActing = (text: string) => (acting ? `${text}\n${acting}` : text);
 
   let input: Record<string, unknown>;
   try {

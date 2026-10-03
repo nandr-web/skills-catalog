@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { ACTOR } from '@skills-catalog/core';
+import { readConfig } from './machine/lock.ts';
 
 
 export type Settings = {
@@ -16,8 +17,11 @@ export type Settings = {
   activityLog: string;
   /** The log sits directly in SKILLS_HOME, the client's own folder (kept 0700); a folder the person named is theirs. */
   activityLogInHome: boolean;
-  /** SKILLS_AS: the developer you act as locally (a demo identity, not security), when it is a developer's name. */
+  /** The developer you act as on a local catalog (a demo identity, not security): SKILLS_AS (or the CLI's --as), else
+   *  setup's `me` in config.json, else this computer's login made into a developer name (machineDeveloper). */
   developer?: string;
+  /** Where `developer` came from: the login default says so on every result, in its own words (actingLine). */
+  developerSource?: 'env' | 'config' | 'machine';
   /** SKILLS_AS was set to something that isn't a developer's name: every call says so, and nothing is done. */
   developerInvalid: boolean;
   /** SKILLS_ASSISTANT_HOME (default: the OS home): the assistant's own files; the user target is <it>/.claude/skills. */
@@ -51,17 +55,54 @@ export function catalogToken(s: Settings): string | undefined {
 /** Claude Code's managed-settings folder: macOS, else Linux and WSL (its managed-settings page). */
 const MANAGED_SETTINGS = process.platform === 'darwin' ? '/Library/Application Support/ClaudeCode' : '/etc/claude-code';
 
+/** This computer's login (USER, else LOGNAME, as a terminal and an MCP client pass them) made into a developer name:
+ *  lowercased, accents dropped, each run of other characters one hyphen, trimmed to 64; undefined when nothing is left.
+ *  Read from the environment, never by asking the system, so a process started with a bare environment (a test's) has no
+ *  login default. Setup offers the same name as its default for `me`, so a skill published before setup keeps its owner. */
+export function machineDeveloper(env: Record<string, string | undefined>): string | undefined {
+  const login = env['USER'] || env['LOGNAME'];
+  if (!login) return undefined;
+  const name = login
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+/, '')
+    .slice(0, 64)
+    .replace(/-+$/, '');
+  return ACTOR.test(name) ? name : undefined;
+}
+
+/** config.json as far as settings need it (who acts, where the catalog is); one that can't be read gives nothing here:
+ *  every installer call reads it again and names the damage. */
+function configured(home: string): { me?: string; catalog?: string } {
+  try {
+    const c = readConfig(home);
+    return { ...(typeof c['me'] === 'string' ? { me: c['me'] } : {}), ...(typeof c['catalog'] === 'string' ? { catalog: c['catalog'] } : {}) };
+  } catch {
+    return {};
+  }
+}
+
 export function settingsFrom(env: Record<string, string | undefined>, cwd: string = process.cwd()): Settings {
   const home = resolve(env['SKILLS_HOME'] || join(homedir(), '.skills-catalog'));
+  const config = configured(home);
+  const catalog = env['SKILLS_CATALOG'] || config.catalog || pathToFileURL(join(home, 'catalog')).href;
   const as = env['SKILLS_AS'] || undefined;
   const valid = as !== undefined && ACTOR.test(as);   // a developer's name, by the core's rule for a publisher
+  // A local catalog's mocked sign-in: setup's name, else the login. A hosted catalog's is its token, never these.
+  const local = catalog.startsWith('file:');
+  const fallback = as !== undefined || !local ? undefined : config.me ? { developer: config.me, developerSource: 'config' as const } : (() => {
+    const m = machineDeveloper(env);
+    return m ? { developer: m, developerSource: 'machine' as const } : undefined;
+  })();
   const activityLog = resolve(env['SKILLS_ACTIVITY_LOG'] || join(home, 'activity.log'));
   return {
     home,
-    catalog: env['SKILLS_CATALOG'] || pathToFileURL(join(home, 'catalog')).href,
+    catalog,
     activityLog,
     activityLogInHome: dirname(activityLog) === home,
-    ...(valid ? { developer: as } : {}),
+    ...(valid ? { developer: as, developerSource: 'env' as const } : (fallback ?? {})),
     developerInvalid: as !== undefined && !valid,
     assistantHome: resolve(env['SKILLS_ASSISTANT_HOME'] || homedir()),
     projectDir: resolve(cwd),
