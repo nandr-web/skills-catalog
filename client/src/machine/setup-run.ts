@@ -220,7 +220,13 @@ function placeCommand(places: SetupPlan['places'], text: string, record: SetupRe
     if (recorded.sha256 === sha256(text)) return 'same';
     unlinkSync(path);
   }
-  writeNew(path, text, 0o755);
+  try {
+    writeNew(path, text, 0o755);
+  } catch (e) {
+    // Something appeared there since the look: it isn't setup's, and it's never written over.
+    if ((e as NodeJS.ErrnoException).code === 'EEXIST') return 'taken';
+    throw e;
+  }
   record.created_files = [...record.created_files.filter((c) => c.file !== path), { file: path, sha256: sha256(text) }];
   return 'added';
 }

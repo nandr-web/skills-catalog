@@ -4,6 +4,7 @@
 // 1 when setup's record couldn't be used (nothing was removed) or a refusal.
 
 import { CatalogError, renderError, Words } from '@skills-catalog/core';
+import { flagText } from '@skills-catalog/core/skill-tree';
 import { runTeardown, type TeardownLine, type What } from '../machine/teardown-run.ts';
 import { painter } from '../person/terminal.ts';
 import { settingsFrom } from '../settings.ts';
@@ -37,8 +38,10 @@ export async function runTeardownCommand(argv: readonly string[], io: TeardownIo
     io.stderr(renderError(s, e) + '\n');
     return 1;
   }
-  const what = (x: What) => s.format(w.what[x.kind], x.rule === undefined ? {} : { rule: x.rule });
-  const line = (l: TeardownLine): string => {
+  // Paths and rules come from setup's record, read leniently: shown with any control character escaped.
+  const what = (x: What) => s.format(w.what[x.kind], x.rule === undefined ? {} : { rule: flagText(x.rule) });
+  const line = (raw: TeardownLine): string => {
+    const l = { ...raw, path: flagText(raw.path) } as TeardownLine;
     switch (l.state) {
       case 'removed':
         return paint('ok', `✓ ${s.format(w.removed, { path: l.path, what: what(l.what) }).replace(/^- /, '')}`);
@@ -59,7 +62,7 @@ export async function runTeardownCommand(argv: readonly string[], io: TeardownIo
       io.stdout([w.nothing, ...r.lines.map(line)].join('\n') + '\n');
       return 0;
     }
-    io.stdout([paint('attention', `▲ ${s.format(w.record_unusable, { path: r.places.record })}`), ...r.recordUnusable.found.map((f) => s.format(w.record_unusable_line, { path: f.path, what: what(f.what) })), ...r.lines.map(line)].join('\n') + '\n');
+    io.stdout([paint('attention', `▲ ${s.format(w.record_unusable, { path: r.places.record })}`), ...r.recordUnusable.found.map((f) => s.format(w.record_unusable_line, { path: flagText(f.path), what: what(f.what) })), ...r.lines.map(line)].join('\n') + '\n');
     return 1;
   }
   const acted = r.lines.filter((l) => l.state !== 'damaged');

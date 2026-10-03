@@ -10,7 +10,7 @@
 
 import { createHash, randomBytes } from 'node:crypto';
 import { closeSync, constants, fchmodSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, unlinkSync, writeSync, type BigIntStats } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { CatalogError } from '@skills-catalog/core';
 import { jsonEqual } from './json-equal.ts';
 import { readJsonFile, type Snapshot } from './json-file.ts';
@@ -49,6 +49,7 @@ export type TeardownResult = {
 const sha256 = (b: Buffer | string) => createHash('sha256').update(b).digest('hex');
 const part = (n: bigint) => (n <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(n) : n.toString());
 const TRIES = 3;
+const BACKUP_NAME = /^\d{8}T\d{6}Z-[0-9a-f]{4}-(claude\.json|settings\.json)$/;
 const lstatOr = (path: string): BigIntStats | undefined => {
   try {
     return lstatSync(path, { bigint: true });
@@ -254,9 +255,11 @@ function underLock(input: TeardownInput): TeardownResult {
     if (r === 'changed') createdLeft.push(launcher);
   }
 
-  // Two backups of each file kept, as setup keeps them.
+  // Two backups of each file kept, as setup keeps them; only copies in the backups folder, under the names setup gives
+  // them, are ever deleted (a record naming any other path proves nothing: it's "not here").
+  const ownCopy = (b: SetupRecord['backups'][number]) => !away.has(b.path) && !away.has(b.file) && dirname(b.path) === places.backups && BACKUP_NAME.test(basename(b.path));
   for (const file of [places.claudeJson, places.settingsJson]) {
-    const mine = record.backups.filter((b) => b.file === file);
+    const mine = record.backups.filter((b) => b.file === file && ownCopy(b));
     for (const old of mine.slice(0, -2)) {
       if (deleteIfSame(old.path, old.sha256) !== 'changed') record.backups = record.backups.filter((b) => b !== old);
     }

@@ -141,6 +141,23 @@ describe('teardown', () => {
     expect(w.out()).toContain(S.format(T.changed, { path: launcher, what: T.what.command }).replace(/^- /, ''));
   });
 
+  it('a backup the record names outside the backups folder is never deleted, even when it\'s the oldest to prune (review blocker)', async () => {
+    const w = world();
+    const victim = join(w.dir, 'victim.txt');
+    file(victim, 'mine\n');
+    file(w.claudeJson, '{\n  "numStartups": 1\n}\n', 0o600);
+    await runSetupCommand(['--yes'], w.io);
+    const recordPath = join(w.H, 'setup-record.json');
+    const r = JSON.parse(w.read(recordPath)!);
+    const { createHash } = await import('node:crypto');
+    const sha = createHash('sha256').update('mine\n').digest('hex');
+    const one = r.backups[0] ?? { file: w.claudeJson, dev: 1, ino: 1, birth: 0 };
+    r.backups = [{ ...one, file: w.claudeJson, path: victim, sha256: sha }, ...r.backups, { ...one, file: w.claudeJson, path: victim, sha256: sha }];
+    writeFileSync(recordPath, JSON.stringify(r));
+    await w.teardown();
+    expect(w.read(victim)).toBe('mine\n');
+  });
+
   it('nothing set up: says so, changes nothing', async () => {
     const w = world();
     expect(await w.teardown()).toBe(0);
