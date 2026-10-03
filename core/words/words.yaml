@@ -709,6 +709,8 @@ results:
     not_found_suggest: " Names like it: {names}."
     not_found_next: "Next: ${search} with words from the task, or tell the user it isn't in the catalog."
     not_found_next_cli: "Next: search the catalog with a few words from the task, or tell the user it isn't in the catalog."
+    invalid_confirm_held: "invalid_request: that confirm value isn't one a held install or update gives (it may have been cut or changed in copying), so nothing was installed. Run the install or update again, tell the person what it holds and why, and use the new values once they say yes."
+    invalid_confirm_held_cli: "invalid_request: that confirm value isn't one a held install or update gives, so nothing was installed. Run the install or update again; a held one is taken with ${cli} update <name> --accept in the person's own terminal."
     invalid_confirm: "invalid_request: that confirm value isn't one a preview gives (it may have been cut or changed in copying), so nothing was published. Preview again (${publish} with just the folder), show the person the lists, and use the new values once they say yes."
     not_installed: "not_installed: {name} isn't installed on this machine, so nothing was changed. To see what is: ${status}; to add it: ${install}."
     not_found_path: "not_found: {name} v{version} has no file {path}. Nothing was changed; its files are listed in a read with include files."
@@ -760,6 +762,7 @@ results:
       required: is required
       contradicting_flags: was set by two flags that contradict each other (use one)
       not_a_confirm: isn't a confirm value a preview gives
+      not_a_held_confirm: isn't one a held install or update gives
       not_a_cursor: isn't a cursor an earlier page gave
       not_a_developer_name: isn't a valid developer name (lowercase letters, digits and single hyphens)
       not_base64: isn't base64 text

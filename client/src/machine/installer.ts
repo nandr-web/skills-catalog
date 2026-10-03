@@ -443,7 +443,8 @@ function decode(confirm: string): Token {
   } catch {
     // falls through
   }
-  throw new CatalogError('invalid_request', { field: 'confirm', why: 'not_a_confirm' });
+  // A hold's own reason, so the recovery is the hold's (run it again), not a publish's (review V3.6).
+  throw new CatalogError('invalid_request', { field: 'confirm', why: 'not_a_held_confirm' });
 }
 
 const kinds = (flags: readonly RiskFlag[]) => [...new Set(flags.map((f) => f.kind))].sort();

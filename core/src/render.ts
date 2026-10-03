@@ -279,6 +279,7 @@ export function renderError(s: Words, e: CatalogError): string {
     case 'invalid_request':
       // A confirm that didn't come from a preview on this machine has its own sentence: preview again.
       if (e.data['why'] === 'not_a_confirm') return fill(w.invalid_confirm, d);
+      if (e.data['why'] === 'not_a_held_confirm') return fill(w.invalid_confirm_held, d);
       return fill(d['limit'] !== undefined ? w.invalid_request_limit : w.invalid_request, d);
     case 'invalid_path':
       // A link, a hard link or a special file in a folder being published: its own sentence proposes a plain copy.
