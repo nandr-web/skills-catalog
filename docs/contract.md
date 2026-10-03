@@ -704,9 +704,10 @@ Reproducible with coreutils, so tests compute it independently and never trust t
 1. Check, in the order a dry run reports: the owner (`not_owner`), `expected_latest` (`conflict`), then the manifest, the files
    and the secret scan (the shared `skill-tree` module). Any failure: an error, nothing stored.
 2. Put each file's bytes by sha256 (safe to repeat).
-3. Compare-and-append the version (the commit point); on a number clash the core retries with the next number.
-4. Emit a `version_published` event {name, version, fingerprint, publisher, at} through the `Events` port. Its subscribers: the
-   search index (may lag; rebuildable from versions at any time) and the rules reviewer (§10), which stores its review.
+3. Compare-and-append the version (the commit point), with the reviews the reviewers (§10) wrote of its checked files, all
+   or nothing with it; on a number clash the core retries with the next number.
+4. Emit a `version_published` event {name, version, fingerprint, publisher, at} through the `Events` port. Its subscriber: the
+   search index (may lag; rebuildable from versions at any time), whose card carries what the latest version's reviews flagged.
 
 On AWS: S3 puts, then one conditional DynamoDB write.
 
@@ -1309,7 +1310,7 @@ with it, 9 of 9 ran ours first.
 | `Identity` (request → who's asking) | "act as" (phase 1): `--as <developer>`, `SKILLS_AS`, or the MCP server's config; the web face, per request, in an `X-Skills-Catalog-As` header (a body field would break the own-fields rule, §2), only setup's `me` or one of its `demo_developers`, checked as `--as` is; default: your name from setup | sign-in, or a personal token (parked with AWS) |
 | `TokenStore` (hashed personal tokens) | none | DynamoDB |
 | `Events` (publish events, delivered at least once) | in-process, from an outbox table in SQLite | DynamoDB stream → a queue → an indexer handler (same bundle) that rewrites the search file in S3; one writer at a time (a queue with concurrency 1). Skill files in S3 are create-only; the search file is the one object that's rewritten |
-| `Reviewer` (a version in, a review out) | the built-in rules reviewer (phase 1); agent reviewers (phase 2) | the same, run by the event handler |
+| `Reviewer` (a version in, a review out) | the built-in rules reviewer (phase 1); agent reviewers (phase 2) | the same, run by the publish; the reviews are stored in the version's transaction (one item per reviewer) |
 | `Clock`, `Ids` | injectable | injectable |
 
 The local adapters are shared by several processes on one folder (the MCP server, the CLI, `serve`), so: SQLite in WAL mode,
@@ -1434,18 +1435,26 @@ submitter"; every entry point can "rank and/or advice (e.g. against)" a low-qual
 phase 1 or phase 2) (e.g. risk of prompt injection, etc.)".
 
 - **A review** is its own record, never part of the version (versions are immutable; reviews arrive later and get re-run):
-  `{fingerprint, reviewer, reviewer_version, at, score (0–1), flags[], findings[], notes?}`. Each finding is grounded:
-  `{path, line?, evidence, why}`. An empty `findings` is a normal, complete review.
-- **Phase 1: one built-in rules reviewer**, a pure function in the shared `skill-tree` module. The catalog runs it on
-  `version_published` and stores its review; the installer runs the same function on a fetched version before an update (§5.3).
-  It flags what §5.3 lists: runnable files, commands run at load, command instructions while the assistant runs commands without asking, capability frontmatter, changed instructions in a skill that
-  grants anything, other non-markdown files, a publisher change, prompt-injection patterns, and context cost.
+  `{reviewer, reviewer_version, fingerprint, at, measurements, flags[], findings[], notes?}`: `measurements` are numbers by
+  name (the rules reviewer's: `context_tokens`, SKILL.md in estimated tokens, and `listing_tokens`, its name and
+  description), never a made-up score. Each finding is grounded: `{kind, path?, line?, evidence, why}`. An empty `findings`
+  is a normal, complete review.
+- **Phase 1: one built-in rules reviewer**, a pure function in the shared `skill-tree` module. The catalog runs it on each
+  publish, on the checked files before the commit, and stores its review with the version (a reviewer that fails is left out,
+  never blocking the publish); `skills-catalog review [<name>]` runs it again over a local catalog's stored versions (the
+  offline run, skipping a review already current). The installer runs the same rules on a fetched version before an update (§5.3).
+  Its review keeps what a skill is, read as a first install reads it: runnable files, commands run at load, frontmatter that
+  grants something, a publisher change, prompt-injection patterns, and context cost. How a version changed (changed
+  instructions in a skill that grants anything, other non-markdown files) is the update hold's, from the installer's diff.
+  Command instructions are not built yet.
 - **Phase 2: agent reviewers**, pluggable through the `Reviewer` port, independent and offline (e.g. a sweep when a reviewer
   changes). Several can review one version; reviewers never block a publish.
 - **Where measurements show:** search cards carry `quality` {flags} only when something is flagged (nothing when clean; ~10
   tokens, shown right after the name: in the agent-experience trials, 2 of 2 runs relayed it there, 1 of 2 at the card's end, and
   with it 2 of 2 warned the person about a planted instruction, while without it one run recommended that skill unwarned); `read_shared_skill` returns the
-  reviews; `install_shared_skill` and `update_installed_skills` return `advisories[]`; a risk flag holds an update.
+  reviews (a version stored with none reads the rules review worked out from its files); `list_shared_skill_versions` gives
+  each version's flags; a risk flag holds an install or update. `advisories[]` on `install_shared_skill` and
+  `update_installed_skills` wait for phase 2's agent reviewers (phase 1's findings are all risk flags, which hold).
   Ranking search by the measurements: later.
 
 ## 11. After the first publish: what changed, and where it's built
