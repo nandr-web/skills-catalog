@@ -8,12 +8,15 @@ import { CatalogError, Words, renderError } from '@skills-catalog/core';
 import { sandbox } from '@skills-catalog/core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { checkInstall, INSTALL_UNSAFE_WHYS } from '../src/machine/setup-install.ts';
-import { race } from './race-fs.ts';
+import { race, runnerFolders } from './race-fs.ts';
 
 vi.mock('node:fs', async (o) => (await import('./race-fs.ts')).mockFs(await o()));
 afterEach(() => {
   race.stats = undefined;
 });
+
+// A test that isn't about the runner's own folders (on Linux, /tmp) sees them as root's own (race-fs.ts).
+const only = (_dir: string, rewrite?: (p: string) => Record<string, unknown> | undefined) => runnerFolders(rewrite);
 
 const me = process.getuid!();
 const file = (path: string, text = '') => {
@@ -27,7 +30,7 @@ function installed(under = 'pkg') {
   const dir = sandbox();
   const pkg = join(dir, under);
   const core = join(dir, 'core');
-  file(join(pkg, 'package.json'), '{"name": "skills-catalog"}');
+  file(join(pkg, 'package.json'), '{"name": "skills-catalog", "dependencies": {"@skills-catalog/core": "file:../core", "yaml": "2"}}');
   file(join(pkg, 'src', 'cli.ts'));
   file(join(pkg, 'node_modules', 'yaml', 'index.js'));
   file(join(core, 'package.json'), '{"name": "@skills-catalog/core"}');
@@ -39,6 +42,7 @@ function installed(under = 'pkg') {
   chmodSync(node, 0o755);
   const temporary = join(sandbox(), 'temp');
   mkdirSync(temporary);
+  only(dir);
   return { dir, pkg, core, node, input: { node, script: join(pkg, 'src', 'cli.ts'), temporaryRoots: [temporary], uid: me } };
 }
 const refusal = (f: () => unknown) => {
@@ -95,28 +99,85 @@ describe('the install folder, for the hook that runs it at every session', () =>
     }
   });
 
-  it('the linked core, or a folder above node, another user\'s (not root\'s): writable_by_others; root\'s is where the walk up stops', () => {
+  it('the linked core, or a folder above node, another user\'s (not root\'s): writable_by_others; the walk up goes to /', () => {
     const t = installed();
-    race.stats = (p) => (p === t.core ? { uid: me + 1 } : undefined);
+    only(t.dir, (p) => (p === t.core ? { uid: me + 1 } : undefined));
     expect(refusal(() => checkInstall(t.input))).toEqual(unsafe(t.core, 'writable_by_others'));
-    race.stats = (p) => (p === dirname(t.node) ? { uid: me + 1 } : undefined);
+    only(t.dir, (p) => (p === dirname(t.node) ? { uid: me + 1 } : undefined));
     expect(refusal(() => checkInstall(t.input))).toEqual(unsafe(dirname(t.node), 'writable_by_others'));
-    // Root's folder above: the walk up stops there, so a folder above it another user owns isn't looked at.
-    race.stats = (p) => (p === t.dir ? { uid: 0 } : p === dirname(t.dir) ? { uid: me + 1 } : undefined);
-    expect(checkInstall(t.input).node).toBe(t.node);
+    // A root-owned folder doesn't end the walk: another user's folder above it is still refused.
+    only(t.dir, (p) => (p === t.dir ? { uid: 0 } : p === dirname(t.dir) ? { uid: me + 1, mode: 0o40755 } : undefined));
+    expect(refusal(() => checkInstall(t.input))).toEqual(unsafe(dirname(t.dir), 'writable_by_others'));
   });
 
-  it('the sticky bit makes a world-writable folder above pass; a shared group\'s folder passes and is named', () => {
+  it('the sticky bit makes a world-writable folder pass only above node, never above the package', () => {
     const t = installed();
-    chmodSync(t.dir, 0o1777);
-    try {
-      expect(refusal(() => checkInstall(t.input))).toBeUndefined();
-    } finally {
-      chmodSync(t.dir, 0o700);
+    // Above node only: node's folder's parent, made apart from the package's.
+    const nodeHome = dirname(dirname(t.node));
+    only(t.dir, (p) => (p === dirname(t.node) ? { mode: 0o41777 } : undefined));
+    expect(refusal(() => checkInstall(t.input))).toEqual(unsafe(dirname(t.node), 'writable_by_others'));
+    const deeper = join(nodeHome, 'node-bin', 'bin');
+    file(join(deeper, 'node'));
+    chmodSync(join(deeper, 'node'), 0o755);
+    only(t.dir, (p) => (p === dirname(t.node) ? { mode: 0o41777 } : undefined));
+    expect(refusal(() => checkInstall({ ...t.input, node: join(deeper, 'node') }))).toBeUndefined();
+    // Above the package (someone could add a node_modules folder there): refused, sticky or not.
+    only(t.dir, (p) => (p === t.dir ? { mode: 0o41777 } : undefined));
+    expect(refusal(() => checkInstall(t.input))).toEqual(unsafe(t.dir, 'writable_by_others'));
+  });
+
+  it('a group may write only as the person\'s private group, wheel or admin (named); staff or any other group is writable_by_others', () => {
+    const t = installed();
+    const nm = join(t.pkg, 'node_modules');
+    const group = (gid: number) => only(t.dir, (p) => (p === nm ? { gid, mode: 0o40775 } : undefined));
+    group(20);
+    expect(refusal(() => checkInstall(t.input))).toEqual(unsafe(nm, 'writable_by_others'));
+    group(12345);
+    expect(refusal(() => checkInstall(t.input))).toEqual(unsafe(nm, 'writable_by_others'));
+    group(0);
+    expect(checkInstall(t.input).sharedGroup).toEqual([]);
+    group(80);
+    expect(checkInstall(t.input).sharedGroup).toEqual([nm]);
+    if (me !== 20) {
+      group(me);
+      expect(checkInstall(t.input).sharedGroup).toEqual([]);
     }
-    chmodSync(join(t.pkg, 'node_modules'), 0o775);
-    race.stats = (p) => (p === join(t.pkg, 'node_modules') ? { gid: 20 } : undefined);
-    expect(checkInstall(t.input).sharedGroup).toEqual([join(t.pkg, 'node_modules')]);
+  });
+
+  it('what can\'t be looked at is refused as unreadable: a link that can\'t be followed, a folder that can\'t be listed, a dependency that isn\'t there', () => {
+    const t = installed();
+    symlinkSync(join(t.dir, 'nowhere'), join(t.pkg, 'dangling'));
+    expect(refusal(() => checkInstall(t.input))).toEqual(unsafe(join(t.pkg, 'dangling'), 'unreadable'));
+    const u = installed();
+    const shut = join(u.pkg, 'shut');
+    mkdirSync(shut, { mode: 0o755 });
+    chmodSync(shut, 0o000);
+    try {
+      if (me !== 0) expect(refusal(() => checkInstall(u.input))).toEqual(unsafe(shut, 'unreadable'));
+    } finally {
+      chmodSync(shut, 0o755);
+    }
+    const v = installed();
+    file(join(v.pkg, 'package.json'), '{"name": "skills-catalog", "dependencies": {"left-out": "1"}}');
+    expect(refusal(() => checkInstall(v.input))).toEqual(unsafe(join(v.pkg, 'node_modules', 'left-out'), 'unreadable'));
+  });
+
+  it('node in a folder that gets cleaned: temporary', () => {
+    const t = installed();
+    expect(refusal(() => checkInstall({ ...t.input, temporaryRoots: [dirname(t.node)] }))).toEqual(unsafe(t.node, 'temporary'));
+  });
+
+  it('a dependency found above the package, as Node finds a hoisted one, is walked too', () => {
+    const t = installed();
+    // yaml hoisted to a node_modules above the package: not in the package's own folder.
+    const { rmSync } = race.fs;
+    rmSync(join(t.pkg, 'node_modules', 'yaml'), { recursive: true });
+    const hoisted = join(t.dir, 'node_modules', 'yaml');
+    file(join(hoisted, 'index.js'));
+    chmodSync(join(hoisted, 'index.js'), 0o666);
+    expect(refusal(() => checkInstall(t.input))).toEqual(unsafe(join(hoisted, 'index.js'), 'writable_by_others'));
+    chmodSync(join(hoisted, 'index.js'), 0o644);
+    expect(checkInstall(t.input).node).toBe(t.node);
   });
 
   it('a walk past its bounds (entries or depth) is too_many_files; a link out is walked as its own folder, never followed', () => {

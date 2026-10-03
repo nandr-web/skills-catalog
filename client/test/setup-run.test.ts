@@ -6,7 +6,15 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync,
 import { dirname, join } from 'node:path';
 import { CatalogError, Words } from '@skills-catalog/core';
 import { sandbox } from '@skills-catalog/core/testing';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { race, runnerFolders } from './race-fs.ts';
+
+// The runner's own temp folder (on Linux, /tmp, written by everyone) isn't what these tests are about (race-fs.ts).
+vi.mock('node:fs', async (o) => (await import('./race-fs.ts')).mockFs(await o()));
+beforeEach(() => runnerFolders());
+afterEach(() => {
+  race.stats = undefined;
+});
 import { hookGroup, mcpEntry } from '../src/machine/setup-entries.ts';
 import { runSetup, type RunInput } from '../src/machine/setup-run.ts';
 import { fileOf, golden } from './setup-golden.ts';
@@ -169,6 +177,14 @@ describe('setup\'s run', () => {
     await expect(runSetup({ ...input, seams: { afterRead: (p) => { if (p === claudeJson) throw new Error('crash'); } } })).rejects.toThrow('crash');
     expect(existsSync(claudeJson)).toBe(false);
     expect(record(H).entries.map((e: { state: string }) => e.state)).toEqual(Array(10).fill('pending'));
+  });
+
+  it('a crash after a backup is made, before its file is written: the record already names the backup', async () => {
+    const { H, input, claudeJson } = world();
+    writeFileSync(claudeJson, fileOf(golden.kept_input.claude_json), { mode: 0o600 });
+    await expect(runSetup({ ...input, seams: { afterRead: (p) => { if (p === claudeJson) throw new Error('crash'); } } })).rejects.toThrow('crash');
+    const [bc] = backupsOf(H, 'claude.json');
+    expect(record(H).backups.map((b: { path: string }) => b.path)).toEqual([join(H, 'backups', bc!)]);
   });
 
   it('sweeps its own temp files older than an hour from the assistant home and .claude, and nothing else', async () => {

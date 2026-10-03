@@ -5,7 +5,15 @@ import { chmodSync, linkSync, mkdirSync, readdirSync, realpathSync, rmSync, syml
 import { dirname, join } from 'node:path';
 import { CatalogError, Words } from '@skills-catalog/core';
 import { sandbox } from '@skills-catalog/core/testing';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { race, runnerFolders } from './race-fs.ts';
+
+// The runner's own temp folder (on Linux, /tmp, written by everyone) isn't what these tests are about (race-fs.ts).
+vi.mock('node:fs', async (o) => (await import('./race-fs.ts')).mockFs(await o()));
+beforeEach(() => runnerFolders());
+afterEach(() => {
+  race.stats = undefined;
+});
 import { freshText } from '../src/machine/json-splice.ts';
 import { allowRules, hookGroup, mcpEntry } from '../src/machine/setup-entries.ts';
 import { planSetup, type PlanInput } from '../src/machine/setup-plan.ts';
