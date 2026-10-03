@@ -7,7 +7,7 @@ import { MANIFEST } from './manifest.ts';
 import { flagText, isMarkdown, type DiffSide, type RiskFlag } from './diff.ts';
 import { INVISIBLE, decodeText, isText, type TreeFile } from './tree.ts';
 import { CatalogError } from './errors.ts';
-import { readFileSync } from 'node:fs';
+import { EMOJI_PROPERTIES_TEXT } from './config-data.ts';
 import { join } from 'node:path';
 
 // A CRLF is one line end; a lone CR, a lone LF, U+2028 and U+2029 each end one (contract §5.3), as in the diff's checks.
@@ -39,13 +39,14 @@ export const SPACE_SEPARATORS: readonly number[] = [0x20, 0xa0, 0x1680, 0x2000, 
 const SPARED_BLANK = `\\t${SPACE_SEPARATORS.map((cp) => `\\u{${cp.toString(16)}}`).join('')}`;
 const CANDIDATE = new RegExp(`[\\u202a-\\u202e\\u2066-\\u2069]|(?![${SPARED_BLANK}])(?:${INVISIBLE.source})`, 'gu');
 // Which characters are pictographs and skin tones comes from config/emoji-properties.txt (made by
-// scripts/emoji-properties.py from Unicode's emoji-data.txt 16.0), never the runtime's properties, so a line is reviewed
+// scripts/emoji-properties.py from Unicode's emoji-data.txt 16.0; read through config-data.ts, so no file is read at load),
+// never the runtime's properties, so a line is reviewed
 // the same on every machine: sections of code-point ranges, each after its [property] line.
 export const EMOJI_PROPERTIES_FILE = join(import.meta.dirname, '..', '..', 'config', 'emoji-properties.txt');
-function readEmojiProperties(file = EMOJI_PROPERTIES_FILE): Map<string, RegExp> {
+function readEmojiProperties(text = EMOJI_PROPERTIES_TEXT): Map<string, RegExp> {
   const ranges = new Map<string, string[]>();
   let current: string[] | undefined;
-  for (const line of readFileSync(file, 'utf8').split('\n')) {
+  for (const line of text.split('\n')) {
     if (line === '' || line.startsWith('#')) continue;
     const section = /^\[(\w+)\]$/.exec(line);
     if (section) ranges.set(section[1]!, (current = []));

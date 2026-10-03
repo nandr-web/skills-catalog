@@ -74,7 +74,7 @@ export const INVISIBLE = readInvisible();
 // The path rules also use the runtime's normalize(), which is safe only if the runtime knows at least the table's Unicode
 // version: normalisation never changes an assigned character, and every code point unassigned in the table's version is
 // refused before any normalising. A runtime with an older Unicode, or none, is refused before any path is checked.
-export const TABLE_UNICODE = /^# Unicode (\d+\.\d+\.\d+),/m.exec(readFileSync(INVISIBLE_FILE, 'utf8'))![1]!;
+export const TABLE_UNICODE = /^# Unicode (\d+\.\d+\.\d+),/m.exec(INVISIBLE_CHARACTERS_TEXT)![1]!;
 const versionParts = (v: string) => v.split('.').map((n) => Number.parseInt(n, 10) || 0);
 export function unicodeProblem(have: string | undefined, need: string = TABLE_UNICODE): string | null {
   const [a = 0, b = 0, c = 0] = versionParts(have ?? '');
