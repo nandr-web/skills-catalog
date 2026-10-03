@@ -231,7 +231,7 @@ function strict(s: any): any {
 
 const KEYWORDS = new Set(['type', 'properties', 'required', 'additionalProperties', 'items', 'enum', 'const', 'anyOf', 'oneOf', 'maxLength', 'minLength', 'minimum', 'maximum', 'maxItems', 'pattern', 'description']);
 const SCHEMA_CHILDREN = new Set(['items', 'additionalProperties', 'anyOf', 'oneOf']);
-const TYPES = new Set(['object', 'array', 'string', 'integer', 'boolean', 'null']);
+const TYPES = new Set(['object', 'array', 'string', 'integer', 'number', 'boolean', 'null']);
 
 function schemaProblems(s: Json, at: string): string[] {
   const out: string[] = [];
@@ -263,6 +263,8 @@ function errorsOf(schema: Json, value: unknown, at = '$'): string[] {
       return typeof value === 'string' ? [] : [`${at}: not a string`];
     case 'integer':
       return Number.isInteger(value) ? [] : [`${at}: not an integer`];
+    case 'number':
+      return typeof value === 'number' && Number.isFinite(value) ? [] : [`${at}: not a number`];
     case 'boolean':
       return typeof value === 'boolean' ? [] : [`${at}: not a boolean`];
     case 'array':

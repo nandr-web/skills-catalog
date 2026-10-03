@@ -115,7 +115,9 @@ export function catalogSuite(a: TestAdapter): void {
       const { catalog } = (await openOn(a));
       (await catalog.publish(request('release-note-draft', historyVersion(histories.versions['h1.v1'])), actAs('dev1')));
       const item = (await catalog.read({ name: 'release-note-draft' })).skills[0] as ReadItem;
-      expect(item).toMatchObject({ name: 'release-note-draft', version: 1, latest_version: 1, publisher: 'dev1', reviews: [] });
+      expect(item).toMatchObject({ name: 'release-note-draft', version: 1, latest_version: 1, publisher: 'dev1' });
+      // A clean skill's reviews approve without comments (contract §10): the rules review, measured, with no findings.
+      expect(item.reviews).toMatchObject([{ reviewer: 'rules', flags: [], findings: [] }]);
       expect(item.manifest.frontmatter['name']).toBe('release-note-draft');
       expect(item.manifest.body).toContain('# Release note draft');
       expect(item.files).toBeUndefined();

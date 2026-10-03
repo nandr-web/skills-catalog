@@ -548,6 +548,59 @@
                 "name": {
                   "type": "string"
                 },
+                "quality": {
+                  "type": "object",
+                  "properties": {
+                    "flags": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "runnable_file",
+                              "runs_at_load",
+                              "command_instruction",
+                              "capability_frontmatter",
+                              "instructions_changed",
+                              "non_markdown",
+                              "new_publisher",
+                              "prompt_injection",
+                              "context_cost"
+                            ]
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "line": {
+                            "type": "integer"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "from": {},
+                          "to": {},
+                          "detail": {
+                            "type": "string"
+                          },
+                          "advice": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "detail"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "flags"
+                  ],
+                  "additionalProperties": false
+                },
                 "description": {
                   "type": "string"
                 },
@@ -778,7 +831,164 @@
                     },
                     "reviews": {
                       "type": "array",
-                      "items": {}
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "reviewer": {
+                            "type": "string"
+                          },
+                          "reviewer_version": {
+                            "type": "string"
+                          },
+                          "fingerprint": {
+                            "type": "string"
+                          },
+                          "at": {
+                            "type": "string"
+                          },
+                          "measurements": {
+                            "type": "object",
+                            "properties": {},
+                            "required": [],
+                            "additionalProperties": {
+                              "type": "number"
+                            }
+                          },
+                          "flags": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "runnable_file",
+                                    "runs_at_load",
+                                    "command_instruction",
+                                    "capability_frontmatter",
+                                    "instructions_changed",
+                                    "non_markdown",
+                                    "new_publisher",
+                                    "prompt_injection",
+                                    "context_cost"
+                                  ]
+                                },
+                                "path": {
+                                  "type": "string"
+                                },
+                                "line": {
+                                  "type": "integer"
+                                },
+                                "field": {
+                                  "type": "string"
+                                },
+                                "from": {},
+                                "to": {},
+                                "detail": {
+                                  "type": "string"
+                                },
+                                "advice": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "detail"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "findings": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "runnable_file",
+                                    "runs_at_load",
+                                    "command_instruction",
+                                    "capability_frontmatter",
+                                    "instructions_changed",
+                                    "non_markdown",
+                                    "new_publisher",
+                                    "prompt_injection",
+                                    "context_cost"
+                                  ]
+                                },
+                                "path": {
+                                  "type": "string"
+                                },
+                                "line": {
+                                  "type": "integer"
+                                },
+                                "evidence": {
+                                  "type": "string"
+                                },
+                                "why": {
+                                  "type": "string"
+                                },
+                                "advice": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "evidence",
+                                "why"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "notes": {
+                            "type": "string"
+                          },
+                          "omitted": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "runnable_file",
+                                    "runs_at_load",
+                                    "command_instruction",
+                                    "capability_frontmatter",
+                                    "instructions_changed",
+                                    "non_markdown",
+                                    "new_publisher",
+                                    "prompt_injection",
+                                    "context_cost"
+                                  ]
+                                },
+                                "count": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "count"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "reviewer",
+                          "reviewer_version",
+                          "fingerprint",
+                          "at",
+                          "measurements",
+                          "flags",
+                          "findings"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "reviews_omitted": {
+                      "type": "boolean"
                     },
                     "files": {
                       "type": "array",
@@ -1066,6 +1276,9 @@
                       "to": {},
                       "detail": {
                         "type": "string"
+                      },
+                      "advice": {
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -1299,6 +1512,9 @@
                 "to": {},
                 "detail": {
                   "type": "string"
+                },
+                "advice": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -1563,6 +1779,9 @@
                         "to": {},
                         "detail": {
                           "type": "string"
+                        },
+                        "advice": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -1618,6 +1837,9 @@
                 "to": {},
                 "detail": {
                   "type": "string"
+                },
+                "advice": {
+                  "type": "boolean"
                 }
               },
               "required": [

@@ -7,6 +7,7 @@ export const CONFIG_FILES = {
   RESERVED_NAMES_TEXT: join(CONFIG, 'reserved-names.txt'),
   INVISIBLE_CHARACTERS_TEXT: join(CONFIG, 'invisible-characters.txt'),
   CASE_FOLDING_TEXT: join(CONFIG, 'case-folding.txt'),
+  EMOJI_PROPERTIES_TEXT: join(CONFIG, 'emoji-properties.txt'),
 } as const;
 export const CONFIG_DATA_FILE = join(import.meta.dirname, 'config-data.ts');
 

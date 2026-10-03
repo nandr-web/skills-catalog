@@ -6,6 +6,7 @@ import { readdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { Catalog, CatalogConfig } from '../src/catalog.ts';
 import type { Clock, Identity, Ids, Storage } from '../src/ports.ts';
+import type { Reviewer } from '../src/skill-tree/index.ts';
 import { openLocalCatalog } from '../src/local/index.ts';
 import type { SqliteMetadataStore } from '../src/local/metadata.ts';
 import { counterIds, fixedClock, snapshot, versionsIn } from './helpers.ts';
@@ -16,6 +17,8 @@ export interface StoreOptions {
   ids?: Ids;
   identity?: Identity;
   config?: Partial<CatalogConfig>;
+  /** The reviewers a publish runs (contract §10); absent, the catalog's default (the built-in rules reviewer). */
+  reviewers?: readonly Reviewer[];
   /** Wraps the Storage port the catalog uses (another publish landing just before this one's commit). */
   wrapStorage?: (s: Storage) => Storage;
   /** The next commit fails with this error after the files are stored and before the version is recorded. */

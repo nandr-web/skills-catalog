@@ -36,7 +36,7 @@ What each part holds, what runs it on your machine today, and what the hosted ca
 | **Skills: versions + files** | Each skill's versions, owners and files, stored by fingerprint | SQLite + a folder of files | DynamoDB + S3 |
 | **Search** | Finding skills by words, tags, publisher or date | SQLite full-text search | A search file in S3, ranked in the function; OpenSearch Serverless to be re-assessed in phase 3 |
 | **Compute** | What runs the catalog and its API | Your machine | Lambda + HTTP API; files go up and down by short-lived S3 links |
-| **Events** | Telling search and the reviewer that a version was published | An outbox saved with each version | A DynamoDB stream to a queue |
+| **Events** | Telling search that a version was published | An outbox saved with each version | A DynamoDB stream to a queue |
 | **Sign-in** | Who is asking; owners publish, everyone signed in reads | "Acting as" a named developer (a demo label) | Sign in with GitHub; personal tokens for assistants |
 | **The web page** | Browsing, comparing versions, publishing | Served on 127.0.0.1 by `serve` (planned) | CloudFront + S3 |
 | **Where it runs** | The whole hosted shape | — | AWS serverless: nothing to pay or patch while idle |

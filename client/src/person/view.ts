@@ -3,7 +3,7 @@
 // (the CLI) or in the assistant's reply (markdown, handed to it with the MCP result). What needs their decision comes
 // last, set apart (medium.ts's callout), with what answers it: the commands in a terminal, a question in a reply. Every
 // word is the words file's (results.person); only the layout is here. A result with no view here has none.
-import { CatalogError, fenced, manifestRefusal, oneNewlineOff, reasons, renderError, sharesEveryWord, shellQuote, skillMdOf, type DiffResult, type ReadItem, type ReadResult, type SearchInput, type SearchResult, type VersionsResult, type Words } from '@skills-catalog/core';
+import { CatalogError, fenced, manifestRefusal, oneNewlineOff, qualityNotes, reasons, renderError, REVIEW_ONLY_KINDS, sharesEveryWord, shellQuote, skillMdOf, type DiffResult, type ReadItem, type ReadResult, type SearchInput, type SearchResult, type VersionsResult, type Words } from '@skills-catalog/core';
 import { flagText, oneLine } from '@skills-catalog/core/skill-tree';
 import type { InstallView, ListView, UpdateView } from '../machine/installer.ts';
 import type { PublishView } from '../machine/publish-folder.ts';
@@ -166,7 +166,10 @@ function install({ s, say, m }: Ctx, v: InstallView | undefined): string | undef
   return out.join('\n');
 }
 
-function search({ say, m }: Ctx, r: SearchResult, req: SearchInput): string {
+// A review's note, marked: the ▲ and the words, so the mark never stands alone (and colour is only extra).
+const flagged = (m: Medium, notes: string) => m.paint('attention', `${MARK.attention} ${m.text(notes)}`);
+
+function search({ s, say, m }: Ctx, r: SearchResult, req: SearchInput): string {
   const { paint } = m;
   const query = m.text(req.query ?? '');
   if (r.catalog_size === 0) return say('search.empty_catalog');
@@ -182,16 +185,26 @@ function search({ say, m }: Ctx, r: SearchResult, req: SearchInput): string {
   // On a page with matches, the cards sharing only some words come after them, under their own heading, with the words.
   const matches = partial ? r.results : r.results.filter((c) => sharesEveryWord(r, c));
   const extras = partial ? [] : r.results.filter((c) => !sharesEveryWord(r, c));
+  // A card a review flagged (contract §10) has its note; with none flagged, nothing about reviews shows.
+  const notes = (c: SearchResult['results'][number]) => (c.quality ? qualityNotes(s, c.quality.flags) : undefined);
+  const reviewed = r.results.some((c) => c.quality);
   if (m.kind === 'markdown') {
     // A table the person scans: one row per skill, what it does in its own words.
-    const rows = (cs: typeof r.results, shares: boolean) => cs.map((c) => [paint('bold', c.name), `v${c.latest_version}`, m.text(oneLine(c.publisher)), ...(shares ? [m.text(c.matched_words.join(', '))] : []), m.text(oneLine(c.description))]);
-    out.push(...m.table(header(say, partial ? 'search.columns_partial' : 'search.columns'), rows(matches, partial)));
-    if (extras.length) out.push('', paint('attention', `${MARK.attention} ${say('search.also')}`), '', ...m.table(header(say, 'search.columns_partial'), rows(extras, true)));
+    const rows = (cs: typeof r.results, shares: boolean) =>
+      cs.map((c) => {
+        const n = notes(c);
+        return [paint('bold', c.name), `v${c.latest_version}`, m.text(oneLine(c.publisher)), ...(shares ? [m.text(c.matched_words.join(', '))] : []), ...(reviewed ? [n ? flagged(m, n) : ''] : []), m.text(oneLine(c.description))];
+      });
+    const columns = (shares: boolean) => (shares ? (reviewed ? 'search.columns_partial_reviewed' : 'search.columns_partial') : reviewed ? 'search.columns_reviewed' : 'search.columns');
+    out.push(...m.table(header(say, columns(partial)), rows(matches, partial)));
+    if (extras.length) out.push('', paint('attention', `${MARK.attention} ${say('search.also')}`), '', ...m.table(header(say, columns(true)), rows(extras, true)));
     return out.join('\n');
   }
   const card = (c: (typeof r.results)[number], shares: boolean) => {
     const meta = [`v${c.latest_version}`, oneLine(c.publisher), ...(c.tags.length ? [c.tags.map(oneLine).join(', ')] : [])].join(' · ');
     out.push(`  ${paint('bold', c.name)}  ${paint('dim', meta)}`);
+    const n = notes(c);
+    if (n) out.push(`    ${flagged(m, say('search.review', { notes: n }))}`);
     if (shares) out.push(`    ${paint('dim', say('search.shares', { words: c.matched_words.join(', ') }))}`);
     out.push(`    ${oneLine(c.description)}`, '');
   };
@@ -210,11 +223,37 @@ function read(c: Ctx, r: ReadResult): string | undefined {
   return blocks.length && blocks.every((b) => b !== undefined) ? blocks.join('\n\n') : undefined;
 }
 
-function readOne({ say, m }: Ctx, item: ReadItem): string {
+function readOne({ s, say, m }: Ctx, item: ReadItem): string {
   const { paint } = m;
   const publisher = oneLine(item.publisher);
   const latest_mark = item.version === item.latest_version ? '' : say('read.older', { latest: item.latest_version });
   const out = [paint('bold', say('read.header', { name: item.name, version: item.version, latest_mark, publisher, published_at: day(item.published_at) }))];
+  // What the reviews found, before the skill's text, behind the bar: each finding's note and the line it rests on.
+  // A finding is noted from its flag where the review gives one per finding (the rules reviewer does), so a key that
+  // grants something reads by what it grants; otherwise from the finding itself.
+  const findings = item.reviews.flatMap((rv) =>
+    rv.findings.map((f, i) => {
+      const own = rv.flags.length === rv.findings.length && rv.flags[i]?.kind === f.kind ? rv.flags[i]! : undefined;
+      return { f, flag: own ?? { kind: f.kind, ...(f.path !== undefined ? { path: f.path } : {}), detail: f.why } };
+    }),
+  );
+  // Past a review's own limits the findings not listed are counted; past the read's budget only the notes come.
+  const more = item.reviews.reduce((n, rv) => n + (rv.omitted ?? []).reduce((k, o) => k + o.count, 0), 0);
+  if (item.reviews_omitted) {
+    const flags = item.reviews.flatMap((rv) => rv.flags);
+    const block = [paint('attention', paint('bold', `${MARK.attention} ${say('read.review', { n: flags.length })}`))];
+    for (const f of flags) block.push(`  • ${qualityNotes(s, [f])}`);
+    block.push(paint('dim', `  ${say('read.review_left_out', { name: item.name })}`));
+    out.push('', ...m.callout(block));
+  } else if (findings.length) {
+    const block = [paint('attention', paint('bold', `${MARK.attention} ${say('read.review', { n: findings.length + more })}`))];
+    for (const { f, flag } of findings) {
+      block.push(`  • ${qualityNotes(s, [flag])}`);
+      if (f.line !== undefined) block.push(paint('dim', `    ${say('read.found', { line: f.line, evidence: f.evidence })}`));
+    }
+    if (more) block.push(paint('dim', `  ${say('read.more', { n: more })}`));
+    out.push('', ...m.callout(block));
+  }
   const skillMd = skillMdOf(item);
   if (skillMd !== undefined) out.push('', paint('dim', say('read.as_written', { publisher })), ...m.quoted(fenced(oneNewlineOff(skillMd)), 'markdown'));
   const files = item.files ?? [];
@@ -238,10 +277,18 @@ function readMiss(c: Ctx, item: { name: string; error: Record<string, unknown> &
   return shown;
 }
 
-function versions({ say, m }: Ctx, r: VersionsResult): string {
+function versions({ s, say, m }: Ctx, r: VersionsResult): string {
   const { paint } = m;
-  const rows = r.versions.map((v) => [paint('bold', `v${v.version}`), paint('dim', day(v.published_at)), m.text(oneLine(v.publisher)), m.text(oneLine(v.message)) || paint('dim', say('versions.no_message'))]);
-  const out = [paint('bold', say('versions.header', { name: r.name, n: r.latest })), '', ...m.table(header(say, 'versions.columns'), rows)];
+  // A version a review flagged has its note in a column of its own, there only when some version on the page is flagged.
+  const reviewed = r.versions.some((v) => v.flags.length);
+  const rows = r.versions.map((v) => [
+    paint('bold', `v${v.version}`),
+    paint('dim', day(v.published_at)),
+    m.text(oneLine(v.publisher)),
+    m.text(oneLine(v.message)) || paint('dim', say('versions.no_message')),
+    ...(reviewed ? [v.flags.length ? flagged(m, qualityNotes(s, v.flags)) : ''] : []),
+  ]);
+  const out = [paint('bold', say('versions.header', { name: r.name, n: r.latest })), '', ...m.table(header(say, reviewed ? 'versions.columns_reviewed' : 'versions.columns'), rows)];
   if (m.commands && r.next_cursor) out.push('', say('versions.more', { cursor: r.next_cursor }));
   if (m.commands && r.latest > 1) out.push('', paint('dim', say('versions.next', { name: r.name, from: r.latest - 1, to: r.latest })));
   return out.join('\n');
@@ -266,9 +313,13 @@ function diff({ s, say, m }: Ctx, r: DiffResult): string {
   if (r.files.length === 0 && !r.publisher_changed) return say('diff.same', at);
   const out = [paint('bold', say('diff.header', { ...at, n: r.files.length })), ''];
   const bullet = m.kind === 'terminal' ? '  • ' : '- ';
-  const why = [...new Set(r.risk_flags.map((f) => personReason(s, say, f)))];
+  // What can run apart from what the catalog's review found (text that steers, a hidden character, the length).
+  const runs = r.risk_flags.filter((f) => !REVIEW_ONLY_KINDS.has(f.kind));
+  const found = r.risk_flags.filter((f) => REVIEW_ONLY_KINDS.has(f.kind));
+  const why = [...new Set(runs.map((f) => personReason(s, say, f)))];
   if (why.length) out.push(...m.callout([paint('attention', paint('bold', `${MARK.attention} ${say('diff.runs')}`)), ...why.map((w) => bullet + w)]), '');
   else out.push(`${paint('ok', MARK.ok)} ${say('diff.runs_no')}`, '');
+  if (found.length) out.push(...m.callout([paint('attention', paint('bold', `${MARK.attention} ${say('diff.review')}`)), ...found.map((f) => bullet + reasons(s, [f]))]), '');
   const tone = { added: 'added', changed: 'bold', removed: 'removed' } as const;
   const rows = r.files.map((f) => {
     const kind = f.flags.executable ? 'executable' : f.flags.script ? 'script' : f.flags.binary ? 'binary' : undefined;

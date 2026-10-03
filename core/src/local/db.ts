@@ -45,13 +45,21 @@ CREATE TABLE IF NOT EXISTS outbox (
   delivered_at TEXT
 );
 CREATE INDEX IF NOT EXISTS outbox_pending ON outbox (id) WHERE delivered_at IS NULL;
+CREATE TABLE IF NOT EXISTS reviews (
+  name TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  reviewer TEXT NOT NULL,
+  data TEXT NOT NULL,
+  PRIMARY KEY (name, version, reviewer)
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS search_cards (
   name TEXT PRIMARY KEY,
   description TEXT NOT NULL,
   latest_version INTEGER NOT NULL,
   tags TEXT NOT NULL,
   publisher TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  quality TEXT
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5 (name UNINDEXED, words, description, tokenize = '${TOKENIZE}');
 `;
@@ -76,7 +84,7 @@ function distrust(db: DatabaseSync): void {
 // as SQLite does, without regard to case. `required` must be there (the read-only open's); any other of the catalog's
 // tables may be missing (the writing open makes it) but never wrong.
 export class NotCatalogTables extends Error {}
-const OWN_TABLES = ['skills', 'versions', 'version_files', 'pending_blobs', 'outbox', 'search_cards'];
+const OWN_TABLES = ['skills', 'versions', 'version_files', 'pending_blobs', 'outbox', 'reviews', 'search_cards'];
 const FTS_TABLE = 'search_fts';
 const REAL_TABLE = /^CREATE\s+TABLE\s/i;
 const FTS5_TABLE = /^CREATE\s+VIRTUAL\s+TABLE\s+("?)search_fts\1\s+USING\s+fts5\s*\(/i;
@@ -115,6 +123,9 @@ export class LocalDb {
   readonly db: DatabaseSync;
   // True when the search index was dropped because its tokenizer changed: the catalog rebuilds it from the versions.
   readonly indexReset: boolean;
+  // True when this open made the reviews table in a catalog that already had versions (one from before reviews were kept):
+  // the catalog reviews each skill's latest version once (local/index.ts).
+  readonly reviewsAdded: boolean;
 
   // A path opens a catalog to write: the file is made if missing, switched to WAL and given the schema (':memory:' is an
   // empty one). An open DatabaseSync is read as it is: no WAL switch, schema or index check (the read commands' open).
@@ -122,6 +133,7 @@ export class LocalDb {
     if (file instanceof DatabaseSync) {
       this.db = file;
       this.indexReset = false;
+      this.reviewsAdded = false;
       return;
     }
     this.db = new DatabaseSync(file, { timeout: BUSY_MS });
@@ -132,7 +144,7 @@ export class LocalDb {
       checkOwnTables(this.db, []);
       this.walMode();
       this.db.exec('PRAGMA synchronous = NORMAL');
-      this.indexReset = this.schema(opts);
+      ({ stale: this.indexReset, reviewsAdded: this.reviewsAdded } = this.schema(opts));
     } catch (e) {
       this.db.close();
       throw e;
@@ -144,19 +156,28 @@ export class LocalDb {
   // transaction, so a crash leaves neither and the next writing open does it again. That fill is paid once per older
   // catalog, under the write lock: a few seconds at a very large one (about 7 s cold at 200,000 files), while readers go
   // on and other writers wait within the busy timeout.
-  private schema(opts: LocalDbOptions): boolean {
+  private schema(opts: LocalDbOptions): { stale: boolean; reviewsAdded: boolean } {
     return this.immediate(() => {
+      const reviewed = this.hasTable('reviews');
       const fts = this.db.prepare("SELECT sql FROM sqlite_master WHERE name = 'search_fts'").get() as { sql: string } | undefined;
       const stale = fts !== undefined && !fts.sql.includes(`'${TOKENIZE}'`);
       if (stale) this.db.exec('DROP TABLE search_fts; DELETE FROM search_cards;');
       const indexed = this.hasTable('version_files');
+      // A search card's quality (contract §10) came after the first catalogs: an older card table gets the column, empty
+      // (its cards show none until the next publish, the offline review run or a rebuild fills it).
+      if (this.hasTable('search_cards') && !this.hasColumn('search_cards', 'quality')) this.db.exec('ALTER TABLE search_cards ADD COLUMN quality TEXT');
       this.db.exec(SCHEMA);
       if (!indexed) {
         this.db.exec(FILL_FILE_INDEX);
         opts.afterFileIndex?.();
       }
-      return stale;
+      const reviewsAdded = !reviewed && this.db.prepare('SELECT 1 FROM versions LIMIT 1').get() !== undefined;
+      return { stale, reviewsAdded };
     });
+  }
+
+  hasColumn(table: string, column: string): boolean {
+    return (this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column);
   }
 
   hasTable(name: string): boolean {

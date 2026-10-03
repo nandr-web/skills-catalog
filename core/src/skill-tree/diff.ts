@@ -4,6 +4,7 @@
 import { CatalogError } from './errors.ts';
 import { MANIFEST, parseFrontmatter } from './manifest.ts';
 import { INVISIBLE, decodeText, isText, type Mode, type TreeFile } from './tree.ts';
+import { DEFAULT_CONTEXT_COST_BUDGET, reviewFlags } from './review.ts';
 
 // Flag text (a path, a change's sides, the detail) can carry a publisher's text, so it is plain text in the flag
 // itself (contract §5.3): an invisible character becomes \u{XXXX}, then the text is cut to 200 code points, ending in
@@ -37,6 +38,8 @@ export interface RiskFlag {
   from?: unknown;
   to?: unknown;
   detail: string;
+  // Prose that only warns about the pattern (a review's finding shown as advice): it holds no install or update.
+  advice?: true;
 }
 
 export interface FileFlags {
@@ -400,6 +403,22 @@ function fenceChanges(a: TreeFile, b: TreeFile, flagged: ReadonlySet<number>): {
   return out;
 }
 
+// Claude Code may not split lines where this reader does, so in a markdown file whose new version has a ```! block, a
+// lone CR, U+2028 or U+2029 in either version (a CRLF is one ordinary break) means what runs as the skill loads can't be
+// read for sure: runs_at_load once, at the line the new version's first such break ends, or line 1 when only the old
+// version has one (removing one can change what runs as much as adding one). One pass over each text.
+const UNUSUAL_BREAK = /\r(?!\n)|[\u2028\u2029]/;
+export const UNUSUAL_BREAK_DETAIL = "has an unusual line break, so what runs when the skill loads can't be read for sure";
+function unusualBreak(a: TreeFile | undefined, b: TreeFile): number | null {
+  if (!isMarkdown(b.path) || !isText(b.bytes)) return null;
+  const now = decodeText(b.bytes);
+  const at = now.search(UNUSUAL_BREAK);
+  const was = a && isText(a.bytes) ? decodeText(a.bytes) : '';
+  if (at < 0 && !UNUSUAL_BREAK.test(was)) return null;
+  if (!fenceLines(now).opener) return null;
+  return at < 0 ? 1 : now.slice(0, at).split(LINE_BREAK).length;
+}
+
 // What a version grants, so a changed instruction could act without asking (contract §5.3): an injected command, or a
 // front matter key on neither the safe list nor the non-granting list. Each says what it grants, for the flag's detail.
 function grantsOf(files: readonly TreeFile[], fm: Record<string, unknown>, safeKeys: readonly string[], nonGranting: readonly string[]): string[] {
@@ -439,12 +458,16 @@ function keyLine(lines: string[], key: string): number | undefined {
 }
 
 // `configuredSafeKeys` can only narrow the fixed safe list (contract §5.3): a key not on it always counts.
-// `configuredNonGrantingKeys` can only narrow the fixed non-granting list the same way.
+// `configuredNonGrantingKeys` can only narrow the fixed non-granting list the same way. `contextCostBudget` is the rules
+// reviewer's budget for SKILL.md's length, in estimated tokens. A review's advice (prose that only warns about a pattern)
+// holds nothing, so it isn't a risk flag here unless `opts.advice` asks for it (the rules reviewer, which shows it).
 export function diffTrees(
   from: DiffSide | null,
   to: DiffSide,
   configuredSafeKeys: readonly string[] = DEFAULT_SAFE_FRONTMATTER_KEYS,
   configuredNonGrantingKeys: readonly string[] = DEFAULT_NON_GRANTING_KEYS,
+  contextCostBudget: number = DEFAULT_CONTEXT_COST_BUDGET,
+  opts: { advice?: boolean } = {},
 ): TreeDiff {
   const safeKeys = configuredSafeKeys.filter((k) => DEFAULT_SAFE_FRONTMATTER_KEYS.includes(k));
   const nonGranting = configuredNonGrantingKeys.filter((k) => DEFAULT_NON_GRANTING_KEYS.includes(k));
@@ -486,6 +509,10 @@ export function diffTrees(
       risk.push(own);
       continue;
     }
+    // an unusual line break comes first, then the file's other commands that run at load; it's the file's reason alone
+    // when there are none
+    const odd = b ? unusualBreak(a, b) : null;
+    if (odd !== null) risk.push({ kind: 'runs_at_load', path, line: odd, detail: UNUSUAL_BREAK_DETAIL });
     const injected = b ? newInjections(a, b) : [];
     const fences = a && b ? fenceChanges(a, b, new Set(injected.map((x) => x.line))) : [];
     if (injected.length || fences.length) {
@@ -493,6 +520,7 @@ export function diffTrees(
       for (const x of loads.sort((p, q) => p.line - q.line)) risk.push({ kind: 'runs_at_load', path, line: x.line, detail: flagText(x.detail) });
       continue;
     }
+    if (odd !== null) continue;
     const instructions = path !== MANIFEST || fa.body !== fb.body || safeChanged;
     if (grants.length && instructions) {
       risk.push({ kind: 'instructions_changed', path, detail: flagText(grants.join(' and ')) });
@@ -516,6 +544,8 @@ export function diffTrees(
   const publisher_changed = from !== null && from.publisher !== to.publisher;
   if (publisher_changed) risk.push({ kind: 'new_publisher', from: flagText(from!.publisher), to: flagText(to.publisher), detail: flagText(`${from!.publisher} → ${to.publisher}`) });
   // A path is publisher text too (checked at publish, but a flag is shown wherever it goes).
+  // The rules reviewer's flags join the diff's (contract §5.3, §10), beside each file's own reason.
+  risk.push(...reviewFlags(from, to, contextCostBudget).filter((f) => opts.advice === true || f.advice !== true));
   return { files, frontmatter_changes, publisher_changed, risk_flags: risk.map((f) => (f.path === undefined ? f : { ...f, path: flagText(f.path) })) };
 }
 

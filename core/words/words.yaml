@@ -158,6 +158,7 @@ names:
     publish: ${cli} publish <folder>
     accept: ${cli} update <name> --accept
     stats: ${cli} stats
+    review: ${cli} review [<name>]
 tools:
   search:
     annotations:
@@ -482,6 +483,11 @@ results:
       accept_flagged_on: held updates were set to go through without asking
       all_pinned: every skill was pinned
       teardown: setup was undone
+  review_run:
+    done: "Reviewed {versions} stored version(s) again: {reviewed} review(s) stored, the rest were already current."
+    flagged: "Flagged in its latest version: {names}. A search or a read shows each one's review."
+    none_flagged: No skill's latest version is flagged.
+    hosted: "${cli} review runs on a local catalog. A hosted catalog reviews each version as it is published."
   policy_set:
     default: The default for updates is now {policy}; skills with their own setting keep it.
     skill: "Updates for {name}: {policy}."
@@ -523,6 +529,7 @@ results:
     header: "{name} v{from} -> v{to}: {n} file(s) changed. Can run something new on this machine: {executes}."
     executes_no: "no"
     executes_yes: yes, because {reasons}
+    review: "The catalog's review also found what to know first: {reasons}."
     file: "- {status}: {path}{kind}"
     kind:
       executable: " (can run)"
@@ -571,8 +578,16 @@ results:
     next_cli: "To use it here: ${cli} install {name}."
     next_version: 'To use this version here: ${install} with name "{name}" and version {version} (the latest is v{latest}).'
     next_version_cli: "To use this version here: ${cli} install {name} --version {version} (the latest is v{latest})."
+    review: "The catalog's review of this version found what to know before using it; mention it when you recommend this skill: {findings}."
+    finding: "{path} line {line}: {why} ({evidence})"
+    finding_file: "{path}: {why}"
+    findings_more: "{n} more like these"
+    finding_advice: "{path} line {line}: a warning about {why}, as advice that holds nothing ({evidence})"
+    review_omitted: "The catalog's review of this version found what to know before using it ({notes}); its findings aren't shown here, to keep this result short ({used} of {limit} used). To see them: ${get} with name \"{name}\" alone. Mention it when you recommend this skill."
+    review_omitted_cli: "The catalog's review of this version found what to know before using it ({notes}); its findings aren't shown here, to keep this result short ({used} of {limit} used). To see them: ${cli} read {name}. Mention it when you recommend this skill."
   quality:
     card_flagged: "- {name} (v{version}, {publisher}; tags: {tags}). Review: {notes}. {description}"
+    partial_card_flagged: "- {name} (v{version}, {publisher}; shares only: {shared}). Review: {notes}. {description}"
     next: "Some cards have a review note: mention it when you recommend that skill."
     note:
       runnable_file: includes something that can run ({path})
@@ -586,6 +601,11 @@ results:
       prompt_injection: "has text that tries to steer assistants ({path}, found: {detail})"
       context_cost: "long: {detail}"
       low_score: low review score ({score})
+    note_advice: "warns about a risky pattern, as advice that holds nothing ({path}: {detail})"
+    note_injection:
+      hidden: "has a character people can't see but assistants read ({path}, {detail})"
+      pipe: downloads something and runs it in a shell ({path})
+      sends: sends a local file or variable over the network ({path})
   update:
     header: Checked {checked} installed skill(s) against the shared catalog.
     none_installed: "No skills from the shared catalog are installed on this machine, so there was nothing to update. To add one: ${install}."
@@ -600,6 +620,8 @@ results:
     held_notify_next: 'Only if they want it: ${accept} with name "{name}", target "{target}", version {to}, confirm "{confirm}" and flags {flags}, all exactly as given here. Otherwise {name} stays on v{from}.'
     held_other_catalog: "- Waiting for the person: {name} v{from} -> v{to} was NOT installed, because the copy here came from another catalog ({was}) and this version comes from {now}: it may be a different skill that shares the name.{also}"
     held_also: " It could also change what runs on this machine, because {reasons}."
+    held_also_review: " The catalog's review also found what to know first: {reasons}."
+    held_notify_flagged_review: '- {name} v{to} is available; its setting is "tell me first", so it stays on v{from}. The catalog''s review also found what to know first: {reasons}. Tell the person each reason in plain words and ask whether to take it.'
     held_notify_next_cli: Only if they want it, the person takes it by running ${cli} update {name} --accept in their own terminal. Otherwise {name} stays on v{from}.
     held_pin: "- {name} stays on v{from} (pinned); v{to} is available."
     held_pin_next: 'If the person wants v{to} anyway: ${accept} with name "{name}", target "{target}", version {to}, confirm "{confirm}" and flags {flags}, all exactly as given here. It stays pinned, at v{to}.'
@@ -643,13 +665,19 @@ results:
       capability_frontmatter_unreadable: its front matter can't be read, even leniently, so what it may do without asking can't be known
       new_publisher: it comes from a different publisher ({detail})
       prompt_injection: "{path} has text that tries to steer the assistant (found: {detail})"
-      context_cost: "it got much longer: {detail}"
+      context_cost: "its SKILL.md is long for the assistant to read each time it's used ({detail})"
+    reason_injection:
+      hidden: "{path} line {line} has a character the person can't see but the assistant reads ({detail})"
+      steering: "{path} line {line} has text that tries to steer the assistant (found: {detail})"
+      pipe: "{path} line {line} downloads something and runs it in a shell"
+      sends: "{path} line {line} sends a local file or variable over the network"
     accept_intro: "{name} v{from} → v{to} is waiting for your OK, because {reasons}."
     accept_intro_install: "{name} v{to} is waiting for your OK before it's installed to {path}, because {reasons}."
     accept_intro_notify: '{name} v{from} → v{to} is available. Your setting for {name} is "tell me first", so it waits for your OK.'
     accept_intro_pin: "{name} v{from} is pinned here, and v{to} is waiting for your OK to replace it. It stays pinned, at v{to}.{also}"
     accept_intro_other_catalog: "{name} v{from} → v{to} is waiting for your OK: the copy here came from another catalog ({was}) and this version comes from {now}, so it may be a different skill that shares the name.{also}"
     accept_also: " It could also change what runs on this machine, because {reasons}."
+    accept_also_review: " The catalog's review also found what to know first: {reasons}."
     accept_look: To see exactly what changes first, ask your assistant to show you the diff of {name} from v{from} to v{to}.
     accept_look_install: To read it first, ask your assistant to show you {name} v{to}.
     accept_ask: "Take it? (y/N) "
@@ -711,6 +739,10 @@ results:
     held_files: '{name} v{version} was NOT installed yet: it includes files that are not plain instructions ({reasons}), and the person decides whether those reach this machine. Tell the person each reason in plain words and ask whether to install it. Only if they agree: ${accept} with name "{name}", target "{target}", version {version}, confirm "{confirm}" and flags {flags}, all exactly as given here.'
     held_files_cli: "{name} v{version} was NOT installed yet: it includes files that are not plain instructions ({reasons}), and the person decides whether those reach this machine. Tell the person each reason in plain words. Don't install it yourself: the person does, by running {command} in their own terminal."
     held_cli: "{name} v{version} was NOT installed yet: it can run things on this machine without asking, because {reasons}. Tell the person each reason in plain words. Don't install it yourself: the person does, by running {command} in their own terminal."
+    held_review: '{name} v{version} was NOT installed yet: the catalog''s review found what the person should know first: {reasons}. Tell the person each reason in plain words and ask whether to install it. Only if they agree: ${accept} with name "{name}", target "{target}", version {version}, confirm "{confirm}" and flags {flags}, all exactly as given here.'
+    held_review_cli: "{name} v{version} was NOT installed yet: the catalog's review found what the person should know first: {reasons}. Tell the person each reason in plain words. Don't install it yourself: the person does, by running {command} in their own terminal."
+    held_over_review: '{name} v{version} was NOT installed: {name} v{from} is installed here, and the catalog''s review of v{version} found what the person should know first: {reasons}. Tell the person each reason in plain words and ask whether to take v{version}. Only if they agree: ${accept} with name "{name}", target "{target}", version {version}, confirm "{confirm}" and flags {flags}, all exactly as given here.'
+    held_over_review_cli: "{name} v{version} was NOT installed: {name} v{from} is installed here, and the catalog's review of v{version} found what the person should know first: {reasons}. Tell the person each reason in plain words. Don't install it yourself: the person does, by running {command} in their own terminal."
     installed_after_yes: "Installed {name} v{version} to {path} after the person agreed (fingerprint checked). Updates: {policy}."
     done: "Installed {name} v{version} to {path} (fingerprint checked). Updates: {policy}."
     unchanged: "{name} v{version} is already installed here and unchanged, so nothing was written."
@@ -979,11 +1011,14 @@ results:
       partial: 'Nothing matches every word of "{query}". Closest, sharing only some words:'
       shares: "shares only: {words}"
       also: "Not matches, sharing only some words:"
+      review: "Review: {notes}"
       empty: 'No skill matches "{query}" ({total} in the catalog). Try other words: ${search}'
       empty_catalog: The shared catalog is empty. Nobody has published a skill yet.
       empty_reply: 'No skill matches "{query}" ({total} in the catalog).'
       columns: "Skill | Version | Publisher | What it does"
       columns_partial: "Skill | Version | Publisher | Shares only | What it does"
+      columns_reviewed: "Skill | Version | Publisher | Review | What it does"
+      columns_partial_reviewed: "Skill | Version | Publisher | Shares only | Review | What it does"
       next: "Read one: ${cli} read {name}    Install one: ${cli} install {name}"
       more: "More: the same search with --cursor {cursor}"
     read:
@@ -995,12 +1030,19 @@ results:
       next: "To install it: ${cli} install {name}"
       next_version: "To install this version: ${cli} install {name} --version {version}   (the latest is v{latest})"
       path_hint: "To read a file of {skill}: ${cli} read {skill} --path {path}"
+      review:
+        one: "The catalog's review found 1 thing to know before you install it:"
+        other: "The catalog's review found {n} things to know before you install it:"
+      found: 'line {line}: "{evidence}"'
+      more: "…and {n} more like these"
+      review_left_out: "Its findings aren't shown, to keep this short. To see them: ${cli} read {name}"
     versions:
       header:
         one: "{name}: 1 version"
         other: "{name}: {n} versions"
       no_message: no note
       columns: "Version | Published | By | Note"
+      columns_reviewed: "Version | Published | By | Note | Review"
       more: "Older: the same command with --cursor {cursor}"
       next: "What changed in the latest: ${cli} diff {name} --from {from} --to {to}"
     diff:
@@ -1009,6 +1051,7 @@ results:
         other: "{name} v{from} → v{to}: {n} files changed"
       runs: "Can run something new on this machine:"
       runs_no: Nothing new can run on this machine.
+      review: "The catalog's review found what to know first:"
       columns: "Change | File | Note"
       status:
         added: added

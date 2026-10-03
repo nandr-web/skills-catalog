@@ -11,6 +11,7 @@ import { actAs } from '../src/local/index.ts';
 import { userInfo } from 'node:os';
 import { ADAPTERS } from './adapters.ts';
 import { catalogSuite } from './shared/catalog.ts';
+import { reviewsSuite } from './shared/reviews.ts';
 
 const skills = loadGolden('skills.yaml');
 const histories = loadGolden('histories.yaml');
@@ -143,6 +144,19 @@ describe('dry run (contract §2)', () => {
       expect(r.risk_flags.map((f) => f.kind), JSON.stringify(nonGrantingKeys)).toEqual(kinds);
     }
   });
+  it('takes the rules reviewer\'s length budget from its config', async () => {
+    const skill = [{ path: 'SKILL.md', mode: '0644' as const, bytes: Buffer.from(`---\nname: long\ndescription: Long.\n---\n${'x'.repeat(400)}\n`) }];
+    const { catalog } = await openTest({ config: { contextCostBudget: 100 } });
+    const r = await catalog.publish(request('long', skill, { dry_run: true }), actAs('ana'));
+    expect(r.risk_flags.filter((f) => f.kind === 'context_cost')).toEqual([{ kind: 'context_cost', path: 'SKILL.md', detail: 'about 110 tokens (budget 100)' }]);
+    const plain = (await openTest()).catalog;
+    expect((await plain.publish(request('long', skill, { dry_run: true }), actAs('ana'))).risk_flags.filter((f) => f.kind === 'context_cost')).toEqual([]);
+  });
+  it('refuses a length budget that isn\'t a positive whole number, so it can\'t turn the flag off', async () => {
+    for (const [contextCostBudget, why] of [[0, 'too_low'], [0.5, 'not_integer'], [Infinity, 'not_integer']] as const) {
+      expect((await errorOf(() => openTest({ config: { contextCostBudget } }))).toJSON(), String(contextCostBudget)).toEqual({ code: 'invalid_request', field: 'context_cost_budget', why });
+    }
+  });
 });
 
 describe('not found (golden/skills.yaml missing-names)', () => {
@@ -222,6 +236,7 @@ describe('search: the local index', () => {
 });
 
 for (const a of ADAPTERS) catalogSuite(a);
+for (const a of ADAPTERS) reviewsSuite(a);
 
 describe('SKILLS_CATALOG (contract §8)', () => {
   it('file:// opens the local catalog; https:// opens a hosted one (over its web API, nothing asked at open); anything else is refused', async () => {

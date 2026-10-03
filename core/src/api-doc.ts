@@ -69,6 +69,8 @@ function outputType(s: OutputSchema): string {
       return s.enum ? `one of ${s.enum.map(code).join(', ')}` : 'text';
     case 'integer':
       return 'a whole number';
+    case 'number':
+      return 'a number';
     case 'boolean':
       return 'true or false';
     case 'null':
@@ -76,7 +78,9 @@ function outputType(s: OutputSchema): string {
     case 'array':
       return `a list, each ${outputType(s.items)}`;
     case 'object':
-      return Object.keys(s.properties).length ? 'an object with' : 'an object';
+      if (Object.keys(s.properties).length) return 'an object with';
+      // An object of named values of one type (a review's measurements, a link's headers).
+      return typeof s.additionalProperties === 'object' ? `an object, each value ${outputType(s.additionalProperties)}` : 'an object';
   }
 }
 

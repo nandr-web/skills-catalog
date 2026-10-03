@@ -11,10 +11,20 @@ interface CardRow {
   tags: string;
   publisher: string;
   updated_at: string;
+  quality?: string | null; // absent in a card table from before quality (read as it is by a read-only open)
 }
 
-function toCard(r: CardRow): SearchCard {
-  return { ...r, tags: JSON.parse(r.tags) };
+// A card's quality is kept as JSON, null when nothing is flagged; one that can't be read shows none.
+function toCard({ quality, ...r }: CardRow): SearchCard {
+  const card: SearchCard = { ...r, tags: JSON.parse(r.tags) };
+  if (quality) {
+    try {
+      card.quality = JSON.parse(quality);
+    } catch {
+      // unreadable: as if nothing were flagged
+    }
+  }
+  return card;
 }
 
 // Words reach FTS5 as quoted strings, so nothing in a query is read as FTS5 syntax.
@@ -47,8 +57,8 @@ export class SqliteSearchIndex implements SearchIndex {
     if (!fresh) this.db.prepare('DELETE FROM search_fts WHERE name = ?').run(card.name);
     this.db.prepare('INSERT INTO search_fts (name, words, description) VALUES (?, ?, ?)').run(card.name, card.name.replace(/-/g, ' '), card.description);
     this.db
-      .prepare('INSERT OR REPLACE INTO search_cards (name, description, latest_version, tags, publisher, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(card.name, card.description, card.latest_version, JSON.stringify(card.tags), card.publisher, card.updated_at);
+      .prepare('INSERT OR REPLACE INTO search_cards (name, description, latest_version, tags, publisher, updated_at, quality) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(card.name, card.description, card.latest_version, JSON.stringify(card.tags), card.publisher, card.updated_at, card.quality ? JSON.stringify(card.quality) : null);
   }
 
   async rebuild(cards: readonly SearchCard[]): Promise<void> {
