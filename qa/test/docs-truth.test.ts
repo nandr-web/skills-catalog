@@ -101,7 +101,7 @@ describe('the owner\'s words on these pages', () => {
     expect(wordProblems()).toEqual([]);
   });
 
-  it('names the page, the line and the word', () => {
+  it('names the page, the line and the word; the PRD\'s mirrored rows keep their words', () => {
     const root = scratch('qa-words-');
     for (const d of ['docs', 'qa']) mkdirSync(join(root, d));
     for (const p of ['docs/architecture.md', 'docs/decisions.md', 'docs/agent-experience.md', 'docs/requirements.md', 'docs/contract.md', 'docs/api.md', 'qa/qa-plan.md']) {
@@ -109,9 +109,13 @@ describe('the owner\'s words on these pages', () => {
     }
     writeFileSync(join(root, 'docs/architecture.md'), 'ok\nthe registry of skills\nruns on your machine\n');
     writeFileSync(join(root, 'docs/requirements.md'), 'Through an AI assistant (the PRD\'s words)\n');
+    writeFileSync(join(root, 'docs/decisions.md'), '| D1 | Access is through an AI assistant | the PRD\'s row, as it is |\n| B1 | an AI assistant decides |\n');
+    writeFileSync(join(root, 'docs/contract.md'), 'an inert file (review P3.1: an image)\nsee §5.3 and version 1.2\n');
     expect(wordProblems(root)).toEqual([
       'docs/architecture.md:2: "registry" (the owner calls the list of operations "the API" and the shared skills "the catalog")',
       'docs/architecture.md:3: "your machine" (the actors are the Developer and the Assistant)',
+      'docs/decisions.md:2: "AI assistant" (the actors are the Developer and the Assistant)',
+      'docs/contract.md:1: "P3.1" (a review finding\'s id is for the team, not the reader)',
     ]);
   });
 });

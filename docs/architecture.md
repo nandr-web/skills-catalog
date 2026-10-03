@@ -4,13 +4,13 @@ What runs on the Developer's machine, what runs in the team's AWS account, and w
 
 ## On the Developer's machine
 
-![On the Developer's machine: the Developer runs the CLI or guided setup; the Assistant (Claude Code) calls the MCP server's tools; both go through the core, which keeps the local catalog (SQLite and files); the installer writes checked skills into the skills folder and holds a risky update for the Developer's yes](pictures/today.svg)
+![The parts on one machine: the Developer runs the CLI and setup, the Assistant (Claude Code) calls the MCP server, both go through the core to the local catalog, and the installer writes checked skills into the skills folder, holding a risky update for a yes](pictures/today.svg)
 
 **Built.** The core, the local catalog, the MCP server (the Assistant's tools), the installer (it holds a risky update until the Developer says yes), the CLI with every catalog command, and the guided setup. All of them use one API ([api.md](api.md)).
 
-## Two homes, one API
+## In AWS: the same API, hosted
 
-![One API, two homes: on the Developer's machine, the CLI, the MCP server, the installer and the core use the local catalog; with SKILLS_CATALOG set to a hosted address and skills-catalog login, the same parts use the hosted catalog in the team's AWS account (Lambda behind CloudFront, DynamoDB and S3). Only the hosted web page is not built](pictures/shape.svg)
+![The parts in AWS: the hosted catalog in the team's AWS account (the API on Lambda behind CloudFront, with DynamoDB and S3), reached by the same CLI and MCP server once SKILLS_CATALOG names it and the Developer signs in](pictures/shape.svg)
 
 **One API, two homes.** The Assistant and the Developer reach a catalog through one API ([api.md](api.md)): the local catalog by default, or the hosted catalog in the team's AWS account when `SKILLS_CATALOG` names its address and the Developer runs `skills-catalog login`. The same tests run against both. The owner's notes on the PRD asked for exactly this: "build the experience, interface and contracts without coupling ourselves with a specific choice".
 

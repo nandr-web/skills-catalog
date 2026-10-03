@@ -2,20 +2,20 @@
 
 The decision log, in the PRD's format: what was decided, why, when and by whom, and whether it is built. D1–D3 are the PRD's own; B1 onward were decided while building it. "The owner" is the person this was built for; "the team" is the architects, QA and agent-experience work behind the design. Details live in [architecture.md](architecture.md) and [contract.md](contract.md); the owner's words on the PRD are in [prd/notes.md](prd/notes.md).
 
-**At a glance:** 40 decisions: 3 from the PRD, 21 by the owner, 11 by the team, 5 defaults awaiting the owner.
+**At a glance:** 41 decisions: 3 from the PRD, 21 by the owner, 11 by the team, 6 defaults awaiting the owner.
 
 | Decided by | Decisions | Not built yet |
 |---|---|---|
 | The PRD | 3 | 0 |
 | The owner | 21 | 4 |
 | The team | 11 | 0 |
-| Defaults awaiting the owner | 5 | 0 |
+| Defaults awaiting the owner | 6 | 0 |
 
 ## From the PRD
 
 | # | Decision | Rationale | Date | Decided by | How the build honours it | Built |
 |---|---|---|---|---|---|---|
-| D1 | Access is through the Assistant | Low-effort reuse is the point; the Assistant is the access path | 2026-07-23 | The PRD | Claude Code reaches the catalog through the MCP server's tools; the CLI does the same for the Developer at a terminal | Yes |
+| D1 | Access is through an AI assistant | Low-effort reuse is the point; the assistant is the access path | 2026-07-23 | The PRD | Claude Code reaches the catalog through the MCP server's tools; the CLI does the same for the Developer at a terminal | Yes |
 | D2 | Versioning is in scope for the MVP | Consistency over time, see changes, don't overwrite silently | 2026-07-23 | The PRD | Every publish is a numbered version with a fingerprint; history, diffs and an earlier version on request | Yes |
 | D3 | Authentication and de-duplication are out of scope | Not needed to prove low-effort, consistent reuse | 2026-07-23 | The PRD | The local catalog needs no sign-in: it takes the computer's login as the Developer's name, labelled a local sign-in for demo purposes. De-duplication is not built. Extended with the owner's yes (B6): the opt-in hosted catalog signs people in, because a catalog on the internet must know who changes a skill | Yes |
 
@@ -26,12 +26,12 @@ The decision log, in the PRD's format: what was decided, why, when and by whom, 
 | B1 | **What ships first:** everything runs locally by default; AWS is opt-in, off by default. Over: building the web UI and AWS hosting first | The PRD's time box and "run on a reviewer's machine from a short README": no account, no server | 2026-09-28 | The owner | Yes |
 | B2 | **Guided setup:** one command (`skills-catalog setup`) that the Assistant can also run; it asks about auto-updates first, default yes; `--yes` or `--config <file>` for unattended setup; `teardown` undoes it. Over: configuring by hand | The owner's notes: a welcome, seamless setup, with no need to go into a file | 2026-09-28 | The owner | Yes |
 | B3 | **Risky updates wait for a yes:** auto-updates are on by default; an update waits for the Developer's yes only when it could change what runs on the machine or the reviewer flagged it, on every surface. While the Assistant runs commands without asking, a newly added command in a skill's text is flagged too. Over: applying every update silently; holding every update | A skill is instructions the Assistant follows, so an update can change what runs; asking about every update trains people to say yes | 2026-09-28, narrowed 2026-09-29 | The owner | Yes |
-| B4 | **A pinned skill stays pinned:** installing a newer version over a pinned skill waits for a yes | A pin is the Developer's choice; an Assistant shouldn't undo it quietly | 2026-09-29 | The owner | Yes |
+| B4 | **A pinned skill stays pinned:** installing a newer version over a pinned or "tell me first" (notify) skill waits for the Developer's yes, as an update does | The Developer's own setting for that skill decides, not the Assistant | 2026-09-29 | The owner | Yes |
 | B5 | **Reviews:** a rules reviewer reviews every publish; pluggable agent reviewers that measure quality come later; a clean skill shows nothing. Over: reviews only later | The owner asked for reviewer-based measurements, prompt-injection risk included; approving with no comments is a normal result | 2026-09-28 | The owner | The rules reviewer, yes; agent reviewers, later |
 | B6 | **Who may publish:** only a skill's owners (its first publisher, plus maintainers later). Hosted: everyone signs in, even to read. Locally, a simplified sign-in: the Developer acts as a named developer, labelled for demo purposes. Over: anyone signed in publishes | Signing in isn't permission to change someone else's skill; locally, sign-in must not block publishing | 2026-09-28, simplified locally 2026-10-02 | The owner | Yes |
 | B7 | **Search to start with:** keyword search built in, upgraded when measurement says so (recall on a golden query set, speed). Over: a search service by meaning from day one | Nothing to run or pay for; the index is rebuilt from stored versions, so switching later needs no migration | 2026-09-28 | The owner | Yes |
 | B8 | **Where an installed skill's origin is kept:** the installer's own list (name, version, fingerprint, which catalog), by install location. Over: metadata inside SKILL.md; a small file beside it | The skill's files stay exactly as published, so "complete and unchanged" stays checkable | 2026-09-28 | The owner | Yes |
-| B9 | **Local edits to an installed skill:** an update replaces a copy the Developer changed, as most installed software does, and keeps the changed copy aside, named. Over: warn and skip changed skills | The owner's call; keeping the edited copy aside came with the review fixes the owner asked for | 2026-09-28, copy kept aside 2026-10-02 | The owner | Yes |
+| B9 | **Local edits to an installed skill:** an update replaces a copy the Developer changed, as most installed software does; local edits not shared upstream may be lost. Over: warn, back up, or skip changed skills | The owner's call, like most installed software | 2026-09-28 | The owner | Yes |
 | B10 | **Stay flexible:** one API (List with filters, Get, and the rest), with storage and search behind replaceable parts. Over: building straight on one backend | The owner's notes: "build the experience, interface and contracts without coupling ourselves with a specific choice" | 2026-09-28 | The owner | Yes |
 | B11 | **One definition, every face:** each operation is defined once; the MCP server's tools, the CLI, the HTTP routes, setup's allow list and a published schema come from it. "The API" names the list of operations; "catalog" names the shared skills and the service that keeps them. Over: separate APIs per face | Assistants can do everything a person can, and the faces can't drift apart; two names that sounded alike confused readers | 2026-09-29 | The owner | Yes |
 | B12 | **Architecture:** a local-first core with replaceable storage, search and identity; the same tests run against every backend (moved from the team to the owner). Over: AWS from day one; a git repository as the catalog; plugin marketplaces as the backend; a hosted MCP server only | Runs anywhere in minutes, and keeps every one of those as a later option or an export | 2026-09-29 | The owner | Yes |
@@ -72,6 +72,7 @@ Taken during the review fixes because each was the recommended, reversible optio
 | B35 | **Setup adds the `skills-catalog` launcher by default** (in `~/.local/bin`, never overwriting a file there) | The CLI's messages name `skills-catalog`, so it should run as named | 2026-10-02 | The team (default, awaiting the owner) | Yes |
 | B36 | **File modes are kept as 0644 or 0755**, and the publish preview names each file whose mode changes (0600 becomes 0644) | Two modes are what every machine can reproduce; the Developer sees the change before saying yes | 2026-10-02 | The team (default, awaiting the owner) | Yes |
 | B37 | **A warning in a skill's prose is advice:** the reviewer shows it, but it never holds an update | Text that only warns about a pattern isn't the pattern; holding on it would train people to say yes | 2026-10-02 | The team (default, awaiting the owner) | Yes |
+| B38 | **A hand-edited copy is kept aside on update:** before an update replaces a copy the Developer changed, the changed copy is kept aside and the result names where | The owner's stance is that local edits may be lost; keeping them aside costs nothing and loses nothing. It came with the review fixes | 2026-10-02 | The team (default, awaiting the owner) | Yes |
 
 ## Open
 

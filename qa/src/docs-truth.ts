@@ -105,16 +105,20 @@ export function decisionProblems(text: string): string[] {
 export const WORD_RULES = {
   registry: { pattern: /\bregistry\b/i, why: 'the owner calls the list of operations "the API" and the shared skills "the catalog"' },
   actor: { pattern: /\bAI assistants?\b|\byour (?:machine|assistant|AWS)\b|\byou(?:r)? (?:machine|AWS account)\b/i, why: 'the actors are the Developer and the Assistant' },
+  review_id: { pattern: /\b[PV]\d{1,2}\.\d{1,2}\b/, why: 'a review finding\'s id is for the team, not the reader' },
 } as const;
 
+/** Lines quoted as they are from elsewhere, which keep their own words: the PRD's decision rows mirrored in the log. */
+const QUOTED = /^\| D[1-3] \|/;
+
 export const WORD_PAGES: Record<string, (keyof typeof WORD_RULES)[]> = {
-  'docs/architecture.md': ['registry', 'actor'],
-  'docs/decisions.md': ['registry', 'actor'],
-  'docs/agent-experience.md': ['registry', 'actor'],
-  'docs/requirements.md': ['registry'],     // the requirements keep the PRD's own words ("an AI assistant")
-  'docs/contract.md': ['registry'],
-  'docs/api.md': ['registry'],
-  'qa/qa-plan.md': ['registry'],
+  'docs/architecture.md': ['registry', 'actor', 'review_id'],
+  'docs/decisions.md': ['registry', 'actor', 'review_id'],
+  'docs/agent-experience.md': ['registry', 'actor', 'review_id'],
+  'docs/requirements.md': ['registry', 'review_id'],     // the requirements keep the PRD's own words ("an AI assistant")
+  'docs/contract.md': ['registry', 'review_id'],
+  'docs/api.md': ['registry', 'review_id'],
+  'qa/qa-plan.md': ['registry', 'review_id'],
 };
 
 /** Each line of a page that breaks one of its word rules. */
@@ -124,6 +128,7 @@ export function wordProblems(repo = REPO): string[] {
     const file = join(repo, page);
     if (!existsSync(file)) { out.push(`${page} is missing`); continue; }
     readFileSync(file, 'utf8').split('\n').forEach((line, k) => {
+      if (QUOTED.test(line)) return;
       for (const r of rules) {
         const m = WORD_RULES[r].pattern.exec(line);
         if (m) out.push(`${page}:${k + 1}: "${m[0]}" (${WORD_RULES[r].why})`);

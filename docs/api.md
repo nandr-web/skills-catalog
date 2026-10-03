@@ -55,7 +55,7 @@ Every operation, grouped by what it acts on; the chips say where each one can be
 
 - **Strict inputs:** an unknown field, or one past its limit, is refused with invalid_request naming the field and the limit; nothing is ever cut to fit.
 - **Errors any call can return,** besides each operation's own: **invalid_request** (a field outside its schema), **invalid_developer_setting** (the demo-developer setting isn't a developer's name), **internal_error** (a bug; its details go to a log file). When the catalog can't be opened: **invalid_request** (its location), or **forbidden** (a hosted address given to `serve`, which serves a local catalog only).
-- **The demo line:** while the demo-developer setting is on, every answer ends with "(Acting as bob, for demo purposes.)". The examples here leave it out.
+- **The demo line:** every answer on a local catalog says who is acting: "(Acting as bob, for demo purposes.)" while a demo developer is set (`--as` or `SKILLS_AS`), or, on the default install with no name set, "(Signed in locally as ana, this computer's login, for demo purposes. skills-catalog setup changes it.)". The examples here leave it out.
 - **The CLI:** every command also takes --as &lt;developer>, and exits 0 when done, 1 on an error, 3 when it needs the person at a terminal.
 
 ## The shared skills (the catalog)
