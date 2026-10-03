@@ -41,8 +41,10 @@ export class SqliteSearchIndex implements SearchIndex {
     this.local.immediate(() => this.write(card));
   }
 
-  private write(card: SearchCard): void {
-    this.db.prepare('DELETE FROM search_fts WHERE name = ?').run(card.name);
+  // `fresh`: the tables were just emptied, so there is no old row to delete. Deleting by name scans the whole full-text
+  // table (name isn't indexed there), which made a rebuild grow with the square of the catalog (5-7 s at 10,000 cards).
+  private write(card: SearchCard, fresh = false): void {
+    if (!fresh) this.db.prepare('DELETE FROM search_fts WHERE name = ?').run(card.name);
     this.db.prepare('INSERT INTO search_fts (name, words, description) VALUES (?, ?, ?)').run(card.name, card.name.replace(/-/g, ' '), card.description);
     this.db
       .prepare('INSERT OR REPLACE INTO search_cards (name, description, latest_version, tags, publisher, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
@@ -52,7 +54,9 @@ export class SqliteSearchIndex implements SearchIndex {
   async rebuild(cards: readonly SearchCard[]): Promise<void> {
     this.local.immediate(() => {
       this.db.exec('DELETE FROM search_fts; DELETE FROM search_cards;');
-      for (const c of cards) this.write(c);
+      // One row per name, the last given winning, as upserts in order would leave it.
+      const byName = new Map(cards.map((c) => [c.name, c]));
+      for (const c of byName.values()) this.write(c, true);
     });
   }
 
