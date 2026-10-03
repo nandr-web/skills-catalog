@@ -17,7 +17,7 @@ import { closeSync, constants, existsSync, fchmodSync, lstatSync, mkdirSync, mkd
 import { dirname, join } from 'node:path';
 import { CatalogError, inlineFiles, shellQuote, validateInput, type Catalog, type Words, type VersionsResult } from '@skills-catalog/core';
 import { DEFAULT_LIMITS, checkFetched, checkName, diffTrees, fingerprint, flagText, sha256Hex, type RiskFlag, type TreeDiff, type TreeFile } from '@skills-catalog/core/skill-tree';
-import { reasons } from '@skills-catalog/core';
+import { reasons, reviewOnly } from '@skills-catalog/core';
 import { logWords } from '../activity.ts';
 import { holdWithinADay, recordUsage, type HoldReason, type UsageEvent } from '../usage/record.ts';
 import type { Context, Done } from '../operations.ts';
@@ -573,14 +573,17 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
     const reason = entry && (entry.catalog !== ctx.settings.catalog || entry.version !== version) ? holdOf(ctx, entry, config) : undefined;
     if (entry && reason) {
       recordHold(ctx, req.name, version, reason, flags, version - entry.version);
-      const also = flags.length ? s.format(s.word('update.held_also'), { reasons: reasons(s, flags) }) : '';
+      // A review's findings alone (text, not something that runs) have their own words (validator V-D3).
+      const also = flags.length ? s.format(s.word(reviewOnly(flags) ? 'update.held_also_review' : 'update.held_also'), { reasons: reasons(s, flags) }) : '';
       const text = s.format(w[ctx.face === 'cli' ? `held_${reason}_cli` : `held_${reason}`], { ...held, from: entry.version, also, was: entry.catalog, now: ctx.settings.catalog });
       return { text, target: `${req.name} v${version}`, result: log.result('install', `held_${reason}`), outcome: 'held' };
     }
     if (flags.length) {
       recordHold(ctx, req.name, version, 'flagged', flags, entry ? version - entry.version : 0);
       // Over an installed copy the sentence names the version installed now.
-      const over = entry ? { word: 'held_over', from: entry.version } : { word: 'held' };
+      // Only what the catalog's review found (text, a hidden character, the length): its own words, not "it can run things".
+      const review = reviewOnly(flags) ? '_review' : '';
+      const over = entry ? { word: `held_over${review}`, from: entry.version } : { word: `held${review}` };
       const text = s.format(w[ctx.face === 'cli' ? `${over.word}_cli` : over.word], { ...held, ...over, reasons: reasons(s, flags) });
       return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held' };
     }
@@ -861,7 +864,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
       const heldOver = (entry: LockEntry, d: TreeDiff): boolean => {
         const at = { name: e.name, from: entry.version, to: v.latest };
         const take = { ...at, target: e.target, confirm, flags: JSON.stringify(kinds(d.risk_flags)) };
-        const also = d.risk_flags.length ? s.format(w.held_also, { reasons: reasons(s, d.risk_flags) }) : '';
+        const also = d.risk_flags.length ? s.format(reviewOnly(d.risk_flags) ? w.held_also_review : w.held_also, { reasons: reasons(s, d.risk_flags) }) : '';
         const { policy } = policyOf(entry, config);
         // A copy from another catalog comes first (§5.3): it may be a different skill that shares the name. Never applied
         // silently; taken on a yes, which records the catalog in use.
@@ -882,7 +885,7 @@ export async function update(ctx: Context, args: unknown): Promise<Done> {
         // the flags it shows, [] when none.
         if (policy === 'notify') {
           recordHold(ctx, e.name, to.version, 'notify', d.risk_flags, to.version - entry.version);
-          item('held_notify', at, d.risk_flags, d.risk_flags.length ? s.format(w.held_notify_flagged, { ...at, reasons: reasons(s, d.risk_flags) }) : s.format(w.held_notify, at), s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
+          item('held_notify', at, d.risk_flags, d.risk_flags.length ? s.format(reviewOnly(d.risk_flags) ? w.held_notify_flagged_review : w.held_notify_flagged, { ...at, reasons: reasons(s, d.risk_flags) }) : s.format(w.held_notify, at), s.format(ctx.face === 'cli' ? w.held_notify_next_cli : w.held_notify_next, take));
           saw('held_notify');
           return true;
         }

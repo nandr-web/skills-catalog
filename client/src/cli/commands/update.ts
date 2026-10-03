@@ -3,7 +3,7 @@
 // what waits and why, ask in the person's own terminal, and take it only on a yes. Without a terminal it refuses (exit
 // 3, run.ts), a backstop only, since a command can fake a terminal; setup never pre-allows it, so an assistant running
 // it meets the permission prompt.
-import { CatalogError, renderError, toCatalogError, type Words } from '@skills-catalog/core';
+import { CatalogError, REVIEW_ONLY_KINDS, renderError, toCatalogError, type Words } from '@skills-catalog/core';
 import { appendActivity, logWords } from '../../activity.ts';
 import { pendingHold } from '../../machine/installer.ts';
 import type { Target } from '../../machine/lock.ts';
@@ -73,7 +73,8 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
   // Why it waits picks the words: a first install names where it goes; a copy from another catalog says where each comes
   // from; a pinned skill says so; a "tell me first" update with nothing flagged has no reasons to give. Flags, if any,
   // are added to the first two.
-  const also = hold.flags.length ? said(s, 'update.accept_also', { reasons: hold.reasons }) : '';
+  const reviewOnly = hold.flags.length > 0 && hold.flags.every((k: string) => REVIEW_ONLY_KINDS.has(k));
+  const also = hold.flags.length ? said(s, reviewOnly ? 'update.accept_also_review' : 'update.accept_also', { reasons: hold.reasons }) : '';
   const at = { name, from: hold.installed, to: hold.version, reasons: hold.reasons, path: hold.path, was: hold.was, now: hold.now, also };
   const intro = first ? 'update.accept_intro_install' : hold.reason === 'other_catalog' ? 'update.accept_intro_other_catalog' : hold.reason === 'pin' ? 'update.accept_intro_pin' : hold.notify && !hold.flags.length ? 'update.accept_intro_notify' : 'update.accept_intro';
   // The person is at this terminal: the command to look first, rather than asking their assistant.

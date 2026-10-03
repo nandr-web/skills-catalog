@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { actAs } from '../src/local/index.ts';
-import { renderRead, renderSearch, renderVersions } from '../src/render.ts';
+import { qualityNotes, reasons, renderDiff, renderRead, renderSearch, renderVersions, reviewOnly } from '../src/render.ts';
 import { flagText } from '../src/skill-tree/index.ts';
 import { Words } from '../src/words-file.ts';
 import { filesOf, loadGolden } from './golden.ts';
@@ -132,5 +132,44 @@ describe('a review in the words the assistant reads', () => {
     const line = renderRead(s, r as any, counterIds()).split('\n')[1]!;
     const notes = note('prompt_injection', { path: 'SKILL.md', detail: 'ignore previous instructions' });
     expect(line).toBe(s.format(s.word('get.review_omitted'), { notes, used: '24 KB', limit: '24 KB', name: 'heavy' }));
+  });
+});
+
+// Each kind of finding in its own true words (validator V-D3, V-D5): a hidden character, a download run in a shell, a
+// local file sent out and text that steers the assistant are different things; a long SKILL.md isn't something that runs.
+// A hold or a diff caused only by what a review found never says the skill "can run things on this machine".
+describe('a review\'s findings in true words', () => {
+  const flag = (detail: string, line = 5) => ({ kind: 'prompt_injection' as const, path: 'SKILL.md', line, detail });
+  const reason = (key: string, fields: Record<string, unknown>) => s.format(s.word(`update.reason_injection.${key}`), fields);
+
+  it('the reasons: one sentence for each rule, and the length in words that fit a first install', () => {
+    expect(reasons(s, [flag('hidden character U+200B')])).toBe(reason('hidden', { path: 'SKILL.md', line: 5, detail: 'hidden character U+200B' }));
+    expect(reasons(s, [flag('curl piped to a shell')])).toBe(reason('pipe', { path: 'SKILL.md', line: 5 }));
+    expect(reasons(s, [flag('sends a local file or variable')])).toBe(reason('sends', { path: 'SKILL.md', line: 5 }));
+    for (const d of ['ignore previous instructions', 'addressed to the assistant', 'text hidden in an HTML comment']) expect(reasons(s, [flag(d)])).toBe(reason('steering', { path: 'SKILL.md', line: 5, detail: d }));
+    const cost = reasons(s, [{ kind: 'context_cost', path: 'SKILL.md', detail: 'about 5001 tokens (budget 5000)' }]);
+    expect(cost).not.toMatch(/got much longer|run/);
+    expect(cost).toContain('about 5001 tokens (budget 5000)');
+  });
+
+  it('the card notes: a hidden character, a download run in a shell and a file sent each have their own words', () => {
+    expect(qualityNotes(s, [flag('hidden character U+200B')])).toBe(s.format(s.word('quality.note_injection.hidden'), { path: 'SKILL.md', detail: 'hidden character U+200B' }));
+    expect(qualityNotes(s, [flag('curl piped to a shell')])).toBe(s.format(s.word('quality.note_injection.pipe'), { path: 'SKILL.md' }));
+    expect(qualityNotes(s, [flag('sends a local file or variable')])).toBe(s.format(s.word('quality.note_injection.sends'), { path: 'SKILL.md' }));
+    // Two rules of one kind are two notes; the same rule twice is one.
+    expect(qualityNotes(s, [flag('curl piped to a shell'), flag('curl piped to a shell', 6), flag('ignore previous instructions')]).split('; ')).toHaveLength(2);
+  });
+
+  it('a diff whose only flags are a review\'s: nothing new can run, and what the review found is its own line', () => {
+    const d = { name: 'x', from: 1, to: 2, files: [{ path: 'SKILL.md', status: 'changed' as const, flags: { binary: false, executable: false, script: false } }], frontmatter_changes: [], publisher_changed: false, risk_flags: [flag('hidden character U+200B')] };
+    const lines = renderDiff(s, d, counterIds()).split('\n');
+    expect(lines[0]).toContain(s.word('diff.executes_no'));
+    expect(lines).toContain(s.format(s.word('diff.review'), { reasons: reasons(s, d.risk_flags) }));
+  });
+
+  it('whether a hold is only for what a review found', () => {
+    expect(reviewOnly([flag('curl piped to a shell'), { kind: 'context_cost', detail: 'x' }])).toBe(true);
+    expect(reviewOnly([flag('curl piped to a shell'), { kind: 'runnable_file', path: 'a.sh', detail: 'x' }])).toBe(false);
+    expect(reviewOnly([])).toBe(false);
   });
 });

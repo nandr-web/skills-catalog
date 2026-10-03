@@ -35,15 +35,34 @@ const day = (s: Words, iso: string) => {
   return s.format(s.word('date'), { yyyy, mm, dd });
 };
 
+// The kinds only a review raises, about what a skill says rather than what it runs: a hold or a diff for these alone never
+// says the skill can run things on this machine.
+export const REVIEW_ONLY_KINDS: ReadonlySet<string> = new Set(['prompt_injection', 'context_cost']);
+export const reviewOnly = (flags: readonly RiskFlag[]): boolean => flags.length > 0 && flags.every((f) => REVIEW_ONLY_KINDS.has(f.kind));
+
+// A prompt_injection flag's rule, by its detail (review.ts names each): a hidden character, a download run in a shell, a
+// local file sent out, or text that steers the assistant.
+type InjectionRule = 'hidden' | 'pipe' | 'sends' | 'steering';
+function injectionRule(detail: string): InjectionRule {
+  if (detail.startsWith('hidden character')) return 'hidden';
+  if (detail === 'curl piped to a shell') return 'pipe';
+  if (detail === 'sends a local file or variable') return 'sends';
+  return 'steering';
+}
+
 /** What a review flagged, as the notes a card, a version line and the person's views share (results.quality.note): one
- *  per kind, the first flag of each, joined by "; ". A publisher's text in a flag (a path, a key) is escaped and cut. */
+ *  per kind (per rule, for steering text), the first flag of each, joined by "; ". A publisher's text in a flag (a path,
+ *  a key) is escaped and cut. */
 export function qualityNotes(s: Words, flags: readonly RiskFlag[]): string {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const f of flags) {
-    if (seen.has(f.kind)) continue;
-    seen.add(f.kind);
-    out.push(s.format(s.word('quality.note')[f.kind], { path: flagText(f.path ?? ''), detail: flagText(noteDetail(f)) }));
+    const rule = f.kind === 'prompt_injection' ? injectionRule(f.detail) : undefined;
+    const key = rule ? `${f.kind}:${rule}` : f.kind;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const template = rule && rule !== 'steering' ? s.word('quality.note_injection')[rule] : s.word('quality.note')[f.kind];
+    out.push(s.format(template, { path: flagText(f.path ?? ''), detail: flagText(noteDetail(f)) }));
   }
   return out.join('; ');
 }
@@ -196,7 +215,13 @@ export function renderVersions(s: Words, r: VersionsResult): string {
 // One sentence per risk flag, from the update gate's reasons.
 export function reasons(s: Words, flags: readonly RiskFlag[]): string {
   const w = s.word('update.reason');
-  return flags.map((f) => s.format(w[f.kind], { path: flagText(f.path ?? ''), detail: flagText(f.detail), ...(f.line === undefined ? {} : { line: f.line }) })).join('; ');
+  const injection = s.word('update.reason_injection');
+  return flags
+    .map((f) => {
+      const template = f.kind === 'prompt_injection' && f.line !== undefined ? injection[injectionRule(f.detail)] : w[f.kind];
+      return s.format(template, { path: flagText(f.path ?? ''), detail: flagText(f.detail), ...(f.line === undefined ? {} : { line: f.line }) });
+    })
+    .join('; ');
 }
 
 // `ids` makes the fence token for the changed lines, which are the publishers' data, like a read's text (§5.2).
@@ -204,8 +229,12 @@ export function renderDiff(s: Words, r: DiffResult, ids: Ids): string {
   if (!s.guided) return JSON.stringify(r);
   const w = s.word('diff');
   if (r.files.length === 0 && !r.publisher_changed) return s.format(w.same, { name: r.name, from: r.from, to: r.to });
-  const executes = r.risk_flags.length ? s.format(w.executes_yes, { reasons: reasons(s, r.risk_flags) }) : w.executes_no;
+  // What can run is said apart from what a review found (text that steers, a hidden character, the length).
+  const runs = r.risk_flags.filter((f) => !REVIEW_ONLY_KINDS.has(f.kind));
+  const found = r.risk_flags.filter((f) => REVIEW_ONLY_KINDS.has(f.kind));
+  const executes = runs.length ? s.format(w.executes_yes, { reasons: reasons(s, runs) }) : w.executes_no;
   const lines = [s.format(w.header, { name: r.name, from: r.from, to: r.to, n: r.files.length, executes })];
+  if (found.length) lines.push(s.format(w.review, { reasons: reasons(s, found) }));
   for (const f of r.files) {
     const kind = f.flags.executable ? w.kind.executable : f.flags.script ? w.kind.script : f.flags.binary ? w.kind.binary : '';
     lines.push(s.format(w.file, { status: f.status, path: quoted(f.path), kind }));   // a path outside the fence is data: JSON-quoted (§5.2)

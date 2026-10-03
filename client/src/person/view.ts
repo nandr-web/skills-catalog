@@ -3,7 +3,7 @@
 // (the CLI) or in the assistant's reply (markdown, handed to it with the MCP result). What needs their decision comes
 // last, set apart (medium.ts's callout), with what answers it: the commands in a terminal, a question in a reply. Every
 // word is the words file's (results.person); only the layout is here. A result with no view here has none.
-import { fenced, qualityNotes, reasons, skillMdOf, type DiffResult, type ReadResult, type SearchInput, type SearchResult, type VersionsResult, type Words } from '@skills-catalog/core';
+import { fenced, qualityNotes, reasons, REVIEW_ONLY_KINDS, skillMdOf, type DiffResult, type ReadResult, type SearchInput, type SearchResult, type VersionsResult, type Words } from '@skills-catalog/core';
 import { flagText, oneLine } from '@skills-catalog/core/skill-tree';
 import type { ListView, UpdateView } from '../machine/installer.ts';
 import type { Answer } from '../operations.ts';
@@ -210,8 +210,12 @@ function diff({ s, say, m }: Ctx, r: DiffResult): string {
   if (r.files.length === 0 && !r.publisher_changed) return say('diff.same', at);
   const out = [paint('bold', say('diff.header', { ...at, n: r.files.length })), ''];
   const bullet = m.kind === 'terminal' ? '  • ' : '- ';
-  if (r.risk_flags.length) out.push(...m.callout([paint('attention', paint('bold', `${MARK.attention} ${say('diff.runs')}`)), ...r.risk_flags.map((f) => bullet + reasons(s, [f]))]), '');
+  // What can run apart from what the catalog's review found (text that steers, a hidden character, the length).
+  const runs = r.risk_flags.filter((f) => !REVIEW_ONLY_KINDS.has(f.kind));
+  const found = r.risk_flags.filter((f) => REVIEW_ONLY_KINDS.has(f.kind));
+  if (runs.length) out.push(...m.callout([paint('attention', paint('bold', `${MARK.attention} ${say('diff.runs')}`)), ...runs.map((f) => bullet + reasons(s, [f]))]), '');
   else out.push(`${paint('ok', MARK.ok)} ${say('diff.runs_no')}`, '');
+  if (found.length) out.push(...m.callout([paint('attention', paint('bold', `${MARK.attention} ${say('diff.review')}`)), ...found.map((f) => bullet + reasons(s, [f]))]), '');
   const tone = { added: 'added', changed: 'bold', removed: 'removed' } as const;
   const rows = r.files.map((f) => {
     const kind = f.flags.executable ? 'executable' : f.flags.script ? 'script' : f.flags.binary ? 'binary' : undefined;
