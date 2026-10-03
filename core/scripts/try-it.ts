@@ -100,7 +100,7 @@ try {
     show(`published ${r.name} v${r.version} as ${r.publisher}, fingerprint ${short(r.fingerprint)}`);
   }
 
-  step('ana', 'publishes a skill whose SKILL.md has no description', 'FR-01 rejected');
+  step('ana', 'publishes a skill whose SKILL.md has no description', 'UC-01 rejected');
   await refused(() => catalog.publish({ name: 'standup-notes', files: noDescription }, ana), './standup-notes');
   await refused(() => catalog.versions({ name: 'standup-notes' }));
 

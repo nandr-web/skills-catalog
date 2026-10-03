@@ -64,7 +64,7 @@ Each PRD item, where you see it, and the requirement in [`qa/traceability.yaml`]
 | **FR-04** Version | v2 stored, v1 kept · the history · v1 on request · the change | screens 5-6 · scenes 9, 11-13 | [version-new](qa/traceability.yaml#L161), [version-history-visible](qa/traceability.yaml#L174), [version-latest-default](qa/traceability.yaml#L184) |
 | ↳ UC-04: malformed update | Refused; v1 and v2 untouched | scene 10 | [version-malformed-untouched](qa/traceability.yaml#L195) |
 | **NFR** Consistency | Fetched files equal the published ones, byte for byte; same fingerprint | scene 7 | [consistency](qa/traceability.yaml#L204) |
-| **NFR** Through an assistant | Every screen: Claude Code calling the catalog | screens 1-6 · `qa/try-claude.sh selftest` | [assistant-mediated](qa/traceability.yaml#L217) |
+| **NFR** Through an assistant | Claude Code calling the catalog | screens 1-5 · `qa/try-claude.sh selftest` | [assistant-mediated](qa/traceability.yaml#L217) |
 | **NFR** Responsiveness | p95 under 100 ms on a 10,000-skill catalog | `npm run perf` | [responsiveness](qa/traceability.yaml#L226) |
 | **Goal 1** End to end | Developer 1 publishes; Developer 2's assistant finds and gets the same skill | screens 1-3 · the reels | [end-to-end](qa/traceability.yaml#L151) |
 | **D1, D2** | Access through the assistant; versions in the MVP | as the NFR and FR-04 above | |
@@ -76,7 +76,7 @@ Each PRD item, where you see it, and the requirement in [`qa/traceability.yaml`]
 |---|---|
 | Skill · Manifest | A folder with a `SKILL.md` (the manifest: name and description in its front matter, instructions below), plus any other files |
 | Catalog · Version | The shared catalog: a folder on one machine, or hosted in AWS. Versions are v1, v2, …; each has a **fingerprint**, one checksum of all its files, so a copy can be checked against what was published |
-| Publish · Discover · Retrieve | The assistant's tools `publish_skill_to_catalog`, `search_shared_skills`, and `read_shared_skill` / `install_shared_skill` |
+| Publish · Discover · Retrieve | The assistant's tools: `preview_skill_publish`, then `publish_skill_to_catalog` once the person says yes; `search_shared_skills`; `read_shared_skill` and `install_shared_skill` |
 
 ## Try it
 
@@ -95,10 +95,9 @@ A script plays ana and bob on a new catalog in a temporary folder, then deletes 
 
 You should see each PRD item as a scene, ending with **Nothing else was changed.**
 
-<table><tr>
-<td width="50%" valign="top"><img alt="Scenes 1 to 8: ana publishes 2 skills (FR-01); one with no description is refused and nothing is stored; bob's search for changelog for a release finds 1 of 2 skills (FR-02); sourdough bread matches no skill (UC-02); graphql schema finds only a close skill sharing schema; reading release-note-draft gives v1, the latest (FR-03); fetching v1 gives the same files and fingerprint ana published (the consistency NFR); a mistyped name is not found, with names like it (UC-03)" src="docs/pictures/walk.svg" width="100%"></td>
-<td width="50%" valign="top"><img alt="Scenes 9 to 14: ana publishes v2, which adds a script (FR-04); a v3 with no instructions is refused and v1 and v2 are kept (UC-04); bob sees 2 versions, newest first; reads v1 while v2 is the latest; compares v1 with v2 and sees a file that can run; his publish over ana's skill is refused" src="docs/pictures/walk-versions.svg" width="100%"></td>
-</tr></table>
+<p><img alt="Scenes 1 to 8: ana publishes 2 skills (FR-01); one with no description is refused and nothing is stored; bob's search for changelog for a release finds 1 of 2 skills (FR-02); sourdough bread matches no skill (UC-02); graphql schema finds only a close skill sharing schema; reading release-note-draft gives v1, the latest (FR-03); fetching v1 gives the same files and fingerprint ana published (the consistency NFR); a mistyped name is not found, with names like it (UC-03)" src="docs/pictures/walk.svg" width="100%"></p>
+
+<p><img alt="Scenes 9 to 14: ana publishes v2, which adds a script (FR-04); a v3 with no instructions is refused and v1 and v2 are kept (UC-04); bob sees 2 versions, newest first; reads v1 while v2 is the latest; compares v1 with v2 and sees a file that can run; his publish over ana's skill is refused" src="docs/pictures/walk-versions.svg" width="100%"></p>
 
 <details><summary>What it printed on our machine</summary>
 
@@ -112,7 +111,7 @@ Lines marked ✓ are this script's own checks. Each scene ends with the PRD item
    │ published release-note-draft v1 as ana, fingerprint sha256:91d7f2a532db…
    │ published sql-migrations v1 as ana, fingerprint sha256:12504ca30e20…
 
-2. ana publishes a skill whose SKILL.md has no description  [FR-01 rejected]
+2. ana publishes a skill whose SKILL.md has no description  [UC-01 rejected]
    │ invalid_manifest: ./standup-notes/SKILL.md has no description in its front matter. Nothing was published. Fix: …
    │ not_found: no skill named "standup-notes" in the shared catalog. Nothing was changed.
    │ …
@@ -177,10 +176,9 @@ A check runs this script and compares it with this copy, so the copy can't drift
 
 ### In real Claude Code (about two minutes)
 
-**Needs:** the [install](#install) · [Claude Code](https://code.claude.com/docs/en/overview), signed in. A script plays ana and bob on a sandbox catalog (`~/sc-try`), outside your own `~/.claude`.
+**Needs:** the clone (above; no install or setup: the script installs its own packages) · [Claude Code](https://code.claude.com/docs/en/overview), signed in. A script plays ana and bob on a sandbox catalog (`~/sc-try`), outside your own `~/.claude`. Run it from the clone's folder (`cd ..` from `core/`), and quit Claude Code (`/exit`) after each launch.
 
 ```sh
-cd ~/skills-catalog
 qa/try-claude.sh install
 qa/try-claude.sh launch ana publish
 qa/try-claude.sh launch bob install
@@ -207,8 +205,9 @@ qa/try-claude.sh uninstall
 
 <br>The first build downloads a Node.js 24 image and Claude Code (a few minutes); later builds take seconds.
 
+From the clone's folder:
+
 ```sh
-cd ~/skills-catalog
 docker build -t skills-catalog .
 docker run --rm skills-catalog
 docker run --rm -e ANTHROPIC_API_KEY skills-catalog qa/try-claude.sh selftest
@@ -383,7 +382,7 @@ Teardown puts back the files setup changed. Skills you installed stay in `.claud
 
 <br>
 
-<p align="center"><img alt="The hosted catalog: on each Developer's machine, the Assistant makes tool calls to skills-catalog (MCP server, CLI, installer), which calls CloudFront with a firewall over HTTPS with a token; CloudFront passes /api/* to the catalog API, a Lambda running the same core code, which reads and writes DynamoDB (versions, owners, tokens), keeps files and the search index in S3, and checks sign-ins with GitHub; files go up and come back straight from S3 by short-lived link" src="docs/pictures/hosted.svg" width="70%"></p>
+<p><img alt="The hosted catalog: on each Developer's machine, the Assistant makes tool calls to skills-catalog (MCP server, CLI, installer), which calls CloudFront with a firewall over HTTPS with a token; CloudFront passes /api/* to the catalog API, a Lambda running the same core code, which reads and writes DynamoDB (versions, owners, tokens), keeps files and the search index in S3, and checks sign-ins with GitHub; files go up and come back straight from S3 by short-lived link" src="docs/pictures/hosted.svg" width="100%"></p>
 
 **Use one.** Point setup at the catalog's address, then sign in:
 
@@ -414,9 +413,11 @@ skills-catalog login --with-token < token.txt                    # or with a per
 | CLI: search, read, versions, diff, install, list, update, policy, publish, review, stats, serve, setup, teardown, login, logout | ✓ Built |
 | Installer: an update that could run something new, change permissions or come from a new publisher waits for your yes | ✓ Built |
 | Hosted catalog in AWS (opt-in) | ✓ Built, deployed, passes its smoke test with real Claude Code |
-| pi | Next (phase 2) |
-| Copilot, Codex, Cursor, Gemini CLI | Later (phase 3) |
-| A web page with a delta view · bundles · agent reviewers | Later |
+| pi · bundles · one install for every assistant · usage metrics · a web page with a delta view | Phase 2: designed, not built |
+| Copilot, Codex, Cursor, Gemini CLI | Phase 3, after the owner's yes |
+| Agent reviewers | Later |
+
+The phases are [the requirements'](docs/requirements.md) lists, today's plan; the owner's answer to the PRD's Q1 may reorder them.
 
 **Known limits:** search matches keywords (the assistant rewords a paraphrase). Checks with a real assistant run by hand today (`selftest`). What's next, what we cut, and the 4-hour box: [Our thinking](docs/thinking.md).
 

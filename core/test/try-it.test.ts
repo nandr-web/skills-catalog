@@ -28,7 +28,7 @@ describe('npm run try-it', () => {
   it('tells one story, scene by scene, each tagged with the PRD item it shows', () => {
     expect(all.map((s) => s.title)).toEqual([
       '1. ana publishes two skills  [FR-01]',
-      '2. ana publishes a skill whose SKILL.md has no description  [FR-01 rejected]',
+      '2. ana publishes a skill whose SKILL.md has no description  [UC-01 rejected]',
       '3. bob searches "changelog for a release"  [FR-02]',
       '4. bob searches "sourdough bread" (nothing in the catalog is about baking)  [UC-02 nothing matches]',
       '5. bob searches "graphql schema" (nothing in the catalog is about GraphQL)  [UC-02 only close]',
@@ -46,7 +46,7 @@ describe('npm run try-it', () => {
   });
 
   it('refuses a skill with no description, and stores nothing of it', () => {
-    const s = scene('FR-01 rejected');
+    const s = scene('UC-01 rejected');
     expect(s).toMatch(/│ invalid_manifest: .*description/);
     expect(s).toMatch(/│ not_found: no skill named "standup-notes"/);
   });

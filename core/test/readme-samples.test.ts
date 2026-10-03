@@ -141,12 +141,57 @@ describe("README.md's copies of what core's commands print", () => {
       readFileSync(join(ROOT, 'qa', 'try-claude.sh'), 'utf8'),
       ...NOT_OURS,
     ].join('\n');
-    const phrases = README.split('\n')
-      .filter((l) => /You should see/.test(l))
+    // The lines that say what you should see: each "You should see" line, and each row of a table whose second column
+    // is headed "You should see" (the Claude Code steps).
+    const lines = README.split('\n');
+    const tableRows = lines.flatMap((l, i) => (/^\| [^|]+ \| You should see \|$/.test(l) ? lines.slice(i + 2).filter((_, k, rest) => rest.slice(0, k + 1).every((r) => r.startsWith('|'))) : []));
+    expect(tableRows.length, 'the Claude Code step table').toBeGreaterThan(4);
+    const phrases = [...lines.filter((l) => /You should see/.test(l)), ...tableRows.map((r) => r.split(' | ')[1] ?? '')]
       .flatMap((l) => [...l.matchAll(/\*\*(.+?)\*\*/g)].map((m) => m[1]!))
       .filter((p) => !/^v\d/.test(p)); // the Node.js version: the check above
     expect(phrases.length).toBeGreaterThan(5);
     for (const p of phrases) expect(sources, p).toMatch(new RegExp(pattern(p.replace(/^✓ /, ''), false).source.replace(/^\^|\$$/g, '')));
+  });
+
+  it("the PRD table's scenes are try-it's scenes for that PRD item, and every PRD scene is in the table", () => {
+    const tags = new Map([...runScript('try-it.ts').matchAll(/^(\d+)\. .*  \[(.+)\]$/gm)].map((m) => [Number(m[1]), m[2]!.toLowerCase()]));
+    const at = README.indexOf('## Check it against the PRD');
+    const rows = README.slice(at).split('\n').filter((l) => l.startsWith('|')).slice(2); // after the header and |---|
+    const named = new Set<number>();
+    let n = 0;
+    for (const row of rows.slice(0, rows.findIndex((r) => r.startsWith('| PRD |')) >>> 0)) {
+      const [item, , where] = row.split(' | ');
+      // The row's PRD id: FR-01, UC-02, NFR Consistency, … (a table row's first cell, its marks left out)
+      const id = item!.replace(/^\| /, '').replace(/[*↳]/g, '').trim().replace(/:.*$/, '').split(' ').slice(0, /^NFR/.test(item!.replace(/[|*↳ ]/g, '')) ? 2 : 1).join(' ').toLowerCase();
+      for (const m of (where ?? '').matchAll(/scenes? ([\d, -]+)/g)) {
+        for (const part of m[1]!.split(',').map((x) => x.trim()).filter(Boolean)) {
+          const [a, b] = part.split('-').map(Number);
+          for (let k = a!; k <= (b ?? a!); k++) {
+            expect(tags.get(k), `scene ${k} (the row for ${id})`).toMatch(new RegExp(`^${escape(id)}`));
+            named.add(k);
+            n++;
+          }
+        }
+      }
+    }
+    expect(n).toBeGreaterThan(10);
+    for (const [k, tag] of tags) if (tag !== 'beyond the prd') expect(named.has(k), `scene ${k} [${tag}] is in the PRD table`).toBe(true);
+  });
+
+  it('each picture is shown full width, and its smallest label is legible on github.com (≥ 9 px in a ~830 px column)', () => {
+    // On a phone (a ~358 px column) these pictures' labels are 4-5 px; the system map's pictures replace them (they're
+    // built to stay ≥ 9 px there). Open full size: GitHub links each picture to itself.
+    const pics = [...README.matchAll(/(<td[^>]*>[^<]*)?<img [^>]*src="(docs\/pictures\/[^"]+\.svg)"[^>]*>|!\[[^\]]*\]\((docs\/pictures\/[^)]+\.svg)\)/g)];
+    expect(pics.length).toBeGreaterThan(3);
+    for (const m of pics) {
+      const file = m[2] ?? m[3]!;
+      expect(m[0], file).not.toMatch(/width="(?!100%)[^"]*"/);
+      expect(m[1], `${file} sits alone in its row, not in a table cell`).toBeUndefined();
+      const svg = readFileSync(join(ROOT, file), 'utf8');
+      const width = Number(/viewBox="0 0 ([\d.]+) /.exec(svg)![1]);
+      const smallest = Math.min(...[...svg.matchAll(/font-size: *([\d.]+)px/g)].map((f) => Number(f[1])));
+      expect((smallest * 830) / width, `${file}: ${width} px wide, smallest label ${smallest} px`).toBeGreaterThanOrEqual(9);
+    }
   });
 
   it("the Node.js version the README asks for is package.json's", () => {
