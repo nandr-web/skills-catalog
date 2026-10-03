@@ -99,6 +99,22 @@ describe('the CLI face', () => {
     expect(file.out).toContain(S.format(S.word('person.read.path_hint'), { skill: 'release-notes-kit', path: 'nope.md' }));
   });
 
+  // The B validator: the diff named the field ("front matter description:"); the plain list didn't say which copy is
+  // the project's when a skill is in both (review P11.5).
+  it('diff names a known front-matter field in words; list says which copy is only for this project', async () => {
+    const p = place();
+    await seed(p);
+    const d = await cli(p, ['diff', 'release-notes-kit', '--from', '1', '--to', '2'], { tty: true, person: true });
+    expect(d.out).toContain('• Description: Draft release notes from merged pull requests. → Draft release notes and a changelog from merged pull requests.');
+    expect(d.out).not.toContain('front matter description');
+    await cli(p, ['install', 'release-notes-kit', '--version', '1']);
+    await cli(p, ['install', 'release-notes-kit', '--version', '1', '--target', 'project']);
+    const l = await cli(p, ['list']);
+    const lines = l.out.split('\n').filter((x) => x.includes('release-notes-kit'));
+    expect(lines).toHaveLength(2);
+    expect(lines.filter((x) => x.includes(S.word('status.where_project') as string))).toHaveLength(1);
+  });
+
   it('install from a hosted catalog that can\'t be reached fails and writes nothing, and says which catalog (not a bug: review V4.3)', async () => {
     const p = place();
     const catalog = 'https://127.0.0.1:1';

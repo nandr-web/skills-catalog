@@ -271,7 +271,12 @@ function diff({ s, say, m }: Ctx, r: DiffResult): string {
   const show = (v: unknown) => (v === null ? say('diff.none') : flagText(Array.isArray(v) ? v.map(String).join(', ') : typeof v === 'object' ? JSON.stringify(v) : String(v)));
   // A field the box already explains isn't repeated under the table (review V3.8).
   const explained = new Set(r.risk_flags.filter((f) => f.kind === 'capability_frontmatter').map((f) => f.field));
-  for (const c of r.frontmatter_changes.filter((c) => !explained.has(c.field))) out.push(`${bullet}${m.text(say('diff.frontmatter', { field: flagText(c.field), from: show(c.from), to: show(c.to) }))}`);
+  // A field the words name reads as its name ("Description: …"), any other as itself, in SKILL.md's header (the B validator).
+  for (const c of r.frontmatter_changes.filter((c) => !explained.has(c.field))) {
+    const label = s.word(`person.diff.field_label.${c.field}`);
+    const line = typeof label === 'string' ? say('diff.frontmatter_named', { label, from: show(c.from), to: show(c.to) }) : say('diff.frontmatter', { field: flagText(c.field), from: show(c.from), to: show(c.to) });
+    out.push(`${bullet}${m.text(line)}`);
+  }
   const publisher = r.risk_flags.find((f) => f.kind === 'new_publisher');
   if (publisher) out.push(`${bullet}${m.text(say('diff.publisher', { from: flagText(String(publisher.from)), to: flagText(String(publisher.to)) }))}`);
   // The changed lines are the publishers' text, apart from ours; in a terminal coloured by + and -.

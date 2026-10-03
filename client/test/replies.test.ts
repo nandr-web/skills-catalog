@@ -365,6 +365,8 @@ describe('publish, as the person reads it in a reply', () => {
     const dir = folder(p, 'release-note-draft', { 'SKILL.md': '---\nname: release-note-draft\ndescription: Drafts release notes.\n---\nBody.\n', 'template.md': 'T\n', '.env': 'X=1\n' });
     const ctx = ctxFor(p);
     const pre = await perform(ctx, OP, OP, { folder: dir });
+    // No message given: the assistant is asked to offer the person a one-line note for the history (review P11.5).
+    expect(pre.text).toContain('offer the person a one-line note of what changed');
     const shown = views(pre, OP, { folder: dir }).markdown!;
     expect(shown).toContain('Preview: release-note-draft would be published as v1, a new skill');
     expect(shown).toMatch(/\| template\.md \| sent \|/);

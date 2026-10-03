@@ -681,7 +681,7 @@ results:
       {review}Show the person these lists, ask whether to publish them, and end your turn: their request to publish isn't a yes to these lists. Only after they say yes: ${publish} with folder {folder}, confirm "{confirm}", name "{name}", version {version}, files {n_send} and flags {flags}{message_part}, all exactly as given here.
     new_skill: a new skill
     with_message: "; message {message}"
-    no_message: "; no message (adding one needs a new preview)"
+    no_message: "; no message: history will say no note for this version, so offer the person a one-line note of what changed (a new preview with message)"
     change_from: "changes from v{latest}: {files}"
     skip_none: none
     skip_more: " and {n} more"
@@ -905,7 +905,7 @@ results:
     forbidden_read_scope: "forbidden: the sign-in token in use can only read, so nothing was changed. Publishing, or revoking a publish token, needs a token with the publish scope: tell the person; don't look for another token yourself."
     forbidden_too_many_tokens: "forbidden: this person already has {limit} live catalog tokens (not revoked, not expired), so no sign-in was made and no token was issued. Revoking some makes room: list_tokens shows their ids and revoke_token revokes one by id. Tell the person; don't revoke any yourself."
     port_in_use: "port_in_use: port {port} is already in use on this machine, so the server didn't start. Choose another with --port, or leave --port out to take a free one."
-    person_only_serve: "The local web page runs only in the person's own terminal: it prints a private link for their browser, so nothing was started. Give them the command to run there: {command}"
+    person_only_serve: "serve runs only in the person's own terminal: it serves the catalog's API on this machine and prints a private link with its pairing code, so nothing was started. Give them the command to run there: {command}"
     internal_error: "internal_error: this tool (${cli}) hit a bug (the details are in {log}). The bug is in ${cli}, not in the person's setup: nothing on this machine needs fixing, and don't edit ${cli}'s files. Tell the person, and give them the log's path."
     fingerprint_mismatch: "fingerprint_mismatch: the files the catalog sent for {name} v{version} don't match that version's fingerprint, so the catalog's copy is damaged or has been altered. Nothing was written on this machine, and any copy already installed stays as it was. It isn't something the person did, and it isn't a bug in ${cli}: don't retry or work around it. Tell the person, so whoever runs the catalog can check it."
     internal_error_no_log: "internal_error: this tool (${cli}) hit a bug, and couldn't write its log either. The bug is in ${cli}, not in the person's setup: nothing on this machine needs fixing, and don't edit ${cli}'s files. Tell the person."
@@ -1008,7 +1008,13 @@ results:
         executable: can run
         script: a script
         binary: binary, not shown
-      frontmatter: "front matter {field}: {from} → {to}"
+      frontmatter: "{field} (in SKILL.md's header): {from} → {to}"
+      frontmatter_named: "{label}: {from} → {to}"
+      field_label:
+        name: Name
+        description: Description
+        license: License
+        version: Its own version field
       none: none
       more_lines: "… {n} more lines. The whole change: ${cli} diff {name} --from {from} --to {to}"
       more_lines_reply: "… {n} more lines not shown here."
@@ -1109,8 +1115,8 @@ results:
     accept_look_install: "To read it first:  ${cli} read {name} --version {to}"
     usage: "skills-catalog didn't understand that. It takes:"
     serve:
-      started: "Serving the catalog's API on this machine only (127.0.0.1). The web page isn't built yet (phase 2): the address above answers with how to call the API. Stop: Ctrl-C"
-      root: "Skills Catalog on this machine. This address serves the catalog's API only (POST /api/v1/<operation>, after pairing with the code in the link serve printed); the web page isn't built yet (phase 2). The operations: docs/api.md in the repository."
+      started: "Serving the catalog's API on this machine only (127.0.0.1). The web page isn't built yet: the address above answers with how to call the API. Stop: Ctrl-C"
+      root: "Skills Catalog on this machine. This address serves the catalog's API only (POST /api/v1/<operation>, after pairing with the code in the link serve printed); the web page isn't built yet. The operations: docs/api.md in the repository."
     bad_input: "{field} {why}. Nothing was done."
     bad_input_usage: "It takes:  {usage}"
     help:
