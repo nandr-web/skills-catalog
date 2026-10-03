@@ -1,7 +1,7 @@
 {
   "name": "skills-catalog",
   "version": "0.1.0",
-  "description": "The skills catalog on your machine: the assistant's tools as an MCP server over stdio (skills-catalog mcp); the CLI and the installer join next",
+  "description": "The skills catalog on the Developer's machine: the Assistant's tools as an MCP server over stdio (skills-catalog mcp), the CLI, the installer that holds a risky update for a yes, and guided setup",
   "private": true,
   "type": "module",
   "bin": {
