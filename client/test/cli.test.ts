@@ -83,6 +83,22 @@ describe('the CLI face', () => {
     expect(plain.out).toContain(S.format(S.word('install.replaced_newer'), { from: 2 }));
   });
 
+  // The B validator (P6.6/V4.2): several names, or a miss among them, got the assistant's text in a terminal.
+  it('read of several names, and of a name with a file typed after it, is laid out for the person: no data fence, no error code', async () => {
+    const p = place();
+    await seed(p);
+    const two = await cli(p, ['read', 'release-notes-kit', 'sql-migration-helper'], { tty: true, person: true });
+    expect(two.code).toBe(0);
+    expect(two.out).toMatch(/^release-notes-kit v2, published by ana on /m);
+    expect(two.out).toMatch(/^sql-migration-helper v1, published by ben on /m);
+    expect(two.out).toContain(S.format(S.word('person.read.as_written'), { publisher: 'ana' }));
+    expect(two.out).toContain(S.format(S.word('person.read.as_written'), { publisher: 'ben' }));
+    expect(two.out).not.toContain('unless the user asks');
+    const file = await cli(p, ['read', 'release-notes-kit', 'nope.md'], { tty: true, person: true });
+    expect(file.out).not.toMatch(/invalid_name:|unless the user asks/);
+    expect(file.out).toContain(S.format(S.word('person.read.path_hint'), { skill: 'release-notes-kit', path: 'nope.md' }));
+  });
+
   it('install from a hosted catalog that can\'t be reached fails and writes nothing, and says which catalog (not a bug: review V4.3)', async () => {
     const p = place();
     const catalog = 'https://127.0.0.1:1';

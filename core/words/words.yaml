@@ -984,6 +984,7 @@ results:
       left_out: "Not shown, to keep this short: {files}. Read one: ${cli} read {name} --path <file>"
       next: "To install it: ${cli} install {name}"
       next_version: "To install this version: ${cli} install {name} --version {version}   (the latest is v{latest})"
+      path_hint: "To read a file of {skill}: ${cli} read {skill} --path {path}"
     versions:
       header:
         one: "{name}: 1 version"

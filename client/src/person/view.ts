@@ -3,7 +3,7 @@
 // (the CLI) or in the assistant's reply (markdown, handed to it with the MCP result). What needs their decision comes
 // last, set apart (medium.ts's callout), with what answers it: the commands in a terminal, a question in a reply. Every
 // word is the words file's (results.person); only the layout is here. A result with no view here has none.
-import { fenced, manifestRefusal, reasons, skillMdOf, type DiffResult, type ReadResult, type SearchInput, type SearchResult, type VersionsResult, type Words } from '@skills-catalog/core';
+import { CatalogError, fenced, manifestRefusal, reasons, renderError, shellQuote, skillMdOf, type DiffResult, type ReadItem, type ReadResult, type SearchInput, type SearchResult, type VersionsResult, type Words } from '@skills-catalog/core';
 import { flagText, oneLine } from '@skills-catalog/core/skill-tree';
 import type { InstallView, ListView, UpdateView } from '../machine/installer.ts';
 import type { PublishView } from '../machine/publish-folder.ts';
@@ -196,11 +196,15 @@ function search({ say, m }: Ctx, r: SearchResult, req: SearchInput): string {
   return out.join('\n');
 }
 
-function read({ say, m }: Ctx, r: ReadResult): string | undefined {
-  // Several names, or one not found, keep their text: a mixed answer reads best as the words file gives it.
-  if (r.skills.length !== 1 || 'error' in r.skills[0]!) return undefined;
+function read(c: Ctx, r: ReadResult): string | undefined {
+  // Each name in its own block, a miss among them in the person's error words (the B validator: several names, or a
+  // miss, printed the assistant's text: its data fence, "unless the user asks", the error's code).
+  const blocks = r.skills.map((item) => ('error' in item ? readMiss(c, item, r) : readOne(c, item)));
+  return blocks.length && blocks.every((b) => b !== undefined) ? blocks.join('\n\n') : undefined;
+}
+
+function readOne({ say, m }: Ctx, item: ReadItem): string {
   const { paint } = m;
-  const item = r.skills[0]!;
   const publisher = oneLine(item.publisher);
   const latest_mark = item.version === item.latest_version ? '' : say('read.older', { latest: item.latest_version });
   const out = [paint('bold', say('read.header', { name: item.name, version: item.version, latest_mark, publisher, published_at: day(item.published_at) }))];
@@ -212,6 +216,19 @@ function read({ say, m }: Ctx, r: ReadResult): string | undefined {
   if (left.length) out.push(say('read.left_out', { files: left.join(', '), name: item.name }));
   out.push('', paint('dim', item.version === item.latest_version ? say('read.next', { name: item.name }) : say('read.next_version', { name: item.name, version: item.version, latest: item.latest_version })));
   return out.join('\n');
+}
+
+function readMiss(c: Ctx, item: { name: string; error: Record<string, unknown> & { code: string } }, r: ReadResult): string | undefined {
+  const { code, ...data } = item.error;
+  const err = new CatalogError(code as never, data);
+  const shown = error(c, { text: renderError(c.s, err), isError: true, outcome: code, error: err } as Answer);
+  if (shown === undefined) return undefined;
+  // "read <name> <file>": a file name typed where a second skill name goes; the way to read a file of the other skill.
+  const found = r.skills.filter((x): x is ReadItem => !('error' in x));
+  if (c.m.commands && code === 'invalid_name' && /[./]/.test(item.name) && found.length === 1) {
+    return `${shown}\n  ${c.m.paint('dim', c.say('read.path_hint', { skill: found[0]!.name, path: shellQuote(item.name) }))}`;
+  }
+  return shown;
 }
 
 function versions({ say, m }: Ctx, r: VersionsResult): string {
