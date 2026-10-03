@@ -65,6 +65,24 @@ describe('the CLI face', () => {
     expect(readFileSync(join(p.dir, 'project', '.claude', 'skills', 'release-notes-kit', 'SKILL.md'), 'utf8')).toBe(skillMd('release-notes-kit', 'Draft release notes from merged pull requests.'));
   });
 
+  // Review P7.4: an earlier version over a newer installed copy says it replaced the newer one (it was silent).
+  it('install of an earlier version over a newer copy says which newer version it replaced, in a terminal and without one', async () => {
+    const p = place();
+    await seed(p);
+    await cli(p, ['install', 'release-notes-kit']);
+    expect((await cli(p, ['update', 'release-notes-kit', '--accept'], { tty: true, answers: ['y'] })).code).toBe(0);
+    const tty = await cli(p, ['install', 'release-notes-kit', '--version', '1'], { tty: true, person: true });
+    expect(tty.code).toBe(0);
+    expect(tty.out).toContain(S.format(S.word('person.install.done_older'), { name: 'release-notes-kit', version: 1, from: 2 }));
+    const q = place();
+    await seed(q);
+    await cli(q, ['install', 'release-notes-kit']);
+    await cli(q, ['update', 'release-notes-kit', '--accept'], { tty: true, answers: ['y'] });
+    const plain = await cli(q, ['install', 'release-notes-kit', '--version', '1']);
+    expect(plain.code).toBe(0);
+    expect(plain.out).toContain(S.format(S.word('install.replaced_newer'), { from: 2 }));
+  });
+
   it('install from a hosted catalog that can\'t be reached fails and writes nothing, and says which catalog (not a bug: review V4.3)', async () => {
     const p = place();
     const catalog = 'https://127.0.0.1:1';

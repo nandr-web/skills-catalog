@@ -155,7 +155,8 @@ function install({ s, say, m }: Ctx, v: InstallView | undefined): string | undef
     return m.callout(block).join('\n');
   }
   const d = v.done!;
-  const out = [`${paint('ok', MARK.ok)} ${paint('bold', say(d.from !== undefined ? 'install.done_over' : 'install.done', at))}`, paint('dim', say('install.where', { path: m.text(d.path), policy: d.policy_words }))];
+  const doneWords = d.from === undefined ? 'install.done' : d.from > v.version ? 'install.done_older' : 'install.done_over';
+  const out = [`${paint('ok', MARK.ok)} ${paint('bold', say(doneWords, at))}`, paint('dim', say('install.where', { path: m.text(d.path), policy: d.policy_words }))];
   if (d.older) out.push(paint('newer', `${MARK.newer} ${say(m.commands ? 'install.older' : 'install.older_reply', { name: v.name, latest: d.latest })}`));
   if (d.from === undefined) out.push('', say(d.new_folder ? 'install.live_new_folder' : 'install.live', at));
   return out.join('\n');

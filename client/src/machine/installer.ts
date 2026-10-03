@@ -643,9 +643,12 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   });
   if (!('written' in done)) return done;
   const { written, entry } = done;
-  const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + keptLine(s, req.name, written.kept) + olderLine(s, entry, config, v.latest) + '\n' + liveLine(s, ctx, target, req.name, newFolder);
+  // Another version over an installed copy says which it replaced, and a newer one is named as newer (review P7.4).
+  const over = existing && existing.catalog === ctx.settings.catalog ? existing.version : undefined;
+  const replaced = over !== undefined && over > version ? '\n' + s.format(w.replaced_newer, { from: over }) : '';
+  const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + replaced + keptLine(s, req.name, written.kept) + olderLine(s, entry, config, v.latest) + '\n' + liveLine(s, ctx, target, req.name, newFolder);
   const policy = policyOf(entry, config);
-  const view: InstallView = { kind: 'install', name: req.name, version, done: { path: dest, policy_words: policyWords(s, policy), latest: v.latest, older: version < v.latest && policy.policy === 'auto', new_folder: newFolder } };
+  const view: InstallView = { kind: 'install', name: req.name, version, done: { path: dest, policy_words: policyWords(s, policy), ...(over !== undefined ? { from: over } : {}), latest: v.latest, older: version < v.latest && policy.policy === 'auto', new_folder: newFolder } };
   return { text, target: `${req.name} v${version}`, result: log.result('install', 'installed'), outcome: 'installed', view };
 }
 

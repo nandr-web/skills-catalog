@@ -707,6 +707,7 @@ results:
     unchanged: "{name} v{version} is already installed here and unchanged, so nothing was written."
     older_auto: 'This is an earlier version (the latest is v{latest}), and its updates are automatic, so the next update moves it to v{latest}. Tell the person; to keep v{version}: ${policy} with policy "pin" and name "{name}".'
     older_auto_cli: "This is an earlier version (the latest is v{latest}), and its updates are automatic, so the next update moves it to v{latest}. To keep v{version}: ${cli} policy pin {name}."
+    replaced_newer: "It replaced v{from}, a newer version."
     live_new_folder: "{folder} was made just now, and Claude Code doesn't watch a skills folder made after its session started: to use /{name} in this session, the person runs /reload-skills (or starts a new session). Tell them."
     live: "You can use it in this session as /{name}. If the Skill tool says it is unknown, wait a moment and try once more: the assistant notices new skills shortly after they are installed."
   errors:
@@ -1037,6 +1038,7 @@ results:
       stays_reply_over: It stays on v{from} until you say yes.
       done: "Installed {name} v{version}, its files checked against the catalog's"
       done_over: "Updated {name} v{from} → v{version}, its files checked against the catalog's"
+      done_older: "Installed {name} v{version} in place of v{from}, a newer version, its files checked against the catalog's"
       where: "In {path}. Updates: {policy}."
       older: "An earlier version (the latest is v{latest}): the next update moves it to v{latest}. To keep it: ${cli} policy pin {name}"
       older_reply: "An earlier version (the latest is v{latest}): the next update moves it to v{latest} unless you pin it."
