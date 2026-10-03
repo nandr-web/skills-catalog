@@ -217,6 +217,10 @@ reel_s_install() { ask_claude "Install release-note-draft from the shared catalo
 reel_s_list() { ask_claude "Which shared skills do I have installed?"; }
 reel_s_update() { ask_claude "Update my shared skills"; }
 reel_s_closest() { ask_claude "Find a shared skill for a graphql schema"; }
+# The PRD's other exceptions and its second goal, each as the assistant presents it (review P1.2, P6.5, P11.1).
+reel_s_nothing() { ask_claude "Find a shared skill for baking sourdough bread"; }
+reel_s_notfound() { ask_claude "Get me the relase-note-draft skill"; }
+reel_s_history() { ask_claude "What changed in release-note-draft between v1 and v2?"; }
 reel_s_terminal() {  # the person's own terminal: the change, then taking it
   say "skills-catalog diff release-note-draft --from 1 --to 2"; sleep 4
   say "skills-catalog update release-note-draft --accept"; wait_for "Take it\\?" 60; sleep 2
@@ -270,6 +274,9 @@ for r in "${REELS[@]}"; do
       record s_list bob still
       record s_update bob still
       record s_closest bob still
+      record s_nothing bob still
+      record s_notfound bob still
+      record s_history bob still
       record s_terminal bob still ;;
     *) echo "record: no reel $r (publish, install, update, stills)" >&2; exit 1 ;;
   esac

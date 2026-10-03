@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="d d-architecture" viewBox="0 0 663 890" width="663" height="890" role="img" aria-label="When a team shares one catalog in AWS, what runs where, and what talks to what?">
+<title>The hosted catalog</title>
+<style>.d { --d-page: #ECF0F3; --d-canvas: #F9FBFC; --d-ink: #13202A; --d-ink2: #3A4A56; --d-line: #B7C4CD; --d-grid: #D5DDE3; --d-shade: #E1E7EB; --d-accent: #137052; --d-accent-soft: #D9EDE3; --d-hot: #B23A0A; --d-hot-soft: #F8E2D5; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .d, svg.d:root { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+}
+:root[data-theme="dark"] .d { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+
+.d { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 12px; fill: var(--d-ink); }
+.d text { dominant-baseline: central; }
+.d-bg { fill: var(--d-canvas); }
+
+/* nodes */
+.d-node { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1.2; }
+.d-node--external { fill: var(--d-shade); stroke: var(--d-ink2); stroke-dasharray: 4 3; }
+.d-node--focus { fill: var(--d-accent-soft); stroke: var(--d-accent); stroke-width: 1.6; }
+.d-node--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); stroke-width: 1.6; }
+.d-node-detail { fill: none; stroke: var(--d-ink); stroke-width: 1; }
+.d-node--focus + .d-node-detail { stroke: var(--d-accent); }
+.d-node--alert + .d-node-detail { stroke: var(--d-hot); }
+.d-node--external + .d-node-detail { stroke: var(--d-ink2); }
+.d-node--proposed { stroke-width: 1.4; stroke-dasharray: 2 3; }
+.d-node--removed { fill: var(--d-canvas); stroke: var(--d-hot); stroke-width: 1.4; stroke-dasharray: 5 3; }
+.d-label { fill: var(--d-ink); text-anchor: middle; }
+.d-label--strong { font-weight: 600; }
+.d-label--removed { fill: var(--d-ink2); text-decoration: line-through; }
+.d-tag--proposed { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1; stroke-dasharray: 2 2; }
+.d-tag--removed { fill: var(--d-hot); stroke: var(--d-hot); stroke-width: 1; }
+.d-tag-text { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-anchor: middle; }
+.d-tag-text--proposed { fill: var(--d-ink); }
+.d-tag-text--removed { fill: var(--d-canvas); }
+.d-legend-text { font-size: 10.5px; fill: var(--d-ink2); }
+.d-compare-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; fill: var(--d-ink2); }
+.d-callout { fill: var(--d-ink); }
+.d-callout-text { font-size: 10px; font-weight: 600; fill: var(--d-canvas); text-anchor: middle; }
+.d-note { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle; }
+.d-note--focus { fill: var(--d-accent); }
+.d-note--alert { fill: var(--d-hot); }
+
+/* edges */
+.d-edge { fill: none; stroke: var(--d-ink); stroke-width: 1.3; stroke-linejoin: round; }
+.d-edge--async { stroke-dasharray: 5 4; }
+.d-edge--proposed { stroke-dasharray: 2 3; }
+.d-edge--removed { stroke: var(--d-hot); stroke-dasharray: 5 3; }
+.d-edge--return { stroke: var(--d-ink2); stroke-width: 1.1; stroke-dasharray: 4 3; }
+.d-edge--focus { stroke: var(--d-accent); stroke-width: 2; }
+.d-edge--alert { stroke: var(--d-hot); stroke-width: 2; }
+.d-edge-label { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle;
+  paint-order: stroke; stroke: var(--d-canvas); stroke-width: 4px; stroke-linejoin: round; }
+.d-edge-label--focus { fill: var(--d-accent); font-weight: 600; }
+.d-edge-label--alert { fill: var(--d-hot); font-weight: 600; }
+.d-arrow { fill: var(--d-ink); }
+.d-arrow--focus { fill: var(--d-accent); }
+.d-arrow--alert { fill: var(--d-hot); }
+.d-arrow--muted { fill: var(--d-ink2); }
+.d-arrow--open { fill: none; stroke: var(--d-ink); stroke-width: 1.4; stroke-linejoin: round; }
+.d-arrow--open.d-arrow--focus { stroke: var(--d-accent); }
+.d-arrow--open.d-arrow--alert { stroke: var(--d-hot); }
+.d-arrow--open.d-arrow--muted { stroke: var(--d-ink2); }
+
+/* sequence */
+.d-lifeline { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 3 4; }
+.d-activation { fill: var(--d-shade); stroke: var(--d-ink); stroke-width: 1; }
+.d-msg-label { font-size: 11px; fill: var(--d-ink); text-anchor: middle; }
+.d-msg-label--start { text-anchor: start; }
+.d-msg-label--return { fill: var(--d-ink2); }
+.d-msg-label--focus { fill: var(--d-accent); font-weight: 600; }
+.d-msg-label--alert { fill: var(--d-hot); font-weight: 600; }
+.d-memo { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1; }
+.d-memo--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); }
+.d-memo-text { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
+.d-frame { fill: none; stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-frame-tab { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-frame-kind { font-size: 10.5px; font-weight: 600; fill: var(--d-ink); }
+.d-frame-cond-bg { fill: var(--d-canvas); }
+.d-frame-cond { font-size: 10.5px; fill: var(--d-ink2); }
+.d-frame-sep { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+
+/* state */
+.d-pseudo { fill: var(--d-ink); }
+.d-choice-label { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
+.d-composite { fill: var(--d-grid); fill-opacity: 0.25; stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-composite-label { font-size: 11px; font-weight: 600; fill: var(--d-ink); }
+
+/* groups (boundaries) */
+.d-group { fill: var(--d-grid); fill-opacity: 0.35; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+.d-group-label { font-size: 10.5px; fill: var(--d-ink2); letter-spacing: 0.06em; font-weight: 500; }</style>
+<defs><marker id="the-hosted-catalog-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="the-hosted-catalog-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="the-hosted-catalog-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="the-hosted-catalog-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="the-hosted-catalog-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="the-hosted-catalog-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="the-hosted-catalog-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="the-hosted-catalog-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
+<rect class="d-bg" width="663" height="890"/>
+<rect class="d-group" x="215" y="20" width="427.7" height="344" rx="6"/>
+<text class="d-group-label" x="220" y="32.5">EACH DEVELOPER'S MACHINE</text>
+<rect class="d-group" x="20" y="414" width="581" height="360" rx="6"/>
+<text class="d-group-label" x="25" y="426.5">THE TEAM'S AWS ACCOUNT</text>
+<path class="d-edge" d="M501 112 L501 167" marker-end="url(#the-hosted-catalog-arrow)"/>
+<path class="d-edge" d="M468.3 220 L468 366 Q468 371 468 376 L468 384 Q468 389 463 389 L310 389 Q305 389 305 394 L305 468" marker-end="url(#the-hosted-catalog-arrow)"/>
+<path class="d-edge" d="M305 521 L305 576" marker-end="url(#the-hosted-catalog-arrow)"/>
+<path class="d-edge" d="M305 629 L305 699" marker-end="url(#the-hosted-catalog-arrow)"/>
+<path class="d-edge" d="M354 629 L354 676 Q354 681 359 681 L478.7 681 Q483.7 681 483.7 686 L483.7 699" marker-end="url(#the-hosted-catalog-arrow)"/>
+<path class="d-edge" d="M256 629 L256 676 Q256 681 251 681 L199 681 Q194 681 194 686 L194 817" marker-end="url(#the-hosted-catalog-arrow)"/>
+<path class="d-edge" d="M533.7 220 L534 366 Q534 371 534 376 L534.3 402 Q534.3 407 534.3 412 L534.3 699" marker-end="url(#the-hosted-catalog-arrow)"/>
+<rect class="d-node" x="448.5" y="74" width="105" height="38" rx="19"/>
+<text class="d-label" x="501" y="93">Assistant</text>
+<rect class="d-node" x="403" y="167" width="196" height="53" rx="3"/>
+<text class="d-label" x="501" y="186.5">skills-catalog</text>
+<text class="d-note" x="501" y="202.5">MCP server, CLI, installer</text>
+<rect class="d-node" x="238.5" y="468" width="133" height="53" rx="3"/>
+<text class="d-label" x="305" y="487.5">CloudFront</text>
+<text class="d-note" x="305" y="503.5">+ firewall (WAF)</text>
+<rect class="d-node d-node--focus" x="207" y="576" width="196" height="53" rx="3"/>
+<text class="d-label d-label--strong" x="305" y="595.5">catalog API</text>
+<text class="d-note d-note--focus" x="305" y="611.5">Lambda: the same core code</text>
+<path class="d-node" d="M213 705 A92 6 0 0 1 397 705 V752 A92 6 0 0 1 213 752 Z"/>
+<path class="d-node-detail" d="M213 705 A92 6 0 0 0 397 705"/>
+<text class="d-label" x="305" y="724.5">DynamoDB</text>
+<text class="d-note" x="305" y="740.5">versions, owners, tokens</text>
+<path class="d-node" d="M433 705 A76 6 0 0 1 585 705 V752 A76 6 0 0 1 433 752 Z"/>
+<path class="d-node-detail" d="M433 705 A76 6 0 0 0 585 705"/>
+<text class="d-label" x="509" y="724.5">S3</text>
+<text class="d-note" x="509" y="740.5">files, search index</text>
+<rect class="d-node" x="121" y="817" width="146" height="53" rx="3"/>
+<text class="d-label" x="194" y="836.5">GitHub</text>
+<text class="d-note" x="194" y="852.5">sign-in (not ours)</text>
+<text class="d-edge-label" x="539.5" y="139.5">tool calls</text>
+<text class="d-edge-label" x="386.5" y="378.5">HTTPS + token</text>
+<text class="d-edge-label" x="331" y="548.5">/api/*</text>
+<text class="d-edge-label" x="353" y="688.5">reads, writes</text>
+<text class="d-edge-label" x="399" y="655">links, index</text>
+<text class="d-edge-label" x="203.3" y="670.5">checks sign-in</text>
+<text class="d-edge-label" x="581.8" y="295.5">files by link</text>
+</svg>
