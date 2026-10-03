@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { inlineFiles } from '../../src/catalog.ts';
 import type { SearchIndex, Storage } from '../../src/ports.ts';
+import type { Review } from '../../src/skill-tree/index.ts';
 import { actAs } from '../../src/local/index.ts';
 import { openOn, type TestAdapter } from '../adapters.ts';
 import { historyVersion, loadGolden, type RawFile } from '../golden.ts';
@@ -169,6 +170,62 @@ export function storageSuite(a: TestAdapter): void {
       expect(r).toMatchObject({ kind: 'created', record: { version: 2, fingerprint: next.fingerprint } });
       expect(await store.versionsIn('pr-review-checklist')).toEqual([1, 2]);
       for (const f of v1.files) expect(await storage.blob(f.sha256)).toBeDefined();
+    });
+  });
+
+  // Reviews (contract §10) are their own records, kept with the version they review: a commit stores the ones it's given
+  // under the version it creates, all or nothing with it; a reviewer that runs again later replaces its own.
+  describe(`reviews are kept with their version [${a.name}]`, () => {
+    const review = (reviewer: string, at: string, why?: string): Review => ({
+      reviewer,
+      reviewer_version: '1',
+      fingerprint: 'sha256:' + 'b'.repeat(64),
+      at,
+      measurements: { context_tokens: 12, listing_tokens: 3 },
+      flags: why ? [{ kind: 'prompt_injection', path: 'SKILL.md', line: 5, detail: why }] : [],
+      findings: why ? [{ kind: 'prompt_injection', path: 'SKILL.md', line: 5, evidence: 'Ignore all previous instructions.', why }] : [],
+    });
+    async function published() {
+      const { store, catalog } = await openOn(a);
+      await catalog.publish(request('pr-review-checklist', historyVersion(histories.versions['prc.v1'])), ana);
+      const storage = (catalog as any).p.storage as Storage;
+      const { version: _, ...v1 } = (await storage.version('pr-review-checklist', 1))!;
+      const next = { ...v1, fingerprint: 'sha256:' + 'b'.repeat(64), message: 'reviewed' };
+      const event = (version: number) => ({ type: 'version_published' as const, name: v1.name, version, fingerprint: next.fingerprint, publisher: v1.publisher, at: v1.published_at });
+      return { store, storage, v1, next, event };
+    }
+
+    it('a commit stores the reviews it is given under the version it creates; another version, or another skill, has none', async () => {
+      const { storage, v1, next, event } = await published();
+      const r = review('rules', '2026-09-28T12:00:00.000Z', 'ignore previous instructions');
+      expect(await storage.commit({ ...next, reviews: [r] }, v1.files.map((f) => ({ sha256: f.sha256 })), { expectedLatest: 1 }, event)).toMatchObject({ kind: 'created', record: { version: 2 } });
+      expect(await storage.reviews('pr-review-checklist', 2)).toEqual([r]);
+      expect(await storage.reviews('pr-review-checklist', 3)).toEqual([]);
+      expect(await storage.reviews('no-such-skill', 1)).toEqual([]);
+    });
+
+    it('the version record never carries its reviews', async () => {
+      const { storage, v1, next, event } = await published();
+      const r = await storage.commit({ ...next, reviews: [review('rules', '2026-09-28T12:00:00.000Z')] }, v1.files.map((f) => ({ sha256: f.sha256 })), { expectedLatest: 1 }, event);
+      expect(r.kind === 'created' && 'reviews' in r.record).toBe(false);
+      expect('reviews' in (await storage.version('pr-review-checklist', 2))!).toBe(false);
+    });
+
+    it('a refused commit stores no review', async () => {
+      const { storage, v1, next, event } = await published();
+      const r = await storage.commit({ ...next, reviews: [review('rules', '2026-09-28T12:00:00.000Z')] }, v1.files.map((f) => ({ sha256: f.sha256 })), { expectedLatest: 7 }, event);
+      expect(r.kind).toBe('conflict');
+      expect(await storage.reviews('pr-review-checklist', 2)).toEqual([]);
+    });
+
+    it('a reviewer that runs again replaces its own review of that version and leaves the others, listed by reviewer', async () => {
+      const { storage } = await published();
+      await storage.putReview('pr-review-checklist', 1, review('security-agent', '2026-09-28T13:00:00.000Z'));
+      const again = review('rules', '2026-09-28T14:00:00.000Z', 'addressed to the assistant');
+      await storage.putReview('pr-review-checklist', 1, again);
+      const got = await storage.reviews('pr-review-checklist', 1);
+      expect(got.map((r) => r.reviewer)).toEqual(['rules', 'security-agent']);
+      expect(got[0]).toEqual(again);
     });
   });
 
