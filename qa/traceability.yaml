@@ -402,6 +402,7 @@ requirements:
     checks:
       - {layer: setup, name: README quickstart run word for word in a fresh home (npm prefix and caches in the sandbox), auto: true}
       - {layer: setup, name: "README lint: exactly one quickstart command; an architecture diagram that renders (light and dark); every link resolves", auto: true}
+      - {layer: unit, name: "the system map (docs/map/map.yaml, qa/test/map.test.ts): it agrees with the code (every served tool and command in a step or left out with why; every operation, requirement, screen and part file found; every source file in a part; no planned part with code; no banned word); docs/map/index.html and docs/pictures/map-*.svg are a fresh build; every map picture keeps its labels at 9px or more in a phone's column", auto: true}
 
   - id: local-by-default
     source: {doc: notes, ref: "the owner's answer on scope and delivery: AWS optional, off by default; everything local by default"}

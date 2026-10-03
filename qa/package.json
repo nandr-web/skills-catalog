@@ -13,6 +13,8 @@
   "scripts": {
     "qa": "node src/cli.ts",
     "demo": "node src/cli.ts demo",
+    "map": "node src/map/build.ts",
+    "vendor-renderer": "node scripts/vendor-renderer.ts",
     "test": "vitest run --project fast",
     "test:slow": "vitest run --project slow --passWithNoTests",
     "test:all": "vitest run",

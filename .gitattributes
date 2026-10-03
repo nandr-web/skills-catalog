@@ -1,0 +1,6 @@
+# Generated files (built by a command, never edited by hand): GitHub folds them in diffs and leaves them out of the
+# repo's language counts.
+# The system map's diagram renderer (qa: npm run vendor-renderer), and what it builds (qa: npm run map).
+qa/src/map/renderer.js linguist-generated=true
+docs/map/index.html linguist-generated=true
+docs/pictures/map-*.svg linguist-generated=true

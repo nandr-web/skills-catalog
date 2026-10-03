@@ -1,0 +1,213 @@
+# The system map: the parts of the Skills Catalog, the lines between them, and the core loop step by step.
+# Hand-written: the parts, their names and places, and each step's words. Read from the code when the map is built
+# (npm run map in qa/): the assistant's tools, the CLI's commands, the API's operations, the files and tests behind
+# each part, and each step's requirements (qa/traceability.yaml). The map check (qa/test/map.test.ts, in npm run check)
+# fails when this file and the code disagree. Built into docs/map/index.html and docs/pictures/map-*.svg.
+title: Skills Catalog
+question: "How does a skill go from one developer to another, and where does each step happen?"
+alertWord: waits
+codeBase: "https://github.com/nandr-web/skills-catalog/blob/main/"
+
+views:
+  - {id: local, label: on one machine, note: "Everything on one machine: the catalog is a folder there, and the two developers are two demo users (ana and bob in the screens)."}
+  - {id: aws, label: in AWS, note: "Each developer on their own machine, sharing a catalog in the team's AWS account. They sign in with GitHub."}
+
+zones:
+  - {id: machine, label: one machine, only: [local]}
+  - {id: m1, label: "Developer 1's machine", only: [aws]}
+  - {id: m2, label: "Developer 2's machine", only: [aws]}
+  - {id: cloud, label: AWS, only: [aws]}
+
+parts:
+  - id: dev1
+    label: Developer 1
+    kind: actor
+    at: [0, 0]
+    zone: machine
+    views: {aws: {zone: m1}}
+    text: "Has a skill worth sharing and publishes it once. ana in the screens."
+  - id: dev2
+    label: Developer 2
+    kind: actor
+    at: [1, 0]
+    zone: machine
+    views: {aws: {zone: m2}}
+    text: "Needs a skill for a task: asks for one, installs it, and stays up to date. bob in the screens."
+  - id: cc1
+    label: Claude Code
+    note: not ours
+    external: true
+    at: [0, 1]
+    zone: machine
+    views: {aws: {zone: m1}}
+    text: &claude "The assistant (not ours). It reaches skills-catalog's tools over MCP, and loads installed skills from `.claude/skills`."
+    links: &claudeLinks [{label: Claude Code, href: "https://code.claude.com/docs/en/overview"}]
+  - id: cc2
+    label: Claude Code
+    note: not ours
+    external: true
+    at: [1, 1]
+    zone: machine
+    views: {aws: {zone: m2}}
+    text: *claude
+    links: *claudeLinks
+  - id: sc1
+    label: skills-catalog
+    note: MCP server · CLI
+    at: [0, 2]
+    zone: machine
+    views: {aws: {zone: m1}}
+    text: &sc "One program on each machine: the MCP server Claude Code talks to, and the CLI for a person at a terminal. It sets itself up (`skills-catalog setup`, undone by `teardown`), publishes, searches, installs, and keeps installed skills up to date; its rules reviewer flags what a new version adds, and an update that could run something new waits for the person's yes."
+    code: &scCode
+      - client/src/**
+      - core/src/api.ts
+      - core/src/api-doc.ts
+      - core/src/openapi.ts
+      - core/src/words.ts
+      - core/src/words-file.ts
+      - core/src/render.ts
+      - core/src/errors.ts
+      - core/src/internal-error.ts
+      - core/src/index.ts
+      - core/src/ports.ts
+      - core/src/skill-tree/**
+      - core/src/remote/**
+    tests: &scTests [client/test/**, core/test/**]
+  - id: sc2
+    label: skills-catalog
+    note: MCP server · CLI
+    at: [1, 2]
+    zone: machine
+    views: {aws: {zone: m2}}
+    text: *sc
+    code: *scCode
+    tests: *scTests
+  - id: catalog
+    label: catalog
+    kind: store
+    note: skills · versions
+    at: [0.5, 3]
+    zone: machine
+    text: "Every published skill and all its versions, each with its fingerprint and its review. On one machine it is a folder: a SQLite file and the skills' files."
+    code: [core/src/local/**, core/src/catalog.ts, core/src/open.ts, core/src/http/**]
+    tests: [core/test/**]
+    views:
+      aws:
+        label: catalog on AWS
+        note: API · DynamoDB · S3
+        zone: cloud
+        text: "The shared catalog in the team's AWS account: the API on Lambda behind CloudFront, versions in DynamoDB, files in S3, a search file kept up to date by an indexer. Each version is reviewed as it is published. Only the GitHub logins the deployment lists may sign in."
+        code: [hosted/src/**, infra/src/**]
+        tests: [hosted/test/**, infra/test/**]
+  - id: github
+    label: GitHub sign-in
+    note: not ours
+    external: true
+    at: [0.5, 4]
+    only: [aws]
+    text: "Who may publish and read: GitHub logins (not ours). `skills-catalog login` signs in once per machine."
+    code: [hosted/src/github.ts, client/src/cli/login.ts]
+    tests: [hosted/test/**]
+
+links:
+  - {from: dev1, to: cc1, label: asks}
+  - {from: dev2, to: cc2, label: asks}
+  - {from: cc1, to: sc1, label: MCP}
+  - {from: cc2, to: sc2, label: MCP}
+  - {from: dev1, to: sc1, label: CLI}
+  - {from: dev2, to: sc2, label: CLI}
+  - {from: sc1, to: catalog, label: publish}
+  - {from: sc2, to: catalog, label: "find, fetch"}
+  - {from: catalog, to: github, label: signs in, only: [aws]}
+
+flows:
+  - id: publish
+    label: publish
+    who: Developer 1
+    says: "Publish my skill in ./release-note-draft"
+    steps:
+      - {from: dev1, to: cc1, label: "Developer 1 asks Claude Code to publish the folder"}
+      - {from: cc1, to: sc1, label: "Claude Code calls `publish_skill_to_catalog`, which shows a preview first: the files it would send, any it skips, and what the rules reviewer flags", tools: [publish_skill_to_catalog]}
+      - {from: dev1, to: cc1, label: "Developer 1 says yes"}
+      - {from: dev1, to: sc1, label: "Or Developer 1 publishes from a terminal: `skills-catalog publish`, which previews and asks", commands: [publish]}
+      - {from: sc1, to: catalog, label: "v1 goes into the catalog, with its fingerprint and its review; a skill missing a name, description or body is refused, and nothing is stored", operations: {local: [publish_skill_to_catalog], aws: [request_upload_links, publish_version]}}
+    screens: [docs/pictures/claude-code/publish.png]
+    checks: [publish, publish-rejects-invalid]
+  - id: discover
+    label: discover
+    who: Developer 2
+    says: "Is there a skill for writing release notes?"
+    steps:
+      - {from: dev2, to: cc2, label: "Developer 2 asks in plain words"}
+      - {from: cc2, to: sc2, label: "Claude Code calls `search_shared_skills`", tools: [search_shared_skills], commands: [search]}
+      - {from: sc2, to: catalog, label: "The catalog finds release-note-draft; when nothing fits, it says so, and shows the closest only as close", operations: [search_shared_skills]}
+      - {from: cc2, to: dev2, label: "A table: name, version, who published it, what it does"}
+    screens: [docs/pictures/claude-code/search.png, docs/pictures/claude-code/closest.png]
+    checks: [discover, discover-nothing-matches]
+  - id: retrieve
+    label: retrieve
+    who: Developer 2
+    says: "Install it in this project"
+    steps:
+      - {from: dev2, to: cc2, label: "Developer 2 asks to install it"}
+      - {from: cc2, to: sc2, label: "Claude Code calls `read_shared_skill`, then `install_shared_skill`", tools: [read_shared_skill, install_shared_skill], commands: [read, install]}
+      - {from: sc2, to: catalog, label: "Every file of v1 is fetched, and checked against its fingerprint", operations: {local: [read_shared_skill, install_shared_skill], aws: [read_shared_skill, fetch_version]}}
+      - {from: sc2, to: cc2, label: "The skill lands in `.claude/skills`, byte for byte as published, ready to use"}
+    screens: [docs/pictures/reel-install.gif]
+    checks: [retrieve, consistency]
+  - id: version
+    label: version
+    who: Developer 1
+    says: "Publish the new version"
+    steps:
+      - {from: dev1, to: cc1, label: "Developer 1 publishes again: v2 adds a script"}
+      - {from: cc1, to: sc1, label: "Claude Code calls `publish_skill_to_catalog`: the preview names the new script", tools: [publish_skill_to_catalog]}
+      - {from: sc1, label: "The rules reviewer flags the new script (`skills-catalog review` reruns the reviews of a local catalog)", commands: [review]}
+      - {from: sc1, to: catalog, label: "v2 is stored; v1 stays, and the history shows both", operations: {local: [publish_skill_to_catalog, list_shared_skill_versions], aws: [request_upload_links, publish_version, list_shared_skill_versions]}, tools: [list_shared_skill_versions], commands: [versions]}
+      - {from: sc2, to: catalog, label: "Developer 2's list shows ↑ v2 available", tools: [list_installed_skills], commands: [list]}
+    screens: [docs/pictures/claude-code/list.png]
+    checks: [version-new, version-history-visible, review-flags]
+  - id: held-update
+    label: held update
+    who: Developer 2
+    says: "Update my shared skills"
+    steps:
+      - {from: dev2, to: cc2, label: "Developer 2 asks for updates (or a new session's hook says one waits)"}
+      - {from: cc2, to: sc2, label: "Claude Code calls `update_installed_skills`", tools: [update_installed_skills]}
+      - {from: sc2, to: catalog, label: "v2 is fetched", operations: {local: [update_installed_skills], aws: [fetch_version]}}
+      - {from: sc2, label: "v2 adds a script that can run on this machine: held", emphasis: alert}
+      - {from: sc2, to: cc2, label: "Claude Code shows the held update and asks one question", emphasis: alert}
+      - {from: dev2, to: sc2, label: "In a terminal, Developer 2 looks at the change (`skills-catalog diff`) and takes it (`update --accept`); or says yes to Claude Code", commands: [diff, update], tools: [diff_shared_skill_versions, accept_held_update], operations: [diff_shared_skill_versions]}
+    wait:
+      title: Waiting for a yes
+      text: "v2 adds `scripts/collect.sh`, which can run on this machine. Developer 2 stays on v1 until they say yes."
+    screens: [docs/pictures/claude-code/update.png, docs/pictures/claude-code/terminal.png]
+    checks: [auto-updates, review-flags]
+  - id: setup
+    label: setup
+    who: Developer 2
+    says: "Set up skills-catalog"
+    steps:
+      - {from: dev2, to: sc2, label: "`skills-catalog setup`: a welcome, then one question, auto-updates on? (yes by default); `--yes` or `--config` for no questions", commands: [setup]}
+      - {from: sc2, to: cc2, label: "Claude Code gets the MCP server (`skills-catalog mcp`) and a session-start hook", commands: [mcp]}
+      - {from: sc2, to: catalog, label: "In AWS: `skills-catalog login` signs in with GitHub once (on one machine there is nothing to sign in to)", commands: [login], operations: {aws: [sign_in_with_github]}}
+      - {from: dev2, to: sc2, label: "`skills-catalog teardown` undoes everything setup wrote", commands: [teardown]}
+    checks: [setup-cli-and-agent, setup-unattended]
+
+# Served, but not a step of the core loop: each with why. (A step's operations can differ per view: on one machine
+# the client calls the catalog in its own process, in AWS over HTTP.)
+left_out:
+  tools:
+    set_skill_update_policy: "changes auto-updates for one skill; setup sets the default"
+  commands:
+    policy: "changes auto-updates for one skill; setup sets the default"
+    stats: "usage numbers for the person, not a step of the loop"
+    serve: "the catalog's API on this machine for a browser page; the web page itself is planned"
+    logout: "signs out again, the other side of login"
+  operations:
+    list_tokens: "the deployment owner's personal tokens (npm run issue-token in hosted/), not a step of the loop"
+    revoke_token: "the deployment owner's personal tokens (npm run issue-token in hosted/), not a step of the loop"
+
+# Source folders that aren't a part of the running system.
+not_on_map:
+  - {glob: "qa/src/**", why: "the test and demo tools: they check the system, they aren't part of it"}
