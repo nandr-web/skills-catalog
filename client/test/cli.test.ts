@@ -144,6 +144,23 @@ describe('the CLI face', () => {
     expect(r.err).toContain(S.format(S.word('errors.person_only'), { command: 'skills-catalog update release-notes-kit --accept --target project' }));
   });
 
+  // With a user copy installed too, the project's yes goes to the project, never over the user copy (a bug the B
+  // validator found on V4.1's path: the accept took the first installed copy, whatever --target said).
+  it('a held project install, with a user copy of the same skill: the yes installs into the project and leaves the user copy alone', async () => {
+    const p = place();
+    await seed(p);
+    expect((await cli(p, ['install', 'release-notes-kit', '--version', '1'])).code).toBe(0);
+    const user = join(skills(p), 'release-notes-kit');
+    const before = readFileSync(join(user, 'SKILL.md'), 'utf8');
+    expect((await cli(p, ['install', 'release-notes-kit', '--target', 'project'])).code).toBe(3);
+    const yes = await cli(p, ['update', 'release-notes-kit', '--accept', '--target', 'project'], { tty: true, answers: ['y'] });
+    expect(yes.code).toBe(0);
+    const dest = join(p.dir, 'project', '.claude', 'skills', 'release-notes-kit');
+    expect(readFileSync(join(dest, 'scripts', 'collect.sh'), 'utf8')).toBe('#!/bin/sh\necho collecting\n');
+    expect(readFileSync(join(user, 'SKILL.md'), 'utf8')).toBe(before);
+    expect(existsSync(join(user, 'scripts'))).toBe(false);
+  });
+
   it('a "tell me first" skill: update names the command, and update <name> --accept shows it and takes it on a yes', async () => {
     const p = place();
     await seed(p);

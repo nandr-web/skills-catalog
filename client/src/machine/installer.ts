@@ -487,7 +487,7 @@ function refusalReason(s: Words, e: CatalogError): string {
 // ---------- what waits for the person ----------
 
 /** The change waiting for the person's yes for `name`, as the installer would hold it now: an update of the copy
- *  installed here (either target), else a first install into `target`. `installed` is the installed version (none for
+ *  installed here (either target, or the one in `target` when the person named it), else a first install into `target`. `installed` is the installed version (none for
  *  a first install); null when nothing would be held (up to date, or nothing to flag). `reason` is why it waits, in
  *  §5.3's order: a copy from another catalog (`was`, where it came from; `now`, the catalog in use), pinned, "tell me
  *  first" (`notify`; held with or without flags), else its flags. `path` is where it goes. Its confirm and flags are
@@ -507,9 +507,10 @@ export type Pending = {
   flags: string[];
 };
 
-export async function pendingHold(ctx: Context, name: string, target: Target = 'user'): Promise<Pending | { installed: number } | null> {
+export async function pendingHold(ctx: Context, name: string, target: Target = 'user', targetGiven = false): Promise<Pending | { installed: number } | null> {
   const { lock, config } = readRecords(ctx.settings.home);
-  const e = installedHere(ctx, lock).find((x) => x.name === name);
+  // A target the person named picks the copy there (none: a first install into it), never another target's copy.
+  const e = installedHere(ctx, lock).find((x) => x.name === name && (!targetGiven || x.target === target));
   const catalog = await ctx.catalog();
   const v = await allVersions(catalog, name);
   // The same version from another catalog still waits (an install held it as other_catalog).

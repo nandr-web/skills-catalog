@@ -64,7 +64,7 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
   const target = (values['target'] as Target | undefined) ?? 'user';
   let hold: Awaited<ReturnType<typeof pendingHold>>;
   try {
-    hold = await pendingHold(ctx, name, target);
+    hold = await pendingHold(ctx, name, target, values['target'] !== undefined);
   } catch (e) {
     return fail(e);
   }
