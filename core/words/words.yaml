@@ -940,11 +940,14 @@ results:
       header_page: "The shared catalog: {total} skills, showing {first} to {last}"
       partial: 'Nothing matches every word of "{query}". Closest, sharing only some words:'
       shares: "shares only: {words}"
+      review: "Review: {notes}"
       empty: 'No skill matches "{query}" ({total} in the catalog). Try other words: ${search}'
       empty_catalog: The shared catalog is empty. Nobody has published a skill yet.
       empty_reply: 'No skill matches "{query}" ({total} in the catalog).'
       columns: "Skill | Version | Publisher | What it does"
       columns_partial: "Skill | Version | Publisher | Shares only | What it does"
+      columns_reviewed: "Skill | Version | Publisher | Review | What it does"
+      columns_partial_reviewed: "Skill | Version | Publisher | Shares only | Review | What it does"
       next: "Read one: ${cli} read {name}    Install one: ${cli} install {name}"
       more: "More: the same search with --cursor {cursor}"
     read:
@@ -954,12 +957,17 @@ results:
       files: "Files: {files}"
       left_out: "Not shown, to keep this short: {files}. Read one: ${cli} read {name} --path <file>"
       next: "To install it: ${cli} install {name}"
+      review:
+        one: "The catalog's review found 1 thing to know before you install it:"
+        other: "The catalog's review found {n} things to know before you install it:"
+      found: 'line {line}: "{evidence}"'
     versions:
       header:
         one: "{name}: 1 version"
         other: "{name}: {n} versions"
       no_message: no note
       columns: "Version | Published | By | Note"
+      columns_reviewed: "Version | Published | By | Note | Review"
       more: "Older: the same command with --cursor {cursor}"
       next: "What changed in the latest: ${cli} diff {name} --from {from} --to {to}"
     diff:
