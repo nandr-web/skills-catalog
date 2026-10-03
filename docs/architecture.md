@@ -4,13 +4,15 @@ What runs on the Developer's machine, what runs in the team's AWS account, and w
 
 ## On the Developer's machine
 
-![The parts on one machine: the Developer runs the CLI and setup, the Assistant (Claude Code) calls the MCP server, both go through the core to the local catalog, and the installer writes checked skills into the skills folder, holding a risky update for a yes](pictures/today.svg)
+![The parts on one machine: the Developer runs the CLI and setup, the Assistant (Claude Code) calls the MCP server, both go through the core to the local catalog, and the installer writes checked skills into the skills folder, holding a risky update for a yes](pictures/map-local.svg)
+
+<sub>Step through the core loop on [the system map](map/index.html) (download and open it: it is one self-contained page). It is drawn from `docs/map/map.yaml` and checked against the code on every `npm run check`.</sub>
 
 **Built.** The core, the local catalog, the MCP server (the Assistant's tools), the installer (it holds a risky update until the Developer says yes), the CLI with every catalog command, and the guided setup. All of them use one API ([api.md](api.md)).
 
 ## In AWS: the same API, hosted
 
-![The parts in AWS: the hosted catalog in the team's AWS account (the API on Lambda behind CloudFront, with DynamoDB and S3), reached by the same CLI and MCP server once SKILLS_CATALOG names it and the Developer signs in](pictures/shape.svg)
+![The parts in AWS: the hosted catalog in the team's AWS account (the API on Lambda behind CloudFront, with DynamoDB and S3), reached by the same CLI and MCP server once SKILLS_CATALOG names it and the Developer signs in](pictures/map-aws.svg)
 
 **One API, two homes.** The Assistant and the Developer reach a catalog through one API ([api.md](api.md)): the local catalog by default, or the hosted catalog in the team's AWS account when `SKILLS_CATALOG` names its address and the Developer runs `skills-catalog login`. The same tests run against both. The owner's notes on the PRD asked for exactly this: "build the experience, interface and contracts without coupling ourselves with a specific choice".
 
