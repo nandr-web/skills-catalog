@@ -1073,6 +1073,7 @@ setup:
     wrong_type: the setting {key} has the wrong type
     not_absolute: CLAUDE_CONFIG_DIR, which says where it is, isn't an absolute path
   updates_off: only when you ask (${cli} update)
+  per_skill: "- one skill differently (each can update its own way): ${cli} policy <auto|notify|pin> <name>"
   assistant_claude_code: "Claude Code ({files})"
   done_me: "- you: {me}, the name the catalog shows as who published what"
   done_me_none: "- you: no name yet; publishing asks for one (run ${cli} setup --me <name>)"

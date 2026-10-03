@@ -15,6 +15,8 @@ import { CONFIG_KEYS } from '../src/machine/lock.ts';
 import { NON_QUESTION_KEYS, QUESTIONS, runSetupCommand, SETUP_FLAGS, setupDoc, sharedFolderKind, type SetupIo } from '../src/cli/setup.ts';
 import { PROCESS_COMMANDS } from '../src/cli/process.ts';
 import { runTeardownCommand } from '../src/cli/teardown.ts';
+import { bashRuleMatches, personOnlyRule } from '../src/machine/setup-notes.ts';
+import { golden } from './setup-golden.ts';
 import { cliWords } from '../src/cli/words.ts';
 
 const S = cliWords(Words.load());
@@ -335,6 +337,60 @@ describe('a folder catalog on a network or synced folder (F0)', () => {
   it('the summary warns, in words, when the catalog answer is one', async () => {
     const w = world();
     expect(await runSetupCommand(['--yes', '--catalog', join(w.dir, 'Dropbox', 'cat')], w.io)).toBe(0);
-    expect(w.out()).toContain(S.format(S.setup.catalog_shared_folder, { path: join(w.dir, 'Dropbox', 'cat'), kind: S.setup.shared_folder_kind.synced }));
+    expect(w.out()).toContain(`▲ ${S.format(S.setup.catalog_shared_folder, { path: join(w.dir, 'Dropbox', 'cat'), kind: S.setup.shared_folder_kind.synced }).replace(/^- /, '')}`);
+    expect(w.out()).not.toContain('▲ - ');
+  });
+});
+
+describe('what the summary tells the person (P16.2; build notes §7, §9)', () => {
+  it('an administrator\'s policy that would stop the server or the hook: each named with its file; setup still completes', async () => {
+    const w = world();
+    const managed = w.io.env['SKILLS_MANAGED_SETTINGS']!;
+    file(join(managed, 'managed-settings.json'), JSON.stringify({ allowManagedHooksOnly: true, deniedMcpServers: [{ serverName: 'skills-catalog' }], strictPluginOnlyCustomization: ['hooks'] }));
+    file(join(managed, 'managed-mcp.json'), '{}');
+    expect(await runSetupCommand(['--yes'], w.io)).toBe(0);
+    const at = join(managed, 'managed-settings.json');
+    for (const k of ['allow_managed_hooks_only', 'denied_mcp_servers', 'strict_plugin_only_hooks']) expect(w.out(), k).toContain(S.format(S.setup.managed[k], { path: at }).replace(/^- /, ''));
+    expect(w.out()).toContain(S.format(S.setup.managed.managed_mcp, { path: join(managed, 'managed-mcp.json') }).replace(/^- /, ''));
+    expect(w.out()).not.toContain(S.format(S.setup.managed.strict_plugin_only_mcp, { path: at }).replace(/^- /, ''));
+  });
+
+  it('an allow rule of the person\'s that lets the assistant take a person-only step is named; a read rule isn\'t', async () => {
+    const w = world();
+    file(join(w.A, '.claude', 'settings.json'), JSON.stringify({ permissions: { allow: ['Bash(skills-catalog *)', 'mcp__skills-catalog__*', 'Bash(skills-catalog read *)'] } }), 0o600);
+    expect(await runSetupCommand(['--yes'], w.io)).toBe(0);
+    const at = join(w.A, '.claude', 'settings.json');
+    for (const rule of ['Bash(skills-catalog *)', 'mcp__skills-catalog__*']) expect(w.out()).toContain(S.format(S.setup.person_only_rule, { file: at, rule }).replace(/^- /, ''));
+    expect(w.out()).not.toContain('Bash(skills-catalog read *), which');
+  });
+
+  it('the per-skill update setting is named', async () => {
+    const w = world();
+    await runSetupCommand(['--yes'], w.io);
+    expect(w.out()).toContain('policy <auto|notify|pin> <name>');
+  });
+
+  it('a .claude.json that\'s a link: refused, and the entries to add by hand are printed (setup\'s values only)', async () => {
+    const w = world();
+    const target = join(w.dir, 'dotfiles', 'claude.json');
+    file(target, '{}\n', 0o600);
+    const { symlinkSync } = await import('node:fs');
+    symlinkSync(target, join(w.A, '.claude.json'));
+    expect(await runSetupCommand(['--yes'], w.io)).toBe(1);
+    const all = w.out() + w.err();
+    expect(all).toContain(S.setup.by_hand.intro);
+    expect(all).toContain('"skills-catalog": {');
+    expect(all).toContain('mcp__skills-catalog__search_shared_skills');
+    expect(readFileSync(target, 'utf8')).toBe('{}\n');
+  });
+});
+
+describe('the person-only rule check (build notes §7)', () => {
+  const probes = ['skills-catalog update x --accept', 'skills-catalog clear-kept', 'skills-catalog publish x --confirm c --name x --version 1 --files 1 --flags none --allow-suspected-secrets'];
+  it('names each risky rule, never a generated one or a read rule', () => {
+    for (const r of ['Bash(*)', 'Bash', 'Bash(skills-catalog *)', 'Bash(skills-catalog:*)', 'Bash(skills-catalog update *)', 'Bash(skills-catalog update * --accept)', 'Bash(skills-catalog publish *)', 'mcp__skills-catalog__*', 'mcp__skills-catalog']) expect(personOnlyRule(r), r).toBe(true);
+    for (const r of ['Bash(skills-catalog read *)', 'Bash(skills-catalog update)', 'mcp__skills-catalog__search_shared_skills', 'Bash(git *)', ...golden.allow_rules]) expect(personOnlyRule(r), r).toBe(false);
+    expect(probes.every((p) => bashRuleMatches('Bash(skills-catalog *)', p))).toBe(true);
+    expect(bashRuleMatches('Bash(skills-catalog update *)', 'skills-catalog update')).toBe(true);   // a trailing " *" matches the bare command too
   });
 });

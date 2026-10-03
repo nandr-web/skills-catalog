@@ -82,7 +82,7 @@ export function planFile(kind: FileKind, plan: Pick<SetupPlan, 'places' | 'run' 
 // only when absolute and the catalog only as a URL (as they're refused elsewhere), and none with a character a command or
 // an MCP config could read as something else.
 const PATH_SETTINGS = ['SKILLS_HOME', 'SKILLS_ASSISTANT_HOME', 'SKILLS_MANAGED_SETTINGS', 'SKILLS_ACTIVITY_LOG'] as const;
-function carriedSettings(env: PlanInput['env']): Record<string, string> {
+export function carriedSettings(env: PlanInput['env']): Record<string, string> {
   const out: Record<string, string> = {};
   for (const k of CARRIED) {
     const v = env[k];

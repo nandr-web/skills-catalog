@@ -17,8 +17,11 @@ import { ACTOR, CatalogError, openCatalog, renderError, shellQuote, Words } from
 import { readJsonFile } from '../machine/json-file.ts';
 import { CONFIG_KEYS, configWhy, isCatalogAddress, readConfig, type Config } from '../machine/lock.ts';
 import { permissiveMode } from '../machine/permissive.ts';
-import { allowRules, mcpEntry } from '../machine/setup-entries.ts';
-import { planSetup, type PlanInput, type SetupPlan } from '../machine/setup-plan.ts';
+import { allowRules, hookGroup, mcpEntry } from '../machine/setup-entries.ts';
+import { checkInstall } from '../machine/setup-install.ts';
+import { setupNotes } from '../machine/setup-notes.ts';
+import { flagText } from '@skills-catalog/core/skill-tree';
+import { carriedSettings, planSetup, type PlanInput, type SetupPlan } from '../machine/setup-plan.ts';
 import { runSetup, type CommandOutcome } from '../machine/setup-run.ts';
 import { painter, type Paint } from '../person/terminal.ts';
 import { machineDeveloper, settingsFrom, type Settings } from '../settings.ts';
@@ -360,7 +363,12 @@ export async function runSetupCommand(argv: readonly string[], io: SetupIo): Pro
   try {
     plan = planSetup(input);
   } catch (e) {
-    return err(e);
+    const code = err(e);
+    // A file setup won't write through (a dotfiles manager's link), or Claude Code's files maybe elsewhere: the person
+    // can add setup's entries by hand.
+    const d = (e as CatalogError).data ?? {};
+    if ((e as CatalogError).code === 'assistant_config_elsewhere' || ((e as CatalogError).code === 'assistant_file_unusable' && d['why'] === 'link')) io.stderr(byHand(s, input).join('\n') + '\n');
+    return code;
   }
   if (values['print-mcp-entry']) {
     io.stdout(JSON.stringify({ [s.serverName]: mcpEntry(plan.run) }, null, 2) + '\n');
@@ -433,6 +441,8 @@ async function catalogSize(settings: Settings, catalog: string): Promise<number>
  *  command, and anything the person should know (a shared folder, a permissive mode, the backups). */
 async function summary(s: Words, paint: Paint, ran: Awaited<ReturnType<typeof runSetup>>, config: Config, before: Settings, env: SetupIo['env']): Promise<string[]> {
   const w = s.setup;
+  // A line the person should notice: marked, in colour at a terminal, never colour alone.
+  const warn = (text: string) => paint('attention', `▲ ${text.replace(/^- /, '')}`);
   const settings = settingsFrom(env, before.projectDir);
   const catalog = settings.catalog;
   const local = catalog.startsWith('file:');
@@ -460,7 +470,7 @@ async function summary(s: Words, paint: Paint, ran: Awaited<ReturnType<typeof ru
   out.push(ran.command ? command[ran.command] : s.format(w.command_none, { runnable }));
   if (!local) out.push(paint('attention', s.format(w.catalog_hosted, { catalog })));
   const kind = local ? sharedFolderKind(where) : undefined;
-  if (kind) out.push(paint('attention', `▲ ${s.format(w.catalog_shared_folder, { path: where, kind: w.shared_folder_kind[kind] })}`));
+  if (kind) out.push(warn(s.format(w.catalog_shared_folder, { path: where, kind: w.shared_folder_kind[kind] })));
   const permissive = permissiveMode(settings);
   if (permissive.mode && permissive.mode !== 'unknown') out.push(paint('attention', `▲ ${s.format(w.updates_permissive_now, { mode: permissive.mode })}`));
   for (const u of permissive.unusable ?? []) out.push(paint('attention', `▲ ${s.format(w.updates_permissive_unknown, { path: u.path, why: s.format(w.settings_unusable[u.why], { key: 'key' in u ? u.key : '' }) })}`));
@@ -469,6 +479,10 @@ async function summary(s: Words, paint: Paint, ran: Awaited<ReturnType<typeof ru
     const original = (b: string) => (b.endsWith('-claude.json') ? ran.plan.files.claudeJson.path : ran.plan.files.settingsJson.path);
     for (const b of ran.backups) out.push(s.format(w.restore, { file: original(b), backup: b }));
   }
+  const notes = setupNotes({ managedDir: settings.managedSettings, assistantHome: settings.assistantHome, projectDir: settings.projectDir });
+  for (const n of notes.personOnly) out.push(warn(s.format(w.person_only_rule, { file: flagText(n.file), rule: flagText(n.rule) })));
+  for (const n of notes.managed) out.push(warn(s.format(w.managed[n.key], { path: flagText(n.path) })));
+  out.push(s.format(w.per_skill));
   out.push(s.format(w.node, { node: ran.plan.run.node }));
   if ((ran.command === 'added' || ran.command === 'same') && !(env['PATH'] ?? '').split(':').some((p) => p && samePath(p, folder))) out.push(paint('attention', `▲ ${s.format(w.command_off_path, { folder: shellQuote(folder) })}`));
   return out;
@@ -493,6 +507,29 @@ function nodeForm(env: SetupIo['env'], install: { node: string; script: string }
   const found = onPath(env, 'node');
   const node = found && samePath(found, install.node) ? 'node' : shellQuote(install.node);
   return `${node} ${shellQuote(install.script)}`;
+}
+
+/** Setup's own entries, to add by hand where it won't write: the MCP server, the hook group and the allow rules. */
+function byHand(s: Words, input: PlanInput): string[] {
+  try {
+    const inst = checkInstall({ node: input.node, script: input.script, temporaryRoots: input.temporaryRoots, uid: input.uid });
+    const run = { node: inst.node, script: inst.script, id: input.newId, env: carriedSettings(input.env) };
+    const w = s.setup.by_hand;
+    const claudeJson = join(input.assistantHome, '.claude.json');
+    const settingsJson = join(input.assistantHome, '.claude', 'settings.json');
+    return [
+      '',
+      w.intro,
+      s.format(w.mcp, { path: claudeJson }),
+      JSON.stringify({ [s.serverName]: mcpEntry(run) }, null, 2),
+      s.format(w.hook, { path: settingsJson }),
+      JSON.stringify(hookGroup(run), null, 2),
+      s.format(w.rules, { path: settingsJson }),
+      JSON.stringify(allowRules(s), null, 2),
+    ];
+  } catch {
+    return [];
+  }
 }
 
 const samePath = (a: string, b: string) => {
