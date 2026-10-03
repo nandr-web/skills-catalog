@@ -600,6 +600,15 @@
           "total_matches": {
             "type": "integer"
           },
+          "query_words": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "full_matches": {
+            "type": "integer"
+          },
           "catalog_size": {
             "type": "integer"
           }

@@ -10,6 +10,7 @@ import { loadGolden } from '../golden.ts';
 import { HEAVY_MS } from '../helpers.ts';
 import { openOn, type TestAdapter } from '../adapters.ts';
 import { actAs } from '../../src/local/index.ts';
+import { scoreLines, scoreSearch } from '../search-score.ts';
 
 const q = loadGolden('queries.yaml');
 const byId = new Map<string, any>(q.queries.map((x: any) => [x.id, x]));
@@ -79,6 +80,31 @@ export function discoverySuite(a: TestAdapter): void {
         if (!(await hasAll(catalog, query.keywords, query.must_find))) gap.push(id);
       }
       console.info(`discovery known gap (keywords alone miss): ${gap.join(', ')}`);
+    }, HEAVY_MS);
+
+    it('a page where some card shares every word lists those first and says how many; the rest share only some (the review of 2026-10-02, P1.1)', async () => {
+      const catalog = await seeded(a);
+      for (const term of ['release notes', 'review pull request', 'terraform plan', 'is there a skill for writing release notes?']) {
+        const page = await catalog.search({ query: term, limit: 50 });
+        const words = page.query_words!;
+        expect(words.length, term).toBeGreaterThan(0);
+        const full = page.results.map((c) => words.every((w) => c.matched_words.includes(w)));
+        expect(page.match, term).toBe('all');
+        expect(page.full_matches, term).toBe(full.filter(Boolean).length);
+        // Every full match comes before every card that shares only some words.
+        expect(full.indexOf(false) === -1 || full.lastIndexOf(true) < full.indexOf(false), `${term}: ${page.results.map((c) => c.name).join(', ')}`).toBe(true);
+        expect(full.includes(false), `${term} has cards that share only some words`).toBe(true);
+      }
+    }, HEAVY_MS);
+
+    it('Asks: the developer\'s own sentences, sent whole, find and label their skills at least as well as the floor (golden asks_floor)', async () => {
+      const catalog = await seeded(a);
+      const s = await scoreSearch(catalog);
+      console.info(`discovery ${scoreLines(s).join('; ')}`);
+      expect(s.keywords.found).toBe(s.keywords.labelled);
+      expect(s.asks.found, s.asks.misses.join('\n')).toBeGreaterThanOrEqual(q.asks_floor.found);
+      expect(s.asks.shown_as_match, s.asks.misses.join('\n')).toBeGreaterThanOrEqual(q.asks_floor.shown_as_match);
+      expect(s.asks.no_match, s.asks.misses.join('\n')).toBeGreaterThanOrEqual(q.asks_floor.no_match);
     }, HEAVY_MS);
 
     it('Nothing matches: every no-match term says partial or none, and no card has every content word', async () => {

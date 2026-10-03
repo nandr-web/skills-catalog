@@ -4,7 +4,70 @@
 export const COMMON_WORDS: readonly string[] = [
   'a', 'an', 'the', 'is', 'there', 'for', 'to', 'of', 'and', 'or', 'my', 'me', 'i', 'skill', 'skills', 'any', 'find', 'get',
   'with', 'in', 'on', 'that', 'this', 'what', 'how', 'can', 'do', 'does', 'help', 'helps',
+  // The words of asking rather than of the need, so a developer's whole sentence isn't "closest" for words no skill says.
+  'need', 'needs', 'want', 'wants', 'have', 'has', 'please', 'could', 'would', 'should', 'will', 'which', 'who', 'why', 'when', 'where', 'just',
+  'our', 'we', 'us', 'you', 'your', 'someone', 'anything', 'something',
+  'write', 'writes', 'writing', 'make', 'makes', 'create', 'use', 'using',
+  'about', 'from', 'by', 'be', 'it', 'its', 'are', 'was',
+  's', 't', 'm', 'd', 'll', 're', 've', 'don', 'im',
+  'catalog', 'shared',
 ];
+
+// Other words for a query word (config: CatalogConfig.synonyms): a card that has any of them matches that word, and the
+// result names the word as typed. Small on purpose, and only what a team's vocabulary makes certain: shortenings
+// (a11y, k8s, pr, perf, docs), and plain synonyms a skill's own text is unlikely to use (retro for postmortem, outage
+// for incident, shipped for release, spend for cost, stress test for load test). Words searched as given; the index
+// stems them as it stems the query.
+export const SYNONYMS: Readonly<Record<string, readonly string[]>> = {
+  a11y: ['accessibility'],
+  i18n: ['internationalization', 'localization', 'translation'],
+  l10n: ['localization', 'translation'],
+  translate: ['i18n', 'translation'],
+  translating: ['i18n', 'translation'],
+  k8s: ['kubernetes'],
+  kubernetes: ['k8s'],
+  pr: ['pull'],
+  prs: ['pull'],
+  perf: ['performance'],
+  sluggish: ['slow', 'performance'],
+  docs: ['documentation'],
+  db: ['database'],
+  infra: ['infrastructure'],
+  deps: ['dependency', 'dependencies'],
+  vuln: ['vulnerability'],
+  vulns: ['vulnerability'],
+  cve: ['vulnerability'],
+  cves: ['vulnerability'],
+  retro: ['postmortem', 'retrospective'],
+  retrospective: ['postmortem'],
+  postmortem: ['retrospective'],
+  outage: ['incident'],
+  outages: ['incident'],
+  ship: ['release'],
+  shipped: ['release'],
+  shipping: ['release'],
+  bill: ['cost'],
+  billing: ['cost'],
+  spend: ['cost'],
+  spending: ['cost'],
+  stress: ['load'],
+  unused: ['dead'],
+  dead: ['unused'],
+};
+
+/** The words to search for a query's words: each word, then its synonyms; `of` gives, for each searched word, the query
+ *  words it stands for (a synonym can stand for several, and can be a query word itself). */
+export function withSynonyms(words: readonly string[], synonyms: Readonly<Record<string, readonly string[]>> = SYNONYMS): { search: string[]; of: Map<string, string[]> } {
+  const of = new Map<string, string[]>();
+  const add = (term: string, word: string) => {
+    const list = of.get(term) ?? [];
+    if (!list.includes(word)) list.push(word);
+    of.set(term, list);
+  };
+  for (const w of words) add(w, w);
+  for (const w of words) for (const alt of Object.hasOwn(synonyms, w) ? synonyms[w]! : []) add(alt.toLowerCase(), w);
+  return { search: [...of.keys()], of };
+}
 
 export function tokens(text: string): string[] {
   return text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];

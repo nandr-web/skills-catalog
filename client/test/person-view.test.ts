@@ -5,7 +5,8 @@
 // unchanged (every other CLI test).
 import { describe, expect, it } from 'vitest';
 import { cli, S } from './cli-io.ts';
-import { open, seed } from './seed.ts';
+import { open, request, seed, skillMd } from './seed.ts';
+import { actAs } from '@skills-catalog/core';
 import { place, type Place } from './server.ts';
 
 const ESC = /\x1b\[/;
@@ -100,6 +101,19 @@ describe('the CLI for a person at a terminal', () => {
     const r = await person(p, ['search', 'graphql', 'schema']);
     expect(r.out.split('\n')[0]).toBe('▲ Nothing matches every word of "graphql schema". Closest, sharing only some words:');
     expect(r.out).toContain('shares only: schema');
+  });
+
+  it('a search with a full match lists the cards that share only some words apart, each with those words (the review of 2026-10-02, P1.1)', async () => {
+    const p = place();
+    await seed(p, async (c) => {
+      await c.publish(request('semver-helper', [{ path: 'SKILL.md', text: skillMd('semver-helper', 'Works out the next release version.') }]), actAs('ben'));
+    });
+    const r = await person(p, ['search', 'release', 'notes']);
+    const lines = r.out.split('\n');
+    expect(lines[0]).toBe('1 of 15 skills match "release notes"');
+    const also = lines.findIndex((l) => l === `▲ ${S.format(S.word('person.search.also'))}`);
+    expect(also).toBeGreaterThan(lines.findIndex((l) => l.includes('release-notes-kit')));
+    expect(lines.slice(also).join('\n')).toMatch(/semver-helper[\s\S]*shares only: release/);
   });
 
   it('an empty catalog says it is empty, rather than to search again', async () => {

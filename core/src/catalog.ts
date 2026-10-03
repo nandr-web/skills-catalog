@@ -32,13 +32,14 @@ import {
   type TreeDiff,
   type TreeFile,
 } from './skill-tree/index.ts';
-import { COMMON_WORDS, contentWords, spelledLike } from './words.ts';
+import { COMMON_WORDS, SYNONYMS, contentWords, spelledLike, withSynonyms } from './words.ts';
 
 export interface CatalogConfig {
   limits: Limits;
   safeFrontmatterKeys: readonly string[]; // keys that can't grant anything; a change to any other key is a risk flag
   nonGrantingKeys: readonly string[]; // keys known to grant nothing: with only these, a changed file is no reason to ask
   commonWords: readonly string[];
+  synonyms: Readonly<Record<string, readonly string[]>>; // other words for a query word (words.ts SYNONYMS)
   readInlineBudget: number; // bytes of text one read inlines (contract §2: 24 KB keeps a result under 8,000 tokens)
   signInLogins: readonly string[]; // hosted: the GitHub logins that may sign in, each maybe login:id (§1.1); none, nobody
   sessionDays: number; // hosted: how long a sign-in's token lasts
@@ -50,6 +51,7 @@ export const DEFAULT_CONFIG: CatalogConfig = {
   safeFrontmatterKeys: DEFAULT_SAFE_FRONTMATTER_KEYS,
   nonGrantingKeys: DEFAULT_NON_GRANTING_KEYS,
   commonWords: COMMON_WORDS,
+  synonyms: SYNONYMS,
   readInlineBudget: 24 * 1024,
   signInLogins: [],
   sessionDays: 7,
@@ -126,6 +128,10 @@ export interface SearchResult {
   ranking: 'none' | 'lexical';
   next_cursor?: string;
   total_matches: number;
+  // The words searched (the query's, common words left out) and how many cards share every one of them; those come
+  // first. Optional only because a hosted catalog from before them doesn't say them.
+  query_words?: string[];
+  full_matches?: number;
   catalog_size: number;
 }
 
@@ -417,7 +423,15 @@ export class Catalog {
     await this.p.events.deliver();
     const query = req.query?.trim() ?? '';
     const words = query ? contentWords(query, this.config.commonWords) : [];
-    const hits = await this.p.index.query(words, req.filters ?? {});
+    // Each word with its synonyms, as any-word terms; a card matched a query word when it matched any of its terms.
+    const { search, of } = withSynonyms(words, this.config.synonyms);
+    const found = (await this.p.index.query(search, req.filters ?? {})).map(({ card, matched_words }) => ({
+      card,
+      matched_words: words.filter((w) => matched_words.some((t) => of.get(t)?.includes(w))),
+    }));
+    // The cards that share more of the words first (every word first of all), the index's ranking within each.
+    const hits = found.map((h, i) => ({ h, i })).sort((a, b) => b.h.matched_words.length - a.h.matched_words.length || a.i - b.i).map(({ h }) => h);
+    const full = hits.filter((h) => h.matched_words.length === words.length).length;
     const page = hits.slice(offset, offset + limit);
     const out: SearchResult = {
       results: page.map(({ card, matched_words }) => ({
@@ -428,9 +442,11 @@ export class Catalog {
         publisher: card.publisher,
         matched_words,
       })),
-      match: hits.length === 0 ? 'none' : words.length === 0 || hits.some((h) => h.matched_words.length === words.length) ? 'all' : 'partial',
+      match: hits.length === 0 ? 'none' : full > 0 ? 'all' : 'partial',
       ranking: words.length === 0 ? 'none' : 'lexical',
       total_matches: hits.length,
+      query_words: words,
+      full_matches: full,
       catalog_size: await this.p.storage.count(),
     };
     if (offset + limit < hits.length) out.next_cursor = encodeCursor(offset + limit);

@@ -67,7 +67,7 @@ export class SqliteSearchIndex implements SearchIndex {
       hits = rows.map((r) => ({ card: toCard(r), matched_words: [] }));
     } else {
       const rows = this.db
-        .prepare('SELECT c.* FROM search_fts f JOIN search_cards c ON c.name = f.name WHERE search_fts MATCH ? ORDER BY bm25(search_fts), c.name')
+        .prepare('SELECT c.* FROM search_fts f JOIN search_cards c ON c.name = f.name WHERE search_fts MATCH ? ORDER BY bm25(search_fts, 0.0, 4.0, 1.0), c.name')
         .all(matchExpr(words)) as unknown as CardRow[];
       const matched = new Map<string, string[]>();
       for (const w of words) {

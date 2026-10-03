@@ -112,9 +112,11 @@ const SEARCH_OUTPUT = obj(
     ranking: oneOf('none', 'lexical'),
     next_cursor: str,
     total_matches: int,
+    query_words: list(str),
+    full_matches: int,
     catalog_size: int,
   },
-  ['next_cursor'],
+  ['next_cursor', 'query_words', 'full_matches'],
 );
 const readItem = obj(
   {
