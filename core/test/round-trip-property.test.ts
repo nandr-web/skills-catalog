@@ -62,3 +62,21 @@ describe('round trip over generated trees (paths, bytes, modes)', () => {
     }
   });
 });
+
+// A read shows SKILL.md as it was published: quotes, comments, flow lists and trailing spaces kept (review P8.1).
+describe('a read shows SKILL.md byte for byte', () => {
+  it('the front matter as written, and the body with its trailing whitespace', async () => {
+    const { catalog } = await openTest();
+    try {
+      const text = '---\nname: "exact-kit"\n# a comment the author left\ndescription: \'Kept as written.\'\ntags: [release, docs]\n---\nBody with trailing spaces   \n\n';
+      await catalog.publish(request('exact-kit', [{ path: 'SKILL.md', mode: '0644', bytes: Buffer.from(text) }]), actAs('ana'));
+      const r = await catalog.read({ names: ['exact-kit'] });
+      const item = r.skills[0] as { manifest: { frontmatter_text?: string; body?: string } };
+      expect((item.manifest.frontmatter_text ?? '') + (item.manifest.body ?? '')).toBe(text);
+      const { skillMdOf } = await import('../src/render.ts');
+      expect(skillMdOf(item as never)).toBe(text);
+    } finally {
+      catalog.close();
+    }
+  });
+});

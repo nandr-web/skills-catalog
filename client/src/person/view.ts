@@ -3,7 +3,7 @@
 // (the CLI) or in the assistant's reply (markdown, handed to it with the MCP result). What needs their decision comes
 // last, set apart (medium.ts's callout), with what answers it: the commands in a terminal, a question in a reply. Every
 // word is the words file's (results.person); only the layout is here. A result with no view here has none.
-import { fenced, reasons, sharesEveryWord, skillMdOf, type DiffResult, type ReadResult, type SearchInput, type SearchResult, type VersionsResult, type Words } from '@skills-catalog/core';
+import { fenced, oneNewlineOff, reasons, sharesEveryWord, skillMdOf, type DiffResult, type ReadResult, type SearchInput, type SearchResult, type VersionsResult, type Words } from '@skills-catalog/core';
 import { flagText, oneLine } from '@skills-catalog/core/skill-tree';
 import type { ListView, UpdateView } from '../machine/installer.ts';
 import type { Answer } from '../operations.ts';
@@ -147,7 +147,7 @@ function read({ say, m }: Ctx, r: ReadResult): string | undefined {
   const latest_mark = item.version === item.latest_version ? '' : say('read.older', { latest: item.latest_version });
   const out = [paint('bold', say('read.header', { name: item.name, version: item.version, latest_mark, publisher, published_at: day(item.published_at) }))];
   const skillMd = skillMdOf(item);
-  if (skillMd !== undefined) out.push('', paint('dim', say('read.as_written', { publisher })), ...m.quoted(fenced(skillMd.trimEnd()), 'markdown'));
+  if (skillMd !== undefined) out.push('', paint('dim', say('read.as_written', { publisher })), ...m.quoted(fenced(oneNewlineOff(skillMd)), 'markdown'));
   const files = item.files ?? [];
   if (files.length) out.push('', say('read.files', { files: files.map((f) => flagText(f.path)).join(', ') }));
   const left = files.filter((f) => f.content_omitted && f.path !== 'SKILL.md').map((f) => flagText(f.path));

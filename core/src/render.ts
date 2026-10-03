@@ -86,6 +86,10 @@ const quoted = (path: string) => JSON.stringify(path);
 // close the fence by planting a marker in any spelling: it can't know the token. Everything shown comes from the
 // read's own result, so a face can't show more than the core inlined (§2's budget): the fence holds the front matter
 // and the body when the core inlined it; a skill whose body was left out shows no fence at all.
+/** A file's text for its fence: only its one final newline taken off (the fence line follows), never trailing spaces or
+ *  blank lines, which are part of what was published (review P8.1). */
+export const oneNewlineOff = (text: string) => text.replace(/\n$/, '');
+
 function renderItem(s: Words, item: ReadItem, token: string, budget: InlineBudget): string {
   const w = s.word('get');
   const size = (bytes: number) => s.format(w.size, { kb: Math.ceil(bytes / 1024) });
@@ -96,12 +100,12 @@ function renderItem(s: Words, item: ReadItem, token: string, budget: InlineBudge
   if (shown) {
     const skillMd = skillMdOf(item)!;
     const end = s.format(w.fence[1], { token });
-    lines.push(s.format(w.data_note, { publisher, end }), s.format(w.fence[0], { token }), fenced(skillMd.trimEnd()), end);
+    lines.push(s.format(w.data_note, { publisher, end }), s.format(w.fence[0], { token }), fenced(oneNewlineOff(skillMd)), end);
   }
   if (item.files) lines.push(s.format(w.files, { files: list(item.files.map((f) => `${quoted(f.path)} (${f.size} B)`)) }));
   for (const f of item.files ?? []) {
     if (f.content !== undefined && f.path !== MANIFEST) {
-      lines.push(s.format(w.file_fence[0], { path: quoted(f.path), token }), fenced(f.content.trimEnd()), s.format(w.file_fence[1], { path: quoted(f.path), token }));
+      lines.push(s.format(w.file_fence[0], { path: quoted(f.path), token }), fenced(oneNewlineOff(f.content)), s.format(w.file_fence[1], { path: quoted(f.path), token }));
     }
   }
   // What was left out. A body is read with paths ["SKILL.md"] (one path is read whole, whatever its size); a file
@@ -119,7 +123,13 @@ function renderItem(s: Words, item: ReadItem, token: string, budget: InlineBudge
 /** A read's SKILL.md as its text (front matter, then body), when the read carries its body; control characters are
  *  still the caller's to show escaped (fenced). */
 export const skillMdOf = (item: ReadItem): string | undefined =>
-  item.manifest.body === undefined ? undefined : `---\n${stringify(item.manifest.frontmatter, { lineWidth: 0 })}---\n${item.manifest.body}`;
+  item.manifest.body === undefined
+    ? undefined
+    : // As published when the catalog sends the front matter's text (review P8.1); rebuilt from its keys otherwise (an
+      // older hosted catalog).
+      item.manifest.frontmatter_text !== undefined
+      ? item.manifest.frontmatter_text + item.manifest.body
+      : `---\n${stringify(item.manifest.frontmatter, { lineWidth: 0 })}---\n${item.manifest.body}`;
 
 // `ids` makes the read's fence token (the injected Ids, so tests can fix it).
 export function renderRead(s: Words, r: ReadResult, ids: Ids): string {

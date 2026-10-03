@@ -126,7 +126,7 @@ const readItem = obj(
     fingerprint: str,
     published_at: str,
     publisher: str,
-    manifest: obj({ frontmatter: { type: 'object', properties: {}, required: [], additionalProperties: true }, body: str, body_omitted: bool }, ['body', 'body_omitted']),
+    manifest: obj({ frontmatter: { type: 'object', properties: {}, required: [], additionalProperties: true }, body: str, body_omitted: bool, frontmatter_text: str }, ['body', 'body_omitted', 'frontmatter_text']),
     reviews: list(anyValue),
     files: list(obj({ path: str, mode, size: int, sha256: str, type: oneOf('text', 'binary'), content: str, content_omitted: bool }, ['content', 'content_omitted'])),
   },

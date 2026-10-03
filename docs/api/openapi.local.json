@@ -764,6 +764,9 @@
                         },
                         "body_omitted": {
                           "type": "boolean"
+                        },
+                        "frontmatter_text": {
+                          "type": "string"
                         }
                       },
                       "required": [

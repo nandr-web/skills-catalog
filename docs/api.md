@@ -793,6 +793,7 @@ Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`)
         - `frontmatter`: an object
         - `body`: text (not always there)
         - `body_omitted`: true or false (not always there)
+        - `frontmatter_text`: text (not always there)
       - `reviews`: a list, each any value
       - `files`: a list, each an object with (not always there)
         - `path`: text
