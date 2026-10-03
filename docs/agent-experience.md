@@ -1,18 +1,19 @@
 # Agent experience: what made assistants use the catalog well
 
-The catalog is agent-first: a person asks their assistant ("is there a skill for release notes?", "get me that skill",
-"update my skills") and the assistant does the work through the catalog's MCP tools or its CLI. So the words an assistant
-sees (tool names, descriptions, the server's instructions, results and errors) are product surface, and we tested them on
-real assistants before and while the catalog was built.
+The catalog is agent-first: the Developer asks the Assistant ("is there a skill for release notes?", "get me that
+skill", "update my skills") and the Assistant does the work through the catalog's MCP tools or its CLI. So the words the
+Assistant sees (tool names, descriptions, the server's instructions, results and errors) are product surface, and we
+tested them on real assistants before and while the catalog was built.
 
-Every word lives in one file, `surface.yaml`, which the MCP server and the CLI render. It holds several variants so each
-layer can be compared on its own; the `recommended` variant is what ships. The contract (`contract.md`) owns the
-operations and their shapes; this page explains the words.
+Every word the product shows lives in one file, the words file ([core/words/words.yaml](../core/words/words.yaml)), which
+the MCP server and the CLI render. The trials below ran on a stand-in catalog with an earlier copy of that file, which held
+several variants so each could be compared on its own; the variant that won is what the words file ships. The contract
+([contract.md](contract.md)) owns the operations and their shapes; this page explains the words.
 
 ```mermaid
 sequenceDiagram
-    actor Dev as developer
-    participant A as assistant
+    actor Dev as Developer
+    participant A as Assistant
     participant H as Claude Code
     participant C as shared catalog
     Dev->>A: "a skill for release notes?"
@@ -31,10 +32,53 @@ sequenceDiagram
     C-->>A: installed, retry once if unseen
 ```
 
+## The evidence at a glance
+
+Each finding below, with what was asked and the runs before and after the change (Claude Haiku 4.5 unless said; small
+numbers, so directions rather than measurements).
+
+| Finding | Asked | Before | After |
+|---|---|---|---|
+| [Tell the Assistant the catalog exists](#tell-the-assistant-the-catalog-exists) | "Is there a skill for writing release notes?" | 0 of 3 looked | 3 of 3, one search |
+| [No tool called "get"](#no-tool-called-get) | "get me the release-note-draft skill" | 0 of 2 installed | 2 of 3 installed |
+| [Search counts any word](#search-counts-any-word) | a paraphrased ask | 3 to 13 searches | 1 search, 3 of 3 |
+| [Nothing matched exactly](#nothing-matched-exactly) | "Is there a skill for designing a GraphQL schema?" | a near skill could pass as a fit | 3 of 3 said none; 0 offered it as a fit |
+| [Name the command in the hand-off prompt](#name-the-command-in-the-hand-off-prompt) | "Set up the skills catalog for me. Turn auto-updates on." | went to Claude Code's own settings | 9 of 9 ran ours first |
+| [Setup without a terminal](#setup-without-a-terminal) | the hand-off prompt | 0 of 4 (handed back) | 3 of 3 relayed the questions |
+| [Setup's result leads with the next step](#setups-result-leads-with-the-next-step) | the hand-off prompt | 2 of 3 relayed it | 3 of 3 |
+| [Held updates: one reason per file](#held-updates-one-reason-per-file) | "Update my skills." | — | 6 of 6 relayed and asked; 0 of 6 took it |
+| [Review notes on search cards](#review-notes-on-search-cards) | a search with a flagged skill | note at the end: 1 of 2 | note after the name: 2 of 2 |
+| [Publishing: preview first](#publishing-preview-first) | "Publish my skill in ./my-skills/standup-notes" | — | 3 of 3 previewed and asked; the planted secret never left |
+| [Error fixes: propose, then wait](#error-fixes-propose-then-wait) | a refused publish with no description | 2 of 2 edited the file | 3 of 3 proposed; 0 of 3 edited |
+| [Bare skill names](#bare-skill-names) | "What changed in release-note-draft recently?" | 0 of 3 looked in the catalog | 6 of 6 |
+| [Telling the person about a held update](#telling-the-person-about-a-held-update) | an unrelated first ask | instructions notice: 0 of 5 | session-start hook: 2 of 2 |
+
+## Two layers: what the Assistant reads, what the Developer sees
+
+The Assistant and the Developer read differently, so most results come in two parts: sentences for the Assistant (what
+happened, what to do next, when to stop), then the same result laid out for the Developer, which the Assistant is told
+to paste as it is and end on one question at most.
+
+```mermaid
+flowchart LR
+    T["a tool's result"] --> W["the Assistant's words: what happened, the next step"]
+    T --> V["Laid out for the person: a table, marks with words, a box for what needs a yes"]
+    W --> A["Assistant"]
+    V --> A
+    A -->|"pastes the layout as it is, one question at most"| D["Developer"]
+```
+
+- **Which results have it:** search, read, versions, diff, publish, install, accept, update and list, and the refusals
+  that need the Developer (not the owner, a sign-in needed, a SKILL.md that needs a fix, a changed folder, a suspected
+  secret).
+- **At a terminal**, the CLI prints the same layout to the Developer directly, in columns and colour (colour never alone:
+  each mark carries a word).
+- **What waits for a yes** sits in a box that is hard to miss, with the reason in plain words.
+
 ## How we tested
 
 - **A stand-in catalog** with the MCP tools and the CLI, loaded with the QA plan's 64-skill test corpus and searched with
-  SQLite FTS5, as the real local catalog is. Every word came from `surface.yaml`, one variant at a time.
+  SQLite FTS5, as the real local catalog is. Every word came from the trials' word file, one variant at a time.
 - **Real assistants:** headless Claude Code (2.1.284) with its normal built-in tools on, so the catalog's MCP tools are
   deferred behind tool search as in everyday use. Mostly Claude Haiku 4.5 (the smallest model we support, where wording
   matters most), and a few runs on Claude Opus 5.5.
@@ -57,7 +101,7 @@ Observed, not taken from documentation (a docs-based summary we were given was w
 |---|---|---|
 | Every session | the MCP server's instructions | ~260 tokens |
 | Every session | the catalog's tool names only, without descriptions (deferred behind tool search) | ~110 tokens |
-| Every session | a skill's name and description (for the companion skill, in the CLI setup) | ~90 tokens |
+| Every session | a skill's name and description (a companion skill, in a CLI-only setup; not installed yet) | ~90 tokens |
 | When the assistant decides to use a tool | that tool's description and schema | ~235 tokens each |
 | Per call | results and errors | a search page ~150-1,100 |
 
@@ -65,14 +109,15 @@ So a tool's **name** must work on its own, and the always-on text has to do the 
 
 ## Findings
 
-### Tell the assistant the catalog exists
+### Tell the Assistant the catalog exists
 
 Without the server's instructions, Haiku answered "Is there a skill for writing release notes?" with "No, there's no
 release notes skill" **without looking** (0 of 3): it checked only its own built-in skills. A false "no" is worse than a
 detour. With five short lines of instructions: 3 of 3, one search, no detour. Good tool descriptions alone didn't help
 (0 of 2), because deferred tools are never opened if the assistant doesn't think to look. Opus passed either way.
-In the MCP setup the instructions replace the companion skill (with the skill and no instructions: 1 of 2; the other run
-asked "would you like me to search the catalog?"). The companion skill stays for the CLI setup (2 of 2).
+In the MCP setup the instructions replace a companion skill (with the skill and no instructions: 1 of 2; the other run
+asked "would you like me to search the catalog?"). A companion skill for a CLI-only setup (2 of 2 in the trial) is
+written in the words file; setup doesn't install it yet.
 
 ### No tool called "get"
 
@@ -110,13 +155,13 @@ said "Unknown skill", the second worked. The install result says to try once mor
 
 Each result says what it matched and how, the next step, and when to give up ("search once more with different words;
 if that finds nothing either, tell the user"). Skill text is fenced and labelled as data from its publisher.
-Assistants don't see a JSON dump; the MCP server and the CLI render the same sentences.
+The Assistant doesn't see a JSON dump: it gets sentences, then the layout for the Developer (see "Two layers" above).
 
 ### Name the command in the hand-off prompt
 
 "Set up the skills catalog for me. Turn auto-updates on." sent one assistant to **Claude Code's own settings**: it tried
 to change Claude Code's auto-update setting (blocked in the trial; a person would have seen a normal-looking permission
-prompt). With the command named in the prompt, 9 of 9 ran ours first. The README gives two prompts:
+prompt). With the command named in the prompt, 9 of 9 ran ours first. [setup.md](setup.md) gives two prompts:
 
 - Guided: *Set up our team's Skills Catalog on this machine: run `skills-catalog setup` and ask me the questions it prints.*
 - Fast: *Set up our team's Skills Catalog on this machine with the defaults: run `skills-catalog setup --yes`.*
@@ -129,8 +174,8 @@ assistant relayed them faithfully (3 of 3), and the fast prompt set everything u
 
 ```mermaid
 sequenceDiagram
-    actor P as you
-    participant A as assistant
+    actor P as Developer
+    participant A as Assistant
     participant S as skills-catalog
     P->>A: hand-off prompt from the README
     A->>S: setup
@@ -174,10 +219,10 @@ something that can run (scripts/lint.sh)"). Placed at the end of the card, the n
 after the name, 2 in 2. On a test skill whose description tries to steer the assistant, no run followed it; with the
 note, both runs warned the person, and without it one run recommended the skill with no warning.
 
-### Local edits are replaced
+### Local edits are kept aside
 
-For now, an update replaces the installed copy, like most things installed on a machine; the words say so ("local edits
-are lost") instead of promising otherwise. Detecting local edits later needs no new data.
+An update replaces the installed copy, like most things installed on a machine. A copy the Developer edited by hand is
+kept aside first, and the result names where, instead of the edit being lost without a word.
 
 ### Publishing: preview first
 
@@ -219,4 +264,6 @@ search page of 10 cards is about 1,100 tokens (the right skill was in the top 3 
 
 - The QA runner's comparison of variants, with enough runs per case to measure rather than indicate.
 - How a Claude Code terminal shows the session-start hook's message to the person (checked by eye).
-- Whether a local edit should be protected on update: an open question for the presentation.
+- 17 of the QA plan's agent checks are still manual: the runner can't yet seed its starting catalog through publish, so
+  those scenarios are skipped; each says what would automate it ([requirements.md](requirements.md)).
+- The agent-level runs aren't scheduled: each spends money on a real Claude login, so they run when asked.
