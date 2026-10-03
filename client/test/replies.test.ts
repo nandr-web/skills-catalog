@@ -271,3 +271,16 @@ describe('a command typed wrong, as the person reads it', () => {
     }
   });
 });
+
+// Dates as the person reads them: their own date and time, so two versions the same day differ (review P11.4).
+describe('version dates, as the person reads them', () => {
+  it('versions shows each version\'s local date and time', async () => {
+    const p = place();
+    await seed(p);
+    const r = await person(p, ['versions', 'release-notes-kit']);
+    // Each row: vN, then the local date and a time; the seed's two publishes are minutes apart, so the times differ.
+    const times = [...r.out.matchAll(/^\s+v\d+\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2})\s/gm)].map((m) => m[1]);
+    expect(times).toHaveLength(2);
+    expect(times[0]).not.toBe(times[1]);
+  });
+});

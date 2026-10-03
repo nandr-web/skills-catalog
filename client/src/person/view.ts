@@ -21,7 +21,14 @@ const sayer = (s: Words): Say => (path, fields = {}) => {
 
 type Ctx = { s: Words; say: Say; m: Medium };
 
-const day = (iso: string) => iso.slice(0, 10);
+// A time as the person reads it: their own date and time (a UTC day alone shows an evening publish as tomorrow, and two
+// versions the same day look the same; review P11.4).
+const pad = (n: number) => String(n).padStart(2, '0');
+const day = (iso: string) => {
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return iso.slice(0, 10);
+  return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())} ${pad(t.getHours())}:${pad(t.getMinutes())}`;
+};
 const header = (say: Say, path: string) => (say(path).split('|') as string[]).map((h) => h.trim());
 
 /** The person's view of an answer in medium `m`, or undefined when this operation has none there. */
