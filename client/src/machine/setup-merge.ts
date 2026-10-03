@@ -165,8 +165,27 @@ export function mergeClaudeJson(before: string | undefined, entry: Obj, recorded
   return { refusal: { code: 'name_taken', name: SERVER_NAME } };
 }
 
-/** `.claude/settings.json`: one group in `hooks.SessionStart` and the allow rules in `permissions.allow`. */
-export function mergeSettingsJson(before: string | undefined, want: { hook: Obj; rules: readonly string[]; id: string }, recorded: readonly RecordEntry[]): Merged {
+/** `.claude/settings.json`: one group in `hooks.SessionStart` and the allow rules in `permissions.allow`. With no
+ *  `hook` (config session_start_hook: false), only the rules: no hook is added, and one setup added before stays
+ *  recorded while it's in the file, so teardown still removes it. */
+export function mergeSettingsJson(before: string | undefined, want: { hook?: Obj; rules: readonly string[]; id: string }, recorded: readonly RecordEntry[]): Merged {
+  if (!want.hook) return rulesOnly(before, { rules: want.rules, id: want.id }, recorded);
+  return mergeWithHook(before, { ...want, hook: want.hook }, recorded);
+}
+
+/** The rules alone: the same merge with no hook group asked for, keeping a recorded one that's still there. */
+function rulesOnly(before: string | undefined, want: { rules: readonly string[]; id: string }, recorded: readonly RecordEntry[]): Merged {
+  const ourHook = recorded.find((e) => e.kind === 'hook_group');
+  const otherRecords = recorded.filter((e) => e.kind !== 'hook_group');
+  const m = mergeWithHook(before, { ...want, hook: undefined }, otherRecords);
+  if ('refusal' in m || !ourHook || before === undefined) return m;
+  const hooks = (JSON.parse(before) as Obj)['hooks'];
+  const groups = isObject(hooks) ? own(hooks, 'SessionStart') : undefined;
+  const still = Array.isArray(groups) && groups.some((g) => jsonEqual(g, ourHook.value));
+  return still ? { ...m, entries: [withCreated({ kind: 'hook_group', value: ourHook.value }, ourHook.created), ...m.entries] } : m;
+}
+
+function mergeWithHook(before: string | undefined, want: { hook: Obj | undefined; rules: readonly string[]; id: string }, recorded: readonly RecordEntry[]): Merged {
   const ourHook = recorded.find((e) => e.kind === 'hook_group');
   const ourRules = recorded.filter((e) => e.kind === 'allow_rule' && e.was_there === false);
   const rulesCreated = union(...ourRules.map((e) => e.created));
@@ -183,6 +202,11 @@ export function mergeSettingsJson(before: string | undefined, want: { hook: Obj;
     return all;
   };
 
+  if (before === undefined && !want.hook) {
+    const text = freshText({ permissions: { allow: want.rules } });
+    const created: Container[] = ['permissions', 'permissions.allow'];
+    return checked(before, text, true, { rulesAppended: want.rules.length, created, values: { rules: want.rules } }, ruleEntries([], want.rules, created));
+  }
   if (before === undefined) {
     const text = freshText({ hooks: { SessionStart: [want.hook] }, permissions: { allow: want.rules } });
     const created: Container[] = ['hooks', 'hooks.SessionStart', 'permissions', 'permissions.allow'];
@@ -204,13 +228,15 @@ export function mergeSettingsJson(before: string | undefined, want: { hook: Obj;
   // A group carrying this setup id is setup's: one that's neither this run's nor the recorded one is setup's the person
   // changed since, so the run is refused (contract §6), as for the MCP entry. No one else's group carries the id.
   const carriesId = (g: unknown) => JSON.stringify(g).includes(`--setup-id ${want.id}`);
-  if (groups?.some((g) => carriesId(g) && !jsonEqual(g, want.hook) && !(ourHook && jsonEqual(g, ourHook.value)))) return { refusal: { code: 'name_taken', name: SERVER_NAME } };
+  if (want.hook && groups?.some((g) => carriesId(g) && !jsonEqual(g, want.hook) && !(ourHook && jsonEqual(g, ourHook.value)))) return { refusal: { code: 'name_taken', name: SERVER_NAME } };
 
   // The hook group: there → nothing; setup's recorded one → replaced in place; else appended, making what's missing.
   const edit = new Splices(before);
   const marks: Marks = { created: [], values: { hook: want.hook } };
   let hookMade: Container[] | undefined;
-  if (groups === undefined) {
+  if (!want.hook) {
+    // No hook asked for: the hooks are left as they are.
+  } else if (groups === undefined) {
     hookMade = hooks === undefined ? ['hooks', 'hooks.SessionStart'] : ['hooks.SessionStart'];
     edit.add(hooks === undefined ? insertMember(before, s.root, 'hooks', { SessionStart: [want.hook] }) : insertMember(before, container(s.root, 'hooks'), 'SessionStart', [want.hook]));
     marks.hook = { index: 0, replaced: false };
@@ -251,6 +277,6 @@ export function mergeSettingsJson(before: string | undefined, want: { hook: Obj;
     marks.created.push(...(rulesMade ?? []));
   }
 
-  const entries = [hookEntry(hookMade), ...ruleEntries(inFile, missing, rulesMade)];
+  const entries = [...(want.hook ? [hookEntry(hookMade)] : []), ...ruleEntries(inFile, missing, rulesMade)];
   return edit.text === before ? { text: undefined, entries } : checked(before, edit.text, edit.ok, marks, entries);
 }

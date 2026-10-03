@@ -335,6 +335,7 @@ export async function runSetupCommand(argv: readonly string[], io: SetupIo): Pro
   }
 
   const config = configFrom(existing, file, answers, c);
+  const sessionStartHook = config['session_start_hook'] !== false;
   const install = io.install ?? { node: process.execPath, script: SCRIPT, temporaryRoots: [tmpdir(), '/tmp', '/var/tmp'] };
   const input: PlanInput = {
     assistantHome: settings.assistantHome,
@@ -346,6 +347,7 @@ export async function runSetupCommand(argv: readonly string[], io: SetupIo): Pro
     temporaryRoots: install.temporaryRoots,
     words: s,
     newId: io.newId ?? randomBytes(16).toString('hex'),
+    sessionStartHook,
   };
 
   let plan: SetupPlan;
@@ -395,7 +397,7 @@ function planLines(s: Words, paint: Paint, plan: SetupPlan, config: Config, exis
   const changes = [
     configChanges ? s.format(w.config, { path: join(plan.places.skillsHome, 'config.json') }) : undefined,
     f.claudeJson.text === undefined ? undefined : s.format(recorded('mcp_entry') ? w.mcp_replace : w.mcp_add, { path: f.claudeJson.path }),
-    f.settingsJson.text === undefined ? undefined : s.format(recorded('hook_group') ? w.hook_replace : w.hook_add, { path: f.settingsJson.path, rules: allowRules(s).length }),
+    f.settingsJson.text === undefined ? undefined : s.format(!plan.hook ? w.rules_add : recorded('hook_group') ? w.hook_replace : w.hook_add, { path: f.settingsJson.path, rules: allowRules(s).length }),
     f.claudeJson.text === undefined && f.settingsJson.text === undefined ? undefined : s.format(w.record, { path: plan.places.record }),
     terminalCommand && !(plan.record?.created_files ?? []).some((c) => c.file === plan.places.command) ? s.format(w.command, { path: plan.places.command }) : undefined,
   ].filter((l): l is string => l !== undefined);

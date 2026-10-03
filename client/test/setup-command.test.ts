@@ -14,6 +14,7 @@ beforeEach(() => runnerFolders());
 import { CONFIG_KEYS } from '../src/machine/lock.ts';
 import { NON_QUESTION_KEYS, QUESTIONS, runSetupCommand, SETUP_FLAGS, setupDoc, sharedFolderKind, type SetupIo } from '../src/cli/setup.ts';
 import { PROCESS_COMMANDS } from '../src/cli/process.ts';
+import { runTeardownCommand } from '../src/cli/teardown.ts';
 import { cliWords } from '../src/cli/words.ts';
 
 const S = cliWords(Words.load());
@@ -172,6 +173,34 @@ describe('three ways, the same files (skill-setup-unattended)', () => {
     const norm = (w: ReturnType<typeof world>) => Object.fromEntries(Object.entries(w.files()).map(([k, v]) => [k, v?.split(w.dir).join('<dir>')]));
     expect(norm(b)).toEqual(norm(a));
     expect(norm(c)).toEqual(norm(a));
+  });
+});
+
+describe('session_start_hook: false (contract §6)', () => {
+  it('in a --config file: saved, no hook written (the allow rules still are), the plan says so; teardown removes the rest', async () => {
+    const w = world();
+    const path = join(w.dir, 'answers.json');
+    writeFileSync(path, JSON.stringify({ session_start_hook: false }));
+    expect(await runSetupCommand(['--yes', '--config', path], w.io)).toBe(0);
+    expect(JSON.parse(w.files().config!).session_start_hook).toBe(false);
+    const settings = JSON.parse(w.files().settings!);
+    expect(settings.hooks).toBeUndefined();
+    expect(settings.permissions.allow.length).toBeGreaterThan(0);
+    expect(w.out()).toContain(S.format(S.setup.plan.rules_add, { path: join(w.A, '.claude', 'settings.json'), rules: settings.permissions.allow.length }));
+    const record = JSON.parse(readFileSync(join(w.H, 'setup-record.json'), 'utf8'));
+    expect(record.entries.some((e: { kind: string }) => e.kind === 'hook_group')).toBe(false);
+    expect(await runTeardownCommand([], { env: w.io.env, cwd: w.dir, color: false, stdout: () => {}, stderr: () => {} })).toBe(0);
+    expect(w.files().settings).toBeUndefined();
+  });
+
+  it('a person\'s file: only the rules are added, the hooks they have are kept as they are', async () => {
+    const w = world();
+    const before = '{\n  "hooks": {\n    "SessionStart": []\n  }\n}\n';
+    file(join(w.A, '.claude', 'settings.json'), before, 0o600);
+    const path = join(w.dir, 'answers.json');
+    writeFileSync(path, JSON.stringify({ session_start_hook: false }));
+    expect(await runSetupCommand(['--yes', '--config', path], w.io)).toBe(0);
+    expect(JSON.parse(w.files().settings!).hooks).toEqual({ SessionStart: [] });
   });
 });
 

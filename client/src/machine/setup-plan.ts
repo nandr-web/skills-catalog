@@ -30,6 +30,8 @@ export type PlanInput = {
   words: Words;
   /** The setup id for a first run (128 random bits in hex); a record's own id wins. */
   newId: string;
+  /** config session_start_hook: the hook is written unless it's false (contract §6). */
+  sessionStartHook?: boolean;
 };
 /** A file's plan: what it was (the text read, for the backup, and its snapshot, for the write's check) and the text to
  *  write, none when it already holds this run's entries. */
@@ -43,6 +45,8 @@ export type SetupPlan = {
   /** Install folders a shared group can write, for the summary. */
   sharedGroup: string[];
   record: ReturnType<typeof checkPlaces>['record'];
+  /** Whether this run writes the session-start hook. */
+  hook: boolean;
   recordWas: ReturnType<typeof checkPlaces>['recordWas'];
   files: Record<FileKind, FilePlan>;
 };
@@ -55,7 +59,7 @@ function read(path: string, cap: number): { text: string | undefined; was: Snaps
 }
 
 /** One file read afresh and setup's entries merged into it: a first plan, or again after another writer changed it. */
-export function planFile(kind: FileKind, plan: Pick<SetupPlan, 'places' | 'run' | 'record'>, words: Words): FilePlan {
+export function planFile(kind: FileKind, plan: Pick<SetupPlan, 'places' | 'run' | 'record' | 'hook'>, words: Words): FilePlan {
   const path = plan.places[kind];
   const recorded = (plan.record?.entries ?? []).filter((e) => e.file === path);
   // A settings.json whose .claude isn't there yet reads as absent.
@@ -63,7 +67,7 @@ export function planFile(kind: FileKind, plan: Pick<SetupPlan, 'places' | 'run' 
   const m: Merged =
     kind === 'claudeJson'
       ? mergeClaudeJson(before, mcpEntry(plan.run), recorded)
-      : mergeSettingsJson(before, { hook: hookGroup(plan.run), rules: allowRules(words), id: plan.run.id }, recorded);
+      : mergeSettingsJson(before, { ...(plan.hook ? { hook: hookGroup(plan.run) } : {}), rules: allowRules(words), id: plan.run.id }, recorded);
   if ('refusal' in m) {
     const r = m.refusal;
     if (r.code === 'name_taken') throw new CatalogError('name_taken', { path, name: SERVER_NAME });
@@ -98,7 +102,8 @@ export function planSetup(input: PlanInput): SetupPlan {
   const install = checkInstall({ node: input.node, script: input.script, temporaryRoots: input.temporaryRoots, uid: input.uid });
   const id = record?.setup_id ?? input.newId;
   const run: SetupRun = { node: install.node, script: install.script, id, env };
-  const base = { places, run, record };
+  const hook = input.sessionStartHook !== false;
+  const base = { places, run, record, hook };
   const files = { claudeJson: planFile('claudeJson', base, input.words), settingsJson: planFile('settingsJson', base, input.words) };
-  return { places, missing, id, run, sharedGroup: install.sharedGroup, record, recordWas, files };
+  return { places, missing, id, run, sharedGroup: install.sharedGroup, record, hook, recordWas, files };
 }

@@ -1093,6 +1093,7 @@ setup:
     mcp_replace: "- {path}: update the skills-catalog MCP server setup added before (Node or a setting has moved)"
     hook_add: "- {path}: add one session-start hook (it tells you when an update waits for your yes) and {rules} allow rule(s), so your assistant can search, read, install and update skills without asking you each time"
     hook_replace: "- {path}: update the session-start hook setup added before (Node or a setting has moved)"
+    rules_add: "- {path}: add {rules} allow rule(s), so your assistant can search, read, install and update skills without asking you each time (no session-start hook: session_start_hook is false)"
     record: "- {path}: a record of exactly what setup added, so teardown can remove just that"
     command: "- {path}: add the skills-catalog command for your terminal (a launcher for this copy of skills-catalog)"
     config_same: "- {path}: the catalog's settings stay as they are"
