@@ -158,6 +158,7 @@ names:
     publish: ${cli} publish <folder>
     accept: ${cli} update <name> --accept
     stats: ${cli} stats
+    review: ${cli} review [<name>]
 tools:
   search:
     annotations:
@@ -480,6 +481,11 @@ results:
       accept_flagged_on: held updates were set to go through without asking
       all_pinned: every skill was pinned
       teardown: setup was undone
+  review_run:
+    done: "Reviewed {versions} stored version(s) again: {reviewed} review(s) stored, the rest were already current."
+    flagged: "Flagged in its latest version: {names}. A search or a read shows each one's review."
+    none_flagged: No skill's latest version is flagged.
+    hosted: "${cli} review runs on a local catalog. A hosted catalog reviews each version as it is published."
   policy_set:
     default: The default for updates is now {policy}; skills with their own setting keep it.
     skill: "Updates for {name}: {policy}."

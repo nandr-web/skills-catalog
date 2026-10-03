@@ -21,6 +21,7 @@ import { list } from './commands/list.ts';
 import { policy } from './commands/policy.ts';
 import { read } from './commands/read.ts';
 import { search } from './commands/search.ts';
+import { review } from './commands/review.ts';
 import { stats } from './commands/stats.ts';
 import { logAccept, update } from './commands/update.ts';
 import { versions } from './commands/versions.ts';
@@ -34,7 +35,7 @@ import { terminal } from '../person/medium.ts';
 export type { Io } from './command.ts';
 
 /** The commands, keyed by the word after the command's name (as the words file's CLI names write it). */
-export const COMMANDS: Record<string, Command> = { search, read, versions, diff, install, list, update, policy, stats };
+export const COMMANDS: Record<string, Command> = { search, read, versions, diff, install, list, update, policy, stats, review };
 
 /** Every command word served: the operation commands and the process commands (process.ts). */
 export const SERVED: readonly string[] = [...Object.keys(COMMANDS), ...Object.keys(PROCESS_COMMANDS)];

@@ -301,7 +301,7 @@ describe('the operations the commands run', () => {
     expect(literal).toContain('accept_held_update');
     const offFace = ops.filter((op) => Object.hasOwn(OPERATIONS, op) && !OPERATIONS[op]!.faces.includes('cli'));
     const notOps = [...new Set(ops.filter((op) => !Object.hasOwn(OPERATIONS, op)))];
-    expect({ offFace, notOps }).toEqual({ offFace: [], notOps: ['stats'] });
+    expect({ offFace, notOps }).toEqual({ offFace: [], notOps: ['stats', 'review'] });
   });
 });
 
