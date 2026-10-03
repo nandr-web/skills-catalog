@@ -76,7 +76,7 @@ Each PRD item, where you see it, and [the requirement](docs/requirements.md) tha
 |---|---|
 | Skill · Manifest | A folder with a `SKILL.md` (the manifest: name and description in its front matter, instructions below), plus any other files |
 | Catalog · Version | The shared catalog: a folder on one machine, or hosted in AWS. Versions are v1, v2, …; each has a **fingerprint**, one checksum of all its files, so a copy can be checked against what was published |
-| Publish · Discover · Retrieve | The assistant's tools: `preview_skill_publish`, then `publish_skill_to_catalog` once the person says yes; `search_shared_skills`; `read_shared_skill` and `install_shared_skill` |
+| Publish · Discover · Retrieve | The assistant's tools: `publish_skill_to_catalog` (a preview first, then again with its values once the person says yes); `search_shared_skills`; `read_shared_skill` and `install_shared_skill` |
 
 ## Try it
 

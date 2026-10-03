@@ -214,6 +214,16 @@ describe("README.md's copies of what core's commands print", () => {
     }
   });
 
+  // The final check found a tool name the README gave that isn't served (preview_skill_publish): every assistant tool
+  // the README names is one the words file names.
+  it("every assistant tool the README names is one the product serves", async () => {
+    const { Words } = await import('../src/words-file.ts');
+    const tools = new Set(Object.values(Words.load().names as Record<string, string>));
+    const named = [...README.matchAll(/`([a-z]+(?:_[a-z]+){2,})`/g)].map((m) => m[1]!).filter((n) => /skill|catalog|update/.test(n));
+    expect(named.length).toBeGreaterThan(3);
+    expect(named.filter((n) => !tools.has(n))).toEqual([]);
+  });
+
   it("the Node.js version the README asks for is package.json's", () => {
     const min = /^>=(\d+\.\d+)$/.exec(PKG.engines.node)![1]!;
     const named = [...README.matchAll(/Node(?:\.js)? (\d+\.\d+)/g)].map((m) => m[1]);

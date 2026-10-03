@@ -1,4 +1,4 @@
-// Who acts on a local catalog (contract §7, the Identity row; a recorded decision: "keep authentication, but locally it can be mocked /
+// Who acts on a local catalog (contract §7, the Identity row; the owner: "keep authentication, but locally it can be mocked /
 // simplified"): one source for the MCP server, the CLI and the web API. SKILLS_AS (or the CLI's --as) first, then setup's
 // `me` in config.json, then this computer's login made into a developer name. The login default says so on every result,
 // once, in its own discreet line. A hosted catalog's identity is its sign-in, never a local default.
