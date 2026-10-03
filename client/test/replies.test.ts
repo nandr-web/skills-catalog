@@ -284,3 +284,30 @@ describe('version dates, as the person reads them', () => {
     expect(times[0]).not.toBe(times[1]);
   });
 });
+
+// A copy edited by hand: seen in the list, and an update replaces it (the owner's decision) but keeps the edited copy
+// aside and names it (review P11.2).
+describe('an installed copy edited by hand', () => {
+  it('the list says so, and an update keeps the edited copy, named', async () => {
+    const p = place();
+    await seed(p);
+    const ctx = ctxFor(p);
+    const done = await perform(ctx, 'install_shared_skill', 'install_shared_skill', { name: 'sql-migration-helper' });
+    const dest = JSON.parse(/ to ("[^"]+")/.exec(done.text)![1]!) as string;
+    writeFileSync(join(dest, 'SKILL.md'), '---\nname: sql-migration-helper\ndescription: Mine now.\n---\nMy own edit.\n');
+    const l = await perform(ctx, 'list_installed_skills', 'list_installed_skills', {});
+    expect(l.text).toContain(S.word('status.edited'));
+    expect(views(l, 'list_installed_skills').terminal).toContain(S.word('person.list.edited'));
+    const { open, request, skillMd } = await import('./seed.ts');
+    const { actAs } = await import('@skills-catalog/core');
+    const c = await open(p);
+    await c.publish(request('sql-migration-helper', [{ path: 'SKILL.md', text: skillMd('sql-migration-helper', 'Write and review SQL schema migrations.', 'Body, v2.\n') }]), actAs('ben'));
+    await c.close?.();
+    const u = await perform(ctx, 'update_installed_skills', 'update_installed_skills', {});
+    const kept = /was kept at (\S+?):/.exec(u.text)?.[1];
+    expect(kept, u.text).toBeDefined();
+    const { readFileSync } = await import('node:fs');
+    expect(readFileSync(join(kept!, 'SKILL.md'), 'utf8')).toContain('My own edit.');
+    expect(readFileSync(join(dest, 'SKILL.md'), 'utf8')).toContain('Body, v2.');
+  });
+});

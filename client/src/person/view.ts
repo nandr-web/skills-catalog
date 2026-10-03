@@ -66,7 +66,7 @@ function list({ say, m }: Ctx, v: ListView | undefined): string | undefined {
     `v${r.version}`,
     r.state === 'same' ? paint('dim', say('list.same')) : paint('newer', say(r.policy === 'auto' ? 'list.behind_auto' : 'list.behind', { latest: r.latest })),
     // Where it applies only when it isn't the usual place (the person's own skills folder, for every project).
-    r.target === 'project' ? paint('dim', say('list.project')) : '',
+    [r.target === 'project' ? paint('dim', say('list.project')) : '', r.edited ? paint('bold', say('list.edited')) : ''].filter(Boolean).join(', '),
     paint('dim', r.policy_words),
   ]);
   const out = [paint('bold', say('list.title', { n: v.rows.length })), '', ...m.table(header(say, 'list.columns'), rows)];

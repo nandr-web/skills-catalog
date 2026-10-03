@@ -431,6 +431,7 @@ results:
     header: "Installed from the shared catalog: {n} skill(s)."
     line: "- {name} v{version}{state}{where}; updates: {policy}"
     where_project: " (in this project only)"
+    edited: " (its files were changed here since it was installed: an update replaces them and keeps this copy aside, named)"
     state:
       same: " (the latest)"
       behind: " (v{latest} is available)"
@@ -952,6 +953,7 @@ results:
       same: latest
       behind: v{latest} available
       behind_auto: v{latest} available, updates on its own
+      edited: changed here
       project: this project only
       columns: " | Skill | Installed | Latest | Where | Updates"
       empty_reply: Nothing from the shared catalog is installed here yet.

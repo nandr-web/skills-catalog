@@ -225,7 +225,12 @@ function moved(from: string, to: string): boolean {
 //   may have gone where a swapped-in link pointed. It never reports success after a failed check.
 // - Nothing is removed by path unless its identity is one recorded here.
 // Returns the new copy's identity, for the lock, and where a replaced copy was kept, if it was.
+// A copy edited by hand since it was installed: its files no longer the lock's fingerprint. Replaced like any copy (the
+// owner's decision: an update replaces a copy you changed), but kept in staging and named, never deleted (review P11.2).
+const editedHere = (dest: string, entry: LockEntry | undefined): boolean => entry !== undefined && existsSync(dest) && folderFingerprint(dest) !== entry.fingerprint;
+
 function writeSkill(dest: string, target: Target, files: readonly TreeFile[], entry: LockEntry | undefined): { copy: Id; kept?: string } {
+  const keep = editedHere(dest, entry);
   // A staging folder already there is checked before anything is made, so a refusal for it leaves nothing behind.
   const early = join(dirname(dirname(dest)), STAGING);
   if (existsSync(early)) realFolder(early, target);
@@ -360,7 +365,7 @@ function writeSkill(dest: string, target: Target, files: readonly TreeFile[], en
     }
     if (!old) return { copy };
     // Deleted only when it's still the recorded copy; otherwise it's kept, and named.
-    if (entry?.copy === undefined || !removeIfOurs(old.path, fromLock(entry.copy))) return { copy, kept: old.path };
+    if (keep || entry?.copy === undefined || !removeIfOurs(old.path, fromLock(entry.copy))) return { copy, kept: old.path };
     return { copy };
   } finally {
     removeIfOurs(tmp, copy);
@@ -547,7 +552,7 @@ export type InstallView = {
 };
 export type UpdateView = { kind: 'update'; checked: number; unchanged: number; dry_run: boolean; items: UpdateItem[] };
 /** The installed skills as data, for a person's view. */
-export type ListView = { kind: 'list'; rows: { name: string; target: Target; version: number; latest: number; policy: Policy; policy_words: string; state: 'same' | 'behind' }[] };
+export type ListView = { kind: 'list'; rows: { name: string; target: Target; version: number; latest: number; policy: Policy; policy_words: string; state: 'same' | 'behind'; edited: boolean }[] };
 
 type InstallInput = { name: string; version?: number; target?: Target; policy?: Policy };
 
@@ -985,14 +990,14 @@ export async function list(ctx: Context): Promise<Done> {
   const rows = [];
   for (const e of here) {
     const latest = (await catalog!.versions({ name: e.name })).latest;
-    rows.push({ name: e.name, target: e.target, version: e.version, latest, policy: policyOf(e, config), state: latest === e.version ? ('same' as const) : ('behind' as const) });
+    rows.push({ name: e.name, target: e.target, version: e.version, latest, policy: policyOf(e, config), state: latest === e.version ? ('same' as const) : ('behind' as const), edited: editedHere(destOf(ctx, e.target, e.name), e) });
   }
   const w = s.word('status');
   let text: string;
   if (!w || typeof w.header !== 'string') text = asData('list_installed_skills', rows.map((r) => ({ ...r, policy: r.policy.policy })));
   else if (!rows.length) text = s.format(w.empty);
   else {
-    const lines = rows.map((r) => s.format(w.line, { name: r.name, version: r.version, state: s.format(w.state[r.state], { latest: r.latest }), where: r.target === 'project' ? w.where_project : '', policy: policyWords(s, r.policy) }));
+    const lines = rows.map((r) => s.format(w.line, { name: r.name, version: r.version, state: s.format(w.state[r.state], { latest: r.latest }), where: (r.target === 'project' ? w.where_project : '') + (r.edited ? w.edited : ''), policy: policyWords(s, r.policy) }));
     if (rows.some((r) => r.state === 'behind')) lines.push(s.format(w.next_behind));
     text = [s.format(w.header, { n: rows.length }), ...lines].join('\n');
   }
