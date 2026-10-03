@@ -236,7 +236,8 @@ describe('install (contract §3 install_shared_skill)', () => {
 
     const taken = await accept(ctx, { name: 'runner', confirm, target, version, flags: ['runnable_file', 'runnable_file'] });
     const dest = join(userSkills(p), 'runner');
-    expect(taken.text).toBe(S.format(S.word('install.installed_after_yes'), { name: 'runner', version: 1, path: JSON.stringify(dest), policy: AUTO_DEFAULT }));
+    // Then how to use it in this session, as a direct install says (review P3.4).
+    expect(taken.text).toBe(S.format(S.word('install.installed_after_yes'), { name: 'runner', version: 1, path: JSON.stringify(dest), policy: AUTO_DEFAULT }) + '\n' + S.format(S.word('install.live'), { name: 'runner' }));
     expect(taken.result).toBe(S.doc.log.result.accept);
     expect(tree(dest)['scripts/run.sh 755']).toBe('#!/bin/sh\necho run\n');
     expect(lockOf(p)[dest]!.accepted).toEqual([{ version: 1, flags: ['runnable_file'] }]);

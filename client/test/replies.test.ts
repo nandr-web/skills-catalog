@@ -114,3 +114,43 @@ describe('a miss, as the person reads it', () => {
     await s.close();
   });
 });
+
+// FR-04 "an earlier version can be retrieved when asked for": reading it offers that version, and installing it keeps
+// it there, so the next routine update doesn't quietly move it to the latest (review P7.2, P7.3, P3.4).
+describe('an earlier version, read and installed', () => {
+  it('reading v1 offers v1, not the latest (assistant and person)', async () => {
+    const p = place();
+    await seed(p);
+    const a = await perform(ctxFor(p), 'read_shared_skill', 'read_shared_skill', { name: 'release-notes-kit', version: 1 });
+    expect(a.text).toContain(S.format(S.word('get.next_version'), { name: 'release-notes-kit', version: 1, latest: 2 }));
+    const r = await person(p, ['read', 'release-notes-kit', '--version', '1']);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('install release-notes-kit --version 1');
+  });
+
+  it('installing v1 says the next update moves it to the latest, and how to keep it', async () => {
+    const p = place();
+    await seed(p);
+    const ctx = ctxFor(p);
+    const a = await perform(ctx, 'install_shared_skill', 'install_shared_skill', { name: 'release-notes-kit', version: 1 });
+    expect(a.isError).toBeFalsy();
+    expect(a.text).toContain(S.format(S.word('install.older_auto'), { name: 'release-notes-kit', version: 1, latest: 2 }));
+    expect(a.text).toContain(S.format(S.word('install.live'), { name: 'release-notes-kit' }));
+  });
+
+  it('pinned by default: no warning, since it stays', async () => {
+    const p = place();
+    await seed(p);
+    mkdirSync(p.home, { recursive: true });
+    writeFileSync(join(p.home, 'config.json'), JSON.stringify({ update_policy: 'pin' }) + '\n');
+    const a = await perform(ctxFor(p), 'install_shared_skill', 'install_shared_skill', { name: 'release-notes-kit', version: 1 });
+    expect(a.text).not.toContain(S.format(S.word('install.older_auto'), { name: 'release-notes-kit', version: 1, latest: 2 }).slice(0, 30));
+  });
+
+  it('installing the latest by name keeps the usual policy (no pin)', async () => {
+    const p = place();
+    await seed(p);
+    const a = await perform(ctxFor(p), 'install_shared_skill', 'install_shared_skill', { name: 'sql-migration-helper', version: 1 });
+    expect(a.text).not.toContain('earlier version');
+  });
+});

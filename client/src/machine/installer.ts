@@ -21,7 +21,7 @@ import { reasons } from '@skills-catalog/core';
 import { logWords } from '../activity.ts';
 import { holdWithinADay, recordUsage, type HoldReason, type UsageEvent } from '../usage/record.ts';
 import type { Context, Done } from '../operations.ts';
-import { holdLock, policyOf, readRecords, withLock, writeConfig, type FolderId, type Lock, type LockEntry, type Policy, type Target } from './lock.ts';
+import { holdLock, policyOf, readRecords, withLock, writeConfig, type Config, type FolderId, type Lock, type LockEntry, type Policy, type Target } from './lock.ts';
 
 const quoted = (p: string) => JSON.stringify(p);
 const TARGETS: readonly Target[] = ['user', 'project'];
@@ -610,7 +610,7 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   });
   if (!('written' in done)) return done;
   const { written, entry } = done;
-  const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + keptLine(s, req.name, written.kept) + '\n' + s.format(w.live, { name: req.name });
+  const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + keptLine(s, req.name, written.kept) + olderLine(s, entry, config, v.latest) + '\n' + s.format(w.live, { name: req.name });
   return { text, target: `${req.name} v${version}`, result: log.result('install', 'installed'), outcome: 'installed' };
 }
 
@@ -748,8 +748,18 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const text =
     (existing
       ? s.format(s.word('update.accepted'), { name: req.name, from: existing.version, to: to.version, path: quoted(dest) })
-      : s.format(s.word('install.installed_after_yes'), { name: req.name, version: to.version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) })) + keptLine(s, req.name, written.kept);
+      : s.format(s.word('install.installed_after_yes'), { name: req.name, version: to.version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) +
+        olderLine(s, entry, config, v.latest) +
+        '\n' +
+        s.format(s.word('install.live'), { name: req.name })) + keptLine(s, req.name, written.kept);
   return { text, target: `${req.name} v${to.version}`, result: logWords(s).result('accept'), outcome: existing ? 'updated' : 'installed' };
+}
+
+/** An earlier version installed with automatic updates moves to the latest at the next update: said once, with how to
+ *  keep it (review P7.3; pinning it for the person would override their auto-updates choice). */
+function olderLine(s: Words, entry: LockEntry, config: Config, latest: number): string {
+  if (entry.version >= latest || policyOf(entry, config).policy !== 'auto') return '';
+  return '\n' + s.format(s.word('install.older_auto'), { name: entry.name, version: entry.version, latest });
 }
 
 /** The lock's entries for this machine's user folder and this project, by name. */

@@ -566,6 +566,8 @@ results:
     size: "{kb} KB"
     next: 'To use it here: ${install} with name "{name}".'
     next_cli: "To use it here: ${cli} install {name}."
+    next_version: 'To use this version here: ${install} with name "{name}" and version {version} (the latest is v{latest}).'
+    next_version_cli: "To use this version here: ${cli} install {name} --version {version} (the latest is v{latest})."
   quality:
     card_flagged: "- {name} (v{version}, {publisher}; tags: {tags}). Review: {notes}. {description}"
     next: "Some cards have a review note: mention it when you recommend that skill."
@@ -699,6 +701,8 @@ results:
     installed_after_yes: "Installed {name} v{version} to {path} after the person agreed (fingerprint checked). Updates: {policy}."
     done: "Installed {name} v{version} to {path} (fingerprint checked). Updates: {policy}."
     unchanged: "{name} v{version} is already installed here and unchanged, so nothing was written."
+    older_auto: 'This is an earlier version (the latest is v{latest}), and its updates are automatic, so the next update moves it to v{latest}. Tell the person; to keep v{version}: ${policy} with policy "pin" and name "{name}".'
+    older_auto_cli: "This is an earlier version (the latest is v{latest}), and its updates are automatic, so the next update moves it to v{latest}. To keep v{version}: ${cli} policy pin {name}."
     live: "You can use it in this session as /{name}. If the Skill tool says it is unknown, wait a moment and try once more: the assistant notices new skills shortly after they are installed."
   errors:
     not_found: 'not_found: no skill named "{name}" in the shared catalog.{suggest} Nothing was changed.'
@@ -967,6 +971,7 @@ results:
       files: "Files: {files}"
       left_out: "Not shown, to keep this short: {files}. Read one: ${cli} read {name} --path <file>"
       next: "To install it: ${cli} install {name}"
+      next_version: "To install this version: ${cli} install {name} --version {version}   (the latest is v{latest})"
     versions:
       header:
         one: "{name}: 1 version"

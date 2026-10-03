@@ -145,7 +145,7 @@ function read({ say, m }: Ctx, r: ReadResult): string | undefined {
   if (files.length) out.push('', say('read.files', { files: files.map((f) => flagText(f.path)).join(', ') }));
   const left = files.filter((f) => f.content_omitted && f.path !== 'SKILL.md').map((f) => flagText(f.path));
   if (left.length) out.push(say('read.left_out', { files: left.join(', '), name: item.name }));
-  out.push('', paint('dim', say('read.next', { name: item.name })));
+  out.push('', paint('dim', item.version === item.latest_version ? say('read.next', { name: item.name }) : say('read.next_version', { name: item.name, version: item.version, latest: item.latest_version })));
   return out.join('\n');
 }
 

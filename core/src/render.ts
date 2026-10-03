@@ -102,7 +102,7 @@ function renderItem(s: Words, item: ReadItem, token: string, budget: InlineBudge
   const omitted = left.filter((f) => f.size <= budget.limit).map((f) => f.path);
   if (omitted.length) lines.push(s.format(w.omitted, { used: size(budget.used), limit: size(budget.limit), files: list(omitted.map(quoted)), name: item.name }));
   if (tooBig.length) lines.push(s.format(w.too_big, { limit: size(budget.limit), files: list(tooBig.map(quoted)), name: item.name }));
-  lines.push(s.format(w.next, { name: item.name }));
+  lines.push(item.version === item.latest_version ? s.format(w.next, { name: item.name }) : s.format(w.next_version, { name: item.name, version: item.version, latest: item.latest_version }));
   return lines.join('\n');
 }
 
