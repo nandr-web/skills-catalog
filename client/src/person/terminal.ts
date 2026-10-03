@@ -16,8 +16,8 @@ const SGR: Record<Tone, [string, string]> = {
   removed: ['\x1b[31m', '\x1b[39m'],
 };
 
-/** The marks, one meaning each: up to date or done, a newer version, waiting for the person, not done. */
-export const MARK = { ok: '✓', newer: '↑', attention: '▲', refused: '✗' } as const;
+/** The marks, one meaning each: up to date or done, a newer version, waiting for the person, not done, only a close match. */
+export const MARK = { ok: '✓', newer: '↑', attention: '▲', refused: '✗', partial: '≈' } as const;
 
 export type Paint = { (tone: Tone, text: string): string; color: boolean };
 

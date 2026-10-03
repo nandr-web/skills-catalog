@@ -54,7 +54,7 @@ function list({ say, m }: Ctx, v: ListView | undefined): string | undefined {
     r.state === 'same' ? paint('ok', MARK.ok) : paint('newer', MARK.newer),
     paint('bold', r.name),
     `v${r.version}`,
-    r.state === 'same' ? paint('dim', say('list.same')) : paint('newer', say('list.behind', { latest: r.latest })),
+    r.state === 'same' ? paint('dim', say('list.same')) : paint('newer', say(r.policy === 'auto' ? 'list.behind_auto' : 'list.behind', { latest: r.latest })),
     // Where it applies only when it isn't the usual place (the person's own skills folder, for every project).
     r.target === 'project' ? paint('dim', say('list.project')) : '',
     paint('dim', r.policy_words),
@@ -70,9 +70,17 @@ function update({ s, say, m }: Ctx, v: UpdateView | undefined): string | undefin
   if (!v) return undefined;
   const { paint } = m;
   const out = [paint('bold', say('update.checked', { n: v.checked })), ''];
-  const done = v.items.filter((i) => i.kind === 'updated' || i.kind === 'would_update');
   const lead = m.kind === 'terminal' ? '  ' : '- ';
-  for (const i of done) out.push(`${lead}${paint('ok', MARK.ok)} ${say(`update.${i.kind}`, { name: paint('bold', i.name), from: i.from, to: i.to })}`);
+  // A dry run's lines are what would happen: ↑, under a title that says nothing changed (✓ is for what was done).
+  const would = v.items.filter((i) => i.kind === 'would_update');
+  if (would.length) out.push(paint('bold', say('update.dry_run_title')));
+  for (const i of would) out.push(`${lead}${paint('newer', MARK.newer)} ${say('update.would_update', { name: paint('bold', i.name), from: i.from, to: i.to })}`);
+  for (const i of v.items.filter((i) => i.kind === 'updated')) out.push(`${lead}${paint('ok', MARK.ok)} ${say('update.updated', { name: paint('bold', i.name), from: i.from, to: i.to })}`);
+  // A pin is the person's own choice, not a question: a plain line, outside the box (review V3.1).
+  for (const i of v.items.filter((i) => i.kind === 'held_pin')) {
+    out.push(`${lead}${paint('newer', MARK.newer)} ${say('update.pinned', { name: paint('bold', i.name), from: i.from, to: i.to })}`);
+    if (m.commands) out.push(paint('dim', `    ${say('update.pinned_take', { name: i.name, to: i.to })}`));
+  }
   if (v.unchanged) out.push(`${lead}${paint('ok', MARK.ok)} ${paint('dim', say('update.unchanged', { n: v.unchanged }))}`);
   // Refusals keep their full sentence: each names what happened to the folder and what not to do.
   const refused = v.items.filter((i) => i.kind === 'refused');
@@ -81,19 +89,19 @@ function update({ s, say, m }: Ctx, v: UpdateView | undefined): string | undefin
     for (const i of refused) out.push(...i.lines.map((l) => '  ' + l.replace(/^- /, '')));
   }
   // What waits for the person: last, where the eye lands, set apart, each with why and what answers it.
-  const held = v.items.filter((i) => i.kind.startsWith('held_'));
+  const held = v.items.filter((i) => i.kind.startsWith('held_') && i.kind !== 'held_pin');
   if (held.length) {
     const block = [paint('attention', paint('bold', `${MARK.attention} ${say('update.waiting', { n: held.length })}`)), ''];
     for (const i of held) {
       const at = { name: i.name, from: i.from, to: i.to };
       block.push(paint('bold', say('update.held_title', at)));
       const why = i.kind === 'held_flagged' ? [] : [say(`update.why.${i.kind}`, at)];
-      for (const f of i.flags) why.push(reasons(s, [f]));
+      for (const f of i.flags) if (!why.includes(reasons(s, [f]))) why.push(reasons(s, [f]));
       if (i.kind === 'held_flagged' && !i.flags.length) why.push(say('update.why.held_flagged', at));
       const bullet = m.kind === 'terminal' ? '  • ' : '- ';
       for (const w of why) block.push(bullet + w);
       if (m.commands) block.push('', `  ${say('update.look', at)}`, `  ${say('update.take', at)}`, paint('dim', `  ${say('update.stays', at)}`), '');
-      else block.push('', say('update.stays_reply', at), '');
+      else block.push('', say('update.stays_reply', at), say('update.look_reply', at), '');
     }
     while (block.at(-1) === '') block.pop();
     out.push('', ...m.callout(block));
@@ -109,7 +117,7 @@ function search({ say, m }: Ctx, r: SearchResult, req: SearchInput): string {
   const partial = r.match === 'partial';
   const first = r.results.length;
   const title = partial
-    ? paint('attention', `${MARK.attention} ${say('search.partial', { query })}`)
+    ? paint('dim', `${MARK.partial} ${say('search.partial', { query })}`)
     : r.ranking === 'none'
       ? say(r.next_cursor || first < r.catalog_size ? 'search.header_page' : 'search.header_all', { total: r.catalog_size, first: 1, last: first })
       : say('search.header', { count: r.total_matches, total: r.catalog_size, query });
@@ -123,7 +131,7 @@ function search({ say, m }: Ctx, r: SearchResult, req: SearchInput): string {
   for (const c of r.results) {
     const meta = [`v${c.latest_version}`, oneLine(c.publisher), ...(c.tags.length ? [c.tags.map(oneLine).join(', ')] : [])].join(' · ');
     out.push(`  ${paint('bold', c.name)}  ${paint('dim', meta)}`);
-    if (partial) out.push(`    ${paint('attention', say('search.shares', { words: c.matched_words.join(', ') }))}`);
+    if (partial) out.push(`    ${paint('dim', say('search.shares', { words: c.matched_words.join(', ') }))}`);
     out.push(`    ${oneLine(c.description)}`, '');
   }
   if (r.next_cursor) out.push(say('search.more', { cursor: r.next_cursor }));

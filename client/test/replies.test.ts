@@ -154,3 +154,39 @@ describe('an earlier version, read and installed', () => {
     expect(a.text).not.toContain('earlier version');
   });
 });
+
+// A pin is the person's own choice, not a question; a dry run did nothing (review V3.1, V3.7).
+describe('the update view: only real questions in the box', () => {
+  const UPDATE = 'update_installed_skills';
+  it('a pinned skill is a plain line under the updates, and the box counts only what needs a yes', async () => {
+    const p = place();
+    await seed(p);
+    const ctx = ctxFor(p);
+    await perform(ctx, 'install_shared_skill', 'install_shared_skill', { name: 'release-notes-kit', version: 1 });
+    await perform(ctx, 'set_skill_update_policy', 'set_skill_update_policy', { name: 'release-notes-kit', policy: 'pin' });
+    const a = await perform(ctx, UPDATE, UPDATE, {});
+    for (const shown of Object.values(views(a, UPDATE))) {
+      expect(shown).toBeDefined();
+      expect(shown).toContain(S.format(S.word('person.update.pinned'), { name: 'release-notes-kit', from: 1, to: 2 }).replace('release-notes-kit', ''));
+      expect(shown).not.toContain('Waiting for your OK');
+    }
+  });
+
+  it('a dry run marks what would update with ↑ under a title that says nothing changed', async () => {
+    const p = place();
+    await seed(p);
+    const ctx = ctxFor(p);
+    await perform(ctx, 'install_shared_skill', 'install_shared_skill', { name: 'sql-migration-helper' });
+    // Nothing newer to move to: make one.
+    const { open, request, skillMd } = await import('./seed.ts');
+    const { actAs } = await import('@skills-catalog/core');
+    const c = await open(p);
+    await c.publish(request('sql-migration-helper', [{ path: 'SKILL.md', text: skillMd('sql-migration-helper', 'Write and review SQL schema migrations.', 'Body, v2.\n') }]), actAs('ben'));
+    await c.close?.();
+    const a = await perform(ctx, UPDATE, UPDATE, { dry_run: true });
+    const shown = views(a, UPDATE).terminal!;
+    expect(shown).toContain(S.word('person.update.dry_run_title'));
+    expect(shown).toMatch(/↑ sql-migration-helper v1 → v2/);
+    expect(shown).not.toMatch(/✓ sql-migration-helper/);
+  });
+});

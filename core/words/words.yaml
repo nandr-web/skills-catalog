@@ -433,7 +433,7 @@ results:
     state:
       same: " (the latest)"
       behind: " (v{latest} is available)"
-    next_behind: "To bring them up to date: ${update}."
+    next_behind: "To bring them up to date: ${update}. Those whose updates are automatic need no question first; anything that could run something new still waits for the person."
     empty: "No skills from the shared catalog are installed on this machine yet. To find one: ${search}; to add one: ${install}."
     empty_cli: "No skills from the shared catalog are installed on this machine yet. To add one: ${install} (to find one first, search the catalog)."
   stats:
@@ -946,6 +946,7 @@ results:
       title: "Installed from the shared catalog: {n}"
       same: latest
       behind: v{latest} available
+      behind_auto: v{latest} available, updates on its own
       project: this project only
       columns: " | Skill | Installed | Latest | Where | Updates"
       empty_reply: Nothing from the shared catalog is installed here yet.
@@ -1003,7 +1004,10 @@ results:
         one: "Checked 1 installed skill against the shared catalog"
         other: "Checked {n} installed skills against the shared catalog"
       updated: "{name} v{from} → v{to}"
-      would_update: "{name} v{from} → v{to} (dry run: nothing changed)"
+      would_update: "{name} v{from} → v{to}"
+      dry_run_title: "Dry run: nothing was changed. These would update:"
+      pinned: "{name} stays on v{from} (you pinned it; v{to} is available)"
+      pinned_take: "To take v{to}: ${cli} update {name} --accept"
       unchanged:
         one: 1 already up to date
         other: "{n} already up to date"
@@ -1020,6 +1024,7 @@ results:
       take: "Take it:         ${cli} update {name} --accept"
       stays: Until then it stays on v{from}.
       stays_reply: It stays on v{from} until you say yes.
+      look_reply: Ask to see the change first, if you want to.
       refused_title: "Not updated:"
     errors:
       not_found: 'No skill named "{name}" in the shared catalog.'

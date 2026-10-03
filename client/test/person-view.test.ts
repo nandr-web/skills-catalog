@@ -98,7 +98,7 @@ describe('the CLI for a person at a terminal', () => {
   it('a search that only partly matches says so first, and names the shared words on each card', async () => {
     const p = await installedBehind();
     const r = await person(p, ['search', 'graphql', 'schema']);
-    expect(r.out.split('\n')[0]).toBe('▲ Nothing matches every word of "graphql schema". Closest, sharing only some words:');
+    expect(r.out.split('\n')[0]).toBe('≈ Nothing matches every word of "graphql schema". Closest, sharing only some words:');
     expect(r.out).toContain('shares only: schema');
   });
 
