@@ -1,6 +1,6 @@
 # Skills catalog contract
 
-![The contract in one picture: the Developer runs the CLI and the Assistant calls the MCP server's tools; with the HTTP API, they are the three faces of one API (§1), one definition per operation. Catalog operations (search, read, publish) reach the catalog, local or hosted (§2, §7). Machine operations (install, update) go through the installer, where a risky update waits for a yes (§5.3), before it writes checked files into the skills folder (§4.5)](pictures/contract-map.svg)
+![The contract in one picture: the Developer runs the CLI and the Assistant calls the MCP server; both reach one API (§1), one definition per operation, which also has an HTTP form (§1.1). Catalog operations (read, publish) reach the catalog, local or hosted (§2). Install and update go through the installer, where a risky update waits for a yes (§5.3), before it writes into the skills folder (§4.5)](pictures/contract-map.svg)
 
 | To find | Read |
 |---|---|
