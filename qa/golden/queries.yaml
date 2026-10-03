@@ -88,8 +88,22 @@
 # pronouns, the question words assistants copy from the ask, and "skill"/"find"/"help", which
 # describe the search rather than the need). The adapter's list must be exactly this one; the
 # lint compares them. Adding a word here changes labels: re-reason every query that uses it.
+#
+# Added 2026-10-02 (the review, P4.3): the words of asking rather than of the need, so a developer's whole sentence
+# isn't labelled "closest" for words no skill would say: the asking (need, want, have, please, could, would, should,
+# will, which, who, why, when, where, just), its people (our, we, us, you, your, someone), its placeholders (anything,
+# something), the generic task verbs (write, writes, writing, make, makes, create, use, using: "Use when" ends every
+# description), small function words (about, from, by, be, it, its, are, was), the pieces an apostrophe leaves (s, t,
+# m, d, ll, re, ve, don, im) and the catalog itself (catalog, shared). Re-reasoned: no query's keywords hold any of them,
+# so no label changes; the asks below are what they help.
 common_words: [a, an, the, is, there, for, to, of, and, or, my, me, i, skill, skills, any, find, get,
-               with, in, on, that, this, what, how, can, do, does, help, helps]
+               with, in, on, that, this, what, how, can, do, does, help, helps,
+               need, needs, want, wants, have, has, please, could, would, should, will, which, who, why, when, where, just,
+               our, we, us, you, your, someone, anything, something,
+               write, writes, writing, make, makes, create, use, using,
+               about, from, by, be, it, its, are, was,
+               s, t, m, d, ll, re, ve, don, im,
+               catalog, shared]
 
 corpus:
   # --- git, pull requests, releases ---
@@ -618,13 +632,69 @@ queries:
     may_find: []
     any_word_no_match_holds: true
 
+# Asks in the developer's own words (the review of 2026-10-02, P4.2): the sentence an assistant may pass to search as
+# it is, with synonyms and paraphrases of the catalog's words, not hand-picked keywords. Labelled by hand from the ask
+# and the corpus above, before any search was run on them; same rules as the queries' labels (never from the system's
+# output). They measure the "Asks" metric below; the queries' own `ask` lines are measured the same way.
+#   ask:        the developer's sentence, sent whole as one search.
+#   must_find:  every name here must be in the top 5 AND shown as a match (it shares every word the search kept),
+#               not as "closest". Empty: no card may be shown as a match (the page says partial or none).
+#   may_find:   acceptable extras.
+# METRIC "Asks" (core/scripts/search-score.ts prints it and keeps one line per run; core/test/shared/discovery.ts
+# gates it at the floor in `asks_floor`): found@5 = must_find names in the top 5 / labelled; shown as a match =
+# those also labelled a match; no-match asks shown as no match = asks whose page doesn't say "all".
+asks:
+  - {id: p01, ask: "Anything to draft patch notes for our next version?", must_find: [release-note-draft], may_find: [changelog-from-commits, semver-bump]}
+  - {id: p02, ask: "Can something summarize what shipped this sprint for customers?", must_find: [release-note-draft], may_find: [changelog-from-commits, standup-summary]}
+  - {id: p03, ask: "Is there a skill for writing a changelog entry for our library?", must_find: [changelog-from-commits], may_find: [release-note-draft, semver-bump, dependency-upgrade-planner]}
+  - {id: p04, ask: "I need to figure out the next version number before I tag.", must_find: [semver-bump], may_find: [release-note-draft]}
+  - {id: p05, ask: "We had an outage last night; is there something to write the retrospective?", must_find: [postmortem-writer], may_find: [incident-commander, runbook-writer]}
+  - {id: p06, ask: "Can you check if our React components are a11y compliant?", must_find: [accessibility-audit], may_find: [react-component-builder, web-performance-audit]}
+  - {id: p07, ask: "Our site is sluggish on first load, any skill to speed it up?", must_find: [web-performance-audit], may_find: [accessibility-audit]}
+  - {id: p08, ask: "Is there anything to clean up old git branches?", must_find: [git-branch-cleanup], may_find: [dead-code-finder]}
+  - {id: p09, ask: "Help me write a ticket for this bug in Jira.", must_find: [jira-ticket-writer], may_find: [bug-repro-minimizer]}
+  - {id: p10, ask: "Our cloud spend went up a lot, anything to find out why?", must_find: [aws-cost-review], may_find: []}
+  - {id: p11, ask: "Is there a skill that checks our k8s yaml before we deploy?", must_find: [k8s-manifest-lint], may_find: [k8s-pod-debug]}
+  - {id: p12, ask: "My pod keeps crashing on startup, anything to debug it?", must_find: [k8s-pod-debug], may_find: [data-pipeline-debug]}
+  - {id: p13, ask: "Something to find leaked API keys in our repo?", must_find: [secret-scan], may_find: [dependency-vuln-triage, security-review-owasp]}
+  - {id: p14, ask: "Need help translating our app's UI strings into other languages.", must_find: [i18n-string-extractor], may_find: []}
+  - {id: p15, ask: "Is there a skill to write the PR description for my branch?", must_find: [pr-description-writer], may_find: [commit-message-conventional, pr-review-checklist]}
+  - {id: p16, ask: "Can something write tests for my new module?", must_find: [unit-test-writer], may_find: [test-coverage-gaps, e2e-playwright-tests]}
+  - {id: p17, ask: "Our alerts page people at night for nothing, can we fix that?", must_find: [alert-rule-tuning], may_find: [slo-definition, incident-commander, runbook-writer]}
+  - {id: p18, ask: "I just joined and the repo is huge, anything to explain how the code is organized?", must_find: [codebase-tour], may_find: [onboarding-guide]}
+  - {id: p19, ask: "Any skill to find unused code we can delete?", must_find: [dead-code-finder], may_find: [refactor-long-function]}
+  - {id: p20, ask: "Can we stress test our API before launch?", must_find: [load-test-k6], may_find: [contract-test-pact]}
+  - {id: p21, ask: "Is there something to record an architecture decision?", must_find: [adr-writer], may_find: [threat-model-stride, onboarding-guide]}
+  - {id: p22, ask: "Anything that makes our Docker images smaller?", must_find: [dockerfile-optimizer], may_find: []}
+  - {id: p23, ask: "We need to add tracing to our service, is there a skill?", must_find: [otel-instrumentation], may_find: [log-query-builder]}
+  - {id: p24, ask: "Is there a skill to make our bash scripts safer?", must_find: [shell-script-hardening], may_find: []}
+  - {id: p25, ask: "Is there something to plan our team's holiday party?", must_find: [], may_find: []}
+  - {id: p26, ask: "Do we have a skill for training a machine learning model?", must_find: [], may_find: [], note: "'machine' is in dev-env-setup ('a new machine') and 'model' in dbt-model-builder: both may show, only as closest."}
+  - {id: p27, ask: "Anything that writes a wedding speech?", must_find: [], may_find: []}
+asks_floor: {found: 54, shown_as_match: 17, no_match: 9}   # the gate: never below these counts; raise it when search improves. Measured 2026-10-02: before the review fixes 50, 2, 9; after 54, 17, 9 (of 55, 55, 9)
+
 # Named subsets (derived from the queries above; a lint recomputes them and fails on drift).
-match_cases:   # one search term, the page's `match` and the named card's matched_words (the query's words as typed)
+match_cases:  # one search term, the page's `match` and the named card's matched_words (the query's words as typed)
   - term: "review pull request"
     top: pr-review-checklist
     matched_words: [review, pull, request]
     match: all
     note: "Only stemming gets this right: 'request' matches 'requests'. On exact tokens the page says partial and the assistant would report nothing matched (the agent-experience trials, contract §2). Checked on real SQLite FTS5: porter unicode61 gives top 1 with all three words and match all; unicode61 alone gives partial."
+  - term: "is there a skill for writing release notes?"
+    top: release-note-draft
+    matched_words: [release, notes]
+    match: all
+    note: "The PRD's own FR-02 ask, sent whole (the review of 2026-10-02, P4.3): 'writing' is how the developer asks, not what the skill is, so it is a common word; the right skill is a match, not 'closest'."
+  - term: "what shipped"
+    top: release-note-draft
+    matched_words: [shipped]
+    match: all
+    note: "P4.4: 'shipped' alone stems to 'shipping' in two skills' 'Use before/when shipping' clauses; the synonym list reads it as release too, and release-note-draft ranks first."
+  - term: "a11y"
+    top: accessibility-audit
+    matched_words: [a11y]
+    match: all
+    note: "A numeronym the description never uses (q12): found through the synonym list, reported as typed."
 
 sets:
   must-find: [q01, q02, q03, q04, q05, q06, q07, q08, q09, q10, q11, q12, q13, q14, q15, q16, q17, q18, q19, q20, q21, q22, q23, q24, q25, q26, q27]
