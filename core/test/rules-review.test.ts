@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { CatalogError, DEFAULT_CONTEXT_COST_BUDGET, INVISIBLE, checkContextCostBudget, checkTree, diffTrees, reviewFlags, type RiskFlag, type TreeFile } from '../src/skill-tree/index.ts';
 import { loadGolden } from './golden.ts';
-import { expectLinear, times } from './linear.ts';
+import { cpuMs, expectLinear, times } from './linear.ts';
 
 const skill = (body: string, extra: Record<string, string> = {}) =>
   checkTree([{ path: 'SKILL.md', mode: '0644', bytes: Buffer.from(`---\nname: x\ndescription: y\n---\n${body}`) }, ...Object.entries(extra).map(([path, text]) => ({ path, mode: '0644', bytes: Buffer.from(text) }))]);
@@ -105,6 +105,16 @@ describe('the rules reviewer against the golden rows (skills.rules_review)', () 
   // whole span, so one busy moment between two sizes can't fail a linear build: the largest size takes at most
   // max_growth_over_span times as long as the smallest (the sizes span 4x: linear is about 4x, quadratic about 16x),
   // checked only where the largest time is over min_ms_for_growth; a miss is measured again, `remeasure_on_miss` times.
+  // Many short lines cost a little each: a line's checks reuse their patterns (matchAll copied the hidden-character pattern,
+  // a large Unicode class, for every line: 2.5 s for these 300,000 lines, against about 0.1 s now).
+  it('reads 300,000 short lines within a second of CPU', () => {
+    const many = side({ 'SKILL.md': head + 'x\n'.repeat(300_000) });
+    const separators = side({ 'SKILL.md': head + '\u2028'.repeat(300_000) });
+    reviewFlags(null, many);
+    expect(cpuMs(() => reviewFlags(null, many))).toBeLessThan(1000);
+    expect(cpuMs(() => reviewFlags(null, separators))).toBeLessThan(1000);
+  });
+
   describe('a hostile line can\'t stall the review (timing)', () => {
     const t = golden.timing as { sizes: number[]; samples: number; max_ms: number; max_growth_over_span: number; min_ms_for_growth: number; remeasure_on_miss: number };
     const time = (run: () => unknown) => {

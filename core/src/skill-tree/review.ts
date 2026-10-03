@@ -91,7 +91,9 @@ function flagTagsEnd(text: string, at: number): number {
 }
 function hiddenIn(text: string, fileStart: boolean): string | null {
   let spared = 0; // a flag's tag sequence runs to here
-  for (const m of text.matchAll(CANDIDATE)) {
+  // exec on the one pattern, not matchAll: matchAll copies the pattern (a large Unicode class) on every call, once per line.
+  CANDIDATE.lastIndex = 0;
+  for (let m = CANDIDATE.exec(text); m !== null; m = CANDIDATE.exec(text)) {
     const c = m[0];
     if (m.index < spared) continue;
     if (c === '\ufeff' && fileStart && m.index === 0) continue;
