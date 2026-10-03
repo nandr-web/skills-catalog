@@ -1,11 +1,25 @@
 # Skills catalog contract
 
+![The contract in one picture: the Developer runs the CLI and the Assistant calls the MCP server's tools; with the HTTP API, they are the three faces of one API (§1), one definition per operation. Catalog operations (search, read, publish) reach the catalog, local or hosted (§2, §7). Machine operations (install, update) go through the installer, where a risky update waits for a yes (§5.3), before it writes checked files into the skills folder (§4.5)](pictures/contract-map.svg)
+
+| To find | Read |
+|---|---|
+| The operations, their faces and how each is defined | §1 (the list and every field: [api.md](api.md)) |
+| Search, read, versions, diff, publish on the catalog | §2 |
+| Publishing a folder, installing, updating, the update policy | §3 |
+| What a skill, a version and a fingerprint are | §4 |
+| When an update waits for the Developer's yes | §5.3 |
+| What setup writes, and how teardown undoes it | §6 |
+| What can be swapped: storage, search, identity | §7 |
+| Every error code, and what the Assistant is told to do | §9 |
+| Quality reviews | §10 |
+
 The API of the skills catalog: its operations, data and rules. The implementation, its tests (the QA plan) and the words
 assistants see (the agent-experience notes) all follow it, and a change to any shape starts here.
 
-**Phases.** **1** = the build, all local; **2** = designed, local, not built yet; **AWS** = designed, an option in setup (off by
-default), not built; **later**. The owner's direction: "Focus on phase 1 / local work. Bring back up AWS topics only after the
-rest is finished and approved". Everything not marked phase 1 is here so phase 1 doesn't close doors; it isn't built.
+**Phases.** **1** = the build, all local; **2** = designed, local, not built yet; **AWS** = the hosted catalog, built and
+deployed, an option in setup (off by default); **later**. The owner's direction: "Focus on phase 1 / local work. Bring back up AWS topics only after the
+rest is finished and approved". What is marked phase 2 or later is here so phase 1 doesn't close doors; it isn't built.
 
 **Why the rules are the way they are.** The owner's decisions (in decisions.md) set the scope, the update hold (§5.3) and who may publish.
 Many smaller rules come from measured trials with real assistants (the agent-experience notes) or from test runs (the QA plan);
