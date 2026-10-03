@@ -13,6 +13,7 @@ vi.mock('node:fs', async (o) => (await import('./race-fs.ts')).mockFs(await o())
 beforeEach(() => runnerFolders());
 import { runSetupCommand, type SetupIo } from '../src/cli/setup.ts';
 import { runTeardownCommand } from '../src/cli/teardown.ts';
+import { isOwnBackupCopy } from '../src/machine/teardown-run.ts';
 import { cliWords } from '../src/cli/words.ts';
 import { fileOf, golden } from './setup-golden.ts';
 
@@ -156,6 +157,34 @@ describe('teardown', () => {
     writeFileSync(recordPath, JSON.stringify(r));
     await w.teardown();
     expect(w.read(victim)).toBe('mine\n');
+  });
+
+  it('a backup-shaped file outside backups/ is never deleted', async () => {
+    const w = world();
+    const victim = join(w.dir, '20260101T000000Z-abcd-claude.json');
+    file(victim, 'mine\n');
+    file(w.claudeJson, '{\n  "numStartups": 1\n}\n', 0o600);
+    await runSetupCommand(['--yes'], w.io);
+    const recordPath = join(w.H, 'setup-record.json');
+    const r = JSON.parse(w.read(recordPath)!);
+    const { createHash } = await import('node:crypto');
+    const sha = createHash('sha256').update('mine\n').digest('hex');
+    const one = r.backups[0] ?? { dev: 1, ino: 1, birth: 0 };
+    r.backups = [{ ...one, file: w.claudeJson, path: victim, sha256: sha }, ...r.backups, { ...one, file: w.claudeJson, path: victim, sha256: sha }];
+    writeFileSync(recordPath, JSON.stringify(r));
+    await w.teardown();
+    expect(w.read(victim)).toBe('mine\n');
+  });
+
+  it('the pruning boundary: each part refuses on its own', () => {
+    const backups = '/k/backups';
+    const name = '20260101T000000Z-abcd-claude.json';
+    const ok = { path: join(backups, name), file: '/h/.claude.json' };
+    expect(isOwnBackupCopy(ok, backups, new Set())).toBe(true);
+    expect(isOwnBackupCopy({ ...ok, path: join('/k', name) }, backups, new Set())).toBe(false);      // another folder
+    expect(isOwnBackupCopy({ ...ok, path: join(backups, 'notes.txt') }, backups, new Set())).toBe(false);   // another name
+    expect(isOwnBackupCopy(ok, backups, new Set([ok.path]))).toBe(false);   // named elsewhere by the record
+    expect(isOwnBackupCopy(ok, backups, new Set([ok.file]))).toBe(false);
   });
 
   it('nothing set up: says so, changes nothing', async () => {

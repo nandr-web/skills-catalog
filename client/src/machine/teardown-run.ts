@@ -139,6 +139,13 @@ function deleteIfSame(path: string, hash: string): 'removed' | 'changed' | 'gone
   return 'removed';
 }
 
+/** Whether a recorded backup is a copy teardown may delete when pruning: in the backups folder itself, under the name
+ *  setup gives copies, and not a path the record names elsewhere. Each part on its own refuses (defence in depth: the
+ *  record's own check, `elsewhere`, already flags the same paths). */
+export function isOwnBackupCopy(b: { path: string; file: string }, backups: string, away: ReadonlySet<string>): boolean {
+  return !away.has(b.path) && !away.has(b.file) && dirname(b.path) === backups && BACKUP_NAME.test(basename(b.path));
+}
+
 export async function runTeardown(input: TeardownInput): Promise<TeardownResult> {
   const first = checkPlaces({ assistantHome: input.assistantHome, skillsHome: input.skillsHome, env: input.env, uid: input.uid, lenient: true });
   const { places } = first;
@@ -257,7 +264,7 @@ function underLock(input: TeardownInput): TeardownResult {
 
   // Two backups of each file kept, as setup keeps them; only copies in the backups folder, under the names setup gives
   // them, are ever deleted (a record naming any other path proves nothing: it's "not here").
-  const ownCopy = (b: SetupRecord['backups'][number]) => !away.has(b.path) && !away.has(b.file) && dirname(b.path) === places.backups && BACKUP_NAME.test(basename(b.path));
+  const ownCopy = (b: SetupRecord['backups'][number]) => isOwnBackupCopy(b, places.backups, away);
   for (const file of [places.claudeJson, places.settingsJson]) {
     const mine = record.backups.filter((b) => b.file === file && ownCopy(b));
     for (const old of mine.slice(0, -2)) {
