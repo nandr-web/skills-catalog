@@ -1,7 +1,10 @@
 // skills-catalog stats: the usage summary on this machine (contract §3): the kept window, six measures of what update
 // holds cost and whether they changed an answer, and what asks for a review of when updates are held (§5.3). Read from
 // $SKILLS_HOME/usage only, never sent anywhere; the events name no skill. Not an operation of the API: it reads
-// this machine's own counts, so it runs on its own and touches no catalog.
+// this machine's own counts, so it runs on its own and touches no catalog. The person's only, with no MCP tool, on
+// purpose (agent-first's exception for steps marked for a person, P16.6): it measures how the person answers held
+// updates, including whether a hold changed their answer, so it checks the assistant's influence rather than being a
+// step an assistant takes for them.
 import type { Words } from '@skills-catalog/core';
 import { readUsage } from '../../usage/record.ts';
 import { usageStats, type ReviewRule, type UsageStats } from '../../usage/stats.ts';
