@@ -488,15 +488,17 @@ export class Catalog {
   /** The offline review run (contract §10: "on publish or offline"): runs this catalog's reviewers over every stored
    *  version of one skill or all of them, oldest first, stores each review that isn't current (another reviewer version,
    *  or none yet), and re-indexes each skill so its card shows what its latest version's reviews flagged. */
-  async reviewStored(input: { name?: string } = {}): Promise<ReviewRun> {
+  async reviewStored(input: { name?: string; latestOnly?: boolean; deadline?: number } = {}): Promise<ReviewRun> {
     const names = input.name !== undefined ? [(await this.versionOf(input.name)).record.name] : await this.p.storage.names();
     const run: ReviewRun = { versions: 0, reviewed: 0, flagged: [] };
     for (const name of names) {
+      // `deadline` (performance.now()): a bounded run stops between skills; `latestOnly`: each skill's latest version only.
+      if (input.deadline !== undefined && performance.now() > input.deadline) break;
       const s = await this.p.storage.skill(name);
       if (!s) continue;
-      let previous: VersionRecord | undefined;
+      let previous: VersionRecord | undefined = input.latestOnly && s.latest > 1 ? await this.p.storage.version(name, s.latest - 1) : undefined;
       let previousSide: DiffSide | undefined;
-      for (let n = 1; n <= s.latest; n++) {
+      for (let n = input.latestOnly ? s.latest : 1; n <= s.latest; n++) {
         const v = await this.p.storage.version(name, n);
         if (!v) continue;
         run.versions++;

@@ -1446,7 +1446,9 @@ phase 1 or phase 2) (e.g. risk of prompt injection, etc.)".
 - **Phase 1: one built-in rules reviewer**, a pure function in the shared `skill-tree` module. The catalog runs it on each
   publish, on the checked files before the commit, and stores its review with the version (a reviewer that fails is left out,
   never blocking the publish); `skills-catalog review [<name>]` runs it again over a local catalog's stored versions (the
-  offline run, skipping a review already current). The installer runs the same rules on a fetched version before an update (§5.3).
+  offline run, skipping a review already current). A local catalog from before reviews were kept has each skill's latest
+  version reviewed once, at its first writing open (best effort, at most 5 s; the rest is the review command's, and a read
+  works a missing review out meanwhile). The installer runs the same rules on a fetched version before an update (§5.3).
   Its review keeps what a skill is, read as a first install reads it: runnable files, commands run at load, frontmatter that
   grants something, a publisher change, prompt-injection patterns, and context cost. How a version changed (changed
   instructions in a skill that grants anything, other non-markdown files) is the update hold's, from the installer's diff.

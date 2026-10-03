@@ -42,6 +42,8 @@ export interface LocalOptions {
 }
 
 export const systemClock: Clock = { now: () => new Date() };
+// How long a catalog from before reviews may spend on its first writing open reviewing each skill's latest version.
+export const FIRST_REVIEW_MS = 5_000;
 export const randomIds: Ids = { next: () => randomUUID() };
 
 // A read-only catalog delivers nothing: pending events wait for the next writing open.
@@ -103,6 +105,16 @@ export async function openLocalCatalog(dir: string, opts: LocalOptions = {}): Pr
       close: () => db.close(),
     });
     if (db.indexReset) await catalog.rebuildIndex();
+    // A catalog from before reviews were kept: each skill's latest version is reviewed once, now, so its card and its read
+    // agree (older versions are the review command's). Best effort and time-bounded: what's left is reviewed by
+    // `skills-catalog review`, and read works a missing review out meanwhile.
+    if (db.reviewsAdded) {
+      try {
+        await catalog.reviewStored({ latestOnly: true, deadline: performance.now() + FIRST_REVIEW_MS });
+      } catch {
+        // left for the review command
+      }
+    }
     return catalog;
   } catch (e) {
     db.close();

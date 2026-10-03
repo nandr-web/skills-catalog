@@ -123,6 +123,9 @@ export class LocalDb {
   readonly db: DatabaseSync;
   // True when the search index was dropped because its tokenizer changed: the catalog rebuilds it from the versions.
   readonly indexReset: boolean;
+  // True when this open made the reviews table in a catalog that already had versions (one from before reviews were kept):
+  // the catalog reviews each skill's latest version once (local/index.ts).
+  readonly reviewsAdded: boolean;
 
   // A path opens a catalog to write: the file is made if missing, switched to WAL and given the schema (':memory:' is an
   // empty one). An open DatabaseSync is read as it is: no WAL switch, schema or index check (the read commands' open).
@@ -130,6 +133,7 @@ export class LocalDb {
     if (file instanceof DatabaseSync) {
       this.db = file;
       this.indexReset = false;
+      this.reviewsAdded = false;
       return;
     }
     this.db = new DatabaseSync(file, { timeout: BUSY_MS });
@@ -140,7 +144,7 @@ export class LocalDb {
       checkOwnTables(this.db, []);
       this.walMode();
       this.db.exec('PRAGMA synchronous = NORMAL');
-      this.indexReset = this.schema(opts);
+      ({ stale: this.indexReset, reviewsAdded: this.reviewsAdded } = this.schema(opts));
     } catch (e) {
       this.db.close();
       throw e;
@@ -152,8 +156,9 @@ export class LocalDb {
   // transaction, so a crash leaves neither and the next writing open does it again. That fill is paid once per older
   // catalog, under the write lock: a few seconds at a very large one (about 7 s cold at 200,000 files), while readers go
   // on and other writers wait within the busy timeout.
-  private schema(opts: LocalDbOptions): boolean {
+  private schema(opts: LocalDbOptions): { stale: boolean; reviewsAdded: boolean } {
     return this.immediate(() => {
+      const reviewed = this.hasTable('reviews');
       const fts = this.db.prepare("SELECT sql FROM sqlite_master WHERE name = 'search_fts'").get() as { sql: string } | undefined;
       const stale = fts !== undefined && !fts.sql.includes(`'${TOKENIZE}'`);
       if (stale) this.db.exec('DROP TABLE search_fts; DELETE FROM search_cards;');
@@ -166,7 +171,8 @@ export class LocalDb {
         this.db.exec(FILL_FILE_INDEX);
         opts.afterFileIndex?.();
       }
-      return stale;
+      const reviewsAdded = !reviewed && this.db.prepare('SELECT 1 FROM versions LIMIT 1').get() !== undefined;
+      return { stale, reviewsAdded };
     });
   }
 
