@@ -93,7 +93,8 @@ function carriedSettings(env: PlanInput['env']): Record<string, string> {
 
 export function planSetup(input: PlanInput): SetupPlan {
   const env = carriedSettings(input.env);
-  const { places, missing, record, recordWas } = checkPlaces({ assistantHome: input.assistantHome, skillsHome: input.skillsHome, env: input.env, uid: input.uid });
+  const allowed = [...new Set([...allowRules(input.words), ...allowRules(input.words, { readRules: true })])];
+  const { places, missing, record, recordWas } = checkPlaces({ assistantHome: input.assistantHome, skillsHome: input.skillsHome, env: input.env, uid: input.uid, allowed });
   const install = checkInstall({ node: input.node, script: input.script, temporaryRoots: input.temporaryRoots, uid: input.uid });
   const id = record?.setup_id ?? input.newId;
   const run: SetupRun = { node: install.node, script: install.script, id, env };

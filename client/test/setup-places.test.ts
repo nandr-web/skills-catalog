@@ -156,4 +156,37 @@ describe('where setup works, checked before anything is made', () => {
     symlinkSync(join(dir, 'outside.json'), record);
     expect(refusal(() => checkPlaces(input))).toEqual(bad('link'));
   });
+
+  it('the record\'s allow rules must be rules setup writes: any other text is the wrong shape, so teardown never removes it', () => {
+    const { A, H, input } = homes();
+    const record = join(H, 'setup-record.json');
+    const rule = (value: string) => ({ kind: 'allow_rule', file: join(A, '.claude', 'settings.json'), value, state: 'written', was_there: false });
+    const good = { version: 1, setup_id: ID, entries: [rule('Bash(skills-catalog update)')], created_files: [], backups: [] };
+    const allowed = ['Bash(skills-catalog update)'];
+    writeFileSync(record, JSON.stringify(good), { mode: 0o600 });
+    expect(checkPlaces({ ...input, allowed }).record).toEqual(good);
+    writeFileSync(record, JSON.stringify({ ...good, entries: [rule('Bash(rm -rf *)')] }));
+    expect(refusal(() => checkPlaces({ ...input, allowed }))).toEqual({ code: 'invalid_local_file', data: { file: 'setup-record.json', why: 'wrong_shape', path: record } });
+  });
+
+  it('a skills home that is a link is target_symlink; the folders above each home must be the person\'s or root\'s, and only written by others with the sticky bit', () => {
+    const { dir, A, H, input } = homes({ skillsHome: false });
+    const real = join(dir, 'real-skills-home');
+    mkdirSync(real, { mode: 0o700 });
+    symlinkSync(real, H);
+    expect(refusal(() => checkPlaces(input))).toEqual({ code: 'target_symlink', data: { path: H } });
+    const t = homes();
+    // Another user's folder above the assistant home: they could rename the home and put their own in its place.
+    race.stats = (p) => (p === t.dir ? { uid: me + 1 } : undefined);
+    expect(refusal(() => checkPlaces(t.input))).toEqual({ code: 'target_not_private', data: { path: t.dir, own: false } });
+    // Written by everyone, without the sticky bit: refused; with it (as /tmp), it passes.
+    race.stats = (p) => (p === t.dir ? { mode: 0o40777 } : undefined);
+    expect(refusal(() => checkPlaces(t.input))).toEqual({ code: 'target_not_private', data: { path: t.dir, own: true } });
+    race.stats = (p) => (p === t.dir ? { mode: 0o41777 } : undefined);
+    expect(refusal(() => checkPlaces(t.input))).toBeUndefined();
+    // Root's folder above passes.
+    race.stats = (p) => (p === t.dir ? { uid: 0 } : undefined);
+    expect(refusal(() => checkPlaces(t.input))).toBeUndefined();
+    void A;
+  });
 });
