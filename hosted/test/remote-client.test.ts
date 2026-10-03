@@ -29,11 +29,15 @@ let emu: Emulator | undefined;
 let catalog: Catalog | undefined;
 let handler: ReturnType<typeof createHostedHandler> | undefined;
 const apiCalls: string[] = [];
+const puts: string[] = [];
 
 /** The client's HTTP: the catalog's address goes to the hosted handler in process; a link (moto's) over the network. */
 const http: typeof fetch = async (input, init) => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
-  if (url.origin !== CATALOG) return fetch(input, init);
+  if (url.origin !== CATALOG) {
+    if (init?.method === 'PUT') puts.push(url.pathname);
+    return fetch(input, init);
+  }
   apiCalls.push(url.pathname);
   const headers = Object.fromEntries(new Headers(init?.headers).entries());
   const body = init?.body ? new TextEncoder().encode(String(init.body)) : new Uint8Array();
@@ -94,8 +98,32 @@ describe('the hosted client', () => {
   it('without a token every call is unauthenticated; a read-only token may not publish', async () => {
     expect((await errorOf((await as(undefined)).search({ query: 'x' }, 'mcp')))!.code).toBe('unauthenticated');
     expect((await errorOf((await as('t-nobody')).search({ query: 'x' }, 'mcp')))!.code).toBe('unauthenticated');
-    const e = await errorOf((await as('t-reader')).publish({ name: 'readers-skill', files: V1 }, undefined as never, 'mcp'));
+    const readers = [{ path: 'SKILL.md', mode: '0644', content_base64: b64(skillMd('readers-skill', 'A reader tries to publish.')) }];
+    const e = await errorOf((await as('t-reader')).publish({ name: 'readers-skill', files: readers }, undefined as never, 'mcp'));
     expect(e).toBeInstanceOf(CatalogError);
+    expect(e!.code).toBe('forbidden');
+  });
+
+  // Review P5.6: SKILL.md is checked before any link is asked for, so a refused publish (or its preview's dry run)
+  // puts nothing in the bucket, where the sweep would otherwise find it days later.
+  it('a publish refused for its SKILL.md, or a secret, asks for no upload link and puts no file', async () => {
+    const ana = await as('t-ana');
+    const bad = [
+      { files: [{ path: 'SKILL.md', mode: '0644', content_base64: b64('---\nname: no-description\n---\nBody.\n') }, V1[1]!], code: 'invalid_manifest' },
+      { files: [{ path: 'SKILL.md', mode: '0644', content_base64: b64(skillMd('no-description', 'Has no body.', '')) }], code: 'invalid_manifest' },
+      { files: [{ path: 'SKILL.md', mode: '0644', content_base64: b64(skillMd('other-name', 'Its name is not the one asked for.')) }], code: 'invalid_name' },
+      { files: [{ path: 'SKILL.md', mode: '0644', content_base64: b64(skillMd('no-description', 'Carries a key.', 'key AKIAIOSFODNN7EXAMPLE\n')) }], code: 'secret_suspected' },
+    ];
+    for (const dry_run of [true, false]) {
+      for (const b of bad) {
+        apiCalls.length = 0;
+        puts.length = 0;
+        const e = await errorOf(ana.publish({ name: 'no-description', files: b.files, dry_run }, undefined as never, 'mcp'));
+        expect(e?.code, JSON.stringify(b.files[0]!.content_base64)).toBe(b.code);
+        expect(apiCalls).toEqual([]);
+        expect(puts).toEqual([]);
+      }
+    }
   });
 
   it("a file's address answers its link", async () => {
