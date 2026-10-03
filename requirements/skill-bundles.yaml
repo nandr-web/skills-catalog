@@ -6,4 +6,5 @@ quote: "Maybe some UX where I can select which skills to group together and shar
 want: "As a developer, I want to create bundles of skills / plugins, selecting which skills to group together, and share my bundle, so that others get the whole set in one step."
 accept: "A person picks skills (each pinned to a version) into a named bundle and shares it; another developer installs the bundle in one step and gets exactly those versions."
 confirmed: true
+parts: [core, web]
 relates: [skill-bundle-votes]

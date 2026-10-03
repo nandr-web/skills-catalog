@@ -6,4 +6,5 @@ quote: "everyone (signed in) can read"
 want: "As the owner, I want everyone to sign in to read a hosted catalog, so that our skills stay within the people we share them with."
 accept: "On the hosted catalog, every read without a valid sign-in or token is refused, and every signed-in person can read every skill."
 confirmed: true
+parts: [aws, web]
 relates: [skill-web-aws]

@@ -6,4 +6,5 @@ quote: "Self-contained: it should run on a reviewer's machine from a short READM
 want: "As a reviewer of the exercise, I want it to be self-contained and run on my machine from a short README, so that I can try it myself."
 accept: "The README's quickstart, run word for word in a fresh home folder, installs, runs the tests and completes the publish → discover → retrieve loop with no account and no server."
 confirmed: true
+parts: [core, cli]
 relates: [skill-readme-visual, skill-local-default]

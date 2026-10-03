@@ -6,4 +6,5 @@ quote: "likely with community feedback like votes."
 want: "As a developer, I want community feedback like votes on shared bundles, so that good bundles stand out."
 accept: "A signed-in person votes once per bundle and can take it back; counts show on the bundle; an unsigned request can't vote."
 confirmed: true
+parts: [core, web]
 relates: [skill-bundles]

@@ -6,4 +6,5 @@ quote: "A way to automatically or on-demand review / sample one's own sessions /
 want: "As a developer, I want my own sessions and transcripts reviewed or sampled, automatically or on demand, and skills auto-recommended, so that I find skills I'd use without searching."
 accept: "Run on demand or on a schedule, it recommends catalog skills that match needs found in recent sessions; the analysis runs on the developer's machine, and a planted marker in a transcript never leaves it."
 confirmed: true
+parts: [installer]
 relates: [skill-merge-share-suggestions]

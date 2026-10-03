@@ -6,4 +6,5 @@ quote: "As Developer 1, I want to publish my skill to the catalog so another dev
 want: "As Developer 1, I want to publish my skill to the catalog so another developer can reuse it without me handing over files."
 accept: "From FR-01 and UC-01: a developer can publish a skill (manifest + any supporting files) to the catalog; a published skill is available to another developer, complete; a skill missing a name, description, or body is rejected with an explanation, and nothing partial is stored; a confirmation is returned."
 confirmed: true
+parts: [core, cli, mcp]
 relates: [skill-versions]

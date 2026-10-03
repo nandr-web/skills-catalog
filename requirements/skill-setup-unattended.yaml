@@ -6,4 +6,5 @@ quote: "Unattended setup via CLI also should be a thing (e.g. pass all configura
 want: "As a developer, I want unattended setup via the CLI, passing all configurations or a file, so that setup can run fast and unattended."
 accept: "Setup with all defaults, or with a config file, writes the same config as the same answers typed at the prompts; with no terminal attached it never waits."
 confirmed: true
+parts: [cli, installer]
 relates: [skill-setup-welcome]

@@ -6,4 +6,5 @@ quote: "we'd make it a welcome, intuitive, (colorful) UX that asks you if you wa
 want: "As a developer setting up skill searching and fetching, from a CLI installer or a prompt for an agent, I want a welcome, intuitive, colorful setup that asks if I want auto-updates on (default yes), so that I never need to go into a file or run a CLI to configure it."
 accept: "The installer asks once, in colour, with auto-updates defaulting to yes; an agent can run the same setup from a prompt; the file and the CLI exist too; teardown undoes everything setup wrote."
 confirmed: true
+parts: [cli, installer]
 relates: [skill-setup-unattended, skill-auto-updates]

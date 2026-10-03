@@ -6,4 +6,5 @@ quote: "Let's create a guided CLI that can be run by an agent instead as a skill
 want: "As a developer, I want the guided CLI setup to be something my agent can run instead of me, as a skill or by reading a doc, so that setup is agent-first too."
 accept: "An assistant given only the setup skill or the setup doc completes setup in a sandbox, choosing the same options the person would, with no one typing into the CLI; the result equals the same answers given to the wizard."
 confirmed: true
+parts: [cli, installer]
 relates: [skill-setup-welcome, skill-agent-first]

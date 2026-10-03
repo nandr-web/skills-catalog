@@ -6,4 +6,5 @@ quote: "a sub-architect plan the web application stack, security, deployment int
 want: "As the owner, I want the web application's stack, security and deployment into my AWS account planned, so that the web UI can run there."
 accept: "A reviewed plan covers stack, security and deployment; one command deploys a throwaway stack and tears it down, leaving nothing behind; nothing is reachable without the sign-in the owner chooses."
 confirmed: true
+parts: [web, aws]
 relates: [skill-signed-in-read]

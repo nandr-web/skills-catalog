@@ -6,4 +6,5 @@ quote: "with a way to force request the latest (e.g. for independent auditors an
 want: "As a developer on a shared catalog, I want new versions to wait before auto-update applies them, with a way for auditors and security checkers to get the latest at once, so that a bad version is caught before it reaches me."
 accept: "On a shared or hosted catalog a new version waits (about 3 days by default) before auto-update applies it, and a first install of a version that new is held the same way; a watcher policy or a one-off request gets the latest at once, through the person's permission prompt and still through the update hold; a version flagged by a review or withdrawn during the wait is never auto-applied; a local catalog doesn't wait."
 confirmed: false
+parts: [installer, core, aws]
 relates: [skill-auto-updates, skill-review-flags, skill-quality-reviews]

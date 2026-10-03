@@ -6,4 +6,5 @@ quote: "We should make it easy to view and update skills from the UI."
 want: "As a developer, I want a web UI where it's easy to view and update skills and inspect their history, so that I don't need an assistant or a CLI to look after them."
 accept: "In the web UI a person can browse skills, open one and its history, and edit it; saving publishes a new version, and is refused if someone published since."
 confirmed: true
+parts: [web]
 relates: [skill-web-delta, skill-web-mockups]

@@ -6,4 +6,5 @@ quote: "As Developer 2, I want my AI assistant to retrieve a published skill so 
 want: "As Developer 2, I want my AI assistant to retrieve a published skill so I get the same one Developer 1 has, ready to use."
 accept: "From FR-03 and UC-03: through an AI assistant, a developer can retrieve a named skill; it is complete and unchanged from what was published (manifest + supporting files); retrieving a skill that doesn't exist returns a clear \"not found.\""
 confirmed: true
+parts: [core, installer, mcp]
 relates: [skill-unchanged]

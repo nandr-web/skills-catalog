@@ -1,0 +1,10 @@
+id: skill-one-install-all-assistants
+title: "Phase 2: One install reaches every assistant I use"
+phase: "2"
+source: "the owner"
+quote: "Copilot, Codex, Cursor and Gemini CLI (recommended)"
+want: "As a developer using more than one assistant, I want one install to reach all of them, so that I don't install or update a skill once per assistant."
+accept: "One install or update puts the skill where each of the person's supported assistants reads it (e.g. ~/.agents/skills and ~/.claude/skills), recorded once in the lock, and each place is checked as §4.5 says."
+confirmed: true
+parts: [installer]
+relates: [skill-pi-agent, skill-other-assistants]

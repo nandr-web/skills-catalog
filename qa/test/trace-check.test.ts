@@ -30,7 +30,7 @@ describe('qa trace-check', () => {
   it('passes on the real goldens and the exported requirement list (requirements/, the default)', () => {
     const r = traceCheck({ qa: QA });
     expect(r.problems).toEqual([]);
-    expect(r.counts.backlog).toBe(40);
+    expect(r.counts.backlog).toBe(44);
   });
 
   it('a check with a key outside layer, name, golden, auto and automate_by is a problem (a comma in an unquoted name makes one)', () => {
@@ -49,6 +49,22 @@ describe('qa trace-check', () => {
     expect(r.problems).toEqual([]);
     const golden = (f: string) => parse(readFileSync(join(QA, 'golden', f), 'utf8'));
     expect(r.counts).toMatchObject({ scenarios: golden('agent-scenarios.yaml').scenarios.length, queries: golden('queries.yaml').queries.length });
+  });
+
+  // Review P11.3, V2.2: the requirements page says "built" from the tests each requirement names, so each name must be a
+  // test file that exists in the repo.
+  it('fails when a requirement names a test file that doesn\'t exist, a file that isn\'t a test, or tests that aren\'t a list', () => {
+    const c = copy();
+    edit(join(c.qa, 'traceability.yaml'), (d) => {
+      d.requirements[0].tests = ['core/test/no-such.test.ts', 'core/src/catalog.ts', '../outside.test.ts'];
+      d.requirements[1].tests = 'core/test/catalog.test.ts';
+    });
+    expect(traceCheck({ qa: c.qa, backlog: c.backlog }).problems).toEqual(expect.arrayContaining([
+      "publish: test 'core/test/no-such.test.ts' doesn't exist",
+      "publish: test 'core/src/catalog.ts' isn't a test file (<package>/test/….test.ts)",
+      "publish: test '../outside.test.ts' isn't a test file (<package>/test/….test.ts)",
+      'publish-discoverable: tests should be a list of test files',
+    ]));
   });
 
   it('fails when a requirement has no automated check, or a manual one says nothing about automating it', () => {

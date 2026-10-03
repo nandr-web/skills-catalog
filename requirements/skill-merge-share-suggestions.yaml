@@ -6,4 +6,5 @@ quote: "pass over ones own skills and determine if there's room to merge with ot
 want: "As a developer, I want a pass over my own skills that finds room to merge with others, share mine, or get other skills, so that I don't keep near-copies."
 accept: "It lists each own skill with its near-duplicates in the catalog, and the unpublished ones worth sharing; it changes nothing on its own."
 confirmed: true
+parts: [installer]
 relates: [skill-recommend-from-sessions, skill-quality-reviews]

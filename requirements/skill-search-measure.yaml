@@ -6,4 +6,5 @@ quote: "We'd measure and improve the system over time."
 want: "As the owner, I want the system measured and improved over time, so that search choices follow evidence."
 accept: "Every run records recall of the labelled discovery queries, tokens per successful discovery and first-query time, and keeps them per run so trends show."
 confirmed: true
+parts: [qa]
 relates: [skill-scale-plan]

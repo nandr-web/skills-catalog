@@ -16,10 +16,14 @@ const load = (p: string): Doc => parse(readFileSync(p, 'utf8'));
 
 /** The exported requirement list (exported from the design's requirement files), next to the qa package. */
 export const DEFAULT_BACKLOG = fileURLToPath(new URL('../../requirements', import.meta.url));
+/** The product repo's root: a requirement's `tests` are paths from here. */
+export const REPO = fileURLToPath(new URL('../..', import.meta.url));
+/** A test file's path from the repo's root: <package>/test/….test.ts, nothing outside the repo. */
+const TEST_PATH = /^(?:core|client|hosted|infra|qa)\/test\/(?:[\w.-]+\/)*[\w.-]+\.test\.ts$/;
 /** The keys a traceability check may have. */
 export const CHECK_KEYS = ['layer', 'name', 'golden', 'auto', 'automate_by'];
 
-export function traceCheck({ qa, backlog = DEFAULT_BACKLOG }: { qa: string; backlog?: string }): { problems: string[]; counts: Record<string, number> } {
+export function traceCheck({ qa, backlog = DEFAULT_BACKLOG, repo = REPO }: { qa: string; backlog?: string; repo?: string }): { problems: string[]; counts: Record<string, number> } {
   const g = Object.fromEntries(['skills', 'histories', 'queries', 'agent-scenarios', 'policy'].map((n) => [n, load(join(qa, 'golden', `${n}.yaml`))]));
   const trace = load(join(qa, 'traceability.yaml'));
   const scenarios: Doc[] = g['agent-scenarios'].scenarios;
@@ -45,6 +49,13 @@ export function traceCheck({ qa, backlog = DEFAULT_BACKLOG }: { qa: string; back
   // ---- requirements ----
   for (const r of trace.requirements) {
     if (!r.checks.some((c: Doc) => c.auto)) problems.push(`${r.id}: no automated check`);
+    // The tests that hold it (review P11.3, V2.2): the requirements page says "built" from these, so each must be a test
+    // file that exists. A requirement not built yet names none.
+    if (r.tests !== undefined && !Array.isArray(r.tests)) problems.push(`${r.id}: tests should be a list of test files`);
+    for (const t of Array.isArray(r.tests) ? r.tests : []) {
+      if (typeof t !== 'string' || !TEST_PATH.test(t)) problems.push(`${r.id}: test '${t}' isn't a test file (<package>/test/….test.ts)`);
+      else if (!existsSync(join(repo, t))) problems.push(`${r.id}: test '${t}' doesn't exist`);
+    }
     for (const c of r.checks) {
       // A comma in an unquoted flow-mapping name splits it into stray keys: {name: a, b} is {name: a, b: null}.
       const stray = Object.keys(c).filter((k) => !CHECK_KEYS.includes(k));

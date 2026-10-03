@@ -6,4 +6,5 @@ quote: "As Developer 1, I want publishing an updated skill to create a new versi
 want: "As Developer 1, I want publishing an updated skill to create a new version so changes are tracked and nothing is silently overwritten."
 accept: "From FR-04, UC-04 and the goals: publishing a skill whose name already exists creates a new version and prior versions are retained; a developer can see a skill's version history; retrieving returns the latest version by default and an earlier version when asked for; a malformed update is rejected and existing versions are untouched; history is retained and inspectable."
 confirmed: true
+parts: [core]
 relates: [skill-web-delta]

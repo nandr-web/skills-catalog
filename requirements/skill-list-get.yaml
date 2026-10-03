@@ -6,4 +6,5 @@ quote: "Get (a specific skill or skills up to a limit)"
 want: "As an AI assistant acting for a developer, I want to List skills (likely with filters) and Get a specific skill or skills up to a limit, so that I can do the search myself, a-la progressive disclosure, whatever the backend."
 accept: "Search with no words is the List, with filters and pages; get takes one name or up to 20; asking for more returns a clear error naming the limit."
 confirmed: true
+parts: [core, mcp]
 relates: [skill-discover]

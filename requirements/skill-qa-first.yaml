@@ -6,4 +6,5 @@ quote: "We should think about how to build reproducible automation for this. (Th
 want: "As the owner, I want a QA-first mentality and reproducible automation that automatically cleans up after itself and doesn't make permanent changes, so that every check can be run again safely."
 accept: "One command runs every test layer in a throwaway sandbox; a footprint check after each run finds nothing changed outside the sandbox; a deliberately leaky canary test makes the footprint check fail."
 confirmed: true
+parts: [qa]
 relates: [skill-agent-qa]
