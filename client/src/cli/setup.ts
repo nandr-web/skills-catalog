@@ -8,7 +8,7 @@
 // what it means in words. Exit 0 done, 1 refused (nothing changed), 3 needs answers.
 
 import { randomBytes } from 'node:crypto';
-import { realpathSync, statfsSync } from 'node:fs';
+import { accessSync, constants, realpathSync, statfsSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -22,7 +22,7 @@ import { planSetup, type PlanInput, type SetupPlan } from '../machine/setup-plan
 import { runSetup, type CommandOutcome } from '../machine/setup-run.ts';
 import { painter, type Paint } from '../person/terminal.ts';
 import { machineDeveloper, settingsFrom, type Settings } from '../settings.ts';
-import { cliWords } from './words.ts';
+import { cliWords, withCli } from './words.ts';
 
 export type SetupIo = {
   env: Record<string, string | undefined>;
@@ -140,7 +140,11 @@ const OWN_FLAGS = { yes: { type: 'boolean' }, config: { type: 'string' }, 'dry-r
 /** The setup doc an assistant can follow to run setup unattended (skill-setup-by-agent; docs/setup.md, written by
  *  `npm run setup-doc` in client/ and kept equal by a test): the words' doc and assistant note, then each question with
  *  the flag that answers it and its default, from the table. */
-export function setupDoc(s: Words): string {
+/** The README's command form, which the setup doc names (skills-catalog isn't on PATH until setup has run). */
+export const README_COMMAND = 'node ~/skills-catalog/client/src/cli.ts';
+
+export function setupDoc(given: Words): string {
+  const s = given.cli === README_COMMAND ? given : withCli(Words.load(given.variant), README_COMMAND);
   const q = s.setup.questions as { ask: string; default: string; flag: string }[];
   const fill = { default_catalog: '~/.skills-catalog/catalog', me_default: 'your login, made into a name', command_folder: '~/.local/bin' };
   const rows = q.map((x) => `| ${s.format(x.ask, fill).replaceAll('|', '\\|')} | \`${x.flag.replaceAll('|', '\\|')}\` | ${s.format(x.default, fill)} |`);
@@ -242,7 +246,10 @@ export function sharedFolderKind(path: string, statfs: (p: string) => { type: nu
 // ---------- the command ----------
 
 export async function runSetupCommand(argv: readonly string[], io: SetupIo): Promise<number> {
-  const s = cliWords(Words.load());
+  const raw = Words.load();
+  const install = io.install ?? { node: process.execPath, script: SCRIPT, temporaryRoots: [tmpdir(), '/tmp', '/var/tmp'] };
+  // The command as the person can run it now: skills-catalog when it's on PATH, else node and this script.
+  const s = onPath(io.env, 'skills-catalog') ? cliWords(raw) : withCli(raw, nodeForm(io.env, install));
   const paint = painter(io.color);
   const err = (e: unknown) => {
     if (!(e instanceof CatalogError)) throw e;
@@ -336,7 +343,6 @@ export async function runSetupCommand(argv: readonly string[], io: SetupIo): Pro
 
   const config = configFrom(existing, file, answers, c);
   const sessionStartHook = config['session_start_hook'] !== false;
-  const install = io.install ?? { node: process.execPath, script: SCRIPT, temporaryRoots: [tmpdir(), '/tmp', '/var/tmp'] };
   const input: PlanInput = {
     assistantHome: settings.assistantHome,
     skillsHome: settings.home,
@@ -382,7 +388,10 @@ export async function runSetupCommand(argv: readonly string[], io: SetupIo): Pro
   } catch (e) {
     return err(e);
   }
-  io.stdout('\n' + (await summary(s, paint, ran, config, settings, io.env)).join('\n') + '\n');
+  // After the run: skills-catalog when the launcher's folder is on PATH, its full path while it isn't, else as before.
+  const launcher = ran.command === 'added' || ran.command === 'same';
+  const after = !launcher ? s : (io.env['PATH'] ?? '').split(':').some((p) => p && samePath(p, ran.plan.places.commandDir)) ? cliWords(raw) : withCli(raw, shellQuote(ran.plan.places.command));
+  io.stdout('\n' + (await summary(after, paint, ran, config, settings, io.env)).join('\n') + '\n');
   return 0;
 }
 
@@ -463,6 +472,27 @@ async function summary(s: Words, paint: Paint, ran: Awaited<ReturnType<typeof ru
   out.push(s.format(w.node, { node: ran.plan.run.node }));
   if ((ran.command === 'added' || ran.command === 'same') && !(env['PATH'] ?? '').split(':').some((p) => p && samePath(p, folder))) out.push(paint('attention', `▲ ${s.format(w.command_off_path, { folder: shellQuote(folder) })}`));
   return out;
+}
+
+/** Whether `name` is an executable in a folder on PATH. */
+function onPath(env: SetupIo['env'], name: string): string | undefined {
+  for (const dir of (env['PATH'] ?? '').split(':')) {
+    if (!dir) continue;
+    try {
+      accessSync(join(dir, name), constants.X_OK);
+      return join(dir, name);
+    } catch {
+      // not here
+    }
+  }
+  return undefined;
+}
+
+/** node and this script as a command: `node` when the node on PATH is the one running, else its full path. */
+function nodeForm(env: SetupIo['env'], install: { node: string; script: string }): string {
+  const found = onPath(env, 'node');
+  const node = found && samePath(found, install.node) ? 'node' : shellQuote(install.node);
+  return `${node} ${shellQuote(install.script)}`;
 }
 
 const samePath = (a: string, b: string) => {

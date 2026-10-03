@@ -15,6 +15,15 @@ function preferCli(obj: unknown): unknown {
   return out;
 }
 
+/** The CLI's words with the command written another way, for where `skills-catalog` isn't on PATH yet (before setup's
+ *  launcher, or when it was declined): `node …/client/src/cli.ts`. `raw` is the words as loaded, before cliWords. */
+export function withCli(raw: Words, cli: string): Words {
+  const doc = structuredClone(raw.doc);
+  doc.cli = cli;
+  if (doc.variants[raw.variant]) delete doc.variants[raw.variant].cli;
+  return cliWords(new Words(doc, raw.variant));
+}
+
 export function cliWords(s: Words): Words {
   const doc = structuredClone(s.doc);
   const names = doc.names?.cli;

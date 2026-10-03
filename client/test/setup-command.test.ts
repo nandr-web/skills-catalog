@@ -78,7 +78,7 @@ describe('the setup doc an assistant follows (skill-setup-by-agent)', () => {
     const page = readFileSync(join(import.meta.dirname, '..', '..', 'docs', 'setup.md'), 'utf8');
     expect(page === setupDoc(S), 'docs/setup.md is out of date: run `npm run setup-doc` in client/').toBe(true);
     for (const q of S.setup.questions as { flag: string }[]) expect(page).toContain(q.flag.split(' ')[0]);
-    expect(page).toContain(`${S.cli} setup --yes`);
+    expect(page).toContain('node ~/skills-catalog/client/src/cli.ts setup --yes');
   });
 });
 
@@ -92,7 +92,7 @@ describe('no terminal', () => {
     expect(await runSetupCommand([], w.io)).toBe(3);
     for (const q of S.setup.questions as { flag: string }[]) expect(w.out()).toContain(q.flag);
     expect(w.out()).toContain('default: ana');
-    expect(w.out()).toContain(`${S.cli} setup --yes`);
+    expect(w.out()).toContain(`${w.io.install!.node} ${w.io.install!.script} setup --yes`);
     expect(existsSync(w.H)).toBe(false);
     expect(readdirSync(w.A)).toEqual([]);
   });
@@ -173,6 +173,34 @@ describe('three ways, the same files (skill-setup-unattended)', () => {
     const norm = (w: ReturnType<typeof world>) => Object.fromEntries(Object.entries(w.files()).map(([k, v]) => [k, v?.split(w.dir).join('<dir>')]));
     expect(norm(b)).toEqual(norm(a));
     expect(norm(c)).toEqual(norm(a));
+  });
+});
+
+describe('the command it names is one the person can run (validator: skills-catalog isn\'t on PATH before setup)', () => {
+  it('no terminal, no skills-catalog on PATH: the questions\' "every default" line names node and this script', async () => {
+    const w = world();
+    await runSetupCommand([], w.io);
+    const node = w.io.install!.node;
+    expect(w.out()).toContain(`${node} ${w.io.install!.script} setup --yes`);
+    expect(w.out()).not.toContain('skills-catalog setup --yes');
+  });
+
+  it('after setup: the launcher\'s full path while its folder isn\'t on PATH; skills-catalog once it is; node and the script when declined', async () => {
+    const a = world();
+    await runSetupCommand(['--yes'], a.io);
+    expect(a.out()).toContain(`${join(a.A, '.local', 'bin', 'skills-catalog')} teardown`);
+    const b = world();
+    b.io.env['PATH'] = `${join(b.A, '.local', 'bin')}:/usr/bin`;
+    await runSetupCommand(['--yes'], b.io);
+    expect(b.out()).toContain(`${S.cli} teardown`);
+    const c = world();
+    await runSetupCommand(['--yes', '--terminal-command', 'no'], c.io);
+    expect(c.out()).toContain(`${c.io.install!.node} ${c.io.install!.script} teardown`);
+  });
+
+  it('the setup doc names the README\'s command form', () => {
+    expect(setupDoc(S)).toContain('node ~/skills-catalog/client/src/cli.ts setup --yes');
+    expect(setupDoc(S)).not.toMatch(/`skills-catalog setup/);
   });
 });
 
@@ -263,7 +291,8 @@ describe('a catalog address is one address (review: an escape sequence was store
     const w = world();
     expect(await runSetupCommand(['--yes', '--catalog', 'https://catalog.example/team'], w.io)).toBe(0);
     expect(JSON.parse(w.files().config!).catalog).toBe('https://catalog.example/team');
-    expect(w.out()).toContain(S.format(S.setup.catalog_hosted, { catalog: 'https://catalog.example/team' }));
+    expect(w.out()).toContain(`${join(w.A, '.local', 'bin', 'skills-catalog')} login`);
+    expect(w.out()).toContain('https://catalog.example/team is a hosted catalog');
   });
 });
 
