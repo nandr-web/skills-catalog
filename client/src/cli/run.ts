@@ -19,6 +19,7 @@ import { diff } from './commands/diff.ts';
 import { install } from './commands/install.ts';
 import { list } from './commands/list.ts';
 import { policy } from './commands/policy.ts';
+import { publish } from './commands/publish.ts';
 import { read } from './commands/read.ts';
 import { search } from './commands/search.ts';
 import { stats } from './commands/stats.ts';
@@ -34,7 +35,7 @@ import { terminal } from '../person/medium.ts';
 export type { Io } from './command.ts';
 
 /** The commands, keyed by the word after the command's name (as the words file's CLI names write it). */
-export const COMMANDS: Record<string, Command> = { search, read, versions, diff, install, list, update, policy, stats };
+export const COMMANDS: Record<string, Command> = { search, read, versions, diff, install, list, update, policy, stats, publish };
 
 /** Every command word served: the operation commands and the process commands (process.ts). */
 export const SERVED: readonly string[] = [...Object.keys(COMMANDS), ...Object.keys(PROCESS_COMMANDS)];
@@ -46,7 +47,7 @@ export const flagsFor = (word: string): string[] =>
 /** The commands this CLI serves, as the words file names them, and the process commands (the MCP server, the page). */
 export function usage(s: Words): string {
   const served = Object.values(s.names).filter((n) => Object.keys(COMMANDS).includes(n.split(' ')[1] ?? ''));
-  const processes = Object.entries(PROCESS_COMMANDS).map(([word, p]) => [s.cli, word, ...p.flags.map((f) => (f === 'port' ? '[--port N]' : `[--${f}]`))].join(' '));
+  const processes = Object.entries(PROCESS_COMMANDS).map(([word, p]) => [s.cli, word, ...(p.shown ?? p.flags).map((f) => (f === 'port' ? '[--port N]' : `[--${f}]`))].join(' '));
   return `${s.cli}\n${served.map((n) => `  ${n}`).join('\n')}\n${processes.map((n) => `  ${n}`).join('\n')}\n`;
 }
 

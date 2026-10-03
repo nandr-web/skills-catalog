@@ -1062,7 +1062,7 @@ Served by local and hosted catalogs. Called through HTTP (`web`). It changes not
 
 ### `publish_skill_to_catalog`
 
-Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`). It changes the catalog (`writes_catalog`).
+Served by local and hosted catalogs. Called through the Assistant's tool (`mcp`), the CLI (`cli`). It changes the catalog (`writes_catalog`).
 
 **Input**
 

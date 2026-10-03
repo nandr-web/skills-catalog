@@ -220,7 +220,7 @@ export async function publishFolder(ctx: Context, args: unknown): Promise<Done> 
       const shown = skipped.slice(0, SKIPPED_SHOWN).map((p) => quoted(flagText(p)));
       const changed = (r.diff_from_latest?.files ?? []).map((f) => quoted(f.path));
       const notes = r.risk_flags.map((f: RiskFlag) => s.format(s.word('quality.note')[f.kind], { path: flagText(f.path ?? ''), detail: flagText(f.detail) }));
-      const text = s.format(w.preview, {
+      const fields = {
         name,
         version: r.version,
         change: latest === 0 ? w.new_skill : s.format(w.change_from, { latest, files: list(changed) }),
@@ -234,8 +234,10 @@ export async function publishFolder(ctx: Context, args: unknown): Promise<Done> 
         flags: JSON.stringify(flags),
         // The message is part of what the confirm binds: say it, or that there is none, so an assistant adds nothing.
         message_part: message === null ? w.no_message : s.format(w.with_message, { message: JSON.stringify(message) }),
-      });
-      return { text, target: `${name} v${r.version}`, result: log.result('publish', 'preview') };
+      };
+      // The same preview as data, for the CLI's person view and its step-2 command (cli/commands/publish.ts).
+      const view = { kind: 'publish_preview', fields, step2: { folder: real, confirm, name, version: r.version, files: files.length, flags, message } };
+      return { text: s.format(w.preview, fields), target: `${name} v${r.version}`, result: log.result('publish', 'preview'), view };
     }
 
     // Step 2: the folder as it is now and step 2's own values must be what step 1 showed; then the catalog's latest.

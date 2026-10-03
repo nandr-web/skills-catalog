@@ -12,7 +12,8 @@ import { runnerFolders } from './race-fs.ts';
 vi.mock('node:fs', async (o) => (await import('./race-fs.ts')).mockFs(await o()));
 beforeEach(() => runnerFolders());
 import { CONFIG_KEYS } from '../src/machine/lock.ts';
-import { NON_QUESTION_KEYS, QUESTIONS, runSetupCommand, sharedFolderKind, type SetupIo } from '../src/cli/setup.ts';
+import { NON_QUESTION_KEYS, QUESTIONS, runSetupCommand, SETUP_FLAGS, sharedFolderKind, type SetupIo } from '../src/cli/setup.ts';
+import { PROCESS_COMMANDS } from '../src/cli/process.ts';
 import { cliWords } from '../src/cli/words.ts';
 
 const S = cliWords(Words.load());
@@ -69,6 +70,10 @@ describe('the question table', () => {
     const notAsked = ['hosting', 'overrides', 'cooldown', 'accept_flagged_updates', 'safe_frontmatter_keys', 'non_granting_keys', 'context_cost_budget', 'command_instruction_patterns', 'session_start_hook', 'claude_config_dir', 'aws'];
     expect([...NON_QUESTION_KEYS].sort()).toEqual(notAsked.sort());
   });
+});
+
+describe('the CLI\'s list of setup\'s flags', () => {
+  it('is the table\'s', () => expect([...PROCESS_COMMANDS['setup']!.flags].sort()).toEqual([...SETUP_FLAGS].sort()));
 });
 
 describe('no terminal', () => {

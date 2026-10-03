@@ -137,6 +137,9 @@ export const QUESTIONS: readonly Question[] = [
 export const NON_QUESTION_KEYS: readonly string[] = Object.keys(CONFIG_KEYS).filter((k) => !QUESTIONS.some((q) => q.key === k));
 const OWN_FLAGS = { yes: { type: 'boolean' }, config: { type: 'string' }, 'dry-run': { type: 'boolean' }, 'print-mcp-entry': { type: 'boolean' }, help: { type: 'boolean' } } as const;
 
+/** Every flag setup takes (cli/process.ts lists them for the words' check; a test keeps the two equal). */
+export const SETUP_FLAGS: readonly string[] = [...Object.keys(OWN_FLAGS), ...QUESTIONS.flatMap((q) => (q.kind === 'switch' ? [q.flag, `no-${q.flag}`] : [q.flag]))];
+
 /** The usage line and each question's flag, from the table. */
 export function setupHelp(s: Words): string {
   const q = s.setup.questions as { ask: string; default: string; flag: string }[];

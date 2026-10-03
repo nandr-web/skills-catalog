@@ -685,6 +685,14 @@ results:
     review: "Review: {notes}. "
     older_rules: "The latest version, v{version}, was stored before one of today's rules, so this preview compares with nothing: every file shows as added and every grant is flagged. Publishing a new version is how its owner fixes it."
     published: Published {name} v{version} to the shared catalog (fingerprint checked). Teammates can find it now; installed copies pick it up at their next update.
+    preview_person: |
+      Preview: nothing is published yet. {name} would become v{version} in the shared catalog ({change}).
+      Files it would send ({n_send}): {send}
+      Files it skips ({n_skip}): {skip}
+      {review}
+    ask_person: "Publish these files as {name} v{version}? (y/N) "
+    declined_person: Nothing was published.
+    step2_cli: "Nothing was published: this needs the person's yes. Show them these lists; only after they say yes, run exactly: {command}"
     identical: "Nothing to publish: {folder} is identical to {name} v{latest}, the latest version."
   install:
     held: '{name} v{version} was NOT installed yet: it can run things on this machine without asking, because {reasons}. Tell the person each reason in plain words and ask whether to install it. Only if they agree: ${accept} with name "{name}", target "{target}", version {version}, confirm "{confirm}" and flags {flags}, all exactly as given here.'

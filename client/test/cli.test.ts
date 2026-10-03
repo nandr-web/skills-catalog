@@ -26,11 +26,11 @@ describe('the CLI face', () => {
     expect(held).not.toMatch(/accept_held_update/);
   });
 
-  it('serves the catalog\'s and the installer\'s commands, the MCP server and the local page; preview, publish and setup are still to come', async () => {
+  it('serves the catalog\'s and the installer\'s commands, publish, the MCP server, the local page, setup, teardown and sign-in; preview is still to come', async () => {
     const p = place();
     const u = await cli(p, ['frobnicate']);
-    expect(u.err.split('\n').filter((l) => l.startsWith('  ')).map((l) => l.trim().split(' ')[1])).toEqual(['search', 'read', 'versions', 'diff', 'install', 'update', 'list', 'policy', 'update', 'stats', 'mcp', 'serve']);
-    for (const word of ['preview', 'publish', 'setup']) {
+    expect(u.err.split('\n').filter((l) => l.startsWith('  ')).map((l) => l.trim().split(' ')[1])).toEqual(['search', 'read', 'versions', 'diff', 'install', 'update', 'list', 'policy', 'publish', 'update', 'stats', 'mcp', 'serve', 'setup', 'teardown', 'login', 'logout']);
+    for (const word of ['preview']) {
       const r = await cli(p, [word, 'x']);
       expect([r.code, r.err], word).toEqual([1, u.err]);
     }

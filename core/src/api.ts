@@ -371,7 +371,7 @@ export const OPERATIONS: Record<string, OperationDef> = {
     words: 'publish',
     kind: 'machine',
     phase: 1,
-    faces: ['mcp'],
+    faces: ['mcp', 'cli'],
     effect: 'writes_catalog',
     run: 'publishFolder',
     output: 'text',
