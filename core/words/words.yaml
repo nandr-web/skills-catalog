@@ -775,6 +775,9 @@ results:
       missing: is missing
       name: has no name in its front matter
       description: has no description in its front matter
+      body: has no instructions below its front matter (the body is empty)
+      name_not_text: has a name that YAML reads as a number or true/false, not as text
+      missing_several: is missing {fields}
       bad_name: has a name that isn't lowercase letters, digits and single hyphens (64 at most)
       missing_fields: is missing required fields in its front matter
       not_utf8: isn't valid UTF-8 text
@@ -798,10 +801,19 @@ results:
       tag: a custom tag (!something)
       duplicate_key: the same key twice
       multiple_documents: more than one YAML document (a second --- line)
+    invalid_manifest_field_words:
+      name: a name
+      description: a one-line description
+      body: instructions below the front matter
+    list_and: "{items} and {last}"
     invalid_manifest_fix:
       missing: the folder needs a SKILL.md with a name and a description in its front matter; ask the person to add one, or offer to draft it with them.
       name: suggest a name to the person (lowercase words joined by hyphens, like {suggestion}) and add it to the front matter once they agree.
       description: propose a one-line description to the person (what the skill does, and when to use it); add it to the front matter only once they agree.
+      body: propose the skill's instructions to the person (what the assistant should do, step by step) and add them below the front matter only once they agree.
+      name_no_suggestion: suggest a name to the person (lowercase words joined by hyphens) and add it to the front matter once they agree.
+      name_not_text: "propose the name written as text to the person (in quotes, or as lowercase words joined by hyphens); change it only once they agree."
+      missing_several: "propose what's missing to the person ({fields}); add it only once they agree."
       bad_name: suggest {suggestion} to the person and change the front matter once they agree.
       missing_fields: propose the missing fields to the person (a name, and a one-line description of what the skill does and when to use it); add them only once they agree.
       not_utf8: ask the person to save SKILL.md as UTF-8 text; offer to convert it, and do it only once they agree.
@@ -1004,6 +1016,18 @@ results:
       not_found_suggest: "Did you mean: {names}?"
       not_found_next: "Search by words instead: ${search}"
       not_installed: "{name} isn't installed here. See what is: ${status}"
+      rejected: "{file} {problem}. Nothing was published."
+      rejected_file: SKILL.md in {folder}
+      rejected_fix:
+        name: "Fix: add a name to its front matter (lowercase words joined by hyphens, like {suggestion}), then publish again."
+        name_no_suggestion: "Fix: add a name to its front matter (lowercase words joined by hyphens), then publish again."
+        description: "Fix: add a one-line description to its front matter (what the skill does, and when to use it), then publish again."
+        body: "Fix: write the skill's instructions below its front matter, then publish again."
+        missing_several: "Fix: add {fields}, then publish again."
+        name_not_text: "Fix: write the name as text (in quotes, or as lowercase words joined by hyphens), then publish again."
+        bad_name: "Fix: name it {suggestion} in its front matter, then publish again."
+        missing: "Fix: add a SKILL.md with a name and a one-line description in its front matter, then publish again."
+        other: "Fix: correct SKILL.md as described, then publish again."
     accept_look: "To see exactly what changes first:  ${cli} diff {name} --from {from} --to {to}"
     accepted: "Took it: {name} v{from} → v{to}, its files checked against the catalog's."
     accepted_install: "Installed {name} v{to}, its files checked against the catalog's."

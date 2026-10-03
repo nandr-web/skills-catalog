@@ -69,6 +69,7 @@ export type ManifestProblem =
   | 'invalid_yaml'
   | 'front_matter_not_a_mapping'
   | 'missing_fields'
+  | 'name_not_text'
   | 'description_not_text'
   | 'description_too_long'
   | 'control_character'
@@ -161,9 +162,11 @@ export function checkManifest(files: readonly TreeFile[], catalogName?: string):
   else if (/[<>]/.test(description)) descriptionProblem = 'description_angle_brackets';
   if (body.trim() === '') missing.push('body');
   if (missing.length > 0) throw manifestError('missing_fields', missing);
+  // A name YAML reads as a number or true/false (name: 123) is SKILL.md's to fix: quoted, it's text.
+  if (typeof name !== 'string') throw manifestError('name_not_text', ['name']);
   if (descriptionProblem) throw manifestError(descriptionProblem, ['description']);
 
-  checkName(typeof name === 'string' ? name : String(name));
+  checkName(name);
   if (catalogName !== undefined && name !== catalogName) {
     throw new CatalogError('invalid_name', { name: catalogName, why: 'differs_from_front_matter', front_matter_name: String(name) });
   }

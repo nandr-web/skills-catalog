@@ -3,7 +3,7 @@
 // (the CLI) or in the assistant's reply (markdown, handed to it with the MCP result). What needs their decision comes
 // last, set apart (medium.ts's callout), with what answers it: the commands in a terminal, a question in a reply. Every
 // word is the words file's (results.person); only the layout is here. A result with no view here has none.
-import { fenced, reasons, skillMdOf, type DiffResult, type ReadResult, type SearchInput, type SearchResult, type VersionsResult, type Words } from '@skills-catalog/core';
+import { fenced, manifestRefusal, reasons, skillMdOf, type DiffResult, type ReadResult, type SearchInput, type SearchResult, type VersionsResult, type Words } from '@skills-catalog/core';
 import { flagText, oneLine } from '@skills-catalog/core/skill-tree';
 import type { ListView, UpdateView } from '../machine/installer.ts';
 import type { Answer } from '../operations.ts';
@@ -27,7 +27,7 @@ const header = (say: Say, path: string) => (say(path).split('|') as string[]).ma
 /** The person's view of an answer in medium `m`, or undefined when this operation has none there. */
 export function personView(s: Words, m: Medium, op: string, a: Answer, args: Record<string, unknown>): string | undefined {
   const c: Ctx = { s, say: sayer(s), m };
-  if (a.isError) return a.error && m.kind === 'terminal' ? error(c, a) : undefined;
+  if (a.isError) return a.error ? error(c, a) : undefined;
   switch (op) {
     case 'list_installed_skills':
       return list(c, a.view as ListView | undefined);
@@ -187,20 +187,34 @@ function diff({ s, say, m }: Ctx, r: DiffResult): string {
   return out.join('\n');
 }
 
-// Errors (terminal only): the sentence without its code, and a next step the person can type. Those with no words of
-// their own here keep their text, only without the leading code (a person has no use for "not_found:").
-function error({ say, m }: Ctx, a: Answer): string {
+// Errors: the sentence without its code, and what the person can do next: a command to type in a terminal, words in a
+// reply. In a reply only the errors with words of their own here have a view; in a terminal the rest keep their text,
+// only without the leading code (a person has no use for "not_found:").
+function error({ s, say, m }: Ctx, a: Answer): string | undefined {
   const { paint } = m;
   const e = a.error!;
   const d = e.data as Record<string, unknown>;
   const mark = paint('refused', MARK.refused);
-  if (e.code === 'not_found' && typeof d['name'] === 'string' && d['version'] === undefined && d['path'] === undefined) {
+  // The first line marked, the rest under it: indented in a terminal, paragraphs in a reply.
+  const shown = (first: string, ...rest: string[]) => (m.kind === 'terminal' ? [`${mark} ${first}`, ...rest.map((l) => `  ${l}`)].join('\n') : [`${mark} ${first}`, ...rest].join('\n\n'));
+  if (e.code === 'not_found' && typeof d['name'] === 'string' && d['version'] === undefined && d['path'] === undefined && m.kind === 'terminal') {
     const names = (d['suggestions'] as string[] | undefined) ?? [];
     const out = [`${mark} ${say('errors.not_found', { name: oneLine(d['name']) })}`];
     if (names.length) out.push(`  ${say('errors.not_found_suggest', { names: paint('bold', names.join(', ')) })}`);
     out.push(paint('dim', `  ${say('errors.not_found_next')}`));
     return out.join('\n');
   }
+  // A refused SKILL.md: what it lacks, in the same words as the assistant's, and the fix the person can make.
+  const manifest = e.code === 'invalid_manifest' ? d : e.code === 'invalid_name' && d['folder'] !== undefined && d['suggestion'] !== undefined ? { ...d, problem: 'bad_name' } : undefined;
+  if (manifest && typeof manifest['folder'] === 'string') {
+    const r = manifestRefusal(s, manifest);
+    if (r) {
+      const file = say('errors.rejected_file', { folder: m.text(oneLine(manifest['folder'].replace(/\/+$/, '').split('/').at(-1) ?? '')) });
+      const fix = s.word(`person.errors.rejected_fix.${r.fixKey}`) === undefined ? 'other' : r.fixKey;
+      return shown(paint('bold', say('errors.rejected', { file, problem: r.problem })), say(`errors.rejected_fix.${fix}`, r.slots));
+    }
+  }
+  if (m.kind !== 'terminal') return undefined;
   if (e.code === 'not_installed' && typeof d['name'] === 'string') return `${mark} ${say('errors.not_installed', { name: oneLine(d['name']) })}`;
   return `${mark} ${a.text.replace(/^[a-z_]+: /, '')}`;
 }
