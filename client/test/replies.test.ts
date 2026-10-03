@@ -135,7 +135,8 @@ describe('an earlier version, read and installed', () => {
     const a = await perform(ctx, 'install_shared_skill', 'install_shared_skill', { name: 'release-notes-kit', version: 1 });
     expect(a.isError).toBeFalsy();
     expect(a.text).toContain(S.format(S.word('install.older_auto'), { name: 'release-notes-kit', version: 1, latest: 2 }));
-    expect(a.text).toContain(S.format(S.word('install.live'), { name: 'release-notes-kit' }));
+    // The first install made the skills folder: how to load it in this session (review F3).
+    expect(a.text).toContain('/reload-skills');
   });
 
   it('pinned by default: no warning, since it stays', async () => {
@@ -237,7 +238,7 @@ describe('install, as the person reads it', () => {
     const r = await person(p, ['install', 'sql-migration-helper']);
     expect(r.code).toBe(0);
     expect(r.out).toContain("✓ Installed sql-migration-helper v1, its files checked against the catalog's");
-    expect(r.out).toContain('Use it in this session as /sql-migration-helper.');
+    expect(r.out).toContain(S.format(S.word('person.install.live_new_folder'), { name: 'sql-migration-helper' }));
     for (const re of FOR_ASSISTANT) expect(r.out, String(re)).not.toMatch(re);
   });
 
@@ -330,5 +331,18 @@ describe('files that aren\'t instructions', () => {
     expect(held.text).not.toContain('can run things');
     const logo = await perform(ctx, 'install_shared_skill', 'install_shared_skill', { name: 'with-logo' });
     expect(logo.outcome).toBe('installed');
+  });
+});
+
+describe('using a skill just installed, in this session (review F3)', () => {
+  it('a skills folder made by the install: /reload-skills; one already there: use it now', async () => {
+    const p = place();
+    await seed(p);
+    const ctx = ctxFor(p);
+    const first = await perform(ctx, 'install_shared_skill', 'install_shared_skill', { name: 'sql-migration-helper' });
+    expect(first.text).toContain('/reload-skills');
+    const second = await perform(ctx, 'install_shared_skill', 'install_shared_skill', { name: 'demo-skill-01' });
+    expect(second.text).toContain(S.format(S.word('install.live'), { name: 'demo-skill-01' }));
+    expect(second.text).not.toContain('/reload-skills');
   });
 });

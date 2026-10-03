@@ -548,7 +548,7 @@ export type InstallView = {
   name: string;
   version: number;
   held?: { reason: 'flagged' | 'pin' | 'notify' | 'other_catalog'; from?: number; flags: RiskFlag[]; command: string };
-  done?: { path: string; policy_words: string; from?: number; latest: number; older: boolean };
+  done?: { path: string; policy_words: string; from?: number; latest: number; older: boolean; new_folder?: boolean };
 };
 export type UpdateView = { kind: 'update'; checked: number; unchanged: number; dry_run: boolean; items: UpdateItem[] };
 /** The installed skills as data, for a person's view. */
@@ -566,6 +566,8 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   const v = await allVersions(catalog, req.name);
   const version = req.version ?? v.latest;
   const dest = checkTarget(ctx, target, req.name, lock);
+  // A skills folder made by this install isn't watched by a session that started before it (review F3).
+  const newFolder = !existsSync(skillsDir(ctx, target));
   const existing = lock.skills[dest];
   const to = await fetchListed(catalog, req.name, v, version);
   const w = s.word('install');
@@ -629,9 +631,9 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   });
   if (!('written' in done)) return done;
   const { written, entry } = done;
-  const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + keptLine(s, req.name, written.kept) + olderLine(s, entry, config, v.latest) + '\n' + s.format(w.live, { name: req.name });
+  const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + keptLine(s, req.name, written.kept) + olderLine(s, entry, config, v.latest) + '\n' + liveLine(s, ctx, target, req.name, newFolder);
   const policy = policyOf(entry, config);
-  const view: InstallView = { kind: 'install', name: req.name, version, done: { path: dest, policy_words: policyWords(s, policy), latest: v.latest, older: version < v.latest && policy.policy === 'auto' } };
+  const view: InstallView = { kind: 'install', name: req.name, version, done: { path: dest, policy_words: policyWords(s, policy), latest: v.latest, older: version < v.latest && policy.policy === 'auto', new_folder: newFolder } };
   return { text, target: `${req.name} v${version}`, result: log.result('install', 'installed'), outcome: 'installed', view };
 }
 
@@ -753,6 +755,7 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const v = await allVersions(catalog, req.name);
   if (v.latest !== t.latest) throw conflict();
   const dest = checkTarget(ctx, t.target, req.name, lock);
+  const newFolder = !existsSync(skillsDir(ctx, t.target));
   const existing = lock.skills[dest];
   const to = await fetchListed(catalog, req.name, v, t.version);
   if (to.fingerprint !== t.fingerprint) throw conflict();
@@ -772,10 +775,16 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
       : s.format(s.word('install.installed_after_yes'), { name: req.name, version: to.version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) +
         olderLine(s, entry, config, v.latest) +
         '\n' +
-        s.format(s.word('install.live'), { name: req.name })) + keptLine(s, req.name, written.kept);
+        liveLine(s, ctx, t.target, req.name, newFolder)) + keptLine(s, req.name, written.kept);
   const policy = policyOf(entry, config);
-  const view: InstallView = { kind: 'install', name: req.name, version: to.version, done: { path: dest, policy_words: policyWords(s, policy), ...(existing ? { from: existing.version } : {}), latest: t.latest, older: !existing && to.version < t.latest && policy.policy === 'auto' } };
+  const view: InstallView = { kind: 'install', name: req.name, version: to.version, done: { path: dest, policy_words: policyWords(s, policy), ...(existing ? { from: existing.version } : {}), latest: t.latest, older: !existing && to.version < t.latest && policy.policy === 'auto', new_folder: newFolder } };
   return { text, target: `${req.name} v${to.version}`, result: logWords(s).result('accept'), outcome: existing ? 'updated' : 'installed', view };
+}
+
+/** How to use a skill just installed in this session: at once, or, in a skills folder made just now, after /reload-skills
+ *  (Claude Code doesn't watch a folder made after its session started; review F3). */
+function liveLine(s: Words, ctx: Context, target: Target, name: string, newFolder: boolean): string {
+  return newFolder ? s.format(s.word('install.live_new_folder'), { name, folder: quoted(skillsDir(ctx, target)) }) : s.format(s.word('install.live'), { name });
 }
 
 /** An earlier version installed with automatic updates moves to the latest at the next update: said once, with how to
