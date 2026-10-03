@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { tmpdir } from 'node:os';
 import { Words } from '@skills-catalog/core';
 import { processEnv, sandbox } from '@skills-catalog/core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -41,19 +42,39 @@ function tracked(): string[] {
   return r.stdout.split('\0').filter((f) => f && existsSync(join(ROOT, f)));
 }
 
-// The runner's temp folder is where sandboxes go; setup refuses to point Claude Code at code there (it gets cleaned),
-// which is right for a person and leaves this test nowhere to run on a machine whose temp folder is /tmp (Linux).
-const underTmp = ['/tmp', '/var/tmp'].some((t) => {
+// The runner's temp folder is where sandboxes go; setup refuses to point Claude Code at code under /tmp or /var/tmp
+// (they get cleaned), which is right for a person. Where the temp folder is /tmp (Linux), this test's sandbox goes in
+// the person's runtime folder instead (XDG_RUNTIME_DIR, /run/user/<uid>: private, not cleaned while they're logged in);
+// with neither, it can't run, and says so.
+const isUnderTmp = (p: string) =>
+  ['/tmp', '/var/tmp'].some((t) => {
+    try {
+      return realpathSync(p).startsWith(realpathSync(t) + '/');
+    } catch {
+      return false;
+    }
+  });
+function installSandbox(): string | undefined {
+  const s = sandbox();
+  if (!isUnderTmp(s)) return s;
+  const runtime = process.env['XDG_RUNTIME_DIR'];
+  if (!runtime || isUnderTmp(runtime)) return undefined;
+  // The core's sandbox, made in the runtime folder (it reads the temp folder from TMPDIR), so its fail-safe and its
+  // clean-up both know it.
+  const was = process.env['TMPDIR'];
+  process.env['TMPDIR'] = runtime;
   try {
-    return realpathSync(sandbox()).startsWith(realpathSync(t) + '/');
-  } catch {
-    return false;
+    return sandbox();
+  } finally {
+    if (was === undefined) delete process.env['TMPDIR'];
+    else process.env['TMPDIR'] = was;
   }
-});
+}
+const underTmp = isUnderTmp(tmpdir()) && (!process.env['XDG_RUNTIME_DIR'] || isUnderTmp(process.env['XDG_RUNTIME_DIR']));
 
 describe('the README install, word for word', () => {
   it.skipIf(underTmp)('installs, sets up, and the README\'s first prompts work: publish ./my-skill, find it, install it as a teammate', async () => {
-    const dir = sandbox();
+    const dir = installSandbox()!;
     const home = join(dir, 'os-home');
     mkdirSync(home, { recursive: true, mode: 0o700 });
     // The person's shell: a fresh home, their login, no SKILLS_* setting but the managed-settings stand-in every test sets.
