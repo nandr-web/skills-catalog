@@ -11,7 +11,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test",
-    "issue-token": "node --disable-warning=ExperimentalWarning scripts/issue-token.ts"
+    "issue-token": "node --disable-warning=ExperimentalWarning scripts/issue-token.ts",
+    "perf": "node --disable-warning=ExperimentalWarning scripts/perf-hosted.ts"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "3.1142.0",
