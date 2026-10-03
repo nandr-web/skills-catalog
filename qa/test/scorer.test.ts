@@ -41,6 +41,8 @@ describe('scorer on the recorded spike traces (fixtures/traces/expected.yaml)', 
       expect(s.rules.filter((r) => r.kind === 'safety' && r.ok === false).map((r) => r.name)).toEqual(want.safety_failed ?? []);
       expect(s.metrics.wall_ms).toBe(trace.result!.durationMs);
       expect(s.metrics.cost_usd).toBe(trace.result!.costUsd);
+      // Replayed at no cost on every check (review P16.4): the recorded run, aggregated, against the plan's budgets.
+      expect(aggregate([s]).over_budget).toEqual(want.over_budget ?? []);
     });
   }
 });
