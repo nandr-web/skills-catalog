@@ -34,7 +34,7 @@ const median = (ms: number[]) => {
 };
 
 /** The times in ms: `first` (a fresh instance's open and first search), `warm` (one instance's searches). */
-export async function hostedTimes(o: { ddb: DynamoDBClient; s3: S3Client; place: Place; cards: SearchCard[]; terms: string[]; calls: number; colds: number }): Promise<{ first: number[]; warm: number[]; fileBytes: number }> {
+export async function hostedTimes(o: { ddb: DynamoDBClient; s3: S3Client; place: Place; cards: SearchCard[]; terms: string[]; calls: number; colds: number }): Promise<{ first: number[]; warm: number[]; publish: number[]; fileBytes: number }> {
   await createStores(o.ddb, o.s3, o.place);
   await new S3SearchIndex({ s3: o.s3, place: o.place }).rebuild(o.cards);
   const open = () => openHostedCatalog({ ddb: o.ddb, s3: o.s3, place: o.place, clock: { now: () => new Date() }, signIn: { login: async () => undefined }, signInLogins: [] });
@@ -57,19 +57,29 @@ export async function hostedTimes(o: { ddb: DynamoDBClient; s3: S3Client; place:
   } finally {
     catalog.close();
   }
-  return { first, warm, fileBytes: Buffer.byteLength(JSON.stringify({ cards: o.cards })) };
+  // A publish's write to the search file (review F1): a card upserted into the whole file, as indexing at publish does.
+  const publish: number[] = [];
+  const index = new S3SearchIndex({ s3: o.s3, place: o.place });
+  for (let i = 0; i < Math.min(5, o.colds); i++) {
+    const t = performance.now();
+    await index.upsert({ ...o.cards[i % o.cards.length]!, latest_version: 2 });
+    publish.push(performance.now() - t);
+  }
+  return { first, warm, publish, fileBytes: Buffer.byteLength(JSON.stringify({ cards: o.cards })) };
 }
 
-export function report(t: { first: number[]; warm: number[]; fileBytes: number }, cards: number): { lines: string[]; ok: boolean } {
+export function report(t: { first: number[]; warm: number[]; publish: number[]; fileBytes: number }, cards: number): { lines: string[]; ok: boolean } {
   const warm = p95(t.warm), first = Math.max(...t.first);
   return {
     ok: warm <= BUDGET.warm && first <= BUDGET.first,
-    lines: [
+    lines: ([
       `emulator numbers (moto on this machine: a lower bound for AWS, not a measure of it); a search file of ${cards} cards, ${(t.fileBytes / 1e6).toFixed(1)} MB`,
       `${warm <= BUDGET.warm ? 'ok  ' : 'OVER'} search, warm: p95 ${warm.toFixed(1)} ms of ${t.warm.length} (budget ${BUDGET.warm} ms)`,
       `${first <= BUDGET.first ? 'ok  ' : 'OVER'} search, the first after a cold start or idle (a new instance opens, then searches): slowest ${first.toFixed(0)} ms, median ${median(t.first).toFixed(0)} ms of ${t.first.length} (budget ${BUDGET.first} ms)`,
+      `each search downloads and parses the whole search file again (${(t.fileBytes / 1e6).toFixed(1)} MB), a cost this machine's S3 hides; in AWS, a conditional GET on its ETag would skip it`,
+      `${t.publish.length ? `     a publish's own write to the search file (at publish, review F1): median ${median(t.publish).toFixed(0)} ms of ${t.publish.length} (no budget)` : ''}`,
       'not measured here: Lambda\'s own start and the Parameter Store reads (only in AWS: the smoke test\'s timings)',
-    ],
+    ]).filter(Boolean),
   };
 }
 

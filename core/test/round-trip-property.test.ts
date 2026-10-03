@@ -81,3 +81,24 @@ describe('a read shows SKILL.md byte for byte', () => {
     }
   });
 });
+
+// What a read shows inside its fences: only the one final newline goes (the fence line follows), never trailing spaces
+// or blank lines (review P8.1; the C validator found no test failing if trimEnd came back).
+describe('a read\'s fences keep trailing spaces and blank lines', () => {
+  it('in SKILL.md and in a file read with contents', async () => {
+    const { catalog } = await openTest();
+    try {
+      const md = '---\nname: spaced-kit\ndescription: Keeps its whitespace.\n---\nBody   \n\n\n';
+      const notes = 'line with spaces   \n\t\n\n';
+      await catalog.publish(request('spaced-kit', [{ path: 'SKILL.md', mode: '0644', bytes: Buffer.from(md) }, { path: 'notes.md', mode: '0644', bytes: Buffer.from(notes) }]), actAs('ana'));
+      const r = await catalog.read({ name: 'spaced-kit', include: 'contents' });
+      const { renderRead, Words } = await import('../src/index.ts');
+      const text = renderRead(Words.load(), r, { next: () => 'tok' } as never);
+      expect(text).toContain('\nBody   \n\n\n');
+      expect(text).toContain('line with spaces   \n\t\n\n');
+      expect(text).not.toContain('Body   \n\n\n\n');
+    } finally {
+      catalog.close();
+    }
+  });
+});
