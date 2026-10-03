@@ -13,6 +13,7 @@
 // Node has no directory-relative file operations, so another program running as the same person can still race these
 // checks; the installer narrows the window.
 
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { closeSync, constants, existsSync, fchmodSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync, writeSync, type BigIntStats } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CatalogError, inlineFiles, shellQuote, validateInput, type Catalog, type Words, type VersionsResult } from '@skills-catalog/core';
@@ -556,8 +557,18 @@ export type ListView = { kind: 'list'; rows: { name: string; target: Target; ver
 
 type InstallInput = { name: string; version?: number; target?: Target; policy?: Policy };
 
+// The installer only reads the catalog: a SKILLS_CATALOG naming a local place with no catalog in it is refused (the
+// read commands' not_a_catalog), never made there by an install or an update (review V4.3).
+function catalogThere(ctx: Context): void {
+  const url = ctx.settings.catalog;
+  if (!url.startsWith('file:') || url === pathToFileURL(join(ctx.settings.home, 'catalog')).href) return;
+  const dir = fileURLToPath(url);
+  if (!existsSync(join(dir, 'catalog.sqlite'))) throw new CatalogError('invalid_request', { field: 'catalog', why: 'not_a_catalog', path: dir });
+}
+
 export async function install(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<InstallInput>('install_shared_skill', args, ctx.face, 'local');
+  catalogThere(ctx);
   const s = ctx.words;
   const log = logWords(s);
   const target = req.target ?? 'user';
@@ -745,6 +756,7 @@ type AcceptInput = { name: string; target: Target; version: number; confirm: str
 
 export async function accept(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<AcceptInput>('accept_held_update', args, ctx.face, 'local');
+  catalogThere(ctx);
   const s = ctx.words;
   const { lock, config } = readRecords(ctx.settings.home);
   const t = decode(req.confirm);
@@ -806,6 +818,7 @@ type UpdateInput = { names?: string[]; dry_run?: boolean; latest?: boolean };
 
 export async function update(ctx: Context, args: unknown): Promise<Done> {
   const req = validateInput<UpdateInput>('update_installed_skills', args, ctx.face, 'local');
+  catalogThere(ctx);
   const s = ctx.words;
   const w = s.word('update');
   const log = logWords(s);
@@ -997,6 +1010,7 @@ export async function list(ctx: Context): Promise<Done> {
   const s = ctx.words;
   const { lock, config } = readRecords(ctx.settings.home);
   const here = installedHere(ctx, lock);
+  if (here.length) catalogThere(ctx);
   const catalog = here.length ? await ctx.catalog() : undefined;
   const rows = [];
   for (const e of here) {

@@ -366,3 +366,18 @@ describe('publish, as the person reads it in a reply', () => {
     expect(views(done, OP, { folder: dir }).markdown).toContain("✓ **Published release-note-draft v1 to the shared catalog, its files checked.**");
   });
 });
+
+// SKILLS_CATALOG naming a place with no catalog: update says so and names the setting; it makes no catalog there
+// (review V4.3).
+describe('a SKILLS_CATALOG that names a place with no catalog', () => {
+  it('update refuses with the setting named, and creates nothing there', async () => {
+    const p = place();
+    const nowhere = join(p.dir, 'nowhere', 'catalog');
+    const { pathToFileURL } = await import('node:url');
+    const { existsSync } = await import('node:fs');
+    const r = await cli(p, ['update'], { person: true, env: { SKILLS_AS: 'bob', SKILLS_CATALOG: pathToFileURL(nowhere).href } });
+    expect(r.code).toBe(1);
+    expect(r.err).toContain('SKILLS_CATALOG');
+    expect(existsSync(nowhere)).toBe(false);
+  });
+});
