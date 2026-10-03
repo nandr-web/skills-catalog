@@ -681,6 +681,14 @@ results:
     no_message: "; no message (adding one needs a new preview)"
     change_from: "changes from v{latest}: {files}"
     skip_none: none
+    skip_why:
+      git: git's own folder
+      system: a macOS folder file
+      env: environment settings, often secrets
+      key: a key
+      empty: an empty folder, which isn't stored
+    mode_note: "its mode is {from}; the catalog keeps it as {to}"
+    nfc_note: "its name is stored as {path}, the same letters in their composed form"
     skip_more: " and {n} more"
     review: "Review: {notes}. "
     older_rules: "The latest version, v{version}, was stored before one of today's rules, so this preview compares with nothing: every file shows as added and every grant is flagged. Publishing a new version is how its owner fixes it."
