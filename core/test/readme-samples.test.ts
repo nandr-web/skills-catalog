@@ -123,11 +123,15 @@ describe("README.md's copies of what core's commands print", () => {
     expect(mismatch(s.lines, real, true)).toBeUndefined();
   });
 
-  it("each link to a requirement in qa/traceability.yaml lands on that requirement's line", () => {
-    const lines = readFileSync(join(ROOT, 'qa', 'traceability.yaml'), 'utf8').split('\n');
-    const links = [...README.matchAll(/\[([a-z0-9-]+)\]\(qa\/traceability\.yaml#L(\d+)\)/g)];
+  it('each link to a requirement in docs/requirements.md lands on one of its headings', () => {
+    // GitHub's anchor for a heading: lowercased, punctuation dropped (hyphens kept), spaces made hyphens.
+    const slug = (h: string) => h.trim().toLowerCase().replace(/[^\p{L}\p{N} _-]/gu, '').replace(/ /g, '-');
+    const page = readFileSync(join(ROOT, 'docs', 'requirements.md'), 'utf8');
+    const anchors = new Set([...page.matchAll(/^#{1,6} (.+)$/gm)].map((m) => slug(m[1]!)).concat([...page.matchAll(/<a id="([^"]+)"/g)].map((m) => m[1]!)));
+    const links = [...README.matchAll(/\]\(docs\/requirements\.md#([^)]+)\)/g)].map((m) => m[1]!);
     expect(links.length).toBeGreaterThan(10);
-    for (const [, id, n] of links) expect(lines[Number(n) - 1], `${id} at line ${n}`).toBe(`  - id: ${id}`);
+    for (const a of links) expect(anchors.has(a), `docs/requirements.md#${a}`).toBe(true);
+    expect(README, 'requirements are linked by heading, never by a line number').not.toMatch(/\.yaml#L\d/);
   });
 
   it('each phrase a "You should see" line puts in bold is one the product or its scripts really print', () => {
@@ -191,6 +195,22 @@ describe("README.md's copies of what core's commands print", () => {
       const width = Number(/viewBox="0 0 ([\d.]+) /.exec(svg)![1]);
       const smallest = Math.min(...[...svg.matchAll(/font-size: *([\d.]+)px/g)].map((f) => Number(f[1])));
       expect((smallest * 830) / width, `${file}: ${width} px wide, smallest label ${smallest} px`).toBeGreaterThanOrEqual(9);
+    }
+  });
+
+  it("each of the README's pictures uses only the neutral d- prefix for its classes and variables, and has no comments or metadata", () => {
+    const dir = join(ROOT, 'docs', 'pictures');
+    const svgs = [...new Set([...README.matchAll(/docs\/pictures\/([\w-]+\.svg)/g)].map((m) => m[1]!))];
+    expect(svgs.length).toBeGreaterThan(4);
+    for (const f of svgs) {
+      const svg = readFileSync(join(dir, f), 'utf8');
+      const classes = [...svg.matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1]!.split(/\s+/)).filter(Boolean);
+      expect(classes.length, f).toBeGreaterThan(0);
+      for (const c of new Set(classes)) expect(c, `${f}: class ${c}`).toMatch(/^d(-|$)/);
+      const style = [...svg.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]!).join('\n');
+      for (const v of new Set(style.match(/(?<![\w-])--[\w-]+/g) ?? [])) // custom properties, not a class's --modifier expect(v, `${f}: variable ${v}`).toMatch(/^--d-/);
+      for (const sel of new Set(style.match(/\.[a-z][\w-]*/gi) ?? [])) expect(sel, `${f}: selector ${sel}`).toMatch(/^\.d(-|$)/);
+      expect(svg, `${f} has no comments or metadata`).not.toMatch(/<!--|<metadata|generator/i);
     }
   });
 

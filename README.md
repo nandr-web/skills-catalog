@@ -51,22 +51,22 @@ Real sessions: **ana** and **bob** (the PRD's Developer 1 and Developer 2) share
 
 ## Check it against the PRD
 
-Each PRD item, where you see it, and the requirement in [`qa/traceability.yaml`](qa/traceability.yaml) that lists its tests. *Scene* means a scene of `npm run try-it` ([Try it](#try-it)); each scene is tagged with its PRD item.
+Each PRD item, where you see it, and [the requirement](docs/requirements.md) that lists its tests. *Scene* means a scene of `npm run try-it` ([Try it](#try-it)); each scene is tagged with its PRD item.
 
 | PRD | What you see | Where | Checked by |
 |---|---|---|---|
-| **FR-01** Publish | A preview, then v1 in the catalog | screen 1 · scene 1 | [publish](qa/traceability.yaml#L14) |
-| ↳ UC-01: missing a field | Refused, with the fix; nothing stored | scene 2 | [publish-rejects-invalid](qa/traceability.yaml#L46) |
-| **FR-02** Discover | Matches with name, version, description | screen 2 · scene 3 | [discover](qa/traceability.yaml#L83) |
-| ↳ UC-02: nothing matches | "No skill matches", or the closest only as close | screen 4 · scenes 4-5 | [discover-nothing-matches](qa/traceability.yaml#L97) |
-| **FR-03** Retrieve | Read, then installed: v1, by ana | screen 3 · scene 6 | [retrieve](qa/traceability.yaml#L124) |
-| ↳ UC-03: not found | "No skill named …", with names like it | scene 8 | [retrieve-not-found](qa/traceability.yaml#L141) |
-| **FR-04** Version | v2 stored, v1 kept · the history · v1 on request · the change | screens 5-6 · scenes 9, 11-13 | [version-new](qa/traceability.yaml#L161), [version-history-visible](qa/traceability.yaml#L174), [version-latest-default](qa/traceability.yaml#L184) |
-| ↳ UC-04: malformed update | Refused; v1 and v2 untouched | scene 10 | [version-malformed-untouched](qa/traceability.yaml#L195) |
-| **NFR** Consistency | Fetched files equal the published ones, byte for byte; same fingerprint | scene 7 | [consistency](qa/traceability.yaml#L204) |
-| **NFR** Through an assistant | Claude Code calling the catalog | screens 1-5 · `qa/try-claude.sh selftest` | [assistant-mediated](qa/traceability.yaml#L217) |
-| **NFR** Responsiveness | p95 under 100 ms on a 10,000-skill catalog | `npm run perf` | [responsiveness](qa/traceability.yaml#L226) |
-| **Goal 1** End to end | Developer 1 publishes; Developer 2's assistant finds and gets the same skill | screens 1-3 · the reels | [end-to-end](qa/traceability.yaml#L151) |
+| **FR-01** Publish | A preview, then v1 in the catalog | screen 1 · scene 1 | [Publish a skill](docs/requirements.md#publish-a-skill) |
+| ↳ UC-01: missing a field | Refused, with the fix; nothing stored | scene 2 | [Publish a skill](docs/requirements.md#publish-a-skill) |
+| **FR-02** Discover | Matches with name, version, description | screen 2 · scene 3 | [Discover skills](docs/requirements.md#discover-skills-through-an-ai-assistant) |
+| ↳ UC-02: nothing matches | "No skill matches", or the closest only as close | screen 4 · scenes 4-5 | [Discover skills](docs/requirements.md#discover-skills-through-an-ai-assistant) |
+| **FR-03** Retrieve | Read, then installed: v1, by ana | screen 3 · scene 6 | [Retrieve a skill](docs/requirements.md#retrieve-a-skill-through-an-ai-assistant) |
+| ↳ UC-03: not found | "No skill named …", with names like it | scene 8 | [Retrieve a skill](docs/requirements.md#retrieve-a-skill-through-an-ai-assistant) |
+| **FR-04** Version | v2 stored, v1 kept · the history · v1 on request · the change | screens 5-6 · scenes 9, 11-13 | [Version a skill](docs/requirements.md#version-a-skill) |
+| ↳ UC-04: malformed update | Refused; v1 and v2 untouched | scene 10 | [Version a skill](docs/requirements.md#version-a-skill) |
+| **NFR** Consistency | Fetched files equal the published ones, byte for byte; same fingerprint | scene 7 | [Complete and unchanged](docs/requirements.md#a-retrieved-skill-is-complete-and-unchanged) |
+| **NFR** Through an assistant | Claude Code calling the catalog | screens 1-5 · `qa/try-claude.sh selftest` | [Through an assistant](docs/requirements.md#access-is-through-an-ai-assistant) |
+| **NFR** Responsiveness | p95 under 100 ms on a 10,000-skill catalog | `npm run perf` | [Fast enough](docs/requirements.md#fast-enough-to-feel-interactive) |
+| **Goal 1** End to end | Developer 1 publishes; Developer 2's assistant finds and gets the same skill | screens 1-3 · the reels | [End to end](docs/requirements.md#publish-once-reuse-through-an-assistant-end-to-end) |
 | **D1, D2** | Access through the assistant; versions in the MVP | as the NFR and FR-04 above | |
 | **D3** No auth, no de-dup | De-dup isn't built. Sign-in exists only on the opt-in hosted catalog | [why](docs/thinking.md#beyond-the-prd) | |
 
