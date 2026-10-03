@@ -1084,6 +1084,9 @@ results:
     accepted_install: "Installed {name} v{to}, its files checked against the catalog's."
     accept_look_install: "To read it first:  ${cli} read {name} --version {to}"
     usage: "skills-catalog didn't understand that. It takes:"
+    serve:
+      started: "Serving the catalog's API on this machine only (127.0.0.1). The web page isn't built yet (phase 2): the address above answers with how to call the API. Stop: Ctrl-C"
+      root: "Skills Catalog on this machine. This address serves the catalog's API only (POST /api/v1/<operation>, after pairing with the code in the link serve printed); the web page isn't built yet (phase 2). The operations: docs/api.md in the repository."
     bad_input: "{field} {why}. Nothing was done."
     bad_input_usage: "It takes:  {usage}"
     help:

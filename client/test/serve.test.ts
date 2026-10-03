@@ -154,7 +154,7 @@ describe('where it listens', () => {
     } finally {
       expect(await s.stop()).toBe(0);
     }
-    expect(s.out).toEqual([line]);
+    expect(s.out).toEqual([line, S.format(S.word('person.serve.started')) + '\n']);
     expect(s.err).toEqual([]);
   });
 
@@ -183,6 +183,19 @@ describe('the server itself (web/serve.ts)', () => {
     try {
       expect((s.server.address() as { address: string }).address).toBe('127.0.0.1');
       expect([s.server.headersTimeout, s.server.requestTimeout, s.server.maxConnections]).toEqual([10_000, 30_000, 64]);
+    } finally {
+      await s.close();
+    }
+  });
+
+  it('the bare address says what it serves (the API only; the page is phase 2), as plain text (review V6.2)', async () => {
+    const p = place();
+    const s = await serve({ port: 0, publish: false, settings: settingsOf(p), words: S });
+    try {
+      const r = await fetch(`http://127.0.0.1:${s.port}/`);
+      expect(r.status).toBe(200);
+      expect(r.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+      expect(await r.text()).toBe(S.format(S.word('person.serve.root')) + '\n');
     } finally {
       await s.close();
     }
