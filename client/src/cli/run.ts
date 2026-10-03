@@ -121,7 +121,7 @@ export async function runCli(argv: readonly string[], io: Io): Promise<number> {
     // A person reads the result laid out for them, where this command has a view; otherwise its words.
     const shown = io.person ? personView(s, terminal(io.color === true), cmd.op, a, input) : undefined;
     (failed ? io.stderr : io.stdout)((shown === undefined ? a.text : withActing(shown)) + '\n');
-    return failed ? 1 : 0;
+    return failed ? 1 : cmd.needsPersonOn?.includes(a.outcome ?? '') ? 3 : 0;
   } catch (e) {
     if (!(e instanceof Usage)) throw e;
     showUsage();

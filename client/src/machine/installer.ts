@@ -535,6 +535,15 @@ const acceptCommand = (s: Words, name: string, target: Target) => [s.cli, ...['u
 
 /** An update's result as data, for a person's view (person/view.ts). An item's `lines` are the words the text gives it. */
 export type UpdateItem = { kind: 'updated' | 'would_update' | 'held_flagged' | 'held_notify' | 'held_pin' | 'held_other_catalog' | 'refused'; name: string; from: number; to: number; flags: RiskFlag[]; lines: string[] };
+/** What a person reads about one install or one yes taken (a held install in its box, or what was installed and
+ *  where), the CLI's and the reply's view (review V4.1, V3.2). */
+export type InstallView = {
+  kind: 'install';
+  name: string;
+  version: number;
+  held?: { reason: 'flagged' | 'pin' | 'notify' | 'other_catalog'; from?: number; flags: RiskFlag[]; command: string };
+  done?: { path: string; policy_words: string; from?: number; latest: number; older: boolean };
+};
 export type UpdateView = { kind: 'update'; checked: number; unchanged: number; dry_run: boolean; items: UpdateItem[] };
 /** The installed skills as data, for a person's view. */
 export type ListView = { kind: 'list'; rows: { name: string; target: Target; version: number; latest: number; policy: Policy; policy_words: string; state: 'same' | 'behind' }[] };
@@ -575,14 +584,16 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
       recordHold(ctx, req.name, version, reason, flags, version - entry.version);
       const also = flags.length ? s.format(s.word('update.held_also'), { reasons: reasons(s, flags) }) : '';
       const text = s.format(w[ctx.face === 'cli' ? `held_${reason}_cli` : `held_${reason}`], { ...held, from: entry.version, also, was: entry.catalog, now: ctx.settings.catalog });
-      return { text, target: `${req.name} v${version}`, result: log.result('install', `held_${reason}`), outcome: 'held' };
+      const view: InstallView = { kind: 'install', name: req.name, version, held: { reason, from: entry.version, flags: [...flags], command: held.command } };
+      return { text, target: `${req.name} v${version}`, result: log.result('install', `held_${reason}`), outcome: 'held', view };
     }
     if (flags.length) {
       recordHold(ctx, req.name, version, 'flagged', flags, entry ? version - entry.version : 0);
       // Over an installed copy the sentence names the version installed now.
       const over = entry ? { word: 'held_over', from: entry.version } : { word: 'held' };
       const text = s.format(w[ctx.face === 'cli' ? `${over.word}_cli` : over.word], { ...held, ...over, reasons: reasons(s, flags) });
-      return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held' };
+      const view: InstallView = { kind: 'install', name: req.name, version, held: { reason: 'flagged', ...(entry ? { from: entry.version } : {}), flags: [...flags], command: held.command } };
+      return { text, target: `${req.name} v${version}`, result: log.result('install', 'held'), outcome: 'held', view };
     }
     return undefined;
   };
@@ -611,7 +622,9 @@ export async function install(ctx: Context, args: unknown): Promise<Done> {
   if (!('written' in done)) return done;
   const { written, entry } = done;
   const text = s.format(w.done, { name: req.name, version, path: quoted(dest), policy: policyWords(s, policyOf(entry, config)) }) + keptLine(s, req.name, written.kept) + olderLine(s, entry, config, v.latest) + '\n' + s.format(w.live, { name: req.name });
-  return { text, target: `${req.name} v${version}`, result: log.result('install', 'installed'), outcome: 'installed' };
+  const policy = policyOf(entry, config);
+  const view: InstallView = { kind: 'install', name: req.name, version, done: { path: dest, policy_words: policyWords(s, policy), latest: v.latest, older: version < v.latest && policy.policy === 'auto' } };
+  return { text, target: `${req.name} v${version}`, result: log.result('install', 'installed'), outcome: 'installed', view };
 }
 
 /** An update's line for a skill whose folder failed a check: the reason worded per code, else shown as its data. */
@@ -752,7 +765,9 @@ export async function accept(ctx: Context, args: unknown): Promise<Done> {
         olderLine(s, entry, config, v.latest) +
         '\n' +
         s.format(s.word('install.live'), { name: req.name })) + keptLine(s, req.name, written.kept);
-  return { text, target: `${req.name} v${to.version}`, result: logWords(s).result('accept'), outcome: existing ? 'updated' : 'installed' };
+  const policy = policyOf(entry, config);
+  const view: InstallView = { kind: 'install', name: req.name, version: to.version, done: { path: dest, policy_words: policyWords(s, policy), ...(existing ? { from: existing.version } : {}), latest: t.latest, older: !existing && to.version < t.latest && policy.policy === 'auto' } };
+  return { text, target: `${req.name} v${to.version}`, result: logWords(s).result('accept'), outcome: existing ? 'updated' : 'installed', view };
 }
 
 /** An earlier version installed with automatic updates moves to the latest at the next update: said once, with how to

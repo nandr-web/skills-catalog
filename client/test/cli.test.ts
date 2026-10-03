@@ -82,7 +82,7 @@ describe('the CLI face', () => {
     expect(plain.code).toBe(0);
     expect(readFileSync(join(skills(p), 'sql-migration-helper', 'SKILL.md'), 'utf8')).toBe(skillMd('sql-migration-helper', 'Write and review SQL schema migrations.'));
     const held = await cli(p, ['install', 'release-notes-kit']);
-    expect(held.code).toBe(0);
+    expect(held.code).toBe(3); // held: it waits for the person (review V4.1)
     expect(held.out).toContain('skills-catalog update release-notes-kit --accept');
     expect(existsSync(join(skills(p), 'release-notes-kit'))).toBe(false);
   });
@@ -125,7 +125,7 @@ describe('the CLI face', () => {
     const p = place();
     await seed(p);
     const held = await cli(p, ['install', 'release-notes-kit', '--target', 'project']);
-    expect(held.code).toBe(0);
+    expect(held.code).toBe(3); // held: it waits for the person (review V4.1)
     expect(held.out).toContain('skills-catalog update release-notes-kit --accept --target project');
     const dest = join(p.dir, 'project', '.claude', 'skills', 'release-notes-kit');
     const yes = await cli(p, ['update', 'release-notes-kit', '--accept', '--target', 'project'], { tty: true, answers: ['y'] });

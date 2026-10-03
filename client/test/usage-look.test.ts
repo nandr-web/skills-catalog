@@ -58,7 +58,7 @@ describe('looks and answers', () => {
     await seed(p);
     const dest = join(p.osHome, '.claude', 'skills', 'release-notes-kit');
     const held = await cli(p, ['install', 'release-notes-kit']);
-    expect(held.code).toBe(0);
+    expect(held.code).toBe(3); // held: it waits for the person (review V4.1)
     expect(existsSync(dest)).toBe(false);
     const no = await cli(p, ['update', 'release-notes-kit', '--accept'], { tty: true, answers: ['n'] });
     expect(no.code).toBe(0);

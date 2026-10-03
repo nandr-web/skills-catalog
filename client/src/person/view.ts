@@ -5,7 +5,7 @@
 // word is the words file's (results.person); only the layout is here. A result with no view here has none.
 import { fenced, manifestRefusal, reasons, skillMdOf, type DiffResult, type ReadResult, type SearchInput, type SearchResult, type VersionsResult, type Words } from '@skills-catalog/core';
 import { flagText, oneLine } from '@skills-catalog/core/skill-tree';
-import type { ListView, UpdateView } from '../machine/installer.ts';
+import type { InstallView, ListView, UpdateView } from '../machine/installer.ts';
 import type { Answer } from '../operations.ts';
 import type { Medium } from './medium.ts';
 import { MARK } from './terminal.ts';
@@ -41,6 +41,9 @@ export function personView(s: Words, m: Medium, op: string, a: Answer, args: Rec
       return versions(c, a.data as VersionsResult);
     case 'diff_shared_skill_versions':
       return diff(c, a.data as DiffResult);
+    case 'install_shared_skill':
+    case 'accept_held_update':
+      return install(c, a.view as InstallView | undefined);
     default:
       return undefined;
   }
@@ -106,6 +109,31 @@ function update({ s, say, m }: Ctx, v: UpdateView | undefined): string | undefin
     while (block.at(-1) === '') block.pop();
     out.push('', ...m.callout(block));
   }
+  return out.join('\n');
+}
+
+function install({ s, say, m }: Ctx, v: InstallView | undefined): string | undefined {
+  if (!v) return undefined;
+  const { paint } = m;
+  const at = { name: v.name, version: v.version, from: v.held?.from ?? v.done?.from, to: v.version };
+  if (v.held) {
+    const over = v.held.from !== undefined;
+    const why = v.held.reason === 'flagged' ? [] : [say(`update.why.held_${v.held.reason}`, at)];
+    for (const f of v.held.flags) {
+      const w = f.kind === 'capability_frontmatter' ? personReason(s, say, f) : reasons(s, [f]);
+      if (!why.includes(w)) why.push(w);
+    }
+    if (!why.length) why.push(say('update.why.held_flagged', at));
+    const bullet = m.kind === 'terminal' ? '  • ' : '- ';
+    const block = [paint('attention', paint('bold', `${MARK.attention} ${say(over ? 'install.held_title_over' : 'install.held_title', at)}`)), '', ...why.map((w) => bullet + w), ''];
+    if (m.commands) block.push(`  ${say('install.see', at)}`, `  ${say('install.take', { command: v.held.command })}`, paint('dim', `  ${say(over ? 'install.stays_over' : 'install.stays', at)}`));
+    else block.push(say(over ? 'install.stays_reply_over' : 'install.stays_reply', at), say('update.look_reply', at));
+    return m.callout(block).join('\n');
+  }
+  const d = v.done!;
+  const out = [`${paint('ok', MARK.ok)} ${paint('bold', say(d.from !== undefined ? 'install.done_over' : 'install.done', at))}`, paint('dim', say('install.where', { path: m.text(d.path), policy: d.policy_words }))];
+  if (d.older) out.push(paint('newer', `${MARK.newer} ${say(m.commands ? 'install.older' : 'install.older_reply', { name: v.name, latest: d.latest })}`));
+  if (d.from === undefined) out.push('', say('install.live', at));
   return out.join('\n');
 }
 

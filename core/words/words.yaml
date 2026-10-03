@@ -1006,6 +1006,21 @@ results:
         removed: it no longer lets the skill use {from} without asking
       publisher: "publisher: {from} → {to}"
       same: "{name} v{from} and v{to} have the same content."
+    install:
+      held_title: "Waiting for your OK: {name} v{version}, not installed"
+      held_title_over: "Waiting for your OK: {name} v{from} → v{version}, not installed"
+      see: "See it first:  ${cli} read {name} --version {version}"
+      take: "Take it:       {command}"
+      stays: Nothing is installed until then.
+      stays_over: Until then it stays on v{from}.
+      stays_reply: Nothing is installed until you say yes.
+      stays_reply_over: It stays on v{from} until you say yes.
+      done: "Installed {name} v{version}, its files checked against the catalog's"
+      done_over: "Updated {name} v{from} → v{version}, its files checked against the catalog's"
+      where: "In {path}. Updates: {policy}."
+      older: "An earlier version (the latest is v{latest}): the next update moves it to v{latest}. To keep it: ${cli} policy pin {name}"
+      older_reply: "An earlier version (the latest is v{latest}): the next update moves it to v{latest} unless you pin it."
+      live: Use it in this session as /{name}.
     update:
       checked:
         one: "Checked 1 installed skill against the shared catalog"

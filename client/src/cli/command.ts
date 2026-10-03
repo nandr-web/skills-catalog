@@ -45,6 +45,8 @@ export type Command = {
   /** Outcomes that aren't errors on every face but are a failure here (exit 1, on stderr): a read that found none of its
    *  names (contract §1). */
   failsOn?: readonly string[];
+  /** Outcomes that wait for the person (exit 3, on stdout): an install held for their yes (review V4.1). */
+  needsPersonOn?: readonly string[];
   /** The operation's input from the words after the command and its flags; Usage when they don't make one. */
   input(words: readonly string[], values: Values): Record<string, unknown>;
   /** A step of its own (update --accept asks the person) instead of the operation; undefined runs the operation. */

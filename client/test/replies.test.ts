@@ -215,3 +215,39 @@ describe('the diff view, as the person reads it', () => {
     expect(v.terminal).toContain('diff tool-user --from 1 --to 2');
   });
 });
+
+// install has a person view: a held install in the same box as an update, with what to type, and exit 3 (it waits for
+// the person, it didn't fail); a done install says what and where (review V4.1, V3.2).
+describe('install, as the person reads it', () => {
+  it('held in a terminal: the box, the reason, see it and take it, exit 3', async () => {
+    const p = place();
+    await seed(p);
+    const r = await person(p, ['install', 'release-notes-kit']);
+    expect(r.code).toBe(3);
+    expect(r.out).toContain('▲ Waiting for your OK: release-notes-kit v2, not installed');
+    expect(r.out).toContain('scripts/collect.sh');
+    expect(r.out).toContain('read release-notes-kit --version 2');
+    expect(r.out).toContain('update release-notes-kit --accept');
+    for (const re of FOR_ASSISTANT) expect(r.out, String(re)).not.toMatch(re);
+  });
+
+  it('done in a terminal: ✓ what, where, and how to use it', async () => {
+    const p = place();
+    await seed(p);
+    const r = await person(p, ['install', 'sql-migration-helper']);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("✓ Installed sql-migration-helper v1, its files checked against the catalog's");
+    expect(r.out).toContain('Use it in this session as /sql-migration-helper.');
+    for (const re of FOR_ASSISTANT) expect(r.out, String(re)).not.toMatch(re);
+  });
+
+  it('held in a reply: the box asks nothing itself (the assistant asks its one question)', async () => {
+    const p = place();
+    await seed(p);
+    const a = await perform(ctxFor(p), 'install_shared_skill', 'install_shared_skill', { name: 'release-notes-kit' });
+    const shown = views(a, 'install_shared_skill').markdown!;
+    expect(shown).toContain('Waiting for your OK: release-notes-kit v2, not installed');
+    expect(shown).toContain('Nothing is installed until you say yes.');
+    expect(shown).not.toContain('?');
+  });
+});
