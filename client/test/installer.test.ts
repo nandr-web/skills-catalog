@@ -950,7 +950,7 @@ describe('update (contract §3 update_installed_skills, §5.3)', () => {
     for (const name of ['a-skill', 'b-skill']) await install(ctx, { name });
     await publish(p, 'b-skill', plain('b-skill', 'Second.\n'));
     const r = await list(ctx, {});
-    const line = (name: string, state: string) => S.format(S.word('status.line'), { name, version: 1, state, policy: AUTO_DEFAULT });
+    const line = (name: string, state: string) => S.format(S.word('status.line'), { name, version: 1, state, where: '', policy: AUTO_DEFAULT });
     expect(r.text).toBe(
       [
         S.format(S.word('status.header'), { n: 2 }),

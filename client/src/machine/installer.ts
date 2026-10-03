@@ -992,7 +992,7 @@ export async function list(ctx: Context): Promise<Done> {
   if (!w || typeof w.header !== 'string') text = asData('list_installed_skills', rows.map((r) => ({ ...r, policy: r.policy.policy })));
   else if (!rows.length) text = s.format(w.empty);
   else {
-    const lines = rows.map((r) => s.format(w.line, { name: r.name, version: r.version, state: s.format(w.state[r.state], { latest: r.latest }), policy: policyWords(s, r.policy) }));
+    const lines = rows.map((r) => s.format(w.line, { name: r.name, version: r.version, state: s.format(w.state[r.state], { latest: r.latest }), where: r.target === 'project' ? w.where_project : '', policy: policyWords(s, r.policy) }));
     if (rows.some((r) => r.state === 'behind')) lines.push(s.format(w.next_behind));
     text = [s.format(w.header, { n: rows.length }), ...lines].join('\n');
   }

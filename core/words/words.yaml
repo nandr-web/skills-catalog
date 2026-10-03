@@ -429,7 +429,8 @@ results:
     skill: " (set for this skill)"
   status:
     header: "Installed from the shared catalog: {n} skill(s)."
-    line: "- {name} v{version}{state}; updates: {policy}"
+    line: "- {name} v{version}{state}{where}; updates: {policy}"
+    where_project: " (in this project only)"
     state:
       same: " (the latest)"
       behind: " (v{latest} is available)"
