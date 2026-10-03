@@ -355,7 +355,7 @@ describe('the stand-in assistant', () => {
     expect(plain(panes.bob!)).toContain(`● ${surface.names.get}  release-note-draft\n  │ release-note-draft v1 (latest), published by ana`);
     expect(plain(panes.bob!)).toContain('  │ name: release-note-draft\n');
     expect(plain(panes.bob!)).toContain('  │ List the merged pull requests since the last tag, group them by area, and fill template.md.\n');
-    expect(plain(panes.bob!)).toContain('not_found: no skill named "relase-note-draft" in the shared catalog. Names spelled like it: release-note-draft.');
+    expect(plain(panes.bob!)).toContain('not_found: no skill named "relase-note-draft" in the shared catalog. Names like it: release-note-draft.');
     const log = readFileSync(join(root, 'demo', 'activity.log'), 'utf8').trimEnd().split('\n').slice(-2);
     expect(log.map((l) => l.slice(8))).toEqual([row('bob', 'read_shared_skill', 'read', 'release-note-draft v1'), row('bob', 'read_shared_skill', 'not found', '-')].map((l) => l.slice(8)));
   });

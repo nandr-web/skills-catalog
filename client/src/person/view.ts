@@ -197,12 +197,23 @@ function error({ s, say, m }: Ctx, a: Answer): string | undefined {
   const mark = paint('refused', MARK.refused);
   // The first line marked, the rest under it: indented in a terminal, paragraphs in a reply.
   const shown = (first: string, ...rest: string[]) => (m.kind === 'terminal' ? [`${mark} ${first}`, ...rest.map((l) => `  ${l}`)].join('\n') : [`${mark} ${first}`, ...rest].join('\n\n'));
-  if (e.code === 'not_found' && typeof d['name'] === 'string' && d['version'] === undefined && d['path'] === undefined && m.kind === 'terminal') {
-    const names = (d['suggestions'] as string[] | undefined) ?? [];
-    const out = [`${mark} ${say('errors.not_found', { name: oneLine(d['name']) })}`];
-    if (names.length) out.push(`  ${say('errors.not_found_suggest', { names: paint('bold', names.join(', ')) })}`);
-    out.push(paint('dim', `  ${say('errors.not_found_next')}`));
-    return out.join('\n');
+  const next = (line: string) => (m.commands ? [paint('dim', line)] : []);
+  if (e.code === 'not_found' && typeof d['name'] === 'string') {
+    const name = m.text(oneLine(d['name']));
+    // A file or a version the skill doesn't have: the skill is there.
+    if (d['path'] !== undefined && d['version'] !== undefined) return shown(say('errors.not_found_path', { name, version: d['version'], path: m.text(flagText(String(d['path']))) }), ...next(say('errors.not_found_path_next', { name })));
+    if (d['version'] !== undefined && d['latest'] !== undefined) return shown(say('errors.not_found_version', { name, version: d['version'], latest: d['latest'] }), ...next(say('errors.not_found_version_next', { name })));
+    if (d['version'] === undefined && d['path'] === undefined) {
+      const names = ((d['suggestions'] as string[] | undefined) ?? []).map((n) => paint('bold', m.text(n))).join(', ');
+      const suggest = names ? [say(m.commands ? 'errors.not_found_suggest' : 'errors.not_found_suggest_reply', { names })] : [];
+      return shown(say('errors.not_found', { name }), ...suggest, ...next(say('errors.not_found_next')));
+    }
+  }
+  // A name looked up that isn't a skill name ("Release Notes Kit"): the names it likely means.
+  if (e.code === 'invalid_name' && Array.isArray(d['suggestions']) && typeof d['name'] === 'string') {
+    const names = (d['suggestions'] as string[]).map((n) => paint('bold', m.text(n))).join(', ');
+    const suggest = names ? [say(m.commands ? 'errors.not_found_suggest' : 'errors.not_found_suggest_reply', { names })] : [];
+    return shown(say('errors.invalid_name', { name: m.text(oneLine(d['name'])) }), ...suggest, ...next(say('errors.not_found_next')));
   }
   // A refused SKILL.md: what it lacks, in the same words as the assistant's, and the fix the person can make.
   const manifest = e.code === 'invalid_manifest' ? d : e.code === 'invalid_name' && d['folder'] !== undefined && d['suggestion'] !== undefined ? { ...d, problem: 'bad_name' } : undefined;
@@ -216,7 +227,9 @@ function error({ s, say, m }: Ctx, a: Answer): string | undefined {
   }
   if (m.kind !== 'terminal') return undefined;
   if (e.code === 'not_installed' && typeof d['name'] === 'string') return `${mark} ${say('errors.not_installed', { name: oneLine(d['name']) })}`;
-  return `${mark} ${a.text.replace(/^[a-z_]+: /, '')}`;
+  // The rest keep their text, without the leading code and without the "acting as" line the CLI adds once itself.
+  const acting = new RegExp(`\\n?${s.word('acting_as').replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace('{developer}', '[^\\n]*')}$`);
+  return `${mark} ${a.text.replace(acting, '').replace(/^[a-z_]+: /, '')}`;
 }
 
 /** The first line before the usage, for a person who typed something the CLI doesn't take. */

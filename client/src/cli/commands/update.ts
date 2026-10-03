@@ -12,6 +12,8 @@ import type { Settings } from '../../settings.ts';
 import { recordUsage } from '../../usage/record.ts';
 import { fromSchemaFlags, schemaFlags, Usage, type Command, type Env } from '../command.ts';
 import { MARK, barred, painter } from '../../person/terminal.ts';
+import { terminal } from '../../person/medium.ts';
+import { personView } from '../../person/view.ts';
 
 const own = schemaFlags('update_installed_skills', ['names']);
 const TARGETS: readonly unknown[] = ['user', 'project'];
@@ -51,7 +53,10 @@ async function acceptHeld({ ctx, s, io, words, values, withActing }: Env): Promi
   const used = (result: string) => recordUsage(ctx.settings.home, { event: 'use', op: 'accept_held_update', result }, ctx.now());
   const fail = (e: unknown) => {
     const err = toCatalogError(e, ctx.settings.home, ctx.now());
-    io.stderr(withActing(renderError(s, err)) + '\n');
+    // A person reads the error laid out for them, as on every other command.
+    const text = renderError(s, err);
+    const shown = io.person ? personView(s, terminal(io.color === true), 'accept_held_update', { text, isError: true, outcome: err.code, error: err }, {}) : undefined;
+    io.stderr(withActing(shown ?? text) + '\n');
     used(err.code);
     return 1;
   };

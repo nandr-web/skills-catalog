@@ -243,6 +243,9 @@ export function renderError(s: Words, e: CatalogError): string {
     case 'not_found': {
       // A token (revoke_token) is named by its id only, never whose it is.
       if (d['id'] !== undefined) return fill(w.not_found_token, d);
+      // A file or a version the skill doesn't have: the skill is there, so its own sentence, never "no skill named".
+      if (d['path'] !== undefined && d['version'] !== undefined) return fill(w.not_found_path, { ...d, path: quoted(String(d['path'])) });
+      if (d['version'] !== undefined && d['latest'] !== undefined) return fill(w.not_found_version, d);
       const names = (d['suggestions'] as string[] | undefined) ?? [];
       const suggest = names.length ? s.format(w.not_found_suggest, { names: list(names) }) : '';
       const name = d['version'] !== undefined ? `${d['name']} v${d['version']}` : String(d['name'] ?? d['fingerprint']);
@@ -261,6 +264,11 @@ export function renderError(s: Words, e: CatalogError): string {
       // A bad name in the front matter of a folder being published reads as a manifest problem, with a suggestion.
       if (d['folder'] !== undefined && d['suggestion'] !== undefined) {
         return fill(w.invalid_manifest, { folder: d['folder'], problem: w.invalid_manifest_problem.bad_name, fix: fill(w.invalid_manifest_fix.bad_name, { suggestion: d['suggestion'] }) });
+      }
+      // A name looked up (read, install, versions, diff) comes with the names it likely means: nothing was published.
+      if (Array.isArray(d['suggestions'])) {
+        const names = d['suggestions'] as string[];
+        return fill(w.invalid_name_lookup, { ...d, suggest: names.length ? s.format(w.not_found_suggest, { names: list(names) }) : '' });
       }
       return fill(w.invalid_name, d);
     }

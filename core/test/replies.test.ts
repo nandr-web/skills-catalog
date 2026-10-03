@@ -4,9 +4,10 @@
 import { describe, expect, it } from 'vitest';
 import { CatalogError } from '../src/errors.ts';
 import { renderError } from '../src/render.ts';
+import { actAs } from '../src/local/index.ts';
 import { checkManifest } from '../src/skill-tree/index.ts';
 import { Words } from '../src/words-file.ts';
-import { errorOf } from './helpers.ts';
+import { errorOf, openTest, request } from './helpers.ts';
 
 const s = Words.load();
 const w = s.word('errors');
@@ -80,5 +81,53 @@ describe('a SKILL.md refused for what it lacks', () => {
     const text = renderError(s, new CatalogError('invalid_manifest', { folder: FOLDER, problem: 'missing_fields', fields: ['shape'] }));
     expect(text).not.toMatch(RAW);
     expect(text).toContain(w.invalid_manifest_problem.missing_fields);
+  });
+});
+
+const skillFiles = (name: string, body: string) => [{ path: 'SKILL.md', mode: '0644' as const, bytes: Buffer.from(`---\nname: ${name}\ndescription: Drafts release notes.\n---\n${body}`) }];
+async function twoVersions() {
+  const { catalog } = await openTest();
+  await catalog.publish(request('release-note-draft', skillFiles('release-note-draft', 'First.\n')), actAs('ana'));
+  await catalog.publish(request('release-note-draft', skillFiles('release-note-draft', 'Second.\n')), actAs('ana'));
+  await catalog.publish(request('sql-migration-review', skillFiles('sql-migration-review', 'SQL.\n')), actAs('ana'));
+  return catalog;
+}
+
+describe('a miss names what is missing, not the skill', () => {
+  it('a version the skill doesn\'t have says the skill is there and names its latest', async () => {
+    const catalog = await twoVersions();
+    for (const e of [await errorOf(() => catalog.read({ name: 'release-note-draft', version: 9 })), await errorOf(() => catalog.diff({ name: 'release-note-draft', from: 1, to: 7 }))]) {
+      const text = renderError(s, e);
+      expect(text).toContain(s.format(w.not_found_version, { name: 'release-note-draft', version: e.data['version'], latest: 2 }).split(' Nothing')[0]);
+      expect(text).not.toMatch(/no skill named|isn't in the catalog/);
+    }
+  });
+
+  it('a file the version doesn\'t have says that file, not the skill', async () => {
+    const catalog = await twoVersions();
+    const text = renderError(s, await errorOf(() => catalog.read({ name: 'release-note-draft', paths: ['nope.md'] })));
+    expect(text).toContain(s.format(w.not_found_path, { name: 'release-note-draft', version: 2, path: '"nope.md"' }));
+    expect(text).not.toMatch(/no skill named/);
+  });
+
+  it('a name typed as words, on a read or an install, is a lookup: nothing was published, and the name it likely means', async () => {
+    const catalog = await twoVersions();
+    for (const e of [await errorOf(() => catalog.read({ name: 'Release Note Draft' })), await errorOf(() => catalog.versions({ name: 'Release_Note_Draft' }))]) {
+      expect(e.code).toBe('invalid_name');
+      expect(e.data['suggestions']).toEqual(['release-note-draft']);
+      const text = renderError(s, e);
+      expect(text).not.toMatch(/published|Propose a valid name/);
+      expect(text).toContain(s.format(w.not_found_suggest, { names: 'release-note-draft' }));
+    }
+  });
+
+  it('a name that is part of one, or its words in another order, is suggested too', async () => {
+    const catalog = await twoVersions();
+    for (const typed of ['release-note', 'draft-release-note', 'relase-note-draft']) {
+      const e = await errorOf(() => catalog.read({ name: typed }));
+      expect([typed, e.code, e.data['suggestions']]).toEqual([typed, 'not_found', ['release-note-draft']]);
+    }
+    // Only names that share the typed words as whole words: no search-like closest name.
+    expect((await errorOf(() => catalog.read({ name: 'notes' }))).data['suggestions']).toEqual([]);
   });
 });

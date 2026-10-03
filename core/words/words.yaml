@@ -702,12 +702,15 @@ results:
     live: "You can use it in this session as /{name}. If the Skill tool says it is unknown, wait a moment and try once more: the assistant notices new skills shortly after they are installed."
   errors:
     not_found: 'not_found: no skill named "{name}" in the shared catalog.{suggest} Nothing was changed.'
-    not_found_suggest: " Names spelled like it: {names}."
+    not_found_suggest: " Names like it: {names}."
     not_found_next: "Next: ${search} with words from the task, or tell the user it isn't in the catalog."
     not_found_next_cli: "Next: search the catalog with a few words from the task, or tell the user it isn't in the catalog."
     invalid_confirm: "invalid_request: that confirm value isn't one a preview gives (it may have been cut or changed in copying), so nothing was published. Preview again (${publish} with just the folder), show the person the lists, and use the new values once they say yes."
     not_installed: "not_installed: {name} isn't installed on this machine, so nothing was changed. To see what is: ${status}; to add it: ${install}."
     not_found_path: "not_found: {name} v{version} has no file {path}. Nothing was changed; its files are listed in a read with include files."
+    not_found_path_cli: "not_found: {name} v{version} has no file {path}. Nothing was changed; its files are listed by ${cli} read {name} --files."
+    not_found_version: "not_found: {name} has no v{version}; the latest is v{latest}. Nothing was changed. Next: read it without a version, or ${versions} to see every version."
+    not_found_version_cli: "not_found: {name} has no v{version}; the latest is v{latest}. Nothing was changed. To see every version: ${cli} versions {name}"
     not_found_token: "not_found: no token of the signed-in person has the id {id}, so nothing was revoked. list_tokens shows the ids of their tokens."
     invalid_manifest: "invalid_manifest: {folder}/SKILL.md {problem}. Nothing was published. Fix: {fix} Then preview again."
     why:
@@ -856,6 +859,8 @@ results:
     accept_flags_conflict: "conflict: the flags given for {name} aren't the ones it is held for ({flags}), so nothing was installed. Show the person these reasons again, and only if they agree call ${accept} again with exactly these flags."
     not_owner: "not_owner: {name} belongs to {owners}; only they publish new versions of it, so nothing was published. Tell the person: they can ask {owners} to publish the change, or publish it as a new skill under another name (propose one; use it only once they agree)."
     invalid_name: "invalid_name: the name \"{name}\" {why}, so it can't be a skill name. Names are lowercase letters, digits and single hyphens, at most 64 characters. Nothing was published. Propose a valid name to the person and use it only once they agree."
+    invalid_name_lookup: "invalid_name: \"{name}\" {why}, so no skill has that name.{suggest} Nothing was changed. Next: ${search} with words from the task, or use one of the names above."
+    invalid_name_lookup_cli: "invalid_name: \"{name}\" {why}, so no skill has that name.{suggest} Nothing was changed. Next: search the catalog with a few words from the task."
     invalid_path_not_regular: "invalid_path: {path} isn't a plain file (a link, a file with more than one hard link, or a special file), so it wasn't read and nothing was published. Tell the person which file it is and propose replacing it with a plain copy of the file it points to (cp makes a new one); change it only once they agree."
     invalid_path: "invalid_path: {path} {why}, so nothing was published. Tell the person which file or folder it is and propose moving or removing it; change it only once they agree."
     too_large: "too_large: {limit} is {value}, over the limit of {max}, so nothing was published. Tell the person; they decide what to leave out (for example large examples or generated files)."
@@ -1014,6 +1019,12 @@ results:
     errors:
       not_found: 'No skill named "{name}" in the shared catalog.'
       not_found_suggest: "Did you mean: {names}?"
+      not_found_suggest_reply: "Names like it: {names}."
+      not_found_version: "{name} has no v{version}; the latest is v{latest}."
+      not_found_version_next: "See its versions: ${cli} versions {name}"
+      not_found_path: "{name} v{version} has no file {path}."
+      not_found_path_next: "See its files: ${cli} read {name} --files"
+      invalid_name: "\"{name}\" isn't a skill name: names are lowercase words joined by hyphens."
       not_found_next: "Search by words instead: ${search}"
       not_installed: "{name} isn't installed here. See what is: ${status}"
       rejected: "{file} {problem}. Nothing was published."

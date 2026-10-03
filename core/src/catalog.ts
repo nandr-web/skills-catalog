@@ -32,7 +32,7 @@ import {
   type TreeDiff,
   type TreeFile,
 } from './skill-tree/index.ts';
-import { COMMON_WORDS, contentWords, spelledLike } from './words.ts';
+import { COMMON_WORDS, contentWords, similarNames } from './words.ts';
 
 export interface CatalogConfig {
   limits: Limits;
@@ -385,11 +385,26 @@ export class Catalog {
   }
 
   private async notFound(name: string): Promise<CatalogError> {
-    return new CatalogError('not_found', { name, suggestions: spelledLike(name, await this.p.storage.names()) });
+    return new CatalogError('not_found', { name, suggestions: similarNames(name, await this.p.storage.names()) });
+  }
+
+  // A name looked up (read, versions, diff, fetch) that isn't a skill name, the way a person might type it ("Release Note
+  // Draft"): refused as invalid_name with `suggestions`, the names it likely means (its lowercase-hyphen form, or names
+  // like that), so the reply can point at one. A publish's name has no suggestions: there it's the publisher's to choose.
+  private async lookupName(name: string): Promise<string> {
+    try {
+      return checkName(name);
+    } catch (e) {
+      if (!(e instanceof CatalogError) || e.code !== 'invalid_name') throw e;
+      const slug = typeof name === 'string' ? name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : '';
+      const names = slug ? await this.p.storage.names() : [];
+      const suggestions = names.includes(slug) ? [slug, ...similarNames(slug, names, 2)] : similarNames(slug, names);
+      throw new CatalogError('invalid_name', { ...e.data, suggestions });
+    }
   }
 
   private async versionOf(name: string, version?: number): Promise<{ record: VersionRecord; latest: number }> {
-    checkName(name);
+    await this.lookupName(name);
     const s = await this.p.storage.skill(name);
     if (!s) throw await this.notFound(name);
     const record = await this.p.storage.version(name, version ?? s.latest);
