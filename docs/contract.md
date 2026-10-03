@@ -274,7 +274,7 @@ written by hand too, and a lint checks that every tool the instructions or the s
   one tool result (Claude Code warns at 10,000 and saves anything over 25,000 to a file). The default is 10 because in every agent-experience trial
   the right skill was in the top 3; an assistant can ask for up to 50.
 
-Later (same registry): bundles (`create_bundle`, `publish_bundle_version`, `read_bundle`, `list_bundles`: phase 2, local);
+Later (in the same API): bundles (`create_bundle`, `publish_bundle_version`, `read_bundle`, `list_bundles`: phase 2, local);
 `vote`, `unvote` (later, hosted: needs identity); `yank_version` (hide a version published by mistake, e.g. with a secret,
 without renumbering); `create_token` (shown once, scope read or publish, with expiry), `list_tokens`, `revoke_token` (AWS, "a
 signed-in person only, not an agent"); `list_reviews`, `submit_review` (phase 2, a reviewer identity only). Also later, for the web UI: a read-only operation listing installed skills and
@@ -994,8 +994,8 @@ mode is detected, added or changed text can get one more flag.
   - `fetch_and_run`: a download piped into something that runs it (`curl`, `wget`, `iwr`, `irm`, `Invoke-WebRequest` or
     `Invoke-RestMethod`, then later on the line `|` and, after an optional `sudo`, `sh`, `bash`, `zsh`, `dash`, `ksh`,
     `fish`, `python`, `python3`, `node`, `perl`, `ruby`, `php`, `pwsh`, `powershell`, `iex` or `Invoke-Expression`); a
-    download run through a substitution (`<(curl`, `<(wget`, `$(curl`, `$(wget`); or a package run straight from the
-    registry (`npx`, `bunx`, `pnpm dlx`, `uvx`, `pipx run`, each followed by a name);
+    download run through a substitution (`<(curl`, `<(wget`, `$(curl`, `$(wget`); or a package run straight from its
+    package index (`npx`, `bunx`, `pnpm dlx`, `uvx`, `pipx run`, each followed by a name);
   - `install`: a package manager's install (`pip`, `pip3` or `python -m pip` `install`; `uv pip install`, `uv add`, `uv
     tool install`; `pipx install`; `npm install`, `npm i`, `npm add`; `pnpm add`, `pnpm install`, `pnpm i`; `yarn add`,
     `yarn global add`; `bun add`, `bun install`, `bun i`; `brew install`; `apt install`, `apt-get install`, `dnf install`,
@@ -1289,7 +1289,7 @@ person's yes:
   reads are the catalog's own tables (real tables, and the search's full-text table), with no view or trigger anywhere in
   the file, before reading any (every supported Node, 24.15 and later, has SQLite's defensive mode; on an older runtime
   that skipped the version check, a crafted full-text index would be left to SQLite's own corruption checks, which fail
-  as `catalog_unreadable`, never by running code); install, update and accept always use the writing open, never the read-only one. The allow list is generated from the registry, so it can't drift from the commands. Every other command,
+  as `catalog_unreadable`, never by running code); install, update and accept always use the writing open, never the read-only one. The allow list is generated from the API's operation definitions, so it can't drift from the commands. Every other command,
   and so every use of the person-only flags (`--accept`, `--allow-suspected-secrets`), meets the permission prompt, which is
   the person's yes. Those flags also refuse with no terminal (exit 3), a backstop only: a command can fake a terminal.
 
@@ -1481,7 +1481,7 @@ revised design) and reviews of the core's code and its architecture changed thes
 | Versions stored under older rules read as stored, marked `stored_under_older_rules`, and a diff from one fails closed (the skill's owner can always publish a fix); front matter counted in the read's budget, first, and left out as `frontmatter_omitted` with its `grant_keys`; control characters inside the fence shown escaped, and the data note naming the end marker | §2, §4.4, §5.1, §5.2, §5.3 | later |
 | The update hold's other flags: `runs_at_load` (the wide detector), `instructions_changed` (removals and safe keys too, `non_granting_keys`), files in a command position and outside the skill | §4.1, §5.3, §6, §10 | with the update hold, in the shared `skill-tree` module |
 | The installer decides from bytes it checked (a fingerprint mismatch is `fingerprint_mismatch`; full validation of every fetched version, `refused`, its own flags); a first install through the update hold; never overwriting or shadowing what it didn't install (command files too); the install path computed; `accept_held_update` names the flags it accepts; install's policy CLI-only | §3, §4.5, §5.3 | with the installer |
-| What setup pre-allows (generated from the registry; read-only commands never write); absolute paths from `process.execPath`; the prompt as the person's yes for person-only flags; `accept_flagged_updates` only from the terminal wizard; notices with fixed words; the MCP server's activity log | §3, §6, §8 | the activity log with the MCP server, the prompt as the person's yes for person-only flags with the CLI; the rest with setup and the session-start hook, later |
+| What setup pre-allows (generated from the API's operation definitions; read-only commands never write); absolute paths from `process.execPath`; the prompt as the person's yes for person-only flags; `accept_flagged_updates` only from the terminal wizard; notices with fixed words; the MCP server's activity log | §3, §6, §8 | the activity log with the MCP server, the prompt as the person's yes for person-only flags with the CLI; the rest with setup and the session-start hook, later |
 | A cooldown before auto-update applies a new version (0 locally, about 3 days for a shared or hosted catalog); the latest on request (watcher policy, `--latest`, accepting a held one), through the prompt; a report or withdrawal during the wait holds that version for everyone | §3, §5.3, §6, §7, §10 | decided by the owner; designed now, built with shared and hosted catalogs (a local catalog waits 0, so nothing changes in phase 1) |
 | The two-step publish as consent: the publish repeats the name, version, file count and flags so its prompt shows them, and its `confirm` is a MAC only this machine's skills-catalog can make (`not_a_confirm` otherwise); an ignored folder skipped once, unwalked; paths in commands shell-quoted | §3, §5.2, §9 | with the MCP server and the CLI |
 | An install over a pinned or notify skill held until the person says yes, like an update (the owner's decision); `accept_held_update` names the target and version; a skill from another catalog held (`other_catalog`) | §3, §5.3 | with the installer |
