@@ -51,6 +51,12 @@ if (command === 'mcp' && rest.length === 0) {
     return text;
   };
   process.exitCode = await runLogin(rest, { settings: settingsFrom(process.env), env: process.env, stdout: (t) => void process.stdout.write(t), stderr: (t) => void process.stderr.write(t), readStdin });
+} else if (command === 'hook') {
+  // Setup's session-start hook: always exit 0, and once its 2 seconds are up, don't wait for a sync still running (the
+  // next session start or the MCP server's start finishes it).
+  const { runHook } = await import('./cli/hook.ts');
+  await runHook(rest, cliWords(Words.load()), { env: process.env, cwd: process.cwd(), stdin: process.stdin, stdout: (t) => void process.stdout.write(t) });
+  process.stdout.write('', () => process.exit(0));
 } else if (command === 'setup') {
   const { runSetupCommand } = await import('./cli/setup.ts');
   process.exitCode = await runSetupCommand(rest, { env: process.env, cwd: process.cwd(), tty, color: wantsColor(Boolean(process.stdout.isTTY), process.env), ask: askPerson, stdout: (t) => void process.stdout.write(t), stderr: (t) => void process.stderr.write(t) });
