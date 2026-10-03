@@ -137,6 +137,30 @@ export const QUESTIONS: readonly Question[] = [
 export const NON_QUESTION_KEYS: readonly string[] = Object.keys(CONFIG_KEYS).filter((k) => !QUESTIONS.some((q) => q.key === k));
 const OWN_FLAGS = { yes: { type: 'boolean' }, config: { type: 'string' }, 'dry-run': { type: 'boolean' }, 'print-mcp-entry': { type: 'boolean' }, help: { type: 'boolean' } } as const;
 
+/** The setup doc an assistant can follow to run setup unattended (skill-setup-by-agent; docs/setup.md, written by
+ *  `npm run setup-doc` in client/ and kept equal by a test): the words' doc and assistant note, then each question with
+ *  the flag that answers it and its default, from the table. */
+export function setupDoc(s: Words): string {
+  const q = s.setup.questions as { ask: string; default: string; flag: string }[];
+  const fill = { default_catalog: '~/.skills-catalog/catalog', me_default: 'your login, made into a name', command_folder: '~/.local/bin' };
+  const rows = q.map((x) => `| ${s.format(x.ask, fill).replaceAll('|', '\\|')} | \`${x.flag.replaceAll('|', '\\|')}\` | ${s.format(x.default, fill)} |`);
+  return [
+    '<!-- Written by `npm run setup-doc` in client/ from the words file and setup\'s question table. Don\'t edit by hand. -->',
+    '',
+    s.setup.doc.trimEnd(),
+    s.setup.doc_assistant_note.trimEnd(),
+    '',
+    '## The questions, and the flag that answers each',
+    '',
+    '| Question | Flag | Default |',
+    '|---|---|---|',
+    ...rows,
+    '',
+    `Also: \`--config <file>\` (a JSON file with config.json's keys, the same answers as the flags), \`--dry-run\` (the plan, nothing changed), \`--print-mcp-entry\` (the entry for another MCP client). Exit 0 done, 1 refused (nothing changed), 3 needs answers. Undo with \`${s.cli} teardown\`.`,
+    '',
+  ].join('\n');
+}
+
 /** Every flag setup takes (cli/process.ts lists them for the words' check; a test keeps the two equal). */
 export const SETUP_FLAGS: readonly string[] = [...Object.keys(OWN_FLAGS), ...QUESTIONS.flatMap((q) => (q.kind === 'switch' ? [q.flag, `no-${q.flag}`] : [q.flag]))];
 

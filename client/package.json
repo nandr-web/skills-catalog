@@ -19,7 +19,8 @@
     "test:activity": "vitest run --project fast test/activity.test.ts",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test",
-    "mutate": "node test/mutations.mjs"
+    "mutate": "node test/mutations.mjs",
+    "setup-doc": "node --disable-warning=ExperimentalWarning scripts/setup-doc.ts"
   },
   "dependencies": {
     "@skills-catalog/core": "file:../core"

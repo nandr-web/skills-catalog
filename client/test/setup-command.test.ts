@@ -12,7 +12,7 @@ import { runnerFolders } from './race-fs.ts';
 vi.mock('node:fs', async (o) => (await import('./race-fs.ts')).mockFs(await o()));
 beforeEach(() => runnerFolders());
 import { CONFIG_KEYS } from '../src/machine/lock.ts';
-import { NON_QUESTION_KEYS, QUESTIONS, runSetupCommand, SETUP_FLAGS, sharedFolderKind, type SetupIo } from '../src/cli/setup.ts';
+import { NON_QUESTION_KEYS, QUESTIONS, runSetupCommand, SETUP_FLAGS, setupDoc, sharedFolderKind, type SetupIo } from '../src/cli/setup.ts';
 import { PROCESS_COMMANDS } from '../src/cli/process.ts';
 import { cliWords } from '../src/cli/words.ts';
 
@@ -69,6 +69,15 @@ describe('the question table', () => {
     // Contract §6's keys setup never asks about; any other key is a question's, or the table and the config drifted.
     const notAsked = ['hosting', 'overrides', 'cooldown', 'accept_flagged_updates', 'safe_frontmatter_keys', 'non_granting_keys', 'context_cost_budget', 'command_instruction_patterns', 'session_start_hook', 'claude_config_dir', 'aws'];
     expect([...NON_QUESTION_KEYS].sort()).toEqual(notAsked.sort());
+  });
+});
+
+describe('the setup doc an assistant follows (skill-setup-by-agent)', () => {
+  it('docs/setup.md is what `npm run setup-doc` writes now: the words\' doc, the assistant note, and every question with its flag', () => {
+    const page = readFileSync(join(import.meta.dirname, '..', '..', 'docs', 'setup.md'), 'utf8');
+    expect(page === setupDoc(S), 'docs/setup.md is out of date: run `npm run setup-doc` in client/').toBe(true);
+    for (const q of S.setup.questions as { flag: string }[]) expect(page).toContain(q.flag.split(' ')[0]);
+    expect(page).toContain(`${S.cli} setup --yes`);
   });
 });
 
