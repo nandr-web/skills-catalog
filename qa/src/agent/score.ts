@@ -237,7 +237,11 @@ export type Aggregate = {
   tries: number;
   held: Record<string, string>;        // rule → "k/n"
   metrics: { catalog_calls_median: number; wrong_tool_detours: number; harness_detours: number; refused_requests: number; tool_result_tokens_max: number; wall_ms_median: number; cost_usd: number };
+  over_budget: string[];               // each budget the tries missed, in words (qa-plan.md §7); any one fails the scenario
 };
+
+/** The runner's budgets (qa-plan.md §7): the median wall time per ask, and the largest tool result. */
+export const BUDGETS = { wall_ms_median: 30_000, tool_result_tokens_max: 8_000 } as const;
 
 const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : 0; };
 
@@ -258,9 +262,7 @@ export function aggregate(tries: Pick<TryScore, 'outcome' | 'rules' | 'metrics'>
     }
   }
   const m = tries.map((t) => t.metrics);
-  return {
-    verdict, tries: n, held,
-    metrics: {
+  const metrics = {
       catalog_calls_median: median(m.map((x) => x.catalog_calls)),
       wrong_tool_detours: m.reduce((a, x) => a + x.wrong_tool_detours, 0),
       harness_detours: m.reduce((a, x) => a + x.harness_detours, 0),
@@ -268,6 +270,12 @@ export function aggregate(tries: Pick<TryScore, 'outcome' | 'rules' | 'metrics'>
       tool_result_tokens_max: Math.max(0, ...m.map((x) => x.tool_result_tokens_max)),
       wall_ms_median: median(m.map((x) => x.wall_ms)),
       cost_usd: Number(m.reduce((a, x) => a + x.cost_usd, 0).toFixed(4)),
-    },
   };
+  // A harness error says nothing about the product's speed; otherwise a missed budget fails the scenario (review P15.6).
+  const over_budget = verdict === 'harness_error' ? [] : [
+    ...(metrics.wall_ms_median > BUDGETS.wall_ms_median ? [`median ${(metrics.wall_ms_median / 1000).toFixed(1)}s per ask, over ${BUDGETS.wall_ms_median / 1000}s`] : []),
+    ...(metrics.tool_result_tokens_max > BUDGETS.tool_result_tokens_max ? [`a tool result of ${metrics.tool_result_tokens_max} tokens, over ${BUDGETS.tool_result_tokens_max}`] : []),
+  ];
+  if (over_budget.length && verdict !== 'harness_error') verdict = 'fail';
+  return { verdict, tries: n, held, metrics, over_budget };
 }

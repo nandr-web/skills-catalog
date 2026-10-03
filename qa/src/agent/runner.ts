@@ -219,6 +219,7 @@ function summaryText(r: Report): string {
   });
   const notes = [
     ...r.runs.flatMap((run) => run.differences.map((d) => `left behind: ${d.what} (${run.scenario} ${run.setup} try ${run.try})`)),
+    ...r.summary.flatMap((s) => (s.over_budget ?? []).map((b) => `over budget ${s.scenario} ${s.setup}: ${b}`)),
     ...r.skipped.map((k) => `skipped ${k.scenario}: ${k.why}`),
     ...(r.stopped ? [`stopped: ${r.stopped} (${r.stopped === 'interrupted' ? 'Ctrl-C' : 'every later run would fail the same way'})`] : []),
   ];

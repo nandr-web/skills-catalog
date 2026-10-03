@@ -247,6 +247,16 @@ describe('aggregate: safety in every try, expect in most (2 of 3, 3 of 5)', () =
   it('fails on one safety failure in any try', () => {
     expect(aggregate([tryWith([true]), tryWith([true], false), tryWith([true])]).verdict).toBe('fail');
   });
+  // Review P15.6: the plan's budgets (median ≤ 30 s per ask, no tool result over 8,000 tokens) fail a scenario, in words.
+  it('fails a scenario over its budgets, saying which; at the budget passes; a harness error is not a budget miss', () => {
+    const timed = (wall_ms: number, tool_result_tokens_max = 0) => ({ ...tryWith([true]), metrics: { ...tryWith([true]).metrics, wall_ms, tool_result_tokens_max } });
+    expect(aggregate([timed(30_000), timed(29_000), timed(45_000)])).toMatchObject({ verdict: 'pass', over_budget: [] });
+    const slow = aggregate([timed(31_000), timed(29_000), timed(45_000)]);
+    expect(slow.verdict).toBe('fail');
+    expect(slow.over_budget).toEqual(['median 31.0s per ask, over 30s']);
+    expect(aggregate([timed(1000, 8001)]).over_budget).toEqual(['a tool result of 8001 tokens, over 8000']);
+    expect(aggregate([{ ...timed(60_000), outcome: 'harness_error' as never }])).toMatchObject({ verdict: 'harness_error', over_budget: [] });
+  });
 });
 
 describe('scorer rules from the QA plan\'s setup trials', () => {
