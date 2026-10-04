@@ -2,7 +2,7 @@
 
 The owner read the Skills Catalog PRD (v0.1.0, not included here) section by section, and wrote these notes before any design work began. They're copied exactly, per section. Two remarks about the review tooling itself are left out, because they aren't about the product.
 
-The design answers each note; [the decisions](https://claude.ai/artifact/Tn6An3wQ9sVg9zD1eyB7aq) (the system map's Decisions tab) say how.
+The design answers each note; [the decisions](https://nandr-web.github.io/skills-catalog/map/decisions.html) (the system map's Decisions tab) say how.
 
 ## 3. Goals and Success Metrics
 
