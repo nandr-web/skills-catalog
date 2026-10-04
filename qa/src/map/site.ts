@@ -497,7 +497,7 @@ async function contextPage(c: Ctx): Promise<string> {
 <aside class="panel" aria-live="polite"><div class="picked" hidden></div>
 <h3>What runs where, and what talks to what.</h3>
 <p>${esc(c.m.views!.find((x) => x.id === v)?.note ?? '')}</p>
-<ul class="legend"><li><b>›</b> opens the part's own page: what's inside it</li><li>Click any other part for what it is</li><li><b>Hatched</b>, dotted, <b>PHASE n · PLANNED</b>: not built yet (turn on “planned”)</li><li>Shaded, dashed, <b>not ours</b>: another company's part</li></ul>
+<ul class="legend"><li><b>›</b> opens the part's own page: what's inside it</li><li>Click any other part for what it is</li><li><b>Hatched</b>, dotted, <b>PHASE n · PLANNED</b>: not built yet (turn on “planned”)</li><li>A shaded box, <b>not ours</b>: another company's part (a dashed outline around parts is a machine or an account)</li></ul>
 </aside></div></section>`);
   }
   const code = codeSpec(c);
@@ -650,7 +650,7 @@ ${b.note ? `<p class="note">${esc(b.note)}</p>` : ''}
 ${b.text ? `<p>${rich(b.text)}</p>` : ''}
 ${b.contract ? `<p><span class="kicker">Declared</span> <code>${esc(b.contract.name)}</code> in ${codeLink(c, b.contract.file)}</p>
 <ul class="plugged">${plugged.map((x) => `<li><span class="kicker">${esc(sideOf(x))}</span> ${esc(x.label)}${x.note ? ` <span class="note">${esc(x.note)}</span>` : ''}${x.status === 'proposed' ? ' <span class="tag">planned</span>' : ''}</li>`).join('')}</ul>
-${b.contract.suites?.length ? `<p><span class="kicker">Proved on both sides by</span> ${b.contract.suites.map((s) => `<code>${esc(s)}</code>`).join(', ')}: ${tests([...a.proof.local, ...a.proof.aws])}</p>` : `<p><span class="kicker">Not proven yet</span> no shared suite runs on both sides' adapters, so swapping a side isn't shown to work.</p>`}` : ''}
+${b.contract.shared ? `<p><span class="kicker">Implemented once, for every side</span> ${codeLink(c, b.contract.shared)}</p>` : b.contract.suites?.length ? `<p><span class="kicker">Proved on both sides by</span> ${b.contract.suites.map((s) => `<code>${esc(s)}</code>`).join(', ')}: ${tests([...a.proof.local, ...a.proof.aws])}</p>` : `<p><span class="kicker">Not proven yet</span> no shared suite runs on both sides' adapters, so swapping a side isn't shown to work.</p>`}` : ''}
 ${b.tests?.length ? `<p><span class="kicker">Tests</span> ${b.tests.map((g) => codeLink(c, g)).join(' ')}</p>` : ''}
 ${into ? `<p><span class="kicker">Plugs into</span> ${esc(into.label)}${b.status === 'proposed' ? ' (once built)' : `, as ${b.plugs!.implements.map((n) => `<code>${esc(n)}</code>`).join(', ')}`}</p>` : ''}
 ${b.code?.length ? `<p><span class="kicker">Code</span> ${b.code.map((g) => codeLink(c, g)).join(' ')}</p>` : ''}
@@ -668,7 +668,8 @@ function architecturePage(c: Ctx): string {
   const L = layoutSystemMap(spec, '');
   const svg = drawSystemMap(spec, L, undefined, { mode: 'inline', idPrefix: 'architecture', interactive: true, partLinks: true });
   const contracts = a.boxes.filter((b) => b.contract && b.status !== 'proposed');
-  const unproven = contracts.filter(unprovenContract), proven = contracts.filter((b) => !unprovenContract(b));
+  const unproven = contracts.filter(unprovenContract), once = contracts.filter((b) => b.contract!.shared);
+  const proven = contracts.filter((b) => b.contract!.suites?.length && !b.contract!.shared);
   const body = `${nav('architecture')}
 <header class="top"><span class="eyebrow">System map · architecture</span><h1>${esc(c.m.title)}</h1>
 <p class="question">${esc(a.question)}</p></header>
@@ -676,13 +677,14 @@ function architecturePage(c: Ctx): string {
 <h2 class="frame-title">The architecture · on one machine and in AWS, with what's planned</h2>
 <div class="${gridClass(L.width)}">${figure(svg, widths, L.width)}
 <aside class="panel" aria-live="polite"><div class="picked" hidden></div>
-<h3>Built around contracts, so each side can be swapped.</h3>
+<h3>Built around contracts: a side can be swapped where the tests prove it.</h3>
 <p>skills-catalog calls <b>the API</b>; the catalog's rules call <b>their ports</b>. What plugs into each sits beside it: on one machine on the left, in AWS on the right.</p>
 <ul class="legend">
 <li><b>⊐ ⊏</b> a contract: an interface in the code that the rest is written against</li>
 <li><b>—</b> from a contract: what plugs into it, checked in the code (it implements the contract)</li>
 <li>${esc(a.proof.text)} Proven so far: ${proven.map((b) => `<b>${esc(b.label)}</b>`).join(', ')}.</li>
-${unproven.length ? `<li><b>Orange</b>, “${esc(UNPROVEN)}”: ${unproven.map((b) => `<b>${esc(b.label)}</b>`).join(' and ')} have no shared suite, so swapping their side isn't shown to work</li>` : ''}
+${unproven.length ? `<li><b>Orange</b>, “${esc(UNPROVEN)}”: ${unproven.map((b) => `<b>${esc(b.label)}</b>`).join(' and ')} ${unproven.length > 1 ? 'have' : 'has'} no shared suite, so swapping a side isn't shown to work</li>` : ''}
+${once.length ? `<li>${once.map((b) => `<b>${esc(b.label)}</b>`).join(' and ')}: implemented once, the same everywhere; only where its input comes from differs per side (<b>→</b> says who)</li>` : ''}
 <li><b>Hatched</b>, dotted, <b>PHASE n · PLANNED</b>: not built yet; n is the phase of the requirements that build it</li>
 <li>Shaded, <b>not ours</b>: another company's part</li>
 <li><b>›</b> opens the part's own page; click any other box for what it is</li>

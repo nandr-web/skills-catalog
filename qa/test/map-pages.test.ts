@@ -162,9 +162,30 @@ describe('the architecture checks catch each kind of drift, one planted mistake 
     expect(problems.map((p) => p.rule)).toEqual(['adapter-not-in-code']);
     expect(problems[0]!.message).toContain('a-storage-aws');
   });
-  it('a box that implements more than the contract it plugs into, but not that one', () => {
-    const found = planted('implements-other-contract', (m) => { abox(m, 'a-identity-aws').plugs!.implements = ['GitHubSignIn', 'TokenStore']; });
-    expect(found[0]!.message).toContain('implements Identity');
+  it('a box that names an interface that isn\'t its contract\'s, and its code has none of it', () => {
+    // It says it implements HostedEvents and not Events: not its contract's, and the code has no such interface.
+    const found = planted(['adapter-not-in-code', 'implements-other-contract'], (m) => { abox(m, 'a-events-aws').plugs!.implements = ['HostedEvents']; });
+    expect(found.find((p) => p.rule === 'implements-other-contract')!.message).toContain('implements Events');
+    expect(found.find((p) => p.rule === 'adapter-not-in-code')!.message).toContain('HostedEvents');
+  });
+  it('a side\'s box holding code that is the other side\'s', () => {
+    const found = planted('side-code-elsewhere', (m) => { abox(m, 'a-storage-local').code = ['hosted/src/storage.ts']; });
+    expect(found[0]!.message).toContain('hosted/src/storage.ts');
+  });
+  it('an AWS adapter moved to the same everywhere, with the local one removed, doesn\'t pass silently', () => {
+    const found = planted('side-code-elsewhere', (m) => {
+      abox(m, 'a-search-aws').zone = 'everywhere';
+      m.architecture!.boxes = m.architecture!.boxes.filter((b) => b.id !== 'a-search-local');
+    });
+    expect(found[0]!.message).toContain('hosted/src/search.ts');
+  });
+  it('a contract implemented once, in a file that is one side\'s code', () => {
+    const found = planted('side-code-elsewhere', (m) => { abox(m, 'a-identity').contract!.shared = 'core/src/local/identity.ts'; });
+    expect(found[0]!.message).toContain('core/src/local/identity.ts');
+  });
+  it('a contract implemented once, in a file that doesn\'t implement it', () => {
+    const found = planted('adapter-not-in-code', (m) => { abox(m, 'a-identity').contract!.shared = 'core/src/api.ts'; });
+    expect(found[0]!.message).toContain('core/src/api.ts');
   });
   it('a contract with no adapter on one side', () => {
     const found = planted('contract-side-missing', (m) => { m.architecture!.boxes = m.architecture!.boxes.filter((b) => b.id !== 'a-search-aws'); });
@@ -193,7 +214,8 @@ describe('the architecture checks catch each kind of drift, one planted mistake 
   it('a field the box doesn\'t have (what an unquoted comma in a flow map makes)', () => planted('unknown-field', (m) => {
     (abox(m, 'a-reviewer') as unknown as Record<string, unknown>)['review out'] = null;
   }));
-  it('a box in a zone the architecture hasn\'t', () => planted('unknown-zone', (m) => { abox(m, 'a-opener').zone = 'nowhere'; }));
+  // In no zone, the opener (an adapter holding the local side's code) is also in the wrong place.
+  it('a box in a zone the architecture hasn\'t', () => planted(['side-code-elsewhere', 'unknown-zone'], (m) => { abox(m, 'a-opener').zone = 'nowhere'; }));
   it('a box opening a view the map hasn\'t', () => planted('unknown-view', (m) => { abox(m, 'a-function').view = 'mars'; }));
   it('a planned box\'s phase is the phases of the requirements that would build it', () => {
     expect(phaseOf({ needs: ['pi-agent', 'other-assistants'] }, facts)).toBe('2–3');
@@ -271,9 +293,9 @@ describe('the pages show what was asked for', () => {
     expect(arch.boxes.filter((b) => b.contract).length).toBe(6);
     const tags: Record<string, string> = { 'a-assistants': 'PHASE 2–3 · PLANNED', 'a-web': 'PHASE 2 · PLANNED', 'a-reviewer-agents': 'PHASE 2 · PLANNED' };
     expect(arch.boxes.filter((b) => b.status === 'proposed').map((b) => b.id).sort()).toEqual(Object.keys(tags).sort());
-    // A built contract no shared suite proves is orange and says so in words; the panel names the ones that are proven.
-    const unproven = arch.boxes.filter((b) => b.contract && !b.contract.suites?.length).map((b) => b.id).sort();
-    expect(unproven).toEqual(['a-events', 'a-identity']);
+    // A built contract no shared suite proves is orange and says so in words (one implemented once is neither); the panel names the proven ones.
+    const unproven = arch.boxes.filter((b) => b.contract && !b.contract.suites?.length && !b.contract.shared).map((b) => b.id).sort();
+    expect(unproven).toEqual(['a-events']); // Identity is implemented once, so it has no suites and isn't orange
     for (const b of arch.boxes.filter((x) => x.contract)) {
       const d = drawn(b.id);
       expect(/\bd-node--alert\b/.test(d), `${b.id} orange: ${unproven.includes(b.id)}`).toBe(unproven.includes(b.id));
@@ -281,7 +303,12 @@ describe('the pages show what was asked for', () => {
     }
     expect(s).toMatch(/Proven so far: <b>the API<\/b>, <b>Storage<\/b>, <b>SearchIndex<\/b>, <b>Reviewer<\/b>\./);
     expect(s).toContain('<b>Orange</b>');
-    expect(s).toContain('<b>Events</b> and <b>Identity</b> have no shared suite');
+    expect(s).toContain('<b>Events</b> has no shared suite');
+    expect(s).toMatch(/<b>Identity<\/b>: implemented once, the same everywhere/);
+    const idCard = s.slice(s.indexOf('data-box="a-identity"'), s.indexOf('</article>', s.indexOf('data-box="a-identity"')));
+    expect(idCard).toContain('Implemented once, for every side');
+    expect(idCard).toContain('core/src/http/index.ts');
+    expect(idCard).not.toContain('Not proven yet');
     expect(s).toContain('Not proven yet');
     // The page centres a drawing wider than the screen.
     expect(s).toContain('"center":true');

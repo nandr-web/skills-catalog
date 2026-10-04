@@ -516,7 +516,9 @@ architecture:
     - {id: core, label: the core}
     - {id: aws, label: in AWS}
     - {id: everywhere, label: the same everywhere}
-  sides: [local, aws]
+  sides:
+    - {zone: local, code: ["core/src/local/**"]}
+    - {zone: aws, code: ["hosted/**", "infra/**"]}
   proof:
     text: "A contract's shared tests run the same on both sides: on the local adapters and on the AWS ones (against an AWS stand-in). A new backend plugs in by passing them."
     local: [core/test/storage.test.ts, core/test/catalog.test.ts, core/test/discovery.test.ts]
@@ -547,7 +549,7 @@ architecture:
        text: "On one machine, skills-catalog opens the catalog in its own process (`SKILLS_CATALOG=file://…`): the catalog's rules over the local parts below."}
     - {id: a-function, part: catalog, view: aws, label: API function, note: CloudFront · HTTP API · Lambda, zone: aws, at: [2, 2], plugs: {into: a-api, implements: [Catalog]}, code: [hosted/src/entries/api.ts],
        tests: [hosted/test/remote-client.test.ts],
-       text: "In AWS, skills-catalog's client (core/src/remote) calls the same operations over HTTPS (`SKILLS_CATALOG=https://…`): CloudFront, then the HTTP API, then the API function, which runs the catalog's rules over the AWS parts below. Proven by its own test, not the shared suite: the client against the API's handler gives the local catalog's answers. Three operations run only on one machine (rerunning reviews, rebuilding the index, the stored reviews)."}
+       text: "In AWS, skills-catalog's client (core/src/remote) calls the same operations over HTTPS (`SKILLS_CATALOG=https://…`): CloudFront, then the HTTP API, then the API function, which runs the catalog's rules over the AWS parts below. Proven by its own test, not the shared suite: the client against the API's handler gives the local catalog's answers. Two catalog methods outside the API run only on one machine (reviewing stored versions again, rebuilding the index)."}
     - {id: a-rules, label: catalog rules, note: publish · find · fetch, zone: core, at: [1, 3], code: [core/src/catalog.ts],
        text: "Who may publish, what a new version is, what search returns: the same code on one machine and in the API function, calling its parts only through the ports below."}
     # Contract 2, the ports: where a choice can change.
@@ -572,12 +574,12 @@ architecture:
        text: "SQLite's full-text search (FTS5), rebuilt from the stored versions."}
     - {id: a-search-aws, label: search file, note: S3 · ranked in Lambda, kind: store, zone: aws, at: [2, 6], plugs: {into: a-search, implements: [SearchIndex]}, code: [hosted/src/search.ts],
        text: "One index file in S3, ranked in the function (to about 10–30k skills); OpenSearch Serverless is to be weighed again in phase 3."}
-    - {id: a-identity, label: Identity, note: who is asking, kind: port, zone: core, at: [1, 7], contract: {name: Identity, file: core/src/ports.ts},
-       text: "Who is asking, for who may publish: every operation that acts asks it."}
-    - {id: a-identity-local, label: local sign-in, note: acting as a developer, zone: local, at: [0, 7], plugs: {into: a-identity, implements: [Identity]}, code: [core/src/local/identity.ts],
-       text: "No sign-in on one machine: the Developer acts as a named developer, labelled for demo purposes."}
-    - {id: a-identity-aws, label: sign-in, note: GitHub · tokens, zone: aws, at: [2, 7], plugs: {into: a-identity, implements: [Identity, GitHubSignIn, TokenStore]}, code: [core/src/http/index.ts, hosted/src/github.ts, hosted/src/tokens.ts],
-       text: "Who is asking, per request: a verified GitHub sign-in or a token says who (hosted/src/github.ts, tokens.ts: two ports only AWS has), and each operation that acts gets an Identity for that person (core/src/http). Only the logins the deployment lists may sign in."}
+    - {id: a-identity, label: Identity, note: "who is asking · one for all", kind: port, zone: core, at: [1, 7], contract: {name: Identity, file: core/src/ports.ts, shared: core/src/http/index.ts},
+       text: "Who is asking, for who may publish. Not swapped per side: the same code everywhere (core/src/http) gives each request an Identity for whoever signed in. What differs per side is only who that is, and where it comes from."}
+    - {id: a-identity-local, label: local sign-in, note: acting as a developer, zone: local, at: [0, 7], code: [core/src/local/identity.ts],
+       text: "On one machine there is no sign-in: the Developer acts as a named developer (from setup, or `--as`), labelled for demo purposes."}
+    - {id: a-identity-aws, label: sign-in, note: GitHub · tokens, zone: aws, at: [2, 7], code: [hosted/src/api/handler.ts, hosted/src/github.ts, hosted/src/tokens.ts],
+       text: "In AWS a verified GitHub sign-in or a token says who is asking (two ports only AWS has: GitHub's check of a sign-in, and the token store). Only the logins the deployment lists may sign in."}
     - {id: a-reviewer, label: Reviewer, note: "a version in, a review out", kind: port, zone: everywhere, at: [1, 8], contract: {name: Reviewer, file: core/src/skill-tree/reviewer.ts, suites: [reviewsSuite]},
        text: "Reviews each new version as it is published: what it flags, stored with the version."}
     - {id: a-reviewer-rules, label: rules reviewer, note: on one machine and in AWS, zone: everywhere, at: [0, 8], plugs: {into: a-reviewer, implements: [Reviewer]}, code: [core/src/skill-tree/reviewer.ts],
@@ -594,6 +596,8 @@ architecture:
     - {from: a-opener, to: a-rules, label: runs}
     - {from: a-function, to: a-rules, label: runs}
     - {from: a-rules, to: a-storage, label: through its ports}
+    - {from: a-identity-local, to: a-identity, label: says who}
+    - {from: a-identity-aws, to: a-identity, label: says who}
 
 # The code's packages, and which uses which (read from the imports).
 code:

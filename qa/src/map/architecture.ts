@@ -17,8 +17,9 @@ export type ArchBox = {
   part?: string;
   /** Where the part has a page per view, the view whose page this box opens. */
   view?: string;
-  /** A contract: the interface (or class) the rest is written against, and the file that declares it. */
-  contract?: { name: string; file: string; suites?: string[] };
+  /** A contract: the interface (or class) the rest is written against, and the file that declares it. `shared`: a
+   *  contract implemented once, the same on every side (the file that implements it), instead of an adapter per side. */
+  contract?: { name: string; file: string; suites?: string[]; shared?: string };
   /** What plugs into a contract: which contract box, and the interfaces its code implements. */
   plugs?: { into: string; implements: string[] };
   /** A planned box: the requirements that would build it (its phase is theirs). */
@@ -29,9 +30,10 @@ export type ArchLine = { from: string; to: string; label?: string };
 export type Architecture = {
   question: string;
   zones: { id: string; label: string; style?: 'boundary' | 'region' }[];
-  /** The zones a contract's adapters must cover, one adapter each (on one machine, in AWS); an adapter in any other
-   *  zone (the same everywhere) covers them all. */
-  sides: string[];
+  /** The zones a contract's adapters must cover, one adapter each (on one machine, in AWS), with the code that is that
+   *  side's own. A box in a side's zone holds only that side's code; an adapter in any other zone (the same everywhere)
+   *  covers every side, and holds none of the sides' own code. */
+  sides: { zone: string; code: string[] }[];
   boxes: ArchBox[];
   lines?: ArchLine[];
   /** The shared suites a contract names run on the local adapters (in `local`) and on the AWS ones (in `aws`). */
@@ -78,7 +80,9 @@ export function checkArchitecture(m: MapSource, facts: Facts): Problem[] {
   const zones = new Set(a.zones.map((z) => z.id));
   const parts = new Map(m.parts.map((p) => [p.id, p]));
   const cells = new Map<string, string>();
-  for (const s of a.sides) if (!zones.has(s)) add('unknown-zone', `architecture.sides: no zone "${s}"`);
+  for (const s of a.sides) if (!zones.has(s.zone)) add('unknown-zone', `architecture.sides: no zone "${s.zone}"`);
+  const sideOf = (f: string) => a.sides.find((s) => s.code.some((g) => matchesGlob(f, g)))?.zone;
+  const sideZones = a.sides.map((s) => s.zone);
 
   for (const b of a.boxes) {
     const at = `architecture.boxes.${b.id}`;
@@ -101,8 +105,23 @@ export function checkArchitecture(m: MapSource, facts: Facts): Problem[] {
     }
     for (const r of b.needs ?? []) if (!facts.requirements.has(r)) add('unknown-requirement', `${at}.needs: no requirement "${r}" in qa/traceability.yaml`);
 
+    // A side's box holds only that side's code; an adapter for every side holds none of a side's own code.
+    for (const f of filesOf(facts, b.code)) {
+      const owner = sideOf(f);
+      if (b.zone && sideZones.includes(b.zone) && owner !== b.zone)
+        add('side-code-elsewhere', `${at}: it sits ${a.zones.find((z) => z.id === b.zone)?.label}, but ${f} is ${owner ? `${a.zones.find((z) => z.id === owner)?.label}'s` : 'no one side\'s'} code`);
+      if (b.plugs && (!b.zone || !sideZones.includes(b.zone)) && owner)
+        add('side-code-elsewhere', `${at}: it plugs in the same everywhere, but ${f} is ${a.zones.find((z) => z.id === owner)?.label}'s code`);
+    }
     // A contract is declared where it says: one file, in its code (not a comment).
     if (b.contract) {
+      // A shared contract is implemented once, in a file no side owns.
+      if (b.contract.shared) {
+        const sf = b.contract.shared;
+        const ok = facts.matches(sf).length === 1 && IMPLEMENTS(b.contract.name).test(code(facts.text(sf)));
+        if (!ok) add('adapter-not-in-code', `${at}: ${sf} doesn't implement ${b.contract.name} (it says it's implemented once, there)`);
+        else if (sideOf(sf)) add('side-code-elsewhere', `${at}: it's implemented once for every side, but ${sf} is one side's code`);
+      }
       const one = facts.matches(b.contract.file);
       const text = one.length === 1 && one[0] === b.contract.file ? code(facts.text(b.contract.file)) : '';
       if (!DECLARES(b.contract.name).test(text)) add('contract-not-in-code', `${at}: ${b.contract.file} ${one.length === 1 ? `declares no "${b.contract.name}"` : 'is not one file'}`);
@@ -127,10 +146,10 @@ export function checkArchitecture(m: MapSource, facts: Facts): Problem[] {
   }
 
   // Every contract is built on each side: an adapter on one machine and one in AWS, or one the same everywhere.
-  for (const c of a.boxes.filter((b) => b.contract && b.status !== 'proposed')) {
+  for (const c of a.boxes.filter((b) => b.contract && !b.contract.shared && b.status !== 'proposed')) {
     const built = a.boxes.filter((b) => b.plugs?.into === c.id && b.status !== 'proposed');
-    const everywhere = built.some((b) => !b.zone || !a.sides.includes(b.zone));
-    for (const side of a.sides) if (!everywhere && !built.some((b) => b.zone === side))
+    const everywhere = built.some((b) => !b.zone || !sideZones.includes(b.zone));
+    for (const side of sideZones) if (!everywhere && !built.some((b) => b.zone === side))
       add('contract-side-missing', `architecture.boxes.${c.id}: nothing built plugs into ${c.label} ${a.zones.find((z) => z.id === side)?.label ?? side}`);
   }
 
@@ -164,7 +183,7 @@ export function architectureText(a: Architecture | undefined): [string, string][
 }
 
 /** A built contract that no shared suite proves on both sides. */
-export const unprovenContract = (b: ArchBox) => !!b.contract && b.status !== 'proposed' && !b.contract.suites?.length;
+export const unprovenContract = (b: ArchBox) => !!b.contract && !b.contract.shared && b.status !== 'proposed' && !b.contract.suites?.length;
 /** The words an unproven contract carries on the drawing, in place of its note. */
 export const UNPROVEN = 'no shared tests yet';
 
