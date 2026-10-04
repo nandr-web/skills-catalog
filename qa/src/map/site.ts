@@ -745,7 +745,7 @@ function decisionsPage(c: Ctx): string {
   const body = `${nav('decisions')}
 <header class="top"><span class="eyebrow">System map · decisions</span><h1>${esc(c.m.title)}</h1>
 <p class="question">What was decided, over what, and about which part?</p>
-<p class="lede">${total} decisions, ${notYet} not built yet. Each names the parts it's about: a part's page shows its decisions beside its boxes. Where several options were weighed, the decision opens to show them side by side. The same log, as a table: <a href="../decisions.md">docs/decisions.md</a>, built from <a href="../decisions.yaml">docs/decisions.yaml</a>.</p></header>
+<p class="lede">${total} decisions, ${notYet} not built yet. Each names the parts it's about: a part's page shows its decisions beside its boxes. Where several options were weighed, the decision opens to show them side by side. Built from <a href="../decisions.yaml">docs/decisions.yaml</a>.</p></header>
 <nav class="filters" aria-label="Decisions about a part"><span class="kicker">Jump to a part</span> ${levels.map((l) => `<a class="chip" href="${esc(w.get(l.id)!.href)}">${esc(l.label)}</a>`).join(' ')}</nav>
 ${groups}
 ${open}`;

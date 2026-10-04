@@ -90,4 +90,4 @@ Search is keyword search, with a small list of synonyms in the configuration; a 
 | Claude Code plugin marketplaces as the backend | Native install and per-marketplace auto-update, but no search the Assistant can call and no per-skill update policy; kept as the export for bundles |
 | The Claude API's skills endpoint | Versioned storage for one workspace, with no discovery |
 
-More: [decisions.md](decisions.md) (why each choice), [requirements.md](requirements.md) (each requirement, its status and the checks that hold it), [agent-experience.md](agent-experience.md) (measured trials).
+More: [the decisions](https://claude.ai/artifact/Tn6An3wQ9sVg9zD1eyB7aq) (the system map's Decisions tab: why each choice, over what), [requirements.md](requirements.md) (each requirement, its status and the checks that hold it), [agent-experience.md](agent-experience.md) (measured trials).

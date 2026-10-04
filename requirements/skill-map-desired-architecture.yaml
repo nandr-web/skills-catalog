@@ -1,0 +1,10 @@
+id: skill-map-desired-architecture
+title: "A \"desired architecture\" toggle on the system map"
+phase: "2"
+source: "the owner"
+quote: "a toggle with 'desired architecture', along with a hover-over help"
+want: "As the owner, I want the service map diagrams, especially the high-level architecture to reflect what's in place today, what's planned, and a toggle with 'desired architecture', along with a hover-over help that explains that \"Systems drift, and this is intended to show the architecture in the owner's mind, as a way to compare the current implementation vs what exists today\"."
+accept: "The architecture shows what's in place today and what's planned, and a desired-architecture toggle whose hover help says, in the owner's words, why it's there."
+confirmed: true
+parts: [docs, qa]
+relates: [skill-map-drift, skill-map-architecture]

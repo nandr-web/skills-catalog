@@ -1,0 +1,10 @@
+id: skill-map-layers
+title: "The system map has every relevant layer and component"
+phase: "2"
+source: "the owner"
+quote: "include all the relevant layers and components, which - if unclear - are decided on by myself - the owner"
+want: "As the owner, I want the system map to include all the relevant layers and components, which - if unclear - are decided on by myself - the owner."
+accept: "Every layer and component the owner names is on the map; any the agent finds unclear has been put to the owner and answered."
+confirmed: true
+parts: [docs, qa]
+relates: [skill-map-architecture, skill-map-indirection]

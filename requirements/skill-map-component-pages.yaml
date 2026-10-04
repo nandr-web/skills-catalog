@@ -1,0 +1,10 @@
+id: skill-map-component-pages
+title: "The system map links to a page per component"
+phase: "2"
+source: "the owner"
+quote: "link to dedicated pages per component"
+want: "As the owner, I want the system map to link to dedicated pages per component"
+accept: "Every component on the map opens a page of its own."
+confirmed: true
+parts: [docs, qa]
+relates: [skill-map-drill-down, skill-map-alternatives]

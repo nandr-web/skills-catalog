@@ -8,7 +8,7 @@
 
 <p align="center"><sub>Real Claude Code. Version 2 of a skill adds a script, so the update waits for a yes.</sub></p>
 
-<p align="center"><a href="#check-it-against-the-prd">The PRD, item by item</a> · <a href="#try-it">Try it</a> · <a href="#install">Install</a> · <a href="docs/thinking.md">Our thinking</a> · <a href="docs/architecture.md">Architecture</a> · <a href="docs/decisions.md">Decisions</a> · <a href="docs/api.md">API</a></p>
+<p align="center"><a href="#check-it-against-the-prd">The PRD, item by item</a> · <a href="#try-it">Try it</a> · <a href="#install">Install</a> · <a href="docs/thinking.md">Our thinking</a> · <a href="docs/architecture.md">Architecture</a> · <a href="https://claude.ai/artifact/Tn6An3wQ9sVg9zD1eyB7aq">Decisions</a> · <a href="docs/api.md">API</a></p>
 
 - **Publish once.** A skill goes into a shared catalog as a numbered version. Nothing is overwritten.
 - **Find it by asking.** Your assistant searches in plain words. It says so when nothing really fits.
@@ -434,7 +434,7 @@ Two developers, one catalog, in order:
 ## Read more
 
 - [Our thinking](docs/thinking.md): Q1, what we cut, the time box
-- [Architecture](docs/architecture.md) and [decisions](docs/decisions.md): the shape, the choices, who made them
+- [Architecture](docs/architecture.md) and [decisions](https://claude.ai/artifact/Tn6An3wQ9sVg9zD1eyB7aq) (the system map's Decisions tab): the shape, the choices, who made them
 - [The system map](docs/map/index.html): the architecture at a glance (what's built, what's planned, the contracts that let a backend be swapped), the ports one level down, what's inside each part, and the decisions beside them, read from the code (pages to download and open)
 - [The API](docs/api.md) and [the contract](docs/contract.md): every operation, its data, rules and errors
 - [Requirements](docs/requirements.md) and [how we test](qa/qa-plan.md): each requirement and its tests

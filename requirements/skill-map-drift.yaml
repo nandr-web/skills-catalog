@@ -1,0 +1,10 @@
+id: skill-map-drift
+title: "A \"show drift\" toggle on the system map"
+phase: "2"
+source: "the owner"
+quote: "a form of \"show drift\" toggle that shows how the current implementation differs from the planned architecture"
+want: "As the owner, I want the service map diagrams, especially the high-level architecture diagram to have a form of \"show drift\" toggle that shows how the current implementation differs from the planned architecture"
+accept: "The architecture (and the other map diagrams where it applies) has a show-drift toggle that marks where the implementation differs from the planned architecture."
+confirmed: true
+parts: [docs, qa]
+relates: [skill-map-desired-architecture, skill-map-architecture]

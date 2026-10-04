@@ -21,7 +21,7 @@ assistants see (the agent-experience notes) all follow it, and a change to any s
 deployed, an option in setup (off by default); **later**. The owner's direction: "Focus on phase 1 / local work. Bring back up AWS topics only after the
 rest is finished and approved". What is marked phase 2 or later is here so phase 1 doesn't close doors; it isn't built.
 
-**Why the rules are the way they are.** The owner's decisions (in decisions.md) set the scope, the update hold (§5.3) and who may publish.
+**Why the rules are the way they are.** The owner's decisions (on the system map's Decisions tab) set the scope, the update hold (§5.3) and who may publish.
 Many smaller rules come from measured trials with real assistants (the agent-experience notes) or from test runs (the QA plan);
 where they do, the numbers are given, because they are the reason for the rule.
 

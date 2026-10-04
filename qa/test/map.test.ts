@@ -26,7 +26,6 @@ describe('the system map', () => {
     const built = await buildMap();
     expect(built.problems).toEqual([]);
     expect([...built.files.keys()].sort()).toEqual([
-      'docs/decisions.md',
       'docs/map/catalog-aws.html', 'docs/map/catalog.html', 'docs/map/context.html', 'docs/map/decisions.html', 'docs/map/index.html', 'docs/map/ports.html',
       'docs/map/skills-catalog.html', 'docs/map/use-cases.html',
       'docs/pictures/map-aws.svg', 'docs/pictures/map-held-update.svg', 'docs/pictures/map-local.svg',
@@ -90,7 +89,7 @@ describe('neutral names', () => {
     const pictures = readdirSync(join(ROOT, 'docs/pictures')).filter((f) => f.endsWith('.svg')).map((f) => `docs/pictures/${f}`);
     const pages = readdirSync(join(ROOT, 'docs/map')).filter((f) => f.endsWith('.html')).map((f) => `docs/map/${f}`);
     expect(pages.length).toBeGreaterThan(5);
-    for (const path of [...pages, 'docs/decisions.md', 'docs/decisions.yaml', 'qa/src/map/renderer.js', ...pictures]) {
+    for (const path of [...pages, 'docs/decisions.yaml', 'qa/src/map/renderer.js', ...pictures]) {
       const text = readFileSync(join(ROOT, path), 'utf8');
       expect(text, path).not.toMatch(TOOL);
       expect(text, path).not.toMatch(/\bst-[a-z]/);

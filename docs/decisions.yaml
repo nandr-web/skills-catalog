@@ -1,4 +1,4 @@
-# The decision log as data. docs/decisions.md is built from this file (npm run map in qa/): don't edit the page.
+# The decision log as data: the system map's Decisions tab (docs/map/decisions.html) is built from it (npm run map in qa/).
 # Each decision names the parts of the system map it's about (parts:, by the map's ids: a part in docs/map/map.yaml or a
 # box on a part's page), so the map shows it beside them. Where options were weighed side by side, an aspect carries
 # them: the options, the one chosen, and what drives the choice (each option's cell: the fact, and good, even or poor).

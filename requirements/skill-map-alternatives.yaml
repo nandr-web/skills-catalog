@@ -1,0 +1,10 @@
+id: skill-map-alternatives
+title: "A component's page shows its alternatives, settled or open"
+phase: "2"
+source: "the owner"
+quote: "include details on the alternative options and whether they've been settled on or may change in the future based on requirements"
+want: "As the owner, I want the system map's per component pages - for any which are applicable, like data stores - to include details on the alternative options and whether they've been settled on or may change in the future based on requirements"
+accept: "Each applicable component's page (data stores first) shows the options weighed, the one chosen if any, and whether it's settled or may change, and why."
+confirmed: true
+parts: [docs, qa]
+relates: [skill-map-decisions, skill-map-component-pages]

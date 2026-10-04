@@ -1,0 +1,10 @@
+id: skill-map-indirection
+title: "The system map shows its indirection layers"
+phase: "2"
+source: "the owner"
+quote: "intuitively reflect the indirection layers where applicable, such that it's easy to see elements that can be swapped in an out"
+want: "As the owner, I want the system map to intuitively reflect the indirection layers where applicable, such that it's easy to see elements that can be swapped in an out by sitting beneath an indirection layer."
+accept: "Each indirection layer is drawn as a contract with what plugs into it on each side; a contract no shared suite proves is marked, in words; the map check fails when a contract isn't declared where it says, a box doesn't implement what it plugs into, or a side's box holds another side's code."
+confirmed: true
+parts: [docs, qa]
+relates: [skill-map-architecture, skill-map-layers]

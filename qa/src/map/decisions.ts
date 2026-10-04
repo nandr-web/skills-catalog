@@ -1,5 +1,5 @@
-// The decision log as data (docs/decisions.yaml): docs/decisions.md is built from it (npm run map in qa/), and the
-// system map shows each decision beside the parts it's about. A decision names those parts by the map's ids (a part,
+// The decision log as data (docs/decisions.yaml): the system map's decisions page is built from it (npm run map in qa/),
+// and the map shows each decision beside the parts it's about. A decision names those parts by the map's ids (a part,
 // or a box on a part's page). Where its options were weighed side by side, an aspect carries them: the options, the
 // one chosen, and what drives the choice (each option's cell: a fact, and whether it counts for, even or against).
 import type { Problem, Rule } from './map.ts';
@@ -39,37 +39,6 @@ export type DecisionLog = {
 };
 
 export const DECISIONS_SOURCE = 'docs/decisions.yaml';
-export const DECISIONS_PAGE = 'docs/decisions.md';
-
-/** The decision as one table cell: its bold lead, its words, what it was chosen over. */
-export function decisionCell(d: Decision): string {
-  const lead = d.title ? `**${d.title}**${/^[,.;:]/.test(d.text) ? '' : ' '}` : '';
-  return `${lead}${d.text}${d.over?.length ? ` Over: ${d.over.join('; ')}` : ''}`;
-}
-
-const notBuilt = (d: Decision) => /^Not built/.test(d.built);
-
-/** docs/decisions.md, byte for byte from the data: the tallies counted, each group's table, the open questions. */
-export function decisionsMarkdown(log: DecisionLog): string {
-  const inGroup = (g: string) => log.decisions.filter((d) => d.group === g);
-  const counts = log.groups.map((g) => inGroup(g.id));
-  const out: string[] = ['# Decisions', '', log.intro.trim(), ''];
-  out.push(`**At a glance:** ${log.decisions.length} decisions: ${counts.map((c, k) => `${c.length} ${log.groups[k]!.glance}`).join(', ')}.`, '');
-  out.push('| Decided by | Decisions | Not built yet |', '|---|---|---|');
-  log.groups.forEach((g, k) => out.push(`| ${g.tally} | ${counts[k]!.length} | ${counts[k]!.filter(notBuilt).length} |`));
-  for (const g of log.groups) {
-    out.push('', `## ${g.heading}`, '');
-    if (g.note) out.push(g.note.trim(), '');
-    const prd = inGroup(g.id).some((d) => d.honours !== undefined);
-    out.push(prd ? '| # | Decision | Rationale | Date | Decided by | How the build honours it | Built |' : '| # | Decision | Rationale | Date | Decided by | Built |');
-    out.push(prd ? '|---|---|---|---|---|---|---|' : '|---|---|---|---|---|---|');
-    for (const d of inGroup(g.id)) out.push(`| ${[d.id, decisionCell(d), d.rationale, d.date, d.by, ...(prd ? [d.honours ?? ''] : []), d.built].join(' | ')} |`);
-  }
-  out.push('', '## Open', '', '| # | Question | Owner | Due |', '|---|---|---|---|');
-  for (const q of log.open) out.push(`| ${q.id} | ${q.question} | ${q.owner} | ${q.due} |`);
-  return out.join('\n') + '\n';
-}
-
 /** The decisions about a part: those naming it, or naming it through one of their aspects. */
 export function decisionsAbout(log: DecisionLog, id: string): { decision: Decision; aspects: Aspect[] }[] {
   return log.decisions.flatMap((d) => {

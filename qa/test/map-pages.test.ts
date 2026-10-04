@@ -7,7 +7,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { phaseOf, type ArchBox } from '../src/map/architecture.ts';
 import { mapIds, ROOT, SOURCE } from '../src/map/build.ts';
-import { checkDecisions, decisionCell, decisionsAbout, decisionsMarkdown, DECISIONS_PAGE, DECISIONS_SOURCE, type DecisionLog } from '../src/map/decisions.ts';
+import { checkDecisions, decisionsAbout, DECISIONS_SOURCE, type DecisionLog } from '../src/map/decisions.ts';
 import { readFacts, type Facts } from '../src/map/facts.ts';
 import { checkMap, type MapSource, type Rule } from '../src/map/map.ts';
 import { foundationUsers, packageLines, pageViews, readLines, type Page } from '../src/map/pages.ts';
@@ -247,15 +247,8 @@ describe('the architecture checks catch each kind of drift, one planted mistake 
 });
 
 describe('decisions as data', () => {
-  it('builds docs/decisions.md from docs/decisions.yaml, byte for byte', () => {
-    expect(decisionsMarkdown(decisions())).toBe(readFileSync(join(ROOT, DECISIONS_PAGE), 'utf8'));
-  });
   it('agrees with the map: every part it names is there, every chosen option is one of its options', () => {
     expect(checkDecisions(decisions(), mapIds(source()))).toEqual([]);
-  });
-  it('writes a decision as the log does: its lead in bold, then what it was chosen over', () => {
-    const b1 = decisions().decisions.find((d) => d.id === 'B1')!;
-    expect(decisionCell(b1)).toBe('**What ships first:** everything runs locally by default; AWS is opt-in, off by default. Over: building the web UI and AWS hosting first');
   });
   it('finds the decisions about a box, through the aspect that was weighed for it', () => {
     const about = decisionsAbout(decisions(), 'versions-table');

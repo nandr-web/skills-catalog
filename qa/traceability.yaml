@@ -600,16 +600,26 @@ requirements:
   # ---------------- The system map: more views, read from the code ----------------
   - id: system-map-views
     source: {doc: notes, ref: "the owner's asks for the system map: views of the architecture with a planned toggle, a page per part, a part's decisions and their alternatives"}
-    backlog: [skill-map-structure, skill-map-drill-down, skill-map-decisions, skill-map-architecture]
+    backlog: [skill-map-structure, skill-map-drill-down, skill-map-decisions, skill-map-architecture, skill-map-indirection]
     phase: 2
-    text: "The system map opens on the architecture (the contracts in the middle, what plugs into each on one machine and in AWS, what's planned hatched with its phase), and shows the context (the running parts on one machine and in AWS, what's planned on a toggle, the code's packages), a page per part with what's inside it, and each part's decisions with the alternatives weighed; all of it read from the code or checked against it."
+    text: "The system map opens on the architecture at a high level (who uses it, the contracts that let a backend be swapped with one box per side beside them, what's planned hatched with its phase), with the ports one level down (what plugs into each on one machine and in AWS), and shows the context (the running parts on one machine and in AWS, what's planned on a toggle, the code's packages), a page per part with what's inside it, and each part's decisions with the alternatives weighed; all of it read from the code or checked against it."
     oracles: [map-agrees-with-code]
     checks:
       - {layer: unit, name: "a part's page (qa/test/map-pages.test.ts): its lines are read from the imports, or in AWS from the template infra's tests pin (references and permissions, a grant isn't a use); every file and AWS resource is in exactly one box; a hand-written line only gives words to a line the code has, or joins a part the map one level up links; one planted case per rule", auto: true}
       - {layer: unit, name: "the readers (qa/test/map-readers.test.ts): imports through a package's own name and its index files, types-only imports, dynamic imports; the AWS template's resources, references and what each may do", auto: true}
-      - {layer: unit, name: "decisions as data: docs/decisions.md is built from docs/decisions.yaml byte for byte; every part a decision names is on the map; a chosen option is one of its options; a box with a weighed choice shows its options, the one chosen and what drove it", auto: true}
+      - {layer: unit, name: "decisions as data: every part a decision names is on the map; a chosen option is one of its options; a box with a weighed choice shows its options, the one chosen and what drove it", auto: true}
       - {layer: unit, name: "the pages: the architecture draws every box, its contracts as ports and what's planned hatched with its phase; the context page has each place built and with what's planned, and the code; a part with a page links to it; no page shows a reader undefined; the files on disk are a fresh build", auto: true}
       - {layer: unit, name: "the architecture against the code (qa/test/map-pages.test.ts): each contract is declared in its file; what plugs into it implements it; its shared suite runs on the local and the AWS adapters; each hand line is a link one level up or an import; one planted case per rule", auto: true}
+      - {layer: unit, name: "the landing over the detail (qa/test/map-pages.test.ts): every detailed box on exactly one landing box, every landing line over a line or plug in the detail, a landing box planned only when all it stands for is; one planted case per rule", auto: true}
+
+  - id: system-map-next
+    source: {doc: notes, ref: "the owner's next asks for the system map: every relevant layer, drift and the desired architecture, a page per component with its alternatives"}
+    backlog: [skill-map-layers, skill-map-drift, skill-map-desired-architecture, skill-map-component-pages, skill-map-alternatives]
+    phase: 2
+    text: "The system map has every relevant layer and component (the owner deciding where unclear), a show-drift and a desired-architecture toggle, and a page per component with, where it applies, the alternatives and whether they're settled. Not built yet."
+    oracles: [map-agrees-with-code]
+    checks:
+      - {layer: unit, name: "drift: where the code differs from the desired architecture is computed and marked, never drawn by hand; a page per component lists its alternatives", auto: true}
 
 # Each requirement item and the test files that hold it: the requirements page says "built" from these (a file must have
 # a test that runs). not_yet says, in words, what of the item isn't built yet; it can only lower its status. An item not
@@ -646,6 +656,8 @@ items:
   skill-map-drill-down:
     tests: [qa/test/map-pages.test.ts, qa/test/map.test.ts]
     not_yet: "one level down: a part's boxes have no pages of their own yet"
+  skill-map-indirection:
+    tests: [qa/test/map-pages.test.ts]
   skill-map-structure:
     tests: [qa/test/map-pages.test.ts, qa/test/map-readers.test.ts, qa/test/map.test.ts]
   skill-owner-only-publish:

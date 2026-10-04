@@ -5,7 +5,6 @@
 //   docs/map/context.html          who uses it and where each copy runs (planned on a toggle), and the code's packages
 //   docs/map/decisions.html        every decision, with the parts it's about and the options weighed
 //   docs/map/<part>.html           a page per part (map.yaml pages:): its insides, read from the code
-//   docs/decisions.md              the decision log, built from docs/decisions.yaml
 //   docs/pictures/map-<view>.svg   each view's overview, for the README and docs/architecture.md
 //   docs/pictures/map-<flow>.svg   the held update step, on one machine, with its steps in words under it
 // Drawn by the diagram renderer, vendored as renderer.js (scripts/vendor-renderer.ts). No AI, no network: the
@@ -15,7 +14,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
-import { checkDecisions, decisionsMarkdown, DECISIONS_PAGE, DECISIONS_SOURCE, type DecisionLog } from './decisions.ts';
+import { checkDecisions, DECISIONS_SOURCE, type DecisionLog } from './decisions.ts';
 import { readFacts, type Facts } from './facts.ts';
 import { checkMap, type MapSource, type Problem } from './map.ts';
 import { phoneProblems } from './phone.ts';
@@ -46,7 +45,6 @@ export async function buildMap(root = ROOT, given: Sources = {}): Promise<Built>
 
   const site = await buildSite(m, facts, log, m.codeBase);
   for (const [path, text] of site.files) files.set(path, text);
-  files.set(DECISIONS_PAGE, decisionsMarkdown(log));
   // The pictures: what's built today (no planned parts), as a README shows them.
   const { spec: parsed } = parseSystemMap(useCaseSpec({ m, facts }));
   const views = parsed.views.length ? parsed.views.map((v) => v.id) : [''];
