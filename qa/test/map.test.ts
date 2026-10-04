@@ -7,7 +7,7 @@ import { parse } from 'yaml';
 import { buildMap, ROOT, SOURCE } from '../src/map/build.ts';
 import { readFacts, type Facts } from '../src/map/facts.ts';
 import { checkMap, type MapSource, type Rule } from '../src/map/map.ts';
-import { MIN_PHONE_PX, PHONE_COLUMN, phoneProblems, smallestFont, viewBoxWidth } from '../src/map/phone.ts';
+import { MIN_PHONE_PX, PHONE_COLUMN, phoneProblems, smallestFont, viewBoxWidth, WIDE_BY_DESIGN } from '../src/map/phone.ts';
 
 const source = (): MapSource => parse(readFileSync(join(ROOT, SOURCE), 'utf8'));
 let facts: Facts;
@@ -28,7 +28,8 @@ describe('the system map', () => {
     expect([...built.files.keys()].sort()).toEqual([
       'docs/map/catalog-aws.html', 'docs/map/catalog.html', 'docs/map/context.html', 'docs/map/decisions.html', 'docs/map/index.html', 'docs/map/ports.html',
       'docs/map/skills-catalog.html', 'docs/map/use-cases.html',
-      'docs/pictures/map-aws.svg', 'docs/pictures/map-held-update.svg', 'docs/pictures/map-local.svg',
+      'docs/pictures/map-architecture.svg', 'docs/pictures/map-aws.svg', 'docs/pictures/map-held-update.svg', 'docs/pictures/map-local.svg',
+      'docs/pictures/map-ports.svg',
     ]);
     for (const [path, text] of built.files) expect(readFileSync(join(ROOT, path), 'utf8'), `${path} is stale: run npm run map in qa/`).toBe(text);
   }, 60_000);
@@ -72,6 +73,13 @@ describe('the map check catches each kind of drift', () => {
   it('a picture whose labels would shrink under 9px on a phone', () => {
     const wide = readFileSync(join(ROOT, 'docs/pictures/map-local.svg'), 'utf8').replace(/viewBox="0 0 \d+/, 'viewBox="0 0 900');
     expect(phoneProblems('map-local.svg', wide).map((p) => p.rule)).toEqual(['unreadable-on-phone']);
+  });
+  it('only the pictures named wide by design skip the phone check, each saying why', () => {
+    const wide = readFileSync(join(ROOT, 'docs/pictures/map-architecture.svg'), 'utf8');
+    expect(viewBoxWidth(wide)).toBeGreaterThan(PHONE_COLUMN);
+    expect(phoneProblems('docs/pictures/map-architecture.svg', wide)).toEqual([]);
+    expect(phoneProblems('docs/pictures/map-other.svg', wide).map((p) => p.rule)).toEqual(['unreadable-on-phone']);
+    for (const why of Object.values(WIDE_BY_DESIGN)) expect(why).toMatch(/interactive map/);
   });
   it('a stale page or picture on disk', async () => {
     const m = source();

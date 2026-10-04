@@ -1,0 +1,219 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="d d-system-map" viewBox="0 0 819 774" width="819" height="774" role="img" aria-label="What is the system made of, and which parts can be swapped?">
+<title>Skills Catalog</title>
+<style>.d { --d-page: #ECF0F3; --d-canvas: #F9FBFC; --d-ink: #13202A; --d-ink2: #3A4A56; --d-line: #B7C4CD; --d-grid: #D5DDE3; --d-shade: #E1E7EB; --d-accent: #137052; --d-accent-soft: #D9EDE3; --d-hot: #B23A0A; --d-hot-soft: #F8E2D5; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .d, svg.d:root { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+}
+:root[data-theme="dark"] .d { --d-page: #0E1418; --d-canvas: #151D23; --d-ink: #E3EAEE; --d-ink2: #AFBCC5; --d-line: #3A4A55; --d-grid: #25313A; --d-shade: #1C262D; --d-accent: #46C290; --d-accent-soft: #1C3A2F; --d-hot: #F08A50; --d-hot-soft: #4A2819; color-scheme: dark; }
+
+.d { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 12px; fill: var(--d-ink); }
+.d text { dominant-baseline: central; }
+.d-bg { fill: var(--d-canvas); }
+
+/* nodes */
+.d-node { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1.2; }
+.d-node--external { fill: var(--d-shade); stroke: var(--d-ink2); stroke-dasharray: 4 3; }
+.d-node--focus { fill: var(--d-accent-soft); stroke: var(--d-accent); stroke-width: 1.6; }
+.d-node--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); stroke-width: 1.6; }
+.d-node-detail { fill: none; stroke: var(--d-ink); stroke-width: 1; }
+.d-node--focus + .d-node-detail { stroke: var(--d-accent); }
+.d-node--alert + .d-node-detail { stroke: var(--d-hot); }
+.d-node--external + .d-node-detail { stroke: var(--d-ink2); }
+.d-node--proposed { stroke-width: 1.4; stroke-dasharray: 2 3; }
+.d-node--removed { fill: var(--d-canvas); stroke: var(--d-hot); stroke-width: 1.4; stroke-dasharray: 5 3; }
+.d-node--port { stroke-width: 1.7; }
+.d-hatch-bg { fill: var(--d-canvas); }
+.d-hatch-line { stroke: var(--d-ink2); stroke-width: 1.4; stroke-opacity: 0.22; }
+.d-label { fill: var(--d-ink); text-anchor: middle; }
+.d-label--strong { font-weight: 600; }
+.d-label--removed { fill: var(--d-ink2); text-decoration: line-through; }
+.d-tag--proposed { fill: var(--d-canvas); stroke: var(--d-ink); stroke-width: 1; stroke-dasharray: 2 2; }
+.d-tag--removed { fill: var(--d-hot); stroke: var(--d-hot); stroke-width: 1; }
+.d-tag-text { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-anchor: middle; }
+.d-tag-text--proposed { fill: var(--d-ink); }
+.d-tag-text--removed { fill: var(--d-canvas); }
+.d-legend-text { font-size: 10.5px; fill: var(--d-ink2); }
+.d-compare-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; fill: var(--d-ink2); }
+.d-callout { fill: var(--d-ink); }
+.d-callout-text { font-size: 10px; font-weight: 600; fill: var(--d-canvas); text-anchor: middle; }
+.d-note { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle; }
+.d-note--focus { fill: var(--d-accent); }
+.d-note--alert { fill: var(--d-hot); }
+
+/* edges */
+.d-edge { fill: none; stroke: var(--d-ink); stroke-width: 1.3; stroke-linejoin: round; }
+.d-edge--async { stroke-dasharray: 5 4; }
+.d-edge--proposed { stroke-dasharray: 2 3; }
+.d-edge--removed { stroke: var(--d-hot); stroke-dasharray: 5 3; }
+.d-edge--return { stroke: var(--d-ink2); stroke-width: 1.1; stroke-dasharray: 4 3; }
+.d-edge--focus { stroke: var(--d-accent); stroke-width: 2; }
+.d-edge--alert { stroke: var(--d-hot); stroke-width: 2; }
+.d-edge-label { font-size: 10.5px; fill: var(--d-ink2); text-anchor: middle;
+  paint-order: stroke; stroke: var(--d-canvas); stroke-width: 4px; stroke-linejoin: round; }
+.d-edge-label--focus { fill: var(--d-accent); font-weight: 600; }
+.d-edge-label--alert { fill: var(--d-hot); font-weight: 600; }
+.d-arrow { fill: var(--d-ink); }
+.d-arrow--focus { fill: var(--d-accent); }
+.d-arrow--alert { fill: var(--d-hot); }
+.d-arrow--muted { fill: var(--d-ink2); }
+.d-arrow--open { fill: none; stroke: var(--d-ink); stroke-width: 1.4; stroke-linejoin: round; }
+.d-arrow--open.d-arrow--focus { stroke: var(--d-accent); }
+.d-arrow--open.d-arrow--alert { stroke: var(--d-hot); }
+.d-arrow--open.d-arrow--muted { stroke: var(--d-ink2); }
+
+/* sequence */
+.d-lifeline { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 3 4; }
+.d-activation { fill: var(--d-shade); stroke: var(--d-ink); stroke-width: 1; }
+.d-msg-label { font-size: 11px; fill: var(--d-ink); text-anchor: middle; }
+.d-msg-label--start { text-anchor: start; }
+.d-msg-label--return { fill: var(--d-ink2); }
+.d-msg-label--focus { fill: var(--d-accent); font-weight: 600; }
+.d-msg-label--alert { fill: var(--d-hot); font-weight: 600; }
+.d-memo { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1; }
+.d-memo--alert { fill: var(--d-hot-soft); stroke: var(--d-hot); }
+.d-memo-text { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
+.d-frame { fill: none; stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-frame-tab { fill: var(--d-shade); stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-frame-kind { font-size: 10.5px; font-weight: 600; fill: var(--d-ink); }
+.d-frame-cond-bg { fill: var(--d-canvas); }
+.d-frame-cond { font-size: 10.5px; fill: var(--d-ink2); }
+.d-frame-sep { fill: none; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+
+/* state */
+.d-pseudo { fill: var(--d-ink); }
+.d-choice-label { font-size: 10.5px; fill: var(--d-ink); text-anchor: middle; }
+.d-composite { fill: var(--d-grid); fill-opacity: 0.25; stroke: var(--d-ink2); stroke-width: 1.1; }
+.d-composite-label { font-size: 11px; font-weight: 600; fill: var(--d-ink); }
+
+/* system map */
+.d-map-quiet { stroke: var(--d-ink2); stroke-width: 1; }
+.d-map-label--start { text-anchor: start; }
+.d-map-label--end { text-anchor: end; }
+.d-map-badge { fill: var(--d-accent); }
+.d-map-badge--alert { fill: var(--d-hot); }
+.d-map-badge--planned { fill: var(--d-canvas); stroke: var(--d-accent); stroke-width: 1.2; stroke-dasharray: 2 2; }
+.d-map-badge-text { font-size: 10.5px; font-weight: 600; fill: var(--d-canvas); text-anchor: middle; }
+.d-map-badge-text--planned { fill: var(--d-accent); }
+.d-map-rule { fill: none; stroke: var(--d-line); stroke-width: 1; }
+.d-map-legend-head { font-size: 11px; font-weight: 600; fill: var(--d-ink); }
+.d-map-legend-text { font-size: 11px; fill: var(--d-ink); }
+.d-map-legend-word { font-weight: 700; fill: var(--d-hot); }
+.d-map-legend-word--planned { fill: var(--d-accent); }
+.d-map-part[role="button"], a.d-map-part { cursor: pointer; }
+.d-map-part[role="button"]:focus, a.d-map-part:focus { outline: none; }
+.d-map-part[role="button"]:focus-visible > :first-child, a.d-map-part:focus-visible > :first-child, .d-map-part--picked > :first-child { stroke: var(--d-ink); stroke-width: 3; }
+a.d-map-part:hover > :first-child { stroke: var(--d-ink); stroke-width: 2; }
+.d-map-opens { font-size: 15px; font-weight: 700; fill: var(--d-ink2); text-anchor: middle; dominant-baseline: central; }
+
+/* groups (boundaries) */
+.d-group { fill: var(--d-grid); fill-opacity: 0.35; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
+.d-group--region { fill-opacity: 0.22; stroke: var(--d-line); stroke-width: 1.2; stroke-dasharray: none; }
+.d-group-label { font-size: 10.5px; fill: var(--d-ink2); letter-spacing: 0.06em; font-weight: 500; }</style>
+<defs><marker id="map-architecture-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="map-architecture-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="map-architecture-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="map-architecture-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="map-architecture-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="map-architecture-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="map-architecture-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="map-architecture-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
+<rect class="d-bg" width="819" height="774"/>
+<defs><pattern id="map-architecture-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="d-hatch-bg" width="6" height="6"/><path class="d-hatch-line" d="M0 0V6"/></pattern></defs>
+<rect class="d-group d-group--region" x="72.5" y="16" width="728.4" height="230" rx="6"/>
+<text class="d-group-label" x="80.5" y="27">who uses it</text>
+<rect class="d-group d-group--region" x="58.5" y="280.5" width="160" height="344" rx="6"/>
+<text class="d-group-label" x="66.5" y="291.5">on one machine</text>
+<rect class="d-group d-group--region" x="300.2" y="280.5" width="245" height="477.5" rx="6"/>
+<text class="d-group-label" x="308.2" y="291.5">the core</text>
+<rect class="d-group d-group--region" x="611.4" y="280.5" width="191" height="344" rx="6"/>
+<text class="d-group-label" x="619.4" y="291.5">in AWS</text>
+<path class="d-edge" d="M370.2 73 L194.5 73" marker-end="url(#map-architecture-arrow)"/>
+<path class="d-edge" d="M138.5 99.5 L138.5 196 Q138.5 201 143.5 201 L330.7 201" marker-end="url(#map-architecture-arrow)"/>
+<path class="d-edge" d="M422.7 92 L422.7 174.5" marker-end="url(#map-architecture-arrow)"/>
+<path class="d-edge d-edge--proposed" d="M706.9 108 L706.9 132 Q706.9 137 701.9 137 L434.7 137 Q429.7 137 429.7 142 L429.7 174.5" marker-end="url(#map-architecture-arrow)"/>
+<path class="d-edge" d="M422.7 227.5 L422.7 302.5" marker-end="url(#map-architecture-arrow)"/>
+<path class="d-edge d-edge--proposed" d="M706.9 236 L706.9 302.5" marker-end="url(#map-architecture-arrow)"/>
+<path class="d-edge" d="M310.2 329 L202 329"/>
+<path class="d-edge" d="M535.2 329 L630.9 329"/>
+<path class="d-edge" d="M138.5 355.5 L138.5 452 Q138.5 457 143.5 457 L337.2 457" marker-end="url(#map-architecture-arrow)"/>
+<path class="d-edge" d="M706.9 355.5 L706.9 452 Q706.9 457 701.9 457 L508.2 457" marker-end="url(#map-architecture-arrow)"/>
+<path class="d-edge" d="M422.7 483.5 L422.7 558.5" marker-end="url(#map-architecture-arrow)"/>
+<path class="d-edge" d="M322.7 585 L208.5 585"/>
+<path class="d-edge" d="M522.7 585 L621.4 585"/>
+<path class="d-edge d-edge--proposed" d="M422.7 611.5 L422.7 678"/>
+<g class="d-map-part" data-part="o-claude">
+<rect class="d-node d-node--external" x="82.5" y="46.5" width="112" height="53" rx="3"/>
+<text class="d-label" x="138.5" y="66">Claude Code</text>
+<text class="d-note" x="138.5" y="82">not ours</text>
+</g>
+<g class="d-map-part" data-part="o-dev">
+<rect class="d-node" x="370.2" y="54" width="105" height="38" rx="19"/>
+<text class="d-label" x="422.7" y="73">Developer</text>
+</g>
+<g class="d-map-part d-map-part--proposed" data-part="o-assistants">
+<rect class="d-node d-node--external d-node--proposed" style="fill: url(#map-architecture-hatch)" x="622.9" y="38" width="168" height="70" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="639.2" y="44" width="135.4" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="706.9" y="51.5">PHASE 2–3 · PLANNED</text>
+<text class="d-label" x="706.9" y="74.5">other assistants</text>
+<text class="d-note" x="706.9" y="90.5">pi · Copilot · Codex</text>
+</g>
+<g class="d-map-part" data-part="o-client">
+<rect class="d-node" x="330.7" y="174.5" width="184" height="53" rx="3"/>
+<text class="d-label" x="422.7" y="194">skills-catalog</text>
+<text class="d-note" x="422.7" y="210">MCP server · CLI · serve</text>
+</g>
+<g class="d-map-part d-map-part--proposed" data-part="o-web">
+<rect class="d-node d-node--proposed" style="fill: url(#map-architecture-hatch)" x="629.4" y="166" width="155" height="70" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="645.8" y="172" width="122.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="706.9" y="179.5">PHASE 2 · PLANNED</text>
+<text class="d-label" x="706.9" y="202.5">web page</text>
+<text class="d-note" x="706.9" y="218.5">browse · compare</text>
+</g>
+<g class="d-map-part" data-part="o-api">
+<path class="d-node d-node--port" d="M310.2 302.5H535.2V324A5 5 0 0 0 535.2 334V355.5H310.2V334A5 5 0 0 0 310.2 324Z"/>
+<text class="d-label" x="422.7" y="322">catalog API</text>
+<text class="d-note" x="422.7" y="338">every operation, defined once</text>
+</g>
+<g class="d-map-part" data-part="o-local">
+<rect class="d-node" x="75" y="302.5" width="127" height="53" rx="3"/>
+<text class="d-label" x="138.5" y="322">local catalog</text>
+<text class="d-note" x="138.5" y="338">in this process</text>
+</g>
+<g class="d-map-part" data-part="o-hosted">
+<rect class="d-node" x="630.9" y="302.5" width="152" height="53" rx="3"/>
+<text class="d-label" x="706.9" y="322">hosted catalog</text>
+<text class="d-note" x="706.9" y="338">CloudFront · Lambda</text>
+</g>
+<g class="d-map-part" data-part="o-rules">
+<rect class="d-node" x="337.2" y="430.5" width="171" height="53" rx="3"/>
+<text class="d-label" x="422.7" y="450">catalog rules</text>
+<text class="d-note" x="422.7" y="466">publish · find · fetch</text>
+</g>
+<g class="d-map-part" data-part="o-ports">
+<path class="d-node d-node--port" d="M322.7 558.5H522.7V580A5 5 0 0 0 522.7 590V611.5H322.7V590A5 5 0 0 0 322.7 580Z"/>
+<text class="d-label" x="422.7" y="578">ports</text>
+<text class="d-note" x="422.7" y="594">Storage · SearchIndex · …</text>
+</g>
+<g class="d-map-part" data-part="o-local-backends">
+<path class="d-node" d="M68.5 561.5 A70 6 0 0 1 208.5 561.5 V608.5 A70 6 0 0 1 68.5 608.5 Z"/>
+<path class="d-node-detail" d="M68.5 561.5 A70 6 0 0 0 208.5 561.5"/>
+<text class="d-label" x="138.5" y="581">local backends</text>
+<text class="d-note" x="138.5" y="597">SQLite · a folder</text>
+</g>
+<g class="d-map-part" data-part="o-aws-backends">
+<path class="d-node" d="M621.4 561.5 A85.5 6 0 0 1 792.4 561.5 V608.5 A85.5 6 0 0 1 621.4 608.5 Z"/>
+<path class="d-node-detail" d="M621.4 561.5 A85.5 6 0 0 0 792.4 561.5"/>
+<text class="d-label" x="706.9" y="581">AWS backends</text>
+<text class="d-note" x="706.9" y="597">DynamoDB · S3 · GitHub</text>
+</g>
+<g class="d-map-part d-map-part--proposed" data-part="o-agents">
+<rect class="d-node d-node--proposed" style="fill: url(#map-architecture-hatch)" x="345.2" y="678" width="155" height="70" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="361.6" y="684" width="122.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="422.7" y="691.5">PHASE 2 · PLANNED</text>
+<text class="d-label" x="422.7" y="714.5">agent reviewers</text>
+<text class="d-note" x="422.7" y="730.5">quality, by agents</text>
+</g>
+<text class="d-edge-label" x="282.4" y="64">asks</text>
+<text class="d-edge-label" x="234.6" y="192">MCP</text>
+<text class="d-edge-label d-map-label--end" x="415.7" y="133.3">CLI</text>
+<text class="d-edge-label d-edge-label--proposed" x="568.3" y="128">MCP, CLI (planned)</text>
+<text class="d-edge-label d-map-label--start" x="429.7" y="265">calls</text>
+<text class="d-edge-label d-map-label--end d-edge-label--proposed" x="699.9" y="269.3">API (planned)</text>
+<text class="d-edge-label" x="237.9" y="448">runs</text>
+<text class="d-edge-label" x="637.4" y="448">runs</text>
+<text class="d-edge-label d-map-label--start" x="429.7" y="521">through</text>
+<text class="d-edge-label d-map-label--start d-edge-label--proposed" x="429.7" y="644.8">(planned)</text>
+</svg>

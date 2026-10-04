@@ -7,6 +7,7 @@
 //   docs/map/<part>.html           a page per part (map.yaml pages:): its insides, read from the code
 //   docs/pictures/map-<view>.svg   each view's overview, for the README and docs/architecture.md
 //   docs/pictures/map-<flow>.svg   the held update step, on one machine, with its steps in words under it
+//   docs/pictures/map-architecture.svg, map-<zoom>.svg   the architecture and each zoom, for the README
 // Drawn by the diagram renderer, vendored as renderer.js (scripts/vendor-renderer.ts). No AI, no network: the
 // same map, decisions and code give the same files, byte for byte (the map test compares a fresh build with the files
 // on disk).
@@ -20,6 +21,7 @@ import { checkMap, type MapSource, type Problem } from './map.ts';
 import { phoneProblems } from './phone.ts';
 import { drawSystemMap, layoutSystemMap, parseSystemMap } from './renderer.js';
 import { buildSite, useCaseSpec } from './site.ts';
+import { architectureSpec, landingSpec, zoomBoxes } from './architecture.ts';
 
 /** The repo's root, as an absolute path. */
 export const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
@@ -56,6 +58,15 @@ export async function buildMap(root = ROOT, given: Sources = {}): Promise<Built>
       if (i < 0) problems.push({ rule: 'unknown-flow', message: `PICTURE_FLOWS: no flow "${id}"` });
       else files.set(picturePath(id), drawSystemMap(parsed, L, i, { idPrefix: `map-${id}`, legend: true }) + '\n');
     }
+  }
+  // The architecture and each zoom as pictures, for the README (GitHub shows an .html page as its source): built here,
+  // so the fresh-build test keeps them current.
+  if (m.architecture) {
+    const drawings: [string, ReturnType<typeof parseSystemMap>['spec']][] = [
+      ['architecture', parseSystemMap(landingSpec(m, facts)).spec],
+      ...m.architecture.zooms.map((z): [string, ReturnType<typeof parseSystemMap>['spec']] => [z.id, parseSystemMap(architectureSpec(m, facts, zoomBoxes(m.architecture!, z))).spec]),
+    ];
+    for (const [name, spec] of drawings) files.set(picturePath(name), drawSystemMap(spec, layoutSystemMap(spec, ''), undefined, { idPrefix: `map-${name}` }) + '\n');
   }
   for (const [path, svg] of files) if (path.endsWith('.svg')) problems.push(...phoneProblems(path, svg));
   return { files, problems, warnings: site.warnings };

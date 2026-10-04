@@ -26,7 +26,15 @@ export function smallestFont(svg: string): number {
 /** The picture's width, from its viewBox. */
 export const viewBoxWidth = (svg: string) => Number(svg.match(/viewBox="[\d.-]+[\s,]+[\d.-]+[\s,]+([\d.]+)/)?.[1]);
 
+/** Pictures wide by design, each with why: on a phone the README's picture opens the interactive map, which scrolls
+ *  sideways at full size. Any other picture must read on a phone as it is. */
+export const WIDE_BY_DESIGN: Record<string, string> = {
+  'docs/pictures/map-architecture.svg': 'the architecture: three columns side by side (one machine, the core, AWS); the README links it to the interactive map',
+  'docs/pictures/map-ports.svg': 'each port with what plugs in on either side; the README links it to the interactive map',
+};
+
 export function phoneProblems(path: string, svg: string): Problem[] {
+  if (WIDE_BY_DESIGN[path]) return [];
   const w = viewBoxWidth(svg), font = smallestFont(svg);
   const px = font * Math.min(1, PHONE_COLUMN / w);
   return px >= MIN_PHONE_PX ? [] : [{
