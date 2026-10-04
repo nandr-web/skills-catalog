@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
+import { phaseOf, type ArchBox } from '../src/map/architecture.ts';
 import { mapIds, ROOT, SOURCE } from '../src/map/build.ts';
 import { checkDecisions, decisionCell, decisionsAbout, decisionsMarkdown, DECISIONS_PAGE, DECISIONS_SOURCE, type DecisionLog } from '../src/map/decisions.ts';
 import { readFacts, type Facts } from '../src/map/facts.ts';
@@ -107,6 +108,41 @@ describe('the page checks catch each kind of drift', () => {
   it('a package with no box in the Code view', () => caught('package-not-shown', (m) => { m.code!.packages = m.code!.packages.filter((p) => p.id !== 'infra'); }));
 });
 
+describe('the architecture checks catch each kind of drift, one planted mistake per rule', () => {
+  const abox = (m: MapSource, id: string): ArchBox => m.architecture!.boxes.find((b) => b.id === id)!;
+  const rulesOf = (m: MapSource) => [...new Set(checkMap(m, facts, exists).map((p) => p.rule))];
+  /** Plants one mistake in a copy of the map: exactly that rule fires (and nothing else); the unplanted map has no problem. */
+  const planted = (rule: Rule, plant: (m: MapSource) => void) => {
+    expect(checkMap(source(), facts, exists), 'the unplanted map').toEqual([]);
+    const m = structuredClone(source());
+    plant(m);
+    expect(rulesOf(m), `planted ${rule}`).toEqual([rule]);
+  };
+  it('a box that plugs in but whose files don\'t implement the contract', () => planted('adapter-not-in-code', (m) => { abox(m, 'a-storage-local').plugs!.implements = ['SearchIndex']; }));
+  it('a contract its file doesn\'t declare', () => planted('contract-not-in-code', (m) => { abox(m, 'a-storage').contract!.file = 'core/src/catalog.ts'; }));
+  it('a shared suite that runs on neither side', () => {
+    planted('suite-not-run', (m) => { abox(m, 'a-events').contract!.suites = ['eventsSuite']; });
+    const m = structuredClone(source());
+    abox(m, 'a-events').contract!.suites = ['eventsSuite'];
+    const sides = checkMap(m, facts, exists).filter((p) => p.rule === 'suite-not-run').map((p) => /AWS|local/.exec(p.message)?.[0]).sort();
+    expect(sides).toEqual(['AWS', 'local']); // each side is named on its own
+  });
+  it('a line between two boxes that neither a link on the map nor an import backs', () => planted('line-not-in-code', (m) => {
+    m.architecture!.lines!.push({ from: 'a-search-local', to: 'a-identity-aws', label: 'calls' });
+  }));
+  it('a planned box that has code (so it\'s built)', () => planted('planned-part-has-code', (m) => { abox(m, 'a-reviewer-agents').code = ['core/src/skill-tree/reviewer.ts']; }));
+  it('a box plugging into something that is no contract', () => planted('unknown-contract', (m) => { abox(m, 'a-storage-local').plugs!.into = 'a-rules'; }));
+  it('a field the box doesn\'t have (what an unquoted comma in a flow map makes)', () => planted('unknown-field', (m) => {
+    (abox(m, 'a-reviewer') as unknown as Record<string, unknown>)['review out'] = null;
+  }));
+  it('a box in a zone the architecture hasn\'t', () => planted('unknown-zone', (m) => { abox(m, 'a-opener').zone = 'nowhere'; }));
+  it('a box opening a view the map hasn\'t', () => planted('unknown-view', (m) => { abox(m, 'a-function').view = 'mars'; }));
+  it('a planned box\'s phase is the phases of the requirements that would build it', () => {
+    expect(phaseOf({ needs: ['pi-agent', 'other-assistants'] }, facts)).toBe('2–3');
+    expect(phaseOf({ needs: ['quality-agent-reviews'] }, facts)).toBe('2');
+  });
+});
+
 describe('decisions as data', () => {
   it('builds docs/decisions.md from docs/decisions.yaml, byte for byte', () => {
     expect(decisionsMarkdown(decisions())).toBe(readFileSync(join(ROOT, DECISIONS_PAGE), 'utf8'));
@@ -136,8 +172,11 @@ describe('decisions as data', () => {
 });
 
 describe('the pages show what was asked for', () => {
-  it('the structure page: the running parts in each place, built and with what\'s planned, and the code', () => {
-    const s = html('structure.html');
+  it('the context page: the running parts in each place, built and with what\'s planned, and the code', () => {
+    const s = html('context.html');
+    expect(s).toContain('<span class="eyebrow">System map · context</span>');
+    expect(s).toContain('Who uses it, and where does each copy run?');
+    expect(s).toContain('<a href="context.html" aria-current="page">Context</a>');
     for (const v of ['local', 'aws']) for (const p of ['0', '1']) expect(s).toContain(`data-sv="running" data-view="${v}" data-planned="${p}"`);
     expect(s).toContain('data-sv="code"');
     expect(s).toMatch(/<button type="button" class="switch" data-planned[^>]*aria-label="Show what's planned">/);
@@ -146,13 +185,45 @@ describe('the pages show what was asked for', () => {
     expect(s).toMatch(/<a class="d-map-part d-map-part--opens" data-part="catalog" href="catalog-aws.html"/);
     expect(s.match(/data-part="web"/g)?.length).toBe(2); // in AWS and on one machine, with what's planned only
   });
+  it('the architecture page: every box drawn, contracts as ports, what\'s planned hatched with its phase, a card each', () => {
+    const arch = source().architecture!;
+    const s = html('index.html');
+    expect(s).toContain('<a href="index.html" aria-current="page">Architecture</a>');
+    expect(s).toContain('<span class="eyebrow">System map · architecture</span>');
+    expect(s).toContain('"planned":true');
+    // The drawing: one group per box (a part's group is `data-part`); its text up to the box's closing tag.
+    const drawn = (id: string) => {
+      const at = s.indexOf(`data-part="${id}"`);
+      expect(at, `${id} is drawn`).toBeGreaterThan(-1);
+      return s.slice(at, at + s.slice(at).search(/<\/(?:g|a)>/));
+    };
+    expect(arch.boxes.length).toBeGreaterThan(20);
+    for (const b of arch.boxes) {
+      const d = drawn(b.id);
+      expect(s, `a card for ${b.id}`).toContain(`<article class="card" data-box="${b.id}">`);
+      // A contract is drawn as a port, and only a contract is.
+      expect(/\bd-node--port\b/.test(d), `${b.id} drawn as a port: ${!!b.contract}`).toBe(!!b.contract);
+      // A planned box is hatched, and only a planned box is.
+      expect(d.includes('url(#architecture-hatch)'), `${b.id} hatched: ${b.status === 'proposed'}`).toBe(b.status === 'proposed');
+    }
+    expect(arch.boxes.filter((b) => b.contract).length).toBe(6);
+    const tags: Record<string, string> = { 'a-assistants': 'PHASE 2–3 · PLANNED', 'a-web': 'PHASE 2 · PLANNED', 'a-reviewer-agents': 'PHASE 2 · PLANNED' };
+    expect(arch.boxes.filter((b) => b.status === 'proposed').map((b) => b.id).sort()).toEqual(Object.keys(tags).sort());
+    for (const [id, tag] of Object.entries(tags)) {
+      expect(drawn(id), id).toContain(`>${tag}</text>`);
+      const card = s.slice(s.indexOf(`data-box="${id}"`), s.indexOf('</article>', s.indexOf(`data-box="${id}"`)));
+      expect(card, `${id}'s card`).toContain(`<span class="tag">${tag.toLowerCase().replace(' · planned', '')} · planned</span>`);
+    }
+  });
   it('a part\'s page: its boxes, where it sits, its decisions, the steps through it, a way back', () => {
     const p = html('catalog-aws.html');
-    expect(p).toContain('<a href="structure.html">Structure</a>');
+    expect(p).toContain('<a href="index.html">Architecture</a>');
     for (const b of ['edge', 'http-api', 'api-function', 'versions-table', 'files-bucket', 'events', 'indexer', 'sweep', 'alarms', 'page-files']) expect(p).toContain(`data-box="${b}"`);
     expect(p).toContain('Where it sits');
     expect(p).toContain('id="decision-B13"');
     expect(p).toMatch(/held update<\/strong><\/a>, step \d/);
+    expect(p).toMatch(/href="use-cases\.html#step=\d+"/);
+    expect(p).not.toMatch(/href="index\.html#step=/);
   });
   it('clicking the database shows the options weighed, the one chosen, and what drove it', () => {
     const p = html('catalog-aws.html');
@@ -166,7 +237,7 @@ describe('the pages show what was asked for', () => {
     expect(card).toContain('href="decisions.html#decision-B13">Every option side by side ›</a>');
   });
   it('no page shows a reader "undefined", "NaN" or "[object Object]"', () => {
-    for (const name of ['index.html', 'structure.html', 'decisions.html', 'skills-catalog.html', 'catalog.html', 'catalog-aws.html']) {
+    for (const name of ['index.html', 'use-cases.html', 'context.html', 'decisions.html', 'skills-catalog.html', 'catalog.html', 'catalog-aws.html']) {
       const shown = html(name).replace(/<script[\s\S]*?<\/script>/g, '');
       expect(shown, name).not.toMatch(/\bundefined\b|\bNaN\b|\[object Object\]/);
     }

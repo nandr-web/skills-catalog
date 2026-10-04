@@ -1,0 +1,10 @@
+id: skill-map-architecture
+title: "The system map opens on an architecture diagram"
+phase: "2"
+source: "the owner"
+quote: "I want the landing screen to be an actual architecture diagram"
+want: "As the owner, I want the system map to open on an architecture diagram that shows what's built and what's planned (shaded with its phase), and the interface layer that lets the same system run on one machine, in AWS or on another service, so I can see at a glance how it's built and what can be swapped."
+accept: "docs/map/index.html is the architecture: the contracts drawn as ports with what plugs into each on one machine and in AWS, planned parts hatched with their phase from the requirements; the map check fails when a contract isn't declared where it says, a box doesn't implement what it plugs into, a contract's shared suite doesn't run on both sides, or a line has nothing in the code behind it."
+confirmed: false
+parts: [docs, qa]
+relates: [skill-map-structure, skill-map-drill-down, skill-map-decisions]

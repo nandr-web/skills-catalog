@@ -30,7 +30,7 @@ describe('qa trace-check', () => {
   it('passes on the real goldens and the exported requirement list (requirements/, the default)', () => {
     const r = traceCheck({ qa: QA });
     expect(r.problems).toEqual([]);
-    expect(r.counts.backlog).toBe(47);
+    expect(r.counts.backlog).toBe(48);
   });
 
   it('a check with a key outside layer, name, golden, auto and automate_by is a problem (a comma in an unquoted name makes one)', () => {

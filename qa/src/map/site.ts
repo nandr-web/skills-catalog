@@ -1,12 +1,15 @@
 // The system map's pages (docs/map/*.html), built from the map, the decision log and the facts read from the code:
-//   index.html       use cases: the core loop, step by step (the renderer's own page, with the site's navigation)
-//   structure.html   what the system is made of: its running parts (on one machine, in AWS; planned parts on a toggle)
-//                    and its code's packages, with what uses what
+//   index.html       the architecture: the contracts in the middle, what plugs into each on one machine and in AWS,
+//                    who uses it on top, planned parts hatched with their phase (architecture.ts)
+//   use-cases.html   use cases: the core loop, step by step (the renderer's own page, with the site's navigation)
+//   context.html     who uses it and where each copy runs: the running parts (on one machine, in AWS; planned parts on
+//                    a toggle) and its code's packages, with what uses what
 //   decisions.html   every decision, with the parts it's about, and the options weighed where there were several
 //   <page>.html      a part's insides (pages.ts): where it sits, its boxes and the lines read between them, its
 //                    decisions, the use-case steps through it, its code and tests
 // One question per page. Self-contained: inline CSS and script; without a script everything is still there, stacked.
 import { matchesGlob } from 'node:path';
+import { architectureSpec, phaseOf, type ArchBox } from './architecture.ts';
 import { decisionsAbout, type Aspect, type Decision, type DecisionLog } from './decisions.ts';
 import type { Facts } from './facts.ts';
 import { toSpec, type MapSource, type Part } from './map.ts';
@@ -34,7 +37,7 @@ function where(c: Ctx): Map<string, { href: string; label: string }> {
   const views = (c.m.views ?? []).map((v) => v.id);
   for (const p of c.m.parts) {
     const pg = views.map((v) => pageOf(c.m, p.id, v)).find(Boolean);
-    out.set(p.id, { href: pg ? `${pg.id}.html` : `structure.html#part=${p.id}`, label: p.label });
+    out.set(p.id, { href: pg ? `${pg.id}.html` : `context.html#part=${p.id}`, label: p.label });
   }
   for (const pg of c.m.pages ?? []) for (const b of pg.boxes) out.set(b.id, { href: `${pg.id}.html#box=${b.id}`, label: `${b.label} (${pageTitle(c.m, pg)})` });
   return out;
@@ -134,11 +137,11 @@ function codeSpec(c: Ctx): SystemMapSpec {
 
 // ---------------------------------------------------------------- pieces of HTML
 
-function nav(current: 'index' | 'structure' | 'decisions' | 'part', crumbs: { label: string; href?: string }[] = []): string {
-  const tab = (id: string, href: string, label: string) => `<a href="${href}"${current === id || (id === 'structure' && current === 'part') ? ' aria-current="page"' : ''}>${label}</a>`;
+function nav(current: 'architecture' | 'use-cases' | 'context' | 'decisions' | 'part', crumbs: { label: string; href?: string }[] = []): string {
+  const tab = (id: string, href: string, label: string) => `<a href="${href}"${current === id || (id === 'architecture' && current === 'part') ? ' aria-current="page"' : ''}>${label}</a>`;
   return `<nav class="site" aria-label="The system map's pages">
 <a class="brand" href="index.html">Skills Catalog · system map</a>
-<span class="tabs">${tab('index', 'index.html', 'Use cases')}${tab('structure', 'structure.html', 'Structure')}${tab('decisions', 'decisions.html', 'Decisions')}</span>
+<span class="tabs">${tab('architecture', 'index.html', 'Architecture')}${tab('use-cases', 'use-cases.html', 'Use cases')}${tab('context', 'context.html', 'Context')}${tab('decisions', 'decisions.html', 'Decisions')}</span>
 </nav>${crumbs.length ? `\n<p class="crumbs">${crumbs.map((x) => (x.href ? `<a href="${esc(x.href)}">${esc(x.label)}</a>` : `<span aria-current="page">${esc(x.label)}</span>`)).join(' <span aria-hidden="true">›</span> ')}</p>` : ''}`;
 }
 
@@ -378,7 +381,7 @@ const SCRIPT = `(() => {
     history.replaceState(null, '', s ? '#' + s : location.pathname + location.search);
   }
   function show() {
-    root.classList.toggle('hide-planned', !state.planned);
+    root.classList.toggle('hide-planned', !state.planned && !data.planned);
     let active = null;
     for (const f of $$('.frame')) {
       const on = (!f.dataset.view || f.dataset.view === state.view) && (!f.dataset.sv || f.dataset.sv === state.sv)
@@ -471,7 +474,7 @@ ${about.length ? `<p><span class="kicker">Decisions</span> ${about.map(({ decisi
 </article>`;
 }
 
-async function structurePage(c: Ctx): Promise<string> {
+async function contextPage(c: Ctx): Promise<string> {
   const views = (c.m.views ?? []).map((v) => v.id);
   const widths: number[] = [];
   // Two drawings per view, what's built and what's built plus what's planned, so neither has room left for the other.
@@ -519,13 +522,13 @@ ${pk.text ? `<p>${rich(pk.text)}</p>` : ''}
 <div class="seg" role="group" aria-label="Where it runs">${views.map((v) => `<button type="button" data-view="${esc(v)}" data-for-sv="running">${esc(viewLabel(c.m, v))}</button>`).join('')}</div>
 <button type="button" class="switch" data-planned data-for-sv="running" aria-label="Show what's planned">+ planned</button>
 </nav>`;
-  const body = `${nav('structure')}
-<header class="top"><span class="eyebrow">System map · structure</span><h1>${esc(c.m.title)}</h1>
-<p class="question">What is the system made of, and what talks to what?</p></header>
+  const body = `${nav('context')}
+<header class="top"><span class="eyebrow">System map · context</span><h1>${esc(c.m.title)}</h1>
+<p class="question">Who uses it, and where does each copy run?</p></header>
 ${controls}
 <main class="frames">${frames.join('\n')}</main>
 <section class="cards boxes"><h2>The parts and the packages</h2><div class="card-grid">${cards.join('\n')}</div></section>`;
-  return shell(`${c.m.title}: structure`, body, { css: scrollHintCss(widths), data: { views, svs: ['running', 'code'], svOf: Object.fromEntries(c.m.code!.packages.map((p) => [p.id, 'code'])) }, script: c.script });
+  return shell(`${c.m.title}: context`, body, { css: scrollHintCss(widths), data: { views, svs: ['running', 'code'], svOf: Object.fromEntries(c.m.code!.packages.map((p) => [p.id, 'code'])) }, script: c.script });
 }
 
 async function partPage(c: Ctx, page: Page): Promise<string> {
@@ -594,7 +597,7 @@ ${about.length ? `<div class="decisions"><span class="kicker">Decisions</span>${
 ${views.length > 1 ? `<div class="seg" role="group" aria-label="Where it runs">${views.map((v) => `<button type="button" data-view="${esc(v)}">${esc(viewLabel(c.m, v))}</button>`).join('')}</div>` : ''}
 ${page.boxes.some((b) => b.status === 'proposed') ? '<button type="button" class="switch" data-planned aria-label="Show what\'s planned">+ planned</button>' : ''}
 </nav>` : '';
-  const body = `${nav('part', [{ label: 'Structure', href: 'structure.html' }, { label: title }])}
+  const body = `${nav('part', [{ label: 'Architecture', href: 'index.html' }, { label: title }])}
 <header class="top"><span class="eyebrow">System map · a part</span><h1>${esc(title)}</h1>
 <p class="question">${esc(page.question)}</p>
 ${lead.text ? `<p class="lede">${rich(partIn(lead, views[0]!).text ?? lead.text)}</p>` : ''}</header>
@@ -604,7 +607,7 @@ ${controls}
 <section id="decisions"><h2>Decisions about ${esc(title)}</h2>
 ${decisions.length ? `<div class="decisions">${decisions.map((d) => decisionCard(c, d)).join('\n')}</div>` : '<p>None recorded.</p>'}</section>
 <section><h2>Use-case steps through ${esc(title)}</h2>
-<ol class="steps-through">${steps.map(({ f, fi, s, si }) => `<li><span class="num">${fi + 1}</span><span><a href="index.html#step=${fi + 1}"><strong>${esc(f.label)}</strong></a>, step ${si + 1}: ${rich(s.label)}</span></li>`).join('')}</ol></section>
+<ol class="steps-through">${steps.map(({ f, fi, s, si }) => `<li><span class="num">${fi + 1}</span><span><a href="use-cases.html#step=${fi + 1}"><strong>${esc(f.label)}</strong></a>, step ${si + 1}: ${rich(s.label)}</span></li>`).join('')}</ol></section>
 <section class="where-it-sits"><h2>Where it sits</h2><p class="lede">The whole system, with ${esc(title)} in green. Click a part with › to go to its page.</p><div class="locators">${locators}</div></section>
 <section><h2>Code and tests</h2>
 <p><span class="kicker">Code</span> ${own.map((g) => codeLink(c, g)).join(' ')}</p>
@@ -612,6 +615,71 @@ ${tests.length ? `<p><span class="kicker">Tests</span> ${tests.map((g) => codeLi
 ${page.shared?.length ? `<p><span class="kicker">In no one box</span></p><ul>${page.shared.map((s) => `<li>${codeLink(c, s.glob)}: ${esc(s.why)}</li>`).join('')}</ul>` : ''}
 </section>`;
   return shell(`${title}: ${c.m.title}`, body, { css: scrollHintCss(widths), data: { views, svs: [''] }, script: c.script });
+}
+
+/** A requirement as a link to its line in qa/traceability.yaml, with its sentence on hover. */
+const requirementLink = (c: Ctx, id: string) => {
+  const q = c.facts.requirements.get(id);
+  return q ? `<a href="${esc(c.codeBase)}qa/traceability.yaml#L${q.line}" title="${esc(q.text)}"><code>${esc(id)}</code></a>` : `<code>${esc(id)}</code>`;
+};
+
+/** An architecture box's card: what it is; a contract's sides and the suites that prove them; what a box implements. */
+function archCard(c: Ctx, b: ArchBox): string {
+  const a = c.m.architecture!;
+  const boxes = a.boxes;
+  const phase = b.status === 'proposed' ? phaseOf(b, c.facts) : undefined;
+  const part = b.part ? c.m.parts.find((p) => p.id === b.part) : undefined;
+  const views = b.view ? [b.view] : (c.m.views ?? []).map((v) => v.id);
+  const pg = part ? views.map((v) => pageOf(c.m, part.id, v)).find(Boolean) : undefined;
+  const sideOf = (x: ArchBox) => a.zones.find((z) => z.id === x.zone)?.label ?? 'everywhere';
+  const plugged = boxes.filter((x) => x.plugs?.into === b.id);
+  const into = b.plugs ? boxes.find((x) => x.id === b.plugs!.into) : undefined;
+  const tests = (globs: string[]) => globs.map((g) => codeLink(c, g)).join(' ');
+  const about = part ? decisionsAbout(c.log, part.id) : [];
+  return `<article class="card" data-box="${esc(b.id)}">
+<h3>${esc(b.label)}${b.contract ? ' <span class="tag">contract</span>' : ''}${b.status === 'proposed' ? ` <span class="tag">${phase ? `phase ${esc(phase)} · ` : ''}planned</span>` : ''}${b.external ? ' <span class="tag">not ours</span>' : ''}</h3>
+${b.note ? `<p class="note">${esc(b.note)}</p>` : ''}
+${b.text ? `<p>${rich(b.text)}</p>` : ''}
+${b.contract ? `<p><span class="kicker">Declared</span> <code>${esc(b.contract.name)}</code> in ${codeLink(c, b.contract.file)}</p>
+<ul class="plugged">${plugged.map((x) => `<li><span class="kicker">${esc(sideOf(x))}</span> ${esc(x.label)}${x.note ? ` <span class="note">${esc(x.note)}</span>` : ''}${x.status === 'proposed' ? ' <span class="tag">planned</span>' : ''}</li>`).join('')}</ul>
+${b.contract.suites?.length ? `<p><span class="kicker">Proved on both sides by</span> ${b.contract.suites.map((s) => `<code>${esc(s)}</code>`).join(', ')}: ${tests([...a.proof.local, ...a.proof.aws])}</p>` : ''}` : ''}
+${into ? `<p><span class="kicker">Plugs into</span> ${esc(into.label)}${b.status === 'proposed' ? ' (once built)' : `, as ${b.plugs!.implements.map((n) => `<code>${esc(n)}</code>`).join(', ')}`}</p>` : ''}
+${b.code?.length ? `<p><span class="kicker">Code</span> ${b.code.map((g) => codeLink(c, g)).join(' ')}</p>` : ''}
+${b.needs?.length ? `<p><span class="kicker">Would be built by</span> ${b.needs.map((r) => requirementLink(c, r)).join(' ')}</p>` : ''}
+${pg ? `<p><a href="${pg.id}.html"><strong>Inside ${esc(pageTitle(c.m, pg))} ›</strong></a></p>` : ''}
+${about.length ? `<p><span class="kicker">Decisions</span> ${about.map(({ decision: d }) => `<a href="decisions.html#decision-${esc(d.id)}">${esc(d.title ? d.title.replace(/:$/, '') : d.id)}</a>`).join(' · ')}</p>` : ''}
+</article>`;
+}
+
+/** The landing: the architecture, built around its contracts (architecture.ts). */
+function architecturePage(c: Ctx): string {
+  const a = c.m.architecture!;
+  const widths: number[] = [];
+  const spec = parseSystemMap(architectureSpec(c.m, c.facts)).spec;
+  const L = layoutSystemMap(spec, '');
+  const svg = drawSystemMap(spec, L, undefined, { mode: 'inline', idPrefix: 'architecture', interactive: true, partLinks: true });
+  const body = `${nav('architecture')}
+<header class="top"><span class="eyebrow">System map · architecture</span><h1>${esc(c.m.title)}</h1>
+<p class="question">${esc(a.question)}</p></header>
+<main class="frames"><section class="frame">
+<h2 class="frame-title">The architecture · on one machine and in AWS, with what's planned</h2>
+<div class="${gridClass(L.width)}">${figure(svg, widths, L.width)}
+<aside class="panel" aria-live="polite"><div class="picked" hidden></div>
+<h3>Built around two contracts, so each side can be swapped.</h3>
+<p>skills-catalog calls <b>the API</b>; the catalog's rules call <b>its ports</b>. What plugs into each sits beside it: on one machine on the left, in AWS on the right.</p>
+<ul class="legend">
+<li><b>⊐ ⊏</b> a contract: an interface in the code that the rest is written against</li>
+<li><b>—</b> from a contract: what plugs into it, checked in the code (it implements the contract)</li>
+<li>${esc(a.proof.text)}</li>
+<li><b>Hatched</b>, dotted, <b>PHASE n · PLANNED</b>: not built yet; n is the phase of the requirements that build it</li>
+<li>Shaded, <b>not ours</b>: another company's part</li>
+<li><b>›</b> opens the part's own page; click any other box for what it is</li>
+</ul>
+<p>Who uses it, and where each copy runs: <a href="context.html">Context</a>. Step by step: <a href="use-cases.html">Use cases</a>.</p>
+</aside></div></section></main>
+<section class="cards boxes"><h2>The boxes</h2><div class="card-grid">${a.boxes.map((b) => archCard(c, b)).join('\n')}</div></section>`;
+  // What's planned is always shown here (hatched, with its phase): the landing shows today and what's next together.
+  return shell(`${c.m.title}: architecture`, body, { css: scrollHintCss(widths), data: { views: [''], svs: [''], planned: true }, script: c.script });
 }
 
 function decisionsPage(c: Ctx): string {
@@ -649,11 +717,15 @@ export async function buildSite(m: MapSource, facts: Facts, log: DecisionLog, co
   const c: Ctx = { m, facts, log, codeBase, script: !opts.static };
   const files = new Map<string, string>();
   const warnings: string[] = [];
-  const header = nav('index');
+  const header = nav('use-cases');
   const uc = await buildSystemMapFrom(useCaseSpec(c), { static: opts.static, header, css: SITE_NAV_CSS });
   warnings.push(...uc.warnings);
-  files.set(`${MAP_DIR}/index.html`, uc.html + '\n');
-  files.set(`${MAP_DIR}/structure.html`, await structurePage(c));
+  if (m.architecture) {
+    warnings.push(...parseSystemMap(architectureSpec(m, facts)).warnings.map((w) => `architecture: ${w}`));
+    files.set(`${MAP_DIR}/index.html`, architecturePage(c));
+  }
+  files.set(`${MAP_DIR}/use-cases.html`, uc.html + '\n');
+  files.set(`${MAP_DIR}/context.html`, await contextPage(c));
   files.set(`${MAP_DIR}/decisions.html`, decisionsPage(c));
   for (const page of m.pages ?? []) files.set(`${MAP_DIR}/${page.id}.html`, await partPage(c, page));
   return { files, warnings };

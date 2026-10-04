@@ -1,6 +1,7 @@
 // npm run map (in qa/): checks docs/map/map.yaml and docs/decisions.yaml against the code, then writes:
-//   docs/map/index.html            use cases: step through the core loop (click a part for its code and tests)
-//   docs/map/structure.html        the running parts (on one machine, in AWS; planned on a toggle) and the code's packages
+//   docs/map/index.html            the architecture: the contracts, what plugs into each on one machine and in AWS, planned
+//   docs/map/use-cases.html        use cases: step through the core loop (click a part for its code and tests)
+//   docs/map/context.html          who uses it and where each copy runs (planned on a toggle), and the code's packages
 //   docs/map/decisions.html        every decision, with the parts it's about and the options weighed
 //   docs/map/<part>.html           a page per part (map.yaml pages:): its insides, read from the code
 //   docs/decisions.md              the decision log, built from docs/decisions.yaml

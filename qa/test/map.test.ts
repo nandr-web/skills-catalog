@@ -27,7 +27,8 @@ describe('the system map', () => {
     expect(built.problems).toEqual([]);
     expect([...built.files.keys()].sort()).toEqual([
       'docs/decisions.md',
-      'docs/map/catalog-aws.html', 'docs/map/catalog.html', 'docs/map/decisions.html', 'docs/map/index.html', 'docs/map/skills-catalog.html', 'docs/map/structure.html',
+      'docs/map/catalog-aws.html', 'docs/map/catalog.html', 'docs/map/context.html', 'docs/map/decisions.html', 'docs/map/index.html', 'docs/map/skills-catalog.html',
+      'docs/map/use-cases.html',
       'docs/pictures/map-aws.svg', 'docs/pictures/map-held-update.svg', 'docs/pictures/map-local.svg',
     ]);
     for (const [path, text] of built.files) expect(readFileSync(join(ROOT, path), 'utf8'), `${path} is stale: run npm run map in qa/`).toBe(text);
@@ -77,7 +78,8 @@ describe('the map check catches each kind of drift', () => {
     const m = source();
     m.title = 'Skills Catalog, renamed';
     const built = await buildMap(ROOT, { map: m });
-    expect(built.files.get('docs/map/index.html')).not.toBe(readFileSync(join(ROOT, 'docs/map/index.html'), 'utf8'));
+    // The title is on every page: the landing (the architecture) and the use-case page both go stale.
+    for (const name of ['index.html', 'use-cases.html']) expect(built.files.get(`docs/map/${name}`), name).not.toBe(readFileSync(join(ROOT, `docs/map/${name}`), 'utf8'));
   }, 60_000);
 });
 

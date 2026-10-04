@@ -19,8 +19,8 @@ export type Facts = {
   commands: Set<string>;
   /** The API's operations, local and hosted (core/src/api.ts OPERATIONS). */
   operations: Set<string>;
-  /** Each requirement in qa/traceability.yaml: its line there and its sentence. */
-  requirements: Map<string, { line: number; text: string }>;
+  /** Each requirement in qa/traceability.yaml: its line there, its sentence and its phase (1, 2, 3, aws, later). */
+  requirements: Map<string, { line: number; text: string; phase: string }>;
   /** Every source file of the system's packages, relative to the repo, with / between folders. */
   sources: string[];
   /** Does a path or glob (relative to the repo) match any file? */
@@ -42,10 +42,10 @@ const files = (root: string, pattern: string) =>
 export function readFacts(root: string): Facts {
   const trace = readFileSync(join(root, 'qa', 'traceability.yaml'), 'utf8');
   const lines = trace.split('\n');
-  const requirements = new Map<string, { line: number; text: string }>();
-  for (const r of (parse(trace) as { requirements: { id: string; text: string }[] }).requirements) {
+  const requirements = new Map<string, { line: number; text: string; phase: string }>();
+  for (const r of (parse(trace) as { requirements: { id: string; text: string; phase: string | number }[] }).requirements) {
     const line = lines.findIndex((l) => l === `  - id: ${r.id}`) + 1;
-    requirements.set(r.id, { line, text: r.text });
+    requirements.set(r.id, { line, text: r.text, phase: String(r.phase) });
   }
   const served = Words.load().toolDefs().filter((d) => RUNS[d.op]);
   const sources = PACKAGES.flatMap((p) => files(root, `${p}/src/**/*`));

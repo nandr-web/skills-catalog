@@ -503,6 +503,94 @@ pages:
       - {glob: "hosted/src/entries/{index,once,parameters,settings}.ts", why: "each function's start: its settings and secrets, opened once"}
       - {glob: "hosted/src/index.ts", why: "the hosted adapters' index"}
 
+# The architecture (docs/map/index.html, the map's landing): the contracts in the middle, what plugs into each on one
+# machine (left) and in AWS (right), who uses it on top; planned boxes hatched, with the phase of the requirements that
+# would build them. Written by hand: the boxes, their names and places. Checked against the code (qa/src/map/architecture.ts):
+# each contract is declared in its file; each box that plugs in implements it in its own code; each contract's shared
+# suite runs on both sides' adapters; each hand line is a link on the map above, or an import between the boxes' files.
+architecture:
+  question: "What is the system made of, and which parts can be swapped?"
+  zones:
+    - {id: local, label: on one machine}
+    - {id: core, label: the core}
+    - {id: ports, label: its ports}
+    - {id: aws, label: in AWS}
+  proof:
+    text: "Each contract's shared tests run against both sides: the same tests on the local adapters and on the AWS ones (against an AWS stand-in). A new backend plugs in by passing them."
+    local: [core/test/storage.test.ts, core/test/catalog.test.ts, core/test/discovery.test.ts]
+    aws: [hosted/test/shared.test.ts]
+  boxes:
+    # Who uses it, and the program on each machine.
+    - {id: a-claude, part: cc2, label: Claude Code, note: not ours, external: true, at: [0, 0],
+       text: "The assistant (not ours). It reaches skills-catalog's tools over MCP, and loads installed skills from `.claude/skills`."}
+    - {id: a-dev, part: dev2, label: Developer, kind: actor, at: [1, 0],
+       text: "Shares a skill once, or finds one, installs it and stays up to date: through an assistant or at a terminal."}
+    - {id: a-assistants, part: assistants, label: other assistants, note: pi · Copilot · Codex, external: true, status: proposed, at: [2, 0], needs: [pi-agent, other-assistants],
+       text: "pi in phase 2; Copilot, Codex, Cursor and Gemini CLI in phase 3, after the owner's approval. Each reaches skills-catalog the way Claude Code does: its tools or the CLI."}
+    - {id: a-client, part: sc2, label: skills-catalog, note: MCP server · CLI · serve, at: [1, 1], code: [client/src/**, core/src/open.ts],
+       text: "One program on each machine: the MCP server, the CLI and `serve`. Every face runs each operation the one way, through the API, whichever catalog `SKILLS_CATALOG` names."}
+    - {id: a-web, part: web, label: web page, note: browse · compare, status: proposed, at: [2, 1], needs: [web-view-update, web-delta],
+       text: "Browse skills and what changed between versions, in a browser, over the same API. CloudFront and a bucket for its files are in place; the page isn't built yet."}
+    # Contract 1, the API: one definition of every operation; in this process on one machine, over HTTPS in AWS.
+    - id: a-api
+      label: the API
+      note: every operation, defined once
+      kind: port
+      zone: core
+      at: [1, 2]
+      contract: {name: Catalog, file: core/src/catalog.ts, suites: [catalogSuite]}
+      code: [core/src/api.ts, core/src/openapi.ts, core/src/catalog.ts]
+      text: "The contract every face is written against: each operation, its input and its answer, defined once (the MCP tools, the CLI's commands, the HTTP routes and the published schema all come from it). skills-catalog opens it in its own process, or reaches it over HTTPS."
+    - {id: a-opener, part: catalog, view: local, label: opener, note: in this process, zone: local, at: [0, 2], plugs: {into: a-api, implements: [Catalog]}, code: [core/src/local/index.ts],
+       text: "On one machine, skills-catalog opens the catalog in its own process (`SKILLS_CATALOG=file://…`): the catalog's rules over the local parts below."}
+    - {id: a-function, part: catalog, view: aws, label: API function, note: CloudFront · HTTP API · Lambda, zone: aws, at: [2, 2], plugs: {into: a-api, implements: [Catalog]}, code: [hosted/src/entries/api.ts, core/src/remote/index.ts],
+       text: "In AWS, skills-catalog calls the same operations over HTTPS (`SKILLS_CATALOG=https://…`, core/src/remote): CloudFront, then the HTTP API, then the API function, which runs the catalog's rules over the AWS parts below."}
+    - {id: a-rules, label: catalog rules, note: publish · find · fetch, zone: core, at: [1, 3], code: [core/src/catalog.ts],
+       text: "Who may publish, what a new version is, what search returns: the same code on one machine and in the API function, calling its parts only through the ports below."}
+    # Contract 2, the ports: where a choice can change.
+    - {id: a-storage, label: Storage, note: versions · files, kind: port, zone: ports, at: [1, 4], contract: {name: Storage, file: core/src/ports.ts, suites: [storageSuite]},
+       text: "Every skill's versions and their files, with the publish's one all-or-nothing commit."}
+    - {id: a-storage-local, label: versions + files, note: SQLite · a folder, kind: store, zone: local, at: [0, 4], plugs: {into: a-storage, implements: [Storage]},
+       code: [core/src/local/storage.ts, core/src/local/db.ts, core/src/local/metadata.ts, core/src/local/blobs.ts],
+       text: "One SQLite file for versions, owners and the latest pointer; a folder for files, each named by its fingerprint."}
+    - {id: a-storage-aws, label: versions + files, note: DynamoDB · S3, kind: store, zone: aws, at: [2, 4], plugs: {into: a-storage, implements: [Storage]},
+       code: [hosted/src/storage.ts, hosted/src/blobs.ts, hosted/src/place.ts],
+       text: "One DynamoDB table for versions, owners, events and tokens; S3 for files by fingerprint, written only if absent."}
+    - {id: a-events, label: Events, note: each new version, kind: port, zone: ports, at: [1, 5], contract: {name: Events, file: core/src/ports.ts},
+       text: "Each new version's event, delivered at least once, in order: it keeps search up to date."}
+    - {id: a-events-local, label: outbox, note: SQLite · same commit, kind: queue, zone: local, at: [0, 5], plugs: {into: a-events, implements: [Events]}, code: [core/src/local/outbox.ts],
+       text: "An event saved with each version, in the same transaction, then delivered to search."}
+    - {id: a-events-aws, label: events, note: stream → queue → indexer, kind: queue, zone: aws, at: [2, 5], plugs: {into: a-events, implements: [Events]},
+       code: [hosted/src/events.ts, hosted/src/entries/queue.ts, hosted/src/entries/indexer.ts],
+       text: "The table's stream, through a pipe, into a queue; the indexer reads it and rewrites the search file."}
+    - {id: a-search, label: SearchIndex, note: find by words, kind: port, zone: ports, at: [1, 6], contract: {name: SearchIndex, file: core/src/ports.ts, suites: [discoverySuite]},
+       text: "Keyword search over each skill's name and description: any word, stemmed, ranked; rebuildable from the versions."}
+    - {id: a-search-local, label: search, note: SQLite full-text, kind: store, zone: local, at: [0, 6], plugs: {into: a-search, implements: [SearchIndex]}, code: [core/src/local/search-index.ts],
+       text: "SQLite's full-text search (FTS5), rebuilt from the stored versions."}
+    - {id: a-search-aws, label: search file, note: S3 · ranked in Lambda, kind: store, zone: aws, at: [2, 6], plugs: {into: a-search, implements: [SearchIndex]}, code: [hosted/src/search.ts],
+       text: "One index file in S3, ranked in the function (to about 10–30k skills); OpenSearch Serverless is to be weighed again in phase 3."}
+    - {id: a-identity, label: Identity, note: who is asking, kind: port, zone: ports, at: [1, 7], contract: {name: Identity, file: core/src/ports.ts},
+       text: "Who is asking, for who may publish: every operation that acts asks it."}
+    - {id: a-identity-local, label: local sign-in, note: acting as a developer, zone: local, at: [0, 7], plugs: {into: a-identity, implements: [Identity]}, code: [core/src/local/identity.ts],
+       text: "No sign-in on one machine: the Developer acts as a named developer, labelled for demo purposes."}
+    - {id: a-identity-aws, label: sign-in, note: GitHub · tokens, zone: aws, at: [2, 7], plugs: {into: a-identity, implements: [GitHubSignIn, TokenStore]}, code: [hosted/src/github.ts, hosted/src/tokens.ts],
+       text: "A verified GitHub sign-in, or a token, says who is asking; only the logins the deployment lists may sign in. The API function then acts as that person."}
+    - {id: a-reviewer, label: Reviewer, note: "a version in, a review out", kind: port, zone: ports, at: [1, 8], contract: {name: Reviewer, file: core/src/skill-tree/reviewer.ts, suites: [reviewsSuite]},
+       text: "Reviews each new version as it is published: what it flags, stored with the version."}
+    - {id: a-reviewer-rules, label: rules reviewer, note: on one machine and in AWS, at: [0, 8], plugs: {into: a-reviewer, implements: [Reviewer]}, code: [core/src/skill-tree/reviewer.ts],
+       text: "The built-in rules: scripts and executables, tools a skill grants itself, text that steers the assistant, a new publisher. The same everywhere."}
+    - {id: a-reviewer-agents, label: agent reviewers, note: "quality, by agents", status: proposed, at: [2, 8], plugs: {into: a-reviewer, implements: [Reviewer]}, needs: [quality-agent-reviews],
+       text: "Pluggable reviewers that measure a skill's quality next to the rules reviewer: grounded findings, and no comments when it's good."}
+  lines:
+    - {from: a-dev, to: a-claude, label: asks}
+    - {from: a-claude, to: a-client, label: MCP}
+    - {from: a-dev, to: a-client, label: CLI}
+    - {from: a-assistants, to: a-client, label: "MCP, CLI"}
+    - {from: a-client, to: a-api, label: calls}
+    - {from: a-web, to: a-function, label: API}
+    - {from: a-opener, to: a-rules, label: runs}
+    - {from: a-function, to: a-rules, label: runs}
+
 # The code's packages, and which uses which (read from the imports).
 code:
   question: "How is the code laid out, and which package uses which?"

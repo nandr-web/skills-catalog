@@ -1,6 +1,7 @@
 // The system map's source (docs/map/map.yaml): what's written by hand, how it is checked against the code (facts.ts),
 // and how it becomes the spec the renderer draws. Each problem names its rule, so a test can plant one of each.
 import { matchesGlob, posix } from 'node:path';
+import { architectureText, checkArchitecture, type Architecture } from './architecture.ts';
 import { PACKAGES, type Facts } from './facts.ts';
 import { checkCodeView, checkPages, pageOf, type CodeView, type Page } from './pages.ts';
 
@@ -34,6 +35,8 @@ export type MapSource = {
   pages?: Page[];
   /** The code's packages and what uses what between them. */
   code?: CodeView;
+  /** The architecture: the contracts in the middle, what plugs into each on one machine and in AWS (architecture.ts). */
+  architecture?: Architecture;
 };
 
 export type Rule =
@@ -45,7 +48,9 @@ export type Rule =
   | 'unknown-part' | 'duplicate-id' | 'planned-needs-nothing' | 'file-in-no-box' | 'file-in-two-boxes' | 'box-file-outside-part'
   | 'resource-in-no-box' | 'resource-in-two-boxes' | 'line-not-in-code' | 'line-not-on-map' | 'too-dense' | 'package-not-shown'
   // decisions.ts: decisions as data
-  | 'decision-unknown-part' | 'chosen-not-an-option' | 'unknown-decision';
+  | 'decision-unknown-part' | 'chosen-not-an-option' | 'unknown-decision'
+  // architecture.ts: the contracts and what plugs into them
+  | 'unknown-zone' | 'contract-not-in-code' | 'suite-not-run' | 'unknown-contract' | 'adapter-not-in-code' | 'unknown-field';
 export type Problem = { rule: Rule; message: string };
 
 /** Words the map never uses (review V5.4, V5.6, V6.4; the owner's names): each with what to say instead. */
@@ -133,7 +138,7 @@ export function checkMap(m: MapSource, facts: Facts, exists: (path: string) => b
   }
 
   // The pages inside the parts, and the Code view.
-  problems.push(...checkPages(m, facts), ...checkCodeView(m.code, PACKAGES));
+  problems.push(...checkPages(m, facts), ...checkCodeView(m.code, PACKAGES), ...checkArchitecture(m, facts));
 
   // Words: what a reader sees never uses the banned ones.
   for (const [where, text] of shownText(m)) for (const [re, instead] of BANNED) {
@@ -167,6 +172,7 @@ function shownText(m: MapSource): [string, string][] {
     out.push(['code', m.code.question]);
     for (const p of m.code.packages) out.push([`code.packages.${p.id}`, [p.label, p.note, p.text].filter(Boolean).join(' ')]);
   }
+  out.push(...architectureText(m.architecture));
   return out;
 }
 
@@ -199,6 +205,6 @@ export function toSpec(m: MapSource, facts: Facts, pageDir: string): Record<stri
       return r ? { id, text: r.text, href: `${m.codeBase}qa/traceability.yaml#L${r.line}` } : id;
     }),
   }));
-  const { left_out: _l, not_on_map: _n, pages: _p, code: _c, ...rest } = m;
+  const { left_out: _l, not_on_map: _n, pages: _p, code: _c, architecture: _a, ...rest } = m;
   return { kind: 'system-map', ...rest, parts, flows };
 }
