@@ -129,7 +129,6 @@ describe("README.md's copies of what core's commands print", () => {
     const page = readFileSync(join(ROOT, 'docs', 'requirements.md'), 'utf8');
     const anchors = new Set([...page.matchAll(/^#{1,6} (.+)$/gm)].map((m) => slug(m[1]!)).concat([...page.matchAll(/<a id="([^"]+)"/g)].map((m) => m[1]!)));
     const links = [...README.matchAll(/\]\(docs\/requirements\.md#([^)]+)\)/g)].map((m) => m[1]!);
-    expect(links.length).toBeGreaterThan(10);
     for (const a of links) expect(anchors.has(a), `docs/requirements.md#${a}`).toBe(true);
     expect(README, 'requirements are linked by heading, never by a line number').not.toMatch(/\.yaml#L\d/);
   });
@@ -155,31 +154,6 @@ describe("README.md's copies of what core's commands print", () => {
       .filter((p) => !/^v\d/.test(p)); // the Node.js version: the check above
     expect(phrases.length).toBeGreaterThan(5);
     for (const p of phrases) expect(sources, p).toMatch(new RegExp(pattern(p.replace(/^✓ /, ''), false).source.replace(/^\^|\$$/g, '')));
-  });
-
-  it("the PRD table's scenes are try-it's scenes for that PRD item, and every PRD scene is in the table", () => {
-    const tags = new Map([...runScript('try-it.ts').matchAll(/^(\d+)\. .*  \[(.+)\]$/gm)].map((m) => [Number(m[1]), m[2]!.toLowerCase()]));
-    const at = README.indexOf('## Check it against the PRD');
-    const rows = README.slice(at).split('\n').filter((l) => l.startsWith('|')).slice(2); // after the header and |---|
-    const named = new Set<number>();
-    let n = 0;
-    for (const row of rows.slice(0, rows.findIndex((r) => r.startsWith('| PRD |')) >>> 0)) {
-      const [item, , where] = row.split(' | ');
-      // The row's PRD id: FR-01, UC-02, NFR Consistency, … (a table row's first cell, its marks left out)
-      const id = item!.replace(/^\| /, '').replace(/[*↳]/g, '').trim().replace(/:.*$/, '').split(' ').slice(0, /^NFR/.test(item!.replace(/[|*↳ ]/g, '')) ? 2 : 1).join(' ').toLowerCase();
-      for (const m of (where ?? '').matchAll(/scenes? ([\d, -]+)/g)) {
-        for (const part of m[1]!.split(',').map((x) => x.trim()).filter(Boolean)) {
-          const [a, b] = part.split('-').map(Number);
-          for (let k = a!; k <= (b ?? a!); k++) {
-            expect(tags.get(k), `scene ${k} (the row for ${id})`).toMatch(new RegExp(`^${escape(id)}`));
-            named.add(k);
-            n++;
-          }
-        }
-      }
-    }
-    expect(n).toBeGreaterThan(10);
-    for (const [k, tag] of tags) if (tag !== 'beyond the prd') expect(named.has(k), `scene ${k} [${tag}] is in the PRD table`).toBe(true);
   });
 
   it('each picture is shown full width, and its smallest label is legible on github.com (≥ 9 px in a ~830 px column)', () => {
@@ -220,8 +194,7 @@ describe("README.md's copies of what core's commands print", () => {
     const { Words } = await import('../src/words-file.ts');
     const tools = new Set(Object.values(Words.load().names as Record<string, string>));
     const named = [...README.matchAll(/`([a-z]+(?:_[a-z]+){2,})`/g)].map((m) => m[1]!).filter((n) => /skill|catalog|update/.test(n));
-    expect(named.length).toBeGreaterThan(3);
-    expect(named.filter((n) => !tools.has(n))).toEqual([]);
+    expect(named.filter((n) => !tools.has(n))).toEqual([]); // any tool it names (none since the PRD table went)
   });
 
   it("the Node.js version the README asks for is package.json's", () => {

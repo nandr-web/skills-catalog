@@ -8,7 +8,7 @@
 
 <p align="center"><sub>Real Claude Code. Version 2 of a skill adds a script, so the update waits for a yes.</sub></p>
 
-<p align="center"><a href="#check-it-against-the-prd">The PRD, item by item</a> · <a href="#try-it">Try it</a> · <a href="#install">Install</a> · <a href="docs/thinking.md">Our thinking</a> · <a href="docs/architecture.md">Architecture</a> · <a href="#how-it-works">System map</a> · <a href="docs/api.md">API</a></p>
+<p align="center"><a href="#try-it">Try it</a> · <a href="#install">Install</a> · <a href="docs/thinking.md">Our thinking</a> · <a href="docs/architecture.md">Architecture</a> · <a href="#how-it-works">System map</a> · <a href="docs/api.md">API</a></p>
 
 - **Publish once.** A skill goes into a shared catalog as a numbered version. Nothing is overwritten.
 - **Find it by asking.** Your assistant searches in plain words. It says so when nothing really fits.
@@ -48,35 +48,6 @@ Real sessions: **ana** and **bob** (the PRD's Developer 1 and Developer 2) share
 <p align="center"><img alt="bob asks Claude Code to update his shared skills; its reply shows a box, Waiting for your OK: release-note-draft v2 adds scripts/collect.sh, which can run on this machine, and it stays on v1 until he says yes; it asks; in his shell, skills-catalog diff shows in orange that it can run something new and the script's two lines; skills-catalog update release-note-draft --accept shows the same reason behind an orange bar, he answers y, and it says Took it" src="docs/pictures/reel-update.gif" width="100%"></p>
 
 </details>
-
-## Check it against the PRD
-
-Each PRD item, where you see it, and [the requirement](docs/requirements.md) that lists its tests. *Scene* means a scene of `npm run try-it` ([Try it](#try-it)); each scene is tagged with its PRD item.
-
-| PRD | What you see | Where | Checked by |
-|---|---|---|---|
-| **FR-01** Publish | A preview, then v1 in the catalog | screen 1 · scene 1 | [Publish a skill](docs/requirements.md#publish-a-skill) |
-| ↳ UC-01: missing a field | Refused, with the fix; nothing stored | scene 2 | [Publish a skill](docs/requirements.md#publish-a-skill) |
-| **FR-02** Discover | Matches with name, version, description | screen 2 · scene 3 | [Discover skills](docs/requirements.md#discover-skills-through-an-ai-assistant) |
-| ↳ UC-02: nothing matches | "No skill matches", or the closest only as close | screen 4 · scenes 4-5 | [Discover skills](docs/requirements.md#discover-skills-through-an-ai-assistant) |
-| **FR-03** Retrieve | Read, then installed: v1, by ana | screen 3 · scene 6 | [Retrieve a skill](docs/requirements.md#retrieve-a-skill-through-an-ai-assistant) |
-| ↳ UC-03: not found | "No skill named …", with names like it | scene 8 | [Retrieve a skill](docs/requirements.md#retrieve-a-skill-through-an-ai-assistant) |
-| **FR-04** Version | v2 stored, v1 kept · the history · v1 on request · the change | screens 5-6 · scenes 9, 11-13 | [Version a skill](docs/requirements.md#version-a-skill) |
-| ↳ UC-04: malformed update | Refused; v1 and v2 untouched | scene 10 | [Version a skill](docs/requirements.md#version-a-skill) |
-| **NFR** Consistency | Fetched files equal the published ones, byte for byte; same fingerprint | scene 7 | [Complete and unchanged](docs/requirements.md#a-retrieved-skill-is-complete-and-unchanged) |
-| **NFR** Through an assistant | Claude Code calling the catalog | screens 1-5 · `qa/try-claude.sh selftest` | [Through an assistant](docs/requirements.md#access-is-through-an-ai-assistant) |
-| **NFR** Responsiveness | p95 under 100 ms on a 10,000-skill catalog | `npm run perf` | [Fast enough](docs/requirements.md#fast-enough-to-feel-interactive) |
-| **Goal 1** End to end | Developer 1 publishes; Developer 2's assistant finds and gets the same skill | screens 1-3 · the reels | [End to end](docs/requirements.md#publish-once-reuse-through-an-assistant-end-to-end) |
-| **D1, D2** | Access through the assistant; versions in the MVP | as the NFR and FR-04 above | |
-| **D3** No auth, no de-dup | De-dup isn't built. Sign-in exists only on the opt-in hosted catalog | [why](docs/thinking.md#beyond-the-prd) | |
-
-**The PRD's words, here:**
-
-| PRD | Here |
-|---|---|
-| Skill · Manifest | A folder with a `SKILL.md` (the manifest: name and description in its front matter, instructions below), plus any other files |
-| Catalog · Version | The shared catalog: a folder on one machine, or hosted in AWS. Versions are v1, v2, …; each has a **fingerprint**, one checksum of all its files, so a copy can be checked against what was published |
-| Publish · Discover · Retrieve | The assistant's tools: `publish_skill_to_catalog` (a preview first, then again with its values once the person says yes); `search_shared_skills`; `read_shared_skill` and `install_shared_skill` |
 
 ## Try it
 

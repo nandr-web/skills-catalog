@@ -46,7 +46,7 @@ What we did so that the time box still reads clearly:
 
 - **The part the PRD's 4 hours asks for runs first.** A local catalog, the assistant's tools, versions and history, with no account and no server. The README's first try (`npm run try-it`) runs just that, in about a minute, and shows every PRD item as a scene.
 - **Everything beyond the core is opt-in.** The hosted catalog in AWS is off by default. Guided setup, held updates and reviews sit around the core loop, not inside it.
-- **What the README shows is real.** Its copies of what the commands print are checked against real runs by `npm run check`, and its PRD table links each item to the requirement that lists its tests.
+- **What the README shows is real.** Its copies of what the commands print are checked against real runs by `npm run check`.
 
 ## Beyond the PRD
 
