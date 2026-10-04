@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Skills Catalog: architecture</title>
+<title>ports: Skills Catalog</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
@@ -241,236 +241,137 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 .d-scroll { container-type: inline-size; }
 .d-scroll-art { overflow-x: auto; }
 .d-scroll-hint { display: none; margin: 0 0 6px; font: 12px "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; color: var(--d-ink2); text-align: right; }
-@container (max-width: 818.5px) { .d-scroll-hint[data-w="819"] { display: block; } }
+@container (max-width: 852.5px) { .d-scroll-hint[data-w="853"] { display: block; } }
 </style>
 <div class="wrap">
 <nav class="site" aria-label="The system map's pages">
 <a class="brand" href="index.html">Skills Catalog · system map</a>
 <span class="tabs"><a href="index.html" aria-current="page">Architecture</a><a href="use-cases.html">Use cases</a><a href="context.html">Context</a><a href="decisions.html">Decisions</a></span>
 </nav>
-<header class="top"><span class="eyebrow">System map · architecture</span><h1>Skills Catalog</h1>
-<p class="question">What is the system made of, and which parts can be swapped?</p></header>
+<p class="crumbs"><a href="index.html">Architecture</a> <span aria-hidden="true">›</span> <span aria-current="page">ports</span></p>
+<header class="top"><span class="eyebrow">System map · zoomed in</span><h1>ports</h1>
+<p class="question">Which backend plugs into each port, on one machine and in AWS?</p></header>
 <main class="frames"><section class="frame">
-<h2 class="frame-title">The architecture · on one machine and in AWS, with what's planned</h2>
-<div class="frame-grid wide"><figure class="map-art" style="--w: 819px"><div class="d-scroll"><p class="d-scroll-hint" data-w="819" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 819 774" width="819" height="774" role="group" aria-label="What is the system made of, and which parts can be swapped?">
+<h2 class="frame-title">ports · on one machine and in AWS</h2>
+<div class="frame-grid wide"><figure class="map-art" style="--w: 853px"><div class="d-scroll"><p class="d-scroll-hint" data-w="853" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 853 1030" width="853" height="1030" role="group" aria-label="What is the system made of, and which parts can be swapped?">
 <title>Skills Catalog</title>
-<defs><marker id="architecture-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="architecture-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="architecture-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="architecture-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="architecture-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="architecture-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="architecture-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="architecture-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
-<defs><pattern id="architecture-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="d-hatch-bg" width="6" height="6"/><path class="d-hatch-line" d="M0 0V6"/></pattern></defs>
-<rect class="d-group d-group--region" x="72.5" y="16" width="728.4" height="230" rx="6"/>
-<text class="d-group-label" x="80.5" y="27">who uses it</text>
-<rect class="d-group d-group--region" x="58.5" y="280.5" width="160" height="344" rx="6"/>
-<text class="d-group-label" x="66.5" y="291.5">on one machine</text>
-<rect class="d-group d-group--region" x="300.2" y="280.5" width="245" height="477.5" rx="6"/>
-<text class="d-group-label" x="308.2" y="291.5">the core</text>
-<rect class="d-group d-group--region" x="611.4" y="280.5" width="191" height="344" rx="6"/>
-<text class="d-group-label" x="619.4" y="291.5">in AWS</text>
-<path class="d-edge" d="M370.2 73 L194.5 73" marker-end="url(#architecture-arrow)"/>
-<path class="d-edge" d="M138.5 99.5 L138.5 196 Q138.5 201 143.5 201 L330.7 201" marker-end="url(#architecture-arrow)"/>
-<path class="d-edge" d="M422.7 92 L422.7 174.5" marker-end="url(#architecture-arrow)"/>
-<path class="d-edge d-edge--proposed" d="M706.9 108 L706.9 132 Q706.9 137 701.9 137 L434.7 137 Q429.7 137 429.7 142 L429.7 174.5" marker-end="url(#architecture-arrow)"/>
-<path class="d-edge" d="M422.7 227.5 L422.7 302.5" marker-end="url(#architecture-arrow)"/>
-<path class="d-edge d-edge--proposed" d="M706.9 236 L706.9 302.5" marker-end="url(#architecture-arrow)"/>
-<path class="d-edge" d="M310.2 329 L202 329"/>
-<path class="d-edge" d="M535.2 329 L630.9 329"/>
-<path class="d-edge" d="M138.5 355.5 L138.5 452 Q138.5 457 143.5 457 L337.2 457" marker-end="url(#architecture-arrow)"/>
-<path class="d-edge" d="M706.9 355.5 L706.9 452 Q706.9 457 701.9 457 L508.2 457" marker-end="url(#architecture-arrow)"/>
-<path class="d-edge" d="M422.7 483.5 L422.7 558.5" marker-end="url(#architecture-arrow)"/>
-<path class="d-edge" d="M322.7 585 L208.5 585"/>
-<path class="d-edge" d="M522.7 585 L621.4 585"/>
-<path class="d-edge d-edge--proposed" d="M422.7 611.5 L422.7 678"/>
-<g class="d-map-part" data-part="o-claude" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
-<rect class="d-node d-node--external" x="82.5" y="46.5" width="112" height="53" rx="3"/>
-<text class="d-label" x="138.5" y="66">Claude Code</text>
-<text class="d-note" x="138.5" y="82">not ours</text>
+<defs><marker id="zoom-ports-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="zoom-ports-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="zoom-ports-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="zoom-ports-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="zoom-ports-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="zoom-ports-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="zoom-ports-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="zoom-ports-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
+<defs><pattern id="zoom-ports-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="d-hatch-bg" width="6" height="6"/><path class="d-hatch-line" d="M0 0V6"/></pattern></defs>
+<rect class="d-group d-group--region" x="36.5" y="149.5" width="192" height="472" rx="6"/>
+<text class="d-group-label" x="44.5" y="160.5">on one machine</text>
+<rect class="d-group d-group--region" x="313.4" y="24.5" width="305.2" height="989.5" rx="6"/>
+<text class="d-group-label" x="321.4" y="35.5">the core</text>
+<rect class="d-group d-group--region" x="618.3" y="149.5" width="218" height="472" rx="6"/>
+<text class="d-group-label" x="626.3" y="160.5">in AWS</text>
+<path class="d-edge" d="M429.9 99.5 L429.9 174.5" marker-end="url(#zoom-ports-arrow)"/>
+<path class="d-edge" d="M215 585 L323.4 585" marker-end="url(#zoom-ports-arrow)"/>
+<path class="d-edge" d="M663.8 585 L536.4 585" marker-end="url(#zoom-ports-arrow)"/>
+<path class="d-edge" d="M358.4 201 L206.5 201"/>
+<path class="d-edge" d="M501.4 201 L653.3 201"/>
+<path class="d-edge" d="M348.9 329 L218.5 329"/>
+<path class="d-edge" d="M510.9 329 L628.3 329"/>
+<path class="d-edge" d="M367.9 457 L199 457"/>
+<path class="d-edge" d="M491.9 457 L644.8 457"/>
+<path class="d-edge" d="M429.9 739.5 L429.9 814.5"/>
+<path class="d-edge d-edge--proposed" d="M532.9 713 L539.9 713 Q544.9 713 544.9 718 L544.9 964 Q544.9 969 539.9 969 L507.4 969"/>
+<g class="d-map-part" data-part="a-rules" tabindex="0" role="button" aria-label="catalog rules: what it is, its code and tests">
+<rect class="d-node" x="344.4" y="46.5" width="171" height="53" rx="3"/>
+<text class="d-label" x="429.9" y="66">catalog rules</text>
+<text class="d-note" x="429.9" y="82">publish · find · fetch</text>
 </g>
-<g class="d-map-part" data-part="o-dev" tabindex="0" role="button" aria-label="Developer: what it is, its code and tests">
-<rect class="d-node" x="370.2" y="54" width="105" height="38" rx="19"/>
-<text class="d-label" x="422.7" y="73">Developer</text>
+<g class="d-map-part" data-part="a-storage" tabindex="0" role="button" aria-label="Storage: what it is, its code and tests">
+<path class="d-node d-node--port" d="M358.4 174.5H501.4V196A5 5 0 0 0 501.4 206V227.5H358.4V206A5 5 0 0 0 358.4 196Z"/>
+<text class="d-label" x="429.9" y="194">Storage</text>
+<text class="d-note" x="429.9" y="210">versions · files</text>
 </g>
-<g class="d-map-part d-map-part--proposed" data-part="o-assistants" tabindex="0" role="button" aria-label="other assistants: what it is, its code and tests">
-<rect class="d-node d-node--external d-node--proposed" style="fill: url(#architecture-hatch)" x="622.9" y="38" width="168" height="70" rx="3"/>
-<rect class="d-tag d-tag--proposed" x="639.2" y="44" width="135.4" height="15" rx="3"/>
-<text class="d-tag-text d-tag-text--proposed" x="706.9" y="51.5">PHASE 2–3 · PLANNED</text>
-<text class="d-label" x="706.9" y="74.5">other assistants</text>
-<text class="d-note" x="706.9" y="90.5">pi · Copilot · Codex</text>
+<g class="d-map-part" data-part="a-storage-local" tabindex="0" role="button" aria-label="versions + files: what it is, its code and tests">
+<path class="d-node" d="M58.5 177.5 A74 6 0 0 1 206.5 177.5 V224.5 A74 6 0 0 1 58.5 224.5 Z"/>
+<path class="d-node-detail" d="M58.5 177.5 A74 6 0 0 0 206.5 177.5"/>
+<text class="d-label" x="132.5" y="197">versions + files</text>
+<text class="d-note" x="132.5" y="213">SQLite · a folder</text>
 </g>
-<a class="d-map-part d-map-part--opens" data-part="o-client" href="skills-catalog.html" aria-label="skills-catalog: open its page">
-<rect class="d-node" x="330.7" y="174.5" width="184" height="53" rx="3"/>
-<text class="d-label" x="422.7" y="194">skills-catalog</text>
-<text class="d-note" x="422.7" y="210">MCP server · CLI · serve</text>
-<text class="d-map-opens" x="506.7" y="201" aria-hidden="true">›</text>
-</a>
-<g class="d-map-part d-map-part--proposed" data-part="o-web" tabindex="0" role="button" aria-label="web page: what it is, its code and tests">
-<rect class="d-node d-node--proposed" style="fill: url(#architecture-hatch)" x="629.4" y="166" width="155" height="70" rx="3"/>
-<rect class="d-tag d-tag--proposed" x="645.8" y="172" width="122.2" height="15" rx="3"/>
-<text class="d-tag-text d-tag-text--proposed" x="706.9" y="179.5">PHASE 2 · PLANNED</text>
-<text class="d-label" x="706.9" y="202.5">web page</text>
-<text class="d-note" x="706.9" y="218.5">browse · compare</text>
+<g class="d-map-part" data-part="a-storage-aws" tabindex="0" role="button" aria-label="versions + files: what it is, its code and tests">
+<path class="d-node" d="M653.3 177.5 A74 6 0 0 1 801.3 177.5 V224.5 A74 6 0 0 1 653.3 224.5 Z"/>
+<path class="d-node-detail" d="M653.3 177.5 A74 6 0 0 0 801.3 177.5"/>
+<text class="d-label" x="727.3" y="197">versions + files</text>
+<text class="d-note" x="727.3" y="213">DynamoDB · S3</text>
 </g>
-<g class="d-map-part" data-part="o-api" tabindex="0" role="button" aria-label="catalog API: what it is, its code and tests">
-<path class="d-node d-node--port" d="M310.2 302.5H535.2V324A5 5 0 0 0 535.2 334V355.5H310.2V334A5 5 0 0 0 310.2 324Z"/>
-<text class="d-label" x="422.7" y="322">catalog API</text>
-<text class="d-note" x="422.7" y="338">every operation, defined once</text>
+<g class="d-map-part" data-part="a-events" tabindex="0" role="button" aria-label="Events: what it is, its code and tests">
+<path class="d-node d-node--port" d="M348.9 302.5H510.9V324A5 5 0 0 0 510.9 334V355.5H348.9V334A5 5 0 0 0 348.9 324Z"/>
+<text class="d-label" x="429.9" y="322">Events</text>
+<text class="d-note" x="429.9" y="338">no shared tests yet</text>
 </g>
-<a class="d-map-part d-map-part--opens" data-part="o-local" href="catalog.html" aria-label="local catalog: open its page">
-<rect class="d-node" x="75" y="302.5" width="127" height="53" rx="3"/>
-<text class="d-label" x="138.5" y="322">local catalog</text>
-<text class="d-note" x="138.5" y="338">in this process</text>
-<text class="d-map-opens" x="194" y="329" aria-hidden="true">›</text>
-</a>
-<a class="d-map-part d-map-part--opens" data-part="o-hosted" href="catalog-aws.html" aria-label="hosted catalog: open its page">
-<rect class="d-node" x="630.9" y="302.5" width="152" height="53" rx="3"/>
-<text class="d-label" x="706.9" y="322">hosted catalog</text>
-<text class="d-note" x="706.9" y="338">CloudFront · Lambda</text>
-<text class="d-map-opens" x="774.9" y="329" aria-hidden="true">›</text>
-</a>
-<g class="d-map-part" data-part="o-rules" tabindex="0" role="button" aria-label="catalog rules: what it is, its code and tests">
-<rect class="d-node" x="337.2" y="430.5" width="171" height="53" rx="3"/>
-<text class="d-label" x="422.7" y="450">catalog rules</text>
-<text class="d-note" x="422.7" y="466">publish · find · fetch</text>
+<g class="d-map-part" data-part="a-events-local" tabindex="0" role="button" aria-label="outbox: what it is, its code and tests">
+<rect class="d-node" x="46.5" y="302.5" width="172" height="53" rx="3"/>
+<path class="d-node-detail" d="M204.5 309.5V348.5M208.5 309.5V348.5M212.5 309.5V348.5"/>
+<text class="d-label" x="125.5" y="322">outbox</text>
+<text class="d-note" x="125.5" y="338">SQLite · same commit</text>
 </g>
-<a class="d-map-part d-map-part--opens" data-part="o-ports" href="ports.html" aria-label="ports: open its page">
-<path class="d-node d-node--port" d="M322.7 558.5H522.7V580A5 5 0 0 0 522.7 590V611.5H322.7V590A5 5 0 0 0 322.7 580Z"/>
-<text class="d-label" x="422.7" y="578">ports</text>
-<text class="d-note" x="422.7" y="594">Storage · SearchIndex · …</text>
-<text class="d-map-opens" x="514.7" y="585" aria-hidden="true">›</text>
-</a>
-<a class="d-map-part d-map-part--opens" data-part="o-local-backends" href="ports.html" aria-label="local backends: open its page">
-<path class="d-node" d="M68.5 561.5 A70 6 0 0 1 208.5 561.5 V608.5 A70 6 0 0 1 68.5 608.5 Z"/>
-<path class="d-node-detail" d="M68.5 561.5 A70 6 0 0 0 208.5 561.5"/>
-<text class="d-label" x="138.5" y="581">local backends</text>
-<text class="d-note" x="138.5" y="597">SQLite · a folder</text>
-<text class="d-map-opens" x="200.5" y="585" aria-hidden="true">›</text>
-</a>
-<a class="d-map-part d-map-part--opens" data-part="o-aws-backends" href="ports.html" aria-label="AWS backends: open its page">
-<path class="d-node" d="M621.4 561.5 A85.5 6 0 0 1 792.4 561.5 V608.5 A85.5 6 0 0 1 621.4 608.5 Z"/>
-<path class="d-node-detail" d="M621.4 561.5 A85.5 6 0 0 0 792.4 561.5"/>
-<text class="d-label" x="706.9" y="581">AWS backends</text>
-<text class="d-note" x="706.9" y="597">DynamoDB · S3 · GitHub</text>
-<text class="d-map-opens" x="784.4" y="585" aria-hidden="true">›</text>
-</a>
-<a class="d-map-part d-map-part--opens d-map-part--proposed" data-part="o-agents" href="ports.html" aria-label="agent reviewers: open its page">
-<rect class="d-node d-node--proposed" style="fill: url(#architecture-hatch)" x="345.2" y="678" width="155" height="70" rx="3"/>
-<rect class="d-tag d-tag--proposed" x="361.6" y="684" width="122.2" height="15" rx="3"/>
-<text class="d-tag-text d-tag-text--proposed" x="422.7" y="691.5">PHASE 2 · PLANNED</text>
-<text class="d-label" x="422.7" y="714.5">agent reviewers</text>
-<text class="d-note" x="422.7" y="730.5">quality, by agents</text>
-<text class="d-map-opens" x="492.2" y="713" aria-hidden="true">›</text>
-</a>
-<text class="d-edge-label" x="282.4" y="64">asks</text>
-<text class="d-edge-label" x="234.6" y="192">MCP</text>
-<text class="d-edge-label d-map-label--end" x="415.7" y="133.3">CLI</text>
-<text class="d-edge-label d-edge-label--proposed" x="568.3" y="128">MCP, CLI (planned)</text>
-<text class="d-edge-label d-map-label--start" x="429.7" y="265">calls</text>
-<text class="d-edge-label d-map-label--end d-edge-label--proposed" x="699.9" y="269.3">API (planned)</text>
-<text class="d-edge-label" x="237.9" y="448">runs</text>
-<text class="d-edge-label" x="637.4" y="448">runs</text>
-<text class="d-edge-label d-map-label--start" x="429.7" y="521">through</text>
-<text class="d-edge-label d-map-label--start d-edge-label--proposed" x="429.7" y="644.8">(planned)</text>
+<g class="d-map-part" data-part="a-events-aws" tabindex="0" role="button" aria-label="events: what it is, its code and tests">
+<rect class="d-node" x="628.3" y="302.5" width="198" height="53" rx="3"/>
+<path class="d-node-detail" d="M812.3 309.5V348.5M816.3 309.5V348.5M820.3 309.5V348.5"/>
+<text class="d-label" x="720.3" y="322">events</text>
+<text class="d-note" x="720.3" y="338">stream → queue → indexer</text>
+</g>
+<g class="d-map-part" data-part="a-search" tabindex="0" role="button" aria-label="SearchIndex: what it is, its code and tests">
+<path class="d-node d-node--port" d="M367.9 430.5H491.9V452A5 5 0 0 0 491.9 462V483.5H367.9V462A5 5 0 0 0 367.9 452Z"/>
+<text class="d-label" x="429.9" y="450">SearchIndex</text>
+<text class="d-note" x="429.9" y="466">find by words</text>
+</g>
+<g class="d-map-part" data-part="a-search-local" tabindex="0" role="button" aria-label="search: what it is, its code and tests">
+<path class="d-node" d="M66 433.5 A66.5 6 0 0 1 199 433.5 V480.5 A66.5 6 0 0 1 66 480.5 Z"/>
+<path class="d-node-detail" d="M66 433.5 A66.5 6 0 0 0 199 433.5"/>
+<text class="d-label" x="132.5" y="453">search</text>
+<text class="d-note" x="132.5" y="469">SQLite full-text</text>
+</g>
+<g class="d-map-part" data-part="a-search-aws" tabindex="0" role="button" aria-label="search file: what it is, its code and tests">
+<path class="d-node" d="M644.8 433.5 A82.5 6 0 0 1 809.8 433.5 V480.5 A82.5 6 0 0 1 644.8 480.5 Z"/>
+<path class="d-node-detail" d="M644.8 433.5 A82.5 6 0 0 0 809.8 433.5"/>
+<text class="d-label" x="727.3" y="453">search file</text>
+<text class="d-note" x="727.3" y="469">S3 · ranked in Lambda</text>
+</g>
+<g class="d-map-part" data-part="a-identity" tabindex="0" role="button" aria-label="Identity: what it is, its code and tests">
+<path class="d-node d-node--port" d="M323.4 558.5H536.4V580A5 5 0 0 0 536.4 590V611.5H323.4V590A5 5 0 0 0 323.4 580Z"/>
+<text class="d-label" x="429.9" y="578">Identity</text>
+<text class="d-note" x="429.9" y="594">who is asking · one for all</text>
+</g>
+<g class="d-map-part" data-part="a-identity-local" tabindex="0" role="button" aria-label="local sign-in: what it is, its code and tests">
+<rect class="d-node" x="50" y="558.5" width="165" height="53" rx="3"/>
+<text class="d-label" x="132.5" y="578">local sign-in</text>
+<text class="d-note" x="132.5" y="594">acting as a developer</text>
+</g>
+<g class="d-map-part" data-part="a-identity-aws" tabindex="0" role="button" aria-label="sign-in: what it is, its code and tests">
+<rect class="d-node" x="663.8" y="558.5" width="127" height="53" rx="3"/>
+<text class="d-label" x="727.3" y="578">sign-in</text>
+<text class="d-note" x="727.3" y="594">GitHub · tokens</text>
+</g>
+<g class="d-map-part" data-part="a-reviewer" tabindex="0" role="button" aria-label="Reviewer: what it is, its code and tests">
+<path class="d-node d-node--port" d="M326.9 686.5H532.9V708A5 5 0 0 0 532.9 718V739.5H326.9V718A5 5 0 0 0 326.9 708Z"/>
+<text class="d-label" x="429.9" y="706">Reviewer</text>
+<text class="d-note" x="429.9" y="722">a version in, a review out</text>
+</g>
+<g class="d-map-part" data-part="a-reviewer-rules" tabindex="0" role="button" aria-label="rules reviewer: what it is, its code and tests">
+<rect class="d-node" x="334.9" y="814.5" width="190" height="53" rx="3"/>
+<text class="d-label" x="429.9" y="834">rules reviewer</text>
+<text class="d-note" x="429.9" y="850">on one machine and in AWS</text>
+</g>
+<g class="d-map-part d-map-part--proposed" data-part="a-reviewer-agents" tabindex="0" role="button" aria-label="agent reviewers: what it is, its code and tests">
+<rect class="d-node d-node--proposed" style="fill: url(#zoom-ports-hatch)" x="352.4" y="934" width="155" height="70" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="368.8" y="940" width="122.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="429.9" y="947.5">PHASE 2 · PLANNED</text>
+<text class="d-label" x="429.9" y="970.5">agent reviewers</text>
+<text class="d-note" x="429.9" y="986.5">quality, by agents</text>
+</g>
+<text class="d-edge-label d-map-label--start" x="436.9" y="137">through its ports</text>
+<text class="d-edge-label" x="269.2" y="576">says who</text>
+<text class="d-edge-label" x="581" y="576">says who</text>
+<text class="d-edge-label d-map-label--start d-edge-label--proposed" x="551.9" y="841">(planned)</text>
 </svg></div></div></figure>
 <aside class="panel" aria-live="polite"><div class="picked" hidden></div>
 <p class="hint">Click a box for what it is.</p>
-<ul class="legend key"><li><b>⊐ ⊏</b> swappable beneath (a contract)</li><li><b>Hatched</b> planned, with its phase</li><li><b>Shaded</b> not ours</li><li><b>›</b> zoom in</li></ul>
+<ul class="legend key"><li><b>⊐ ⊏</b> a contract: what the rest is written against</li><li><b>—</b> plugs in: implements it, checked in the code</li><li><b>no shared tests yet</b> no shared suite proves a swap</li><li><b>Hatched</b> planned, with its phase</li><li><b>›</b> its own page</li></ul>
 </aside></div></section></main>
-<section class="cards boxes"><h2>The boxes</h2><div class="card-grid"><article class="card" data-box="o-claude">
-<h3>Claude Code <span class="tag">not ours</span></h3>
-<p class="note">not ours</p>
-<p>The assistant (not ours). It reaches skills-catalog's tools over MCP, and loads installed skills from <code>.claude/skills</code>.</p>
-
-
-
-
-
-
-
-</article>
-<article class="card" data-box="o-dev">
-<h3>Developer</h3>
-
-<p>Shares a skill once, or finds one, installs it and stays up to date: through an assistant or at a terminal.</p>
-
-
-
-
-
-
-
-</article>
-<article class="card" data-box="o-assistants">
-<h3>other assistants <span class="tag">phase 2–3 · planned</span> <span class="tag">not ours</span></h3>
-<p class="note">pi · Copilot · Codex</p>
-<p>pi in phase 2; Copilot, Codex, Cursor and Gemini CLI in phase 3, after the owner's approval. Each reaches skills-catalog the way Claude Code does: its tools or the CLI.</p>
-
-
-
-
-<p><span class="kicker">Would be built by</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/qa/traceability.yaml#L573" title="From pi, a developer finds, installs and updates skills through the CLI pi runs; installed skills land where pi reads them."><code>pi-agent</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/qa/traceability.yaml#L591" title="From Copilot, Codex, Cursor and Gemini CLI, a developer finds, installs and updates skills; not started without the owner's approval."><code>other-assistants</code></a></p>
-
-<p><span class="kicker">Decisions</span> <a href="decisions.html#decision-B16">Other assistants</a></p>
-</article>
-<article class="card" data-box="o-client">
-<h3>skills-catalog</h3>
-<p class="note">MCP server · CLI · serve</p>
-<p>One program on each machine: the MCP server, the CLI and <code>serve</code>. Every face runs each operation the one way, through the API, whichever catalog <code>SKILLS_CATALOG</code> names: the folder on this machine, or the AWS catalog over HTTPS (its client, core/src/remote, runs here).</p>
-
-
-
-<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/client/src"><code>client/src/**</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/open.ts"><code>core/src/open.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/remote"><code>core/src/remote/**</code></a></p>
-
-<p><a href="skills-catalog.html"><strong>Inside skills-catalog ›</strong></a></p>
-
-</article>
-<article class="card" data-box="o-web">
-<h3>web page <span class="tag">phase 2 · planned</span></h3>
-<p class="note">browse · compare</p>
-<p>Browse skills and what changed between versions, in a browser, over the same API. CloudFront and a bucket for its files are in place; the page isn't built yet.</p>
-
-
-
-
-<p><span class="kicker">Would be built by</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/qa/traceability.yaml#L454" title="View and update skills from a web UI (served locally)."><code>web-view-update</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/qa/traceability.yaml#L464" title="A delta view of changes across revisions."><code>web-delta</code></a></p>
-
-<p><span class="kicker">Decisions</span> <a href="decisions.html#decision-B13">Hosted technologies</a> · <a href="decisions.html#decision-B17">The web page</a></p>
-</article>
-<article class="card" data-box="o-api">
-<h3>catalog API <span class="tag">contract</span></h3>
-<p class="note">every operation, defined once</p>
-<p>The contract every face is written against: each operation, its input and its answer, defined once (the MCP tools, the CLI's commands, the HTTP routes and the published schema all come from it). skills-catalog opens it in its own process, or reaches it over HTTPS.</p>
-<p><span class="kicker">Declared</span> <code>Catalog</code> in <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/catalog.ts"><code>core/src/catalog.ts</code></a></p>
-<ul class="plugged"><li><span class="kicker">on one machine</span> local catalog <span class="note">in this process</span></li><li><span class="kicker">in AWS</span> hosted catalog <span class="note">CloudFront · HTTP API · Lambda</span></li></ul>
-<p><span class="kicker">Proved on both sides by</span> <code>catalogSuite</code>: <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/storage.test.ts"><code>core/test/storage.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/catalog.test.ts"><code>core/test/catalog.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/discovery.test.ts"><code>core/test/discovery.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/hosted/test/shared.test.ts"><code>hosted/test/shared.test.ts</code></a></p>
-
-
-<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/api.ts"><code>core/src/api.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/openapi.ts"><code>core/src/openapi.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/catalog.ts"><code>core/src/catalog.ts</code></a></p>
-
-
-
-</article>
-<article class="card" data-box="o-local">
-<h3>local catalog</h3>
-<p class="note">in this process</p>
-<p>On one machine, skills-catalog opens the catalog in its own process (<code>SKILLS_CATALOG=file://…</code>): the catalog's rules over the local parts below.</p>
-
-
-<p><span class="kicker">Plugs into</span> catalog API, as <code>Catalog</code></p>
-<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/index.ts"><code>core/src/local/index.ts</code></a></p>
-
-<p><a href="catalog.html"><strong>Inside the catalog, on one machine ›</strong></a></p>
-<p><span class="kicker">Decisions</span> <a href="decisions.html#decision-D2">D2</a> · <a href="decisions.html#decision-B1">What ships first</a> · <a href="decisions.html#decision-B12">Architecture</a> · <a href="decisions.html#decision-B13">Hosted technologies</a> · <a href="decisions.html#decision-B14">The AWS setup</a> · <a href="decisions.html#decision-B18">Bundles of skills</a></p>
-</article>
-<article class="card" data-box="o-hosted">
-<h3>hosted catalog</h3>
-<p class="note">CloudFront · Lambda</p>
-<p>In AWS, skills-catalog's client (core/src/remote) calls the same operations over HTTPS (<code>SKILLS_CATALOG=https://…</code>): CloudFront, then the HTTP API, then the API function, which runs the catalog's rules over the AWS parts below. Proven by its own test, not the shared suite: the client against the API's handler gives the local catalog's answers. Two catalog methods outside the API run only on one machine (reviewing stored versions again, rebuilding the index).</p>
-
-<p><span class="kicker">Tests</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/hosted/test/remote-client.test.ts"><code>hosted/test/remote-client.test.ts</code></a></p>
-<p><span class="kicker">Plugs into</span> catalog API, as <code>Catalog</code></p>
-<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/hosted/src/entries/api.ts"><code>hosted/src/entries/api.ts</code></a></p>
-
-<p><a href="catalog-aws.html"><strong>Inside the catalog on AWS ›</strong></a></p>
-<p><span class="kicker">Decisions</span> <a href="decisions.html#decision-D2">D2</a> · <a href="decisions.html#decision-B1">What ships first</a> · <a href="decisions.html#decision-B12">Architecture</a> · <a href="decisions.html#decision-B13">Hosted technologies</a> · <a href="decisions.html#decision-B14">The AWS setup</a> · <a href="decisions.html#decision-B18">Bundles of skills</a></p>
-</article>
-<article class="card" data-box="o-rules">
+<section class="cards boxes"><h2>The boxes</h2><div class="card-grid"><article class="card" data-box="a-rules">
 <h3>catalog rules</h3>
 <p class="note">publish · find · fetch</p>
 <p>Who may publish, what a new version is, what search returns: the same code on one machine and in the API function, calling its parts only through the ports below.</p>
@@ -482,28 +383,185 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 
 
 </article>
-<article class="card" data-box="o-ports">
-<h3>ports <span class="tag">contracts</span></h3>
-<p class="note">Storage · SearchIndex · …</p>
-<p>What the catalog's rules call, so a backend can be swapped beneath them: Storage, Events, SearchIndex, Identity and the Reviewer. Zoom in for each one and what plugs into it.</p>
-<ul class="plugged"><li>Storage <span class="note">versions · files</span></li><li>Events <span class="note">no shared tests yet</span></li><li>SearchIndex <span class="note">find by words</span></li><li>Identity <span class="note">who is asking · one for all</span></li><li>Reviewer <span class="note">a version in, a review out</span></li><li>rules reviewer <span class="note">on one machine and in AWS</span></li></ul>
-<p><a href="ports.html"><strong>Zoom in: ports ›</strong></a></p>
+<article class="card" data-box="a-storage">
+<h3>Storage <span class="tag">contract</span></h3>
+<p class="note">versions · files</p>
+<p>Every skill's versions and their files, with the publish's one all-or-nothing commit.</p>
+<p><span class="kicker">Declared</span> <code>Storage</code> in <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/ports.ts"><code>core/src/ports.ts</code></a></p>
+<ul class="plugged"><li><span class="kicker">on one machine</span> versions + files <span class="note">SQLite · a folder</span></li><li><span class="kicker">in AWS</span> versions + files <span class="note">DynamoDB · S3</span></li></ul>
+<p><span class="kicker">Proved on both sides by</span> <code>storageSuite</code>: <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/storage.test.ts"><code>core/test/storage.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/catalog.test.ts"><code>core/test/catalog.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/discovery.test.ts"><code>core/test/discovery.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/hosted/test/shared.test.ts"><code>hosted/test/shared.test.ts</code></a></p>
+
+
+
+
+
+
 </article>
-<article class="card" data-box="o-local-backends">
-<h3>local backends</h3>
+<article class="card" data-box="a-storage-local">
+<h3>versions + files</h3>
 <p class="note">SQLite · a folder</p>
-<p>On one machine: one SQLite file (versions, an outbox for events, full-text search) and a folder for files; the developer named at setup.</p>
-<ul class="plugged"><li>versions + files <span class="note">SQLite · a folder</span></li><li>outbox <span class="note">SQLite · same commit</span></li><li>search <span class="note">SQLite full-text</span></li><li>local sign-in <span class="note">acting as a developer</span></li></ul>
-<p><a href="ports.html"><strong>Zoom in: ports ›</strong></a></p>
+<p>One SQLite file for versions, owners and the latest pointer; a folder for files, each named by its fingerprint.</p>
+
+
+<p><span class="kicker">Plugs into</span> Storage, as <code>Storage</code></p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/storage.ts"><code>core/src/local/storage.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/db.ts"><code>core/src/local/db.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/metadata.ts"><code>core/src/local/metadata.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/blobs.ts"><code>core/src/local/blobs.ts</code></a></p>
+
+
+
 </article>
-<article class="card" data-box="o-aws-backends">
-<h3>AWS backends</h3>
-<p class="note">DynamoDB · S3 · GitHub</p>
-<p>In AWS: a DynamoDB table and its stream, S3 for files and the search file, and GitHub sign-in.</p>
-<ul class="plugged"><li>versions + files <span class="note">DynamoDB · S3</span></li><li>events <span class="note">stream → queue → indexer</span></li><li>search file <span class="note">S3 · ranked in Lambda</span></li><li>sign-in <span class="note">GitHub · tokens</span></li></ul>
-<p><a href="ports.html"><strong>Zoom in: ports ›</strong></a></p>
+<article class="card" data-box="a-storage-aws">
+<h3>versions + files</h3>
+<p class="note">DynamoDB · S3</p>
+<p>One DynamoDB table for versions, owners, events and tokens; S3 for files by fingerprint, written only if absent.</p>
+
+
+<p><span class="kicker">Plugs into</span> Storage, as <code>Storage</code></p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/hosted/src/storage.ts"><code>hosted/src/storage.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/hosted/src/blobs.ts"><code>hosted/src/blobs.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/hosted/src/place.ts"><code>hosted/src/place.ts</code></a></p>
+
+
+
 </article>
-<article class="card" data-box="o-agents">
+<article class="card" data-box="a-events">
+<h3>Events <span class="tag">contract</span></h3>
+<p class="note">each new version</p>
+<p>Each new version's event, delivered at least once, in order: it keeps search up to date.</p>
+<p><span class="kicker">Declared</span> <code>Events</code> in <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/ports.ts"><code>core/src/ports.ts</code></a></p>
+<ul class="plugged"><li><span class="kicker">on one machine</span> outbox <span class="note">SQLite · same commit</span></li><li><span class="kicker">in AWS</span> events <span class="note">stream → queue → indexer</span></li></ul>
+<p><span class="kicker">Not proven yet</span> no shared suite runs on both sides' adapters, so swapping a side isn't shown to work.</p>
+
+
+
+
+
+
+</article>
+<article class="card" data-box="a-events-local">
+<h3>outbox</h3>
+<p class="note">SQLite · same commit</p>
+<p>An event saved with each version, in the same transaction, then delivered to search.</p>
+
+
+<p><span class="kicker">Plugs into</span> Events, as <code>Events</code></p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/outbox.ts"><code>core/src/local/outbox.ts</code></a></p>
+
+
+
+</article>
+<article class="card" data-box="a-events-aws">
+<h3>events</h3>
+<p class="note">stream → queue → indexer</p>
+<p>In AWS the function's Events adapter delivers nothing itself (<code>deliveredByTheStream</code>): each version's event is written in the same DynamoDB transaction, and the table's stream carries it through a pipe into a queue, where the indexer reads it and rewrites the search file. That path runs outside the Events contract, so it isn't swapped with it.</p>
+
+
+<p><span class="kicker">Plugs into</span> Events, as <code>Events</code></p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/hosted/src/events.ts"><code>hosted/src/events.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/hosted/src/entries/queue.ts"><code>hosted/src/entries/queue.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/hosted/src/entries/indexer.ts"><code>hosted/src/entries/indexer.ts</code></a></p>
+
+
+
+</article>
+<article class="card" data-box="a-search">
+<h3>SearchIndex <span class="tag">contract</span></h3>
+<p class="note">find by words</p>
+<p>Keyword search over each skill's name and description: any word, stemmed, ranked; rebuildable from the versions.</p>
+<p><span class="kicker">Declared</span> <code>SearchIndex</code> in <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/ports.ts"><code>core/src/ports.ts</code></a></p>
+<ul class="plugged"><li><span class="kicker">on one machine</span> search <span class="note">SQLite full-text</span></li><li><span class="kicker">in AWS</span> search file <span class="note">S3 · ranked in Lambda</span></li></ul>
+<p><span class="kicker">Proved on both sides by</span> <code>discoverySuite</code>: <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/storage.test.ts"><code>core/test/storage.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/catalog.test.ts"><code>core/test/catalog.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/discovery.test.ts"><code>core/test/discovery.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/hosted/test/shared.test.ts"><code>hosted/test/shared.test.ts</code></a></p>
+
+
+
+
+
+
+</article>
+<article class="card" data-box="a-search-local">
+<h3>search</h3>
+<p class="note">SQLite full-text</p>
+<p>SQLite's full-text search (FTS5), rebuilt from the stored versions.</p>
+
+
+<p><span class="kicker">Plugs into</span> SearchIndex, as <code>SearchIndex</code></p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/search-index.ts"><code>core/src/local/search-index.ts</code></a></p>
+
+
+
+</article>
+<article class="card" data-box="a-search-aws">
+<h3>search file</h3>
+<p class="note">S3 · ranked in Lambda</p>
+<p>One index file in S3, ranked in the function (to about 10–30k skills); OpenSearch Serverless is to be weighed again in phase 3.</p>
+
+
+<p><span class="kicker">Plugs into</span> SearchIndex, as <code>SearchIndex</code></p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/hosted/src/search.ts"><code>hosted/src/search.ts</code></a></p>
+
+
+
+</article>
+<article class="card" data-box="a-identity">
+<h3>Identity <span class="tag">contract</span></h3>
+<p class="note">who is asking · one for all</p>
+<p>Who is asking, for who may publish. Not swapped per side: the same code everywhere (core/src/http) gives each request an Identity for whoever signed in. What differs per side is only who that is, and where it comes from.</p>
+<p><span class="kicker">Declared</span> <code>Identity</code> in <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/ports.ts"><code>core/src/ports.ts</code></a></p>
+<ul class="plugged"></ul>
+<p><span class="kicker">Implemented once, for every side</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/http/index.ts"><code>core/src/http/index.ts</code></a></p>
+
+
+
+
+
+
+</article>
+<article class="card" data-box="a-identity-local">
+<h3>local sign-in</h3>
+<p class="note">acting as a developer</p>
+<p>On one machine there is no sign-in: the Developer acts as a named developer (from setup, or <code>--as</code>), labelled for demo purposes.</p>
+
+
+
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/local/identity.ts"><code>core/src/local/identity.ts</code></a></p>
+
+
+
+</article>
+<article class="card" data-box="a-identity-aws">
+<h3>sign-in</h3>
+<p class="note">GitHub · tokens</p>
+<p>In AWS a verified GitHub sign-in or a token says who is asking (two ports only AWS has: GitHub's check of a sign-in, and the token store). Only the logins the deployment lists may sign in.</p>
+
+
+
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/hosted/src/api/handler.ts"><code>hosted/src/api/handler.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/hosted/src/github.ts"><code>hosted/src/github.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/hosted/src/tokens.ts"><code>hosted/src/tokens.ts</code></a></p>
+
+
+
+</article>
+<article class="card" data-box="a-reviewer">
+<h3>Reviewer <span class="tag">contract</span></h3>
+<p class="note">a version in, a review out</p>
+<p>Reviews each new version as it is published: what it flags, stored with the version.</p>
+<p><span class="kicker">Declared</span> <code>Reviewer</code> in <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/skill-tree/reviewer.ts"><code>core/src/skill-tree/reviewer.ts</code></a></p>
+<ul class="plugged"><li><span class="kicker">the core</span> rules reviewer <span class="note">on one machine and in AWS</span></li><li><span class="kicker">the core</span> agent reviewers <span class="note">quality, by agents</span> <span class="tag">planned</span></li></ul>
+<p><span class="kicker">Proved on both sides by</span> <code>reviewsSuite</code>: <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/storage.test.ts"><code>core/test/storage.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/catalog.test.ts"><code>core/test/catalog.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/test/discovery.test.ts"><code>core/test/discovery.test.ts</code></a> <a href="https://github.com/nandr-web/skills-catalog/blob/main/hosted/test/shared.test.ts"><code>hosted/test/shared.test.ts</code></a></p>
+
+
+
+
+
+
+</article>
+<article class="card" data-box="a-reviewer-rules">
+<h3>rules reviewer</h3>
+<p class="note">on one machine and in AWS</p>
+<p>The built-in rules: scripts and executables, tools a skill grants itself, text that steers the assistant, a new publisher. The same everywhere.</p>
+
+
+<p><span class="kicker">Plugs into</span> Reviewer, as <code>Reviewer</code></p>
+<p><span class="kicker">Code</span> <a href="https://github.com/nandr-web/skills-catalog/blob/main/core/src/skill-tree/reviewer.ts"><code>core/src/skill-tree/reviewer.ts</code></a></p>
+
+
+
+</article>
+<article class="card" data-box="a-reviewer-agents">
 <h3>agent reviewers <span class="tag">phase 2 · planned</span></h3>
 <p class="note">quality, by agents</p>
 <p>Pluggable reviewers that measure a skill's quality next to the rules reviewer: grounded findings, and no comments when it's good.</p>

@@ -1,6 +1,7 @@
 // The system map's pages (docs/map/*.html), built from the map, the decision log and the facts read from the code:
-//   index.html       the architecture: the contracts in the middle, what plugs into each on one machine and in AWS,
-//                    who uses it on top, planned parts hatched with their phase (architecture.ts)
+//   index.html       the architecture at a high level (architecture.ts overview:): who uses it on top, the contracts
+//                    in the middle with one box per side beside them, planned parts hatched with their phase
+//   <zoom>.html      one level down (zooms:): the ports, and what plugs into each on one machine and in AWS
 //   use-cases.html   use cases: the core loop, step by step (the renderer's own page, with the site's navigation)
 //   context.html     who uses it and where each copy runs: the running parts (on one machine, in AWS; planned parts on
 //                    a toggle) and its code's packages, with what uses what
@@ -9,7 +10,7 @@
 //                    decisions, the use-case steps through it, its code and tests
 // One question per page. Self-contained: inline CSS and script; without a script everything is still there, stacked.
 import { matchesGlob } from 'node:path';
-import { architectureSpec, phaseOf, UNPROVEN, unprovenContract, type ArchBox } from './architecture.ts';
+import { architectureSpec, landingSpec, phaseOf, UNPROVEN, unprovenContract, zoomBoxes, type ArchBox, type OverviewBox, type Zoom } from './architecture.ts';
 import { decisionsAbout, type Aspect, type Decision, type DecisionLog } from './decisions.ts';
 import type { Facts } from './facts.ts';
 import { toSpec, type MapSource, type Part } from './map.ts';
@@ -632,7 +633,7 @@ const requirementLink = (c: Ctx, id: string) => {
 };
 
 /** An architecture box's card: what it is; a contract's sides and the suites that prove them; what a box implements. */
-function archCard(c: Ctx, b: ArchBox): string {
+function archCard(c: Ctx, b: ArchBox, shown: { id: string; label: string; note?: string } = b): string {
   const a = c.m.architecture!;
   const boxes = a.boxes;
   const phase = b.status === 'proposed' ? phaseOf(b, c.facts) : undefined;
@@ -644,9 +645,9 @@ function archCard(c: Ctx, b: ArchBox): string {
   const into = b.plugs ? boxes.find((x) => x.id === b.plugs!.into) : undefined;
   const tests = (globs: string[]) => globs.map((g) => codeLink(c, g)).join(' ');
   const about = part ? decisionsAbout(c.log, part.id) : [];
-  return `<article class="card" data-box="${esc(b.id)}">
-<h3>${esc(b.label)}${b.contract ? ' <span class="tag">contract</span>' : ''}${b.status === 'proposed' ? ` <span class="tag">${phase ? `phase ${esc(phase)} · ` : ''}planned</span>` : ''}${b.external ? ' <span class="tag">not ours</span>' : ''}</h3>
-${b.note ? `<p class="note">${esc(b.note)}</p>` : ''}
+  return `<article class="card" data-box="${esc(shown.id)}">
+<h3>${esc(shown.label)}${b.contract ? ' <span class="tag">contract</span>' : ''}${b.status === 'proposed' ? ` <span class="tag">${phase ? `phase ${esc(phase)} · ` : ''}planned</span>` : ''}${b.external ? ' <span class="tag">not ours</span>' : ''}</h3>
+${shown.note ? `<p class="note">${esc(shown.note)}</p>` : ''}
 ${b.text ? `<p>${rich(b.text)}</p>` : ''}
 ${b.contract ? `<p><span class="kicker">Declared</span> <code>${esc(b.contract.name)}</code> in ${codeLink(c, b.contract.file)}</p>
 <ul class="plugged">${plugged.map((x) => `<li><span class="kicker">${esc(sideOf(x))}</span> ${esc(x.label)}${x.note ? ` <span class="note">${esc(x.note)}</span>` : ''}${x.status === 'proposed' ? ' <span class="tag">planned</span>' : ''}</li>`).join('')}</ul>
@@ -660,40 +661,71 @@ ${about.length ? `<p><span class="kicker">Decisions</span> ${about.map(({ decisi
 </article>`;
 }
 
-/** The landing: the architecture, built around its contracts (architecture.ts). */
+/** The key beside a drawing: a mark and a few words each, never a paragraph (visual first). */
+const key = (items: [string, string][]) => `<ul class="legend key">${items.map(([mark, words]) => `<li><b>${mark}</b> ${words}</li>`).join('')}</ul>`;
+const PLANNED_KEY: [string, string] = ['Hatched', 'planned, with its phase'];
+const NOT_OURS_KEY: [string, string] = ['Shaded', 'not ours'];
+
+/** A landing box's card: one detailed box's card under the landing's name, or what a box standing for several holds. */
+function overviewCard(c: Ctx, o: OverviewBox): string {
+  const a = c.m.architecture!;
+  const of = o.of.map((id) => a.boxes.find((b) => b.id === id)!);
+  if (of.length === 1) return archCard(c, of[0]!, { id: o.id, label: o.label, note: o.note });
+  const zoom = a.zooms.find((z) => z.id === o.zoom);
+  return `<article class="card" data-box="${esc(o.id)}">
+<h3>${esc(o.label)}${o.kind === 'port' ? ' <span class="tag">contracts</span>' : ''}</h3>
+${o.note ? `<p class="note">${esc(o.note)}</p>` : ''}
+${o.text ? `<p>${rich(o.text)}</p>` : ''}
+<ul class="plugged">${of.map((b) => `<li>${esc(b.label)}${b.note ? ` <span class="note">${esc(unprovenContract(b) ? UNPROVEN : b.note)}</span>` : ''}</li>`).join('')}</ul>
+${zoom ? `<p><a href="${esc(zoom.id)}.html"><strong>Zoom in: ${esc(zoom.title)} ›</strong></a></p>` : ''}
+</article>`;
+}
+
+/** A drawing in a frame with its key and the card of a picked box beside it. */
+function drawingFrame(spec: ReturnType<typeof parseSystemMap>['spec'], idPrefix: string, title: string, items: [string, string][], widths: number[]): string {
+  const L = layoutSystemMap(spec, '');
+  const svg = drawSystemMap(spec, L, undefined, { mode: 'inline', idPrefix, interactive: true, partLinks: true });
+  return `<main class="frames"><section class="frame">
+<h2 class="frame-title">${esc(title)}</h2>
+<div class="${gridClass(L.width)}">${figure(svg, widths, L.width)}
+<aside class="panel" aria-live="polite"><div class="picked" hidden></div>
+<p class="hint">Click a box for what it is.</p>
+${key(items)}
+</aside></div></section></main>`;
+}
+
+/** The landing: the architecture at a high level, a few boxes; the ports' detail is a zoom away (architecture.ts). */
 function architecturePage(c: Ctx): string {
   const a = c.m.architecture!;
   const widths: number[] = [];
-  const spec = parseSystemMap(architectureSpec(c.m, c.facts)).spec;
-  const L = layoutSystemMap(spec, '');
-  const svg = drawSystemMap(spec, L, undefined, { mode: 'inline', idPrefix: 'architecture', interactive: true, partLinks: true });
-  const contracts = a.boxes.filter((b) => b.contract && b.status !== 'proposed');
-  const unproven = contracts.filter(unprovenContract), once = contracts.filter((b) => b.contract!.shared);
-  const proven = contracts.filter((b) => b.contract!.suites?.length && !b.contract!.shared);
+  const spec = parseSystemMap(landingSpec(c.m, c.facts)).spec;
   const body = `${nav('architecture')}
 <header class="top"><span class="eyebrow">System map · architecture</span><h1>${esc(c.m.title)}</h1>
 <p class="question">${esc(a.question)}</p></header>
-<main class="frames"><section class="frame">
-<h2 class="frame-title">The architecture · on one machine and in AWS, with what's planned</h2>
-<div class="${gridClass(L.width)}">${figure(svg, widths, L.width)}
-<aside class="panel" aria-live="polite"><div class="picked" hidden></div>
-<h3>Built around contracts: a side can be swapped where the tests prove it.</h3>
-<p>skills-catalog calls <b>the API</b>; the catalog's rules call <b>their ports</b>. What plugs into each sits beside it: on one machine on the left, in AWS on the right.</p>
-<ul class="legend">
-<li><b>⊐ ⊏</b> a contract: an interface in the code that the rest is written against</li>
-<li><b>—</b> from a contract: what plugs into it, checked in the code (it implements the contract)</li>
-<li>${esc(a.proof.text)} Proven so far: ${proven.map((b) => `<b>${esc(b.label)}</b>`).join(', ')}.</li>
-${unproven.length ? `<li><b>Orange</b>, “${esc(UNPROVEN)}”: ${unproven.map((b) => `<b>${esc(b.label)}</b>`).join(' and ')} ${unproven.length > 1 ? 'have' : 'has'} no shared suite, so swapping a side isn't shown to work</li>` : ''}
-${once.length ? `<li>${once.map((b) => `<b>${esc(b.label)}</b>`).join(' and ')}: implemented once, the same everywhere; only where its input comes from differs per side (<b>→</b> says who)</li>` : ''}
-<li><b>Hatched</b>, dotted, <b>PHASE n · PLANNED</b>: not built yet; n is the phase of the requirements that build it</li>
-<li>Shaded, <b>not ours</b>: another company's part</li>
-<li><b>›</b> opens the part's own page; click any other box for what it is</li>
-</ul>
-<p>Who uses it, and where each copy runs: <a href="context.html">Context</a>. Step by step: <a href="use-cases.html">Use cases</a>.</p>
-</aside></div></section></main>
-<section class="cards boxes"><h2>The boxes</h2><div class="card-grid">${a.boxes.map((b) => archCard(c, b)).join('\n')}</div></section>`;
+${drawingFrame(spec, 'architecture', 'The architecture · on one machine and in AWS, with what\'s planned', [
+    ['⊐ ⊏', 'swappable beneath (a contract)'], PLANNED_KEY, NOT_OURS_KEY, ['›', 'zoom in'],
+  ], widths)}
+<section class="cards boxes"><h2>The boxes</h2><div class="card-grid">${a.overview.boxes.map((o) => overviewCard(c, o)).join('\n')}</div></section>`;
   // What's planned is always shown here (hatched, with its phase): the landing shows today and what's next together.
   return shell(`${c.m.title}: architecture`, body, { css: scrollHintCss(widths), data: { views: [''], svs: [''], planned: true, center: true }, script: c.script });
+}
+
+/** One level down from the landing: the detailed boxes some landing boxes stand for, each with its card. */
+function zoomPage(c: Ctx, z: Zoom): string {
+  const a = c.m.architecture!;
+  const widths: number[] = [];
+  const ids = zoomBoxes(a, z);
+  const spec = parseSystemMap(architectureSpec(c.m, c.facts, ids)).spec;
+  const drawn = a.boxes.filter((b) => ids.includes(b.id));
+  const body = `${nav('part', [{ label: 'Architecture', href: 'index.html' }, { label: z.title }])}
+<header class="top"><span class="eyebrow">System map · zoomed in</span><h1>${esc(z.title)}</h1>
+<p class="question">${esc(z.question)}</p></header>
+${drawingFrame(spec, `zoom-${z.id}`, `${z.title} · on one machine and in AWS`, [
+    ['⊐ ⊏', 'a contract: what the rest is written against'], ['—', 'plugs in: implements it, checked in the code'],
+    [UNPROVEN, 'no shared suite proves a swap'], PLANNED_KEY, ['›', 'its own page'],
+  ], widths)}
+<section class="cards boxes"><h2>The boxes</h2><div class="card-grid">${drawn.map((b) => archCard(c, b)).join('\n')}</div></section>`;
+  return shell(`${z.title}: ${c.m.title}`, body, { css: scrollHintCss(widths), data: { views: [''], svs: [''], planned: true, center: true }, script: c.script });
 }
 
 function decisionsPage(c: Ctx): string {
@@ -735,8 +767,12 @@ export async function buildSite(m: MapSource, facts: Facts, log: DecisionLog, co
   const uc = await buildSystemMapFrom(useCaseSpec(c), { static: opts.static, header, css: SITE_NAV_CSS });
   warnings.push(...uc.warnings);
   if (m.architecture) {
-    warnings.push(...parseSystemMap(architectureSpec(m, facts)).warnings.map((w) => `architecture: ${w}`));
+    warnings.push(...parseSystemMap(landingSpec(m, facts)).warnings.map((w) => `architecture: ${w}`));
     files.set(`${MAP_DIR}/index.html`, architecturePage(c));
+    for (const z of m.architecture.zooms) {
+      warnings.push(...parseSystemMap(architectureSpec(m, facts, zoomBoxes(m.architecture, z))).warnings.map((w) => `${z.id}: ${w}`));
+      files.set(`${MAP_DIR}/${z.id}.html`, zoomPage(c, z));
+    }
   }
   files.set(`${MAP_DIR}/use-cases.html`, uc.html + '\n');
   files.set(`${MAP_DIR}/context.html`, await contextPage(c));

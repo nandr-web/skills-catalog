@@ -51,7 +51,10 @@ export type Rule =
   | 'decision-unknown-part' | 'chosen-not-an-option' | 'unknown-decision'
   // architecture.ts: the contracts and what plugs into them
   | 'unknown-zone' | 'contract-not-in-code' | 'suite-not-run' | 'unknown-contract' | 'adapter-not-in-code' | 'unknown-field'
-  | 'implements-other-contract' | 'contract-side-missing' | 'planned-phase-unclear' | 'side-code-elsewhere';
+  | 'implements-other-contract' | 'contract-side-missing' | 'planned-phase-unclear' | 'side-code-elsewhere'
+  // architecture.ts: the landing over the detail
+  | 'unknown-zoom' | 'overview-stands-for-nothing' | 'overview-box-twice' | 'overview-misses-box' | 'overview-status-differs'
+  | 'overview-line-not-below';
 export type Problem = { rule: Rule; message: string };
 
 /** Words the map never uses (review V5.4, V5.6, V6.4; the owner's names): each with what to say instead. */

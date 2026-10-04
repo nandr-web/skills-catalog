@@ -120,6 +120,12 @@ describe('the architecture checks catch each kind of drift, one planted mistake 
     expect(rulesOf(m, f), `planted ${[rules].flat().join(' + ')}`).toEqual([rules].flat().sort());
     return problemsOf(m, f);
   };
+  /** Removes detailed boxes, and the landing's mention of them (a landing box left standing for nothing goes too). */
+  const drop = (m: MapSource, ids: string[]) => {
+    const a = m.architecture!;
+    a.boxes = a.boxes.filter((b) => !ids.includes(b.id));
+    for (const o of a.overview.boxes) o.of = o.of.filter((id) => !ids.includes(id));
+  };
   /** The facts with some files' text changed (the checks read code through `text`). */
   const withText = (change: (path: string, text: string) => string): Facts => ({ ...facts, text: (path) => change(path, facts.text(path)) });
   it('a box that plugs in but whose files don\'t implement the contract', () => {
@@ -172,10 +178,11 @@ describe('the architecture checks catch each kind of drift, one planted mistake 
     const found = planted('side-code-elsewhere', (m) => { abox(m, 'a-storage-local').code = ['hosted/src/storage.ts']; });
     expect(found[0]!.message).toContain('hosted/src/storage.ts');
   });
-  it('an AWS adapter moved to the same everywhere, with the local one removed, doesn\'t pass silently', () => {
+  it('an AWS adapter moved into the core (the same everywhere), with the local one removed, doesn\'t pass silently', () => {
     const found = planted('side-code-elsewhere', (m) => {
-      abox(m, 'a-search-aws').zone = 'everywhere';
-      m.architecture!.boxes = m.architecture!.boxes.filter((b) => b.id !== 'a-search-local');
+      abox(m, 'a-search-aws').zone = 'core';
+      abox(m, 'a-search-aws').at = [3, 6];
+      drop(m, ['a-search-local']);
     });
     expect(found[0]!.message).toContain('hosted/src/search.ts');
   });
@@ -188,12 +195,12 @@ describe('the architecture checks catch each kind of drift, one planted mistake 
     expect(found[0]!.message).toContain('core/src/api.ts');
   });
   it('a contract with no adapter on one side', () => {
-    const found = planted('contract-side-missing', (m) => { m.architecture!.boxes = m.architecture!.boxes.filter((b) => b.id !== 'a-search-aws'); });
+    const found = planted('contract-side-missing', (m) => { drop(m, ['a-search-aws']); });
     expect(found).toHaveLength(1);
     expect(found[0]!.message).toMatch(/SearchIndex.*in AWS/);
   });
   it('a contract with no adapter on either side: one problem for each side', () => {
-    const found = planted('contract-side-missing', (m) => { m.architecture!.boxes = m.architecture!.boxes.filter((b) => !['a-events-local', 'a-events-aws'].includes(b.id)); });
+    const found = planted('contract-side-missing', (m) => { drop(m, ['a-events-local', 'a-events-aws']); });
     expect(found).toHaveLength(2);
     expect(found.map((p) => /on one machine|in AWS/.exec(p.message)?.[0]).sort()).toEqual(['in AWS', 'on one machine']);
   });
@@ -217,6 +224,22 @@ describe('the architecture checks catch each kind of drift, one planted mistake 
   // In no zone, the opener (an adapter holding the local side's code) is also in the wrong place.
   it('a box in a zone the architecture hasn\'t', () => planted(['side-code-elsewhere', 'unknown-zone'], (m) => { abox(m, 'a-opener').zone = 'nowhere'; }));
   it('a box opening a view the map hasn\'t', () => planted('unknown-view', (m) => { abox(m, 'a-function').view = 'mars'; }));
+  // The landing over the detail: each detailed box on one landing box, each landing line over a real one.
+  const obox = (m: MapSource, id: string) => m.architecture!.overview.boxes.find((o) => o.id === id)!;
+  it('a detailed box on no landing box', () => {
+    const found = planted('overview-misses-box', (m) => { obox(m, 'o-ports').of = obox(m, 'o-ports').of.filter((id) => id !== 'a-events'); });
+    expect(found[0]!.message).toContain('a-events');
+  });
+  it('a detailed box on two landing boxes', () => planted('overview-box-twice', (m) => { obox(m, 'o-local-backends').of.push('a-events'); }));
+  it('a landing box standing for nothing', () => planted('overview-stands-for-nothing', (m) => {
+    m.architecture!.overview.boxes.push({ id: 'o-empty', of: [], label: 'empty', at: [3, 3], zone: 'core' });
+  }));
+  it('a landing line with nothing under it in the detail', () => {
+    const found = planted('overview-line-not-below', (m) => { m.architecture!.overview.lines.push({ from: 'o-local-backends', to: 'o-hosted', label: 'calls' }); });
+    expect(found[0]!.message).toMatch(/local backends.*hosted catalog/);
+  });
+  it('a landing box planned over something built', () => planted('overview-status-differs', (m) => { obox(m, 'o-rules').status = 'proposed'; }));
+  it('a landing box zooming to a page the architecture hasn\'t', () => planted('unknown-zoom', (m) => { obox(m, 'o-ports').zoom = 'nowhere'; }));
   it('a planned box\'s phase is the phases of the requirements that would build it', () => {
     expect(phaseOf({ needs: ['pi-agent', 'other-assistants'] }, facts)).toBe('2–3');
     expect(phaseOf({ needs: ['quality-agent-reviews'] }, facts)).toBe('2');
@@ -269,54 +292,71 @@ describe('the pages show what was asked for', () => {
     expect(planned.slice(0, planned.indexOf('</g>'))).toContain('>PHASE 2–3 · PLANNED</text>');
     expect(s).toContain('<b>PHASE n · PLANNED</b>');
   });
-  it('the architecture page: every box drawn, contracts as ports, what\'s planned hatched with its phase, a card each', () => {
-    const arch = source().architecture!;
+  // A drawing's group for one box (a part's group is `data-part`): its text up to the box's closing tag.
+  const drawnIn = (s: string) => (id: string) => {
+    const at = s.indexOf(`data-part="${id}"`);
+    expect(at, `${id} is drawn`).toBeGreaterThan(-1);
+    return s.slice(at, at + s.slice(at).search(/<\/(?:g|a)>/));
+  };
+  const cardIn = (s: string, id: string) => s.slice(s.indexOf(`data-box="${id}"`), s.indexOf('</article>', s.indexOf(`data-box="${id}"`)));
+  it('the architecture page: high level, a few boxes in a few groups, the ports\' detail a zoom away, a short key', () => {
+    const o = source().architecture!.overview;
     const s = html('index.html');
+    const drawn = drawnIn(s);
     expect(s).toContain('<a href="index.html" aria-current="page">Architecture</a>');
     expect(s).toContain('<span class="eyebrow">System map · architecture</span>');
     expect(s).toContain('"planned":true');
-    // The drawing: one group per box (a part's group is `data-part`); its text up to the box's closing tag.
-    const drawn = (id: string) => {
-      const at = s.indexOf(`data-part="${id}"`);
-      expect(at, `${id} is drawn`).toBeGreaterThan(-1);
-      return s.slice(at, at + s.slice(at).search(/<\/(?:g|a)>/));
-    };
-    expect(arch.boxes.length).toBeGreaterThan(20);
-    for (const b of arch.boxes) {
+    expect(s).toContain('"center":true'); // the page centres a drawing wider than the screen
+    // High level: about a dozen boxes (the research: a reader holds about four groups), a card each.
+    expect(o.boxes.length).toBeLessThanOrEqual(14);
+    for (const b of o.boxes) {
       const d = drawn(b.id);
       expect(s, `a card for ${b.id}`).toContain(`<article class="card" data-box="${b.id}">`);
-      // A contract is drawn as a port, and only a contract is.
-      expect(/\bd-node--port\b/.test(d), `${b.id} drawn as a port: ${!!b.contract}`).toBe(!!b.contract);
-      // A planned box is hatched, and only a planned box is.
       expect(d.includes('url(#architecture-hatch)'), `${b.id} hatched: ${b.status === 'proposed'}`).toBe(b.status === 'proposed');
     }
-    expect(arch.boxes.filter((b) => b.contract).length).toBe(6);
-    const tags: Record<string, string> = { 'a-assistants': 'PHASE 2–3 · PLANNED', 'a-web': 'PHASE 2 · PLANNED', 'a-reviewer-agents': 'PHASE 2 · PLANNED' };
-    expect(arch.boxes.filter((b) => b.status === 'proposed').map((b) => b.id).sort()).toEqual(Object.keys(tags).sort());
-    // A built contract no shared suite proves is orange and says so in words (one implemented once is neither); the panel names the proven ones.
-    const unproven = arch.boxes.filter((b) => b.contract && !b.contract.suites?.length && !b.contract.shared).map((b) => b.id).sort();
-    expect(unproven).toEqual(['a-events']); // Identity is implemented once, so it has no suites and isn't orange
-    for (const b of arch.boxes.filter((x) => x.contract)) {
-      const d = drawn(b.id);
-      expect(/\bd-node--alert\b/.test(d), `${b.id} orange: ${unproven.includes(b.id)}`).toBe(unproven.includes(b.id));
-      expect(d.includes('>no shared tests yet</text>'), `${b.id} says no shared tests yet`).toBe(unproven.includes(b.id));
+    // The contracts (what can be swapped beneath) are drawn as ports: the API and the ports.
+    expect(o.boxes.filter((b) => /\bd-node--port\b/.test(drawn(b.id))).map((b) => b.id).sort()).toEqual(['o-api', 'o-ports']);
+    // Planned parts carry their phase, from the requirements behind what they stand for.
+    const tags: Record<string, string> = { 'o-assistants': 'PHASE 2–3 · PLANNED', 'o-web': 'PHASE 2 · PLANNED', 'o-agents': 'PHASE 2 · PLANNED' };
+    expect(o.boxes.filter((b) => b.status === 'proposed').map((b) => b.id).sort()).toEqual(Object.keys(tags).sort());
+    for (const [id, tag] of Object.entries(tags)) expect(drawn(id), id).toContain(`>${tag}</text>`);
+    // The ports and what plugs into them zoom in; a box standing for one part opens that part's page.
+    for (const id of ['o-ports', 'o-local-backends', 'o-aws-backends']) expect(drawn(id), id).toContain('href="ports.html"');
+    expect(drawn('o-hosted')).toContain('href="catalog-aws.html"');
+    expect(cardIn(s, 'o-ports')).toContain('<a href="ports.html"><strong>Zoom in: ports ›</strong></a>');
+    // Colour means built or planned only ("color scheme has to mean something"): nothing orange; and a key of marks, not paragraphs.
+    expect(s).not.toMatch(/class="[^"]*\bd-node--alert\b/);
+    expect(s).toContain('<ul class="legend key">');
+    expect(s).not.toContain('Proven so far');
+    expect(s).not.toContain('the same everywhere');
+  });
+  it('the ports page: each port, what plugs into it on each side, a card each, unproven said in words only', () => {
+    const arch = source().architecture!;
+    const s = html('ports.html');
+    const drawn = drawnIn(s);
+    expect(s).toContain('<a href="index.html">Architecture</a>');
+    expect(s).toContain('<span class="eyebrow">System map · zoomed in</span>');
+    const ids = [...new Set(['a-rules', ...arch.overview.boxes.filter((b) => b.zoom === 'ports').flatMap((b) => b.of)])];
+    expect(ids.length).toBeGreaterThan(12);
+    for (const id of ids) {
+      const b = arch.boxes.find((x) => x.id === id)!;
+      const d = drawn(id);
+      expect(s, `a card for ${id}`).toContain(`<article class="card" data-box="${id}">`);
+      expect(/\bd-node--port\b/.test(d), `${id} drawn as a port: ${!!b.contract}`).toBe(!!b.contract);
+      expect(d.includes('url(#zoom-ports-hatch)'), `${id} hatched: ${b.status === 'proposed'}`).toBe(b.status === 'proposed');
     }
-    expect(s).toMatch(/Proven so far: <b>the API<\/b>, <b>Storage<\/b>, <b>SearchIndex<\/b>, <b>Reviewer<\/b>\./);
-    expect(s).toContain('<b>Orange</b>');
-    expect(s).toContain('<b>Events</b> has no shared suite');
-    expect(s).toMatch(/<b>Identity<\/b>: implemented once, the same everywhere/);
-    const idCard = s.slice(s.indexOf('data-box="a-identity"'), s.indexOf('</article>', s.indexOf('data-box="a-identity"')));
+    expect(drawn('a-reviewer-agents')).toContain('>PHASE 2 · PLANNED</text>');
+    // A built contract no shared suite proves says so in words, not colour (built or planned is the only colour); one implemented once doesn't.
+    const unproven = arch.boxes.filter((b) => b.contract && !b.contract.suites?.length && !b.contract.shared).map((b) => b.id);
+    expect(unproven).toEqual(['a-events']);
+    for (const b of arch.boxes.filter((x) => x.contract && ids.includes(x.id)))
+      expect(drawn(b.id).includes('>no shared tests yet</text>'), `${b.id} says no shared tests yet`).toBe(unproven.includes(b.id));
+    expect(s).not.toMatch(/class="[^"]*\bd-node--alert\b/);
+    expect(cardIn(s, 'a-events')).toContain('Not proven yet');
+    const idCard = cardIn(s, 'a-identity');
     expect(idCard).toContain('Implemented once, for every side');
     expect(idCard).toContain('core/src/http/index.ts');
     expect(idCard).not.toContain('Not proven yet');
-    expect(s).toContain('Not proven yet');
-    // The page centres a drawing wider than the screen.
-    expect(s).toContain('"center":true');
-    for (const [id, tag] of Object.entries(tags)) {
-      expect(drawn(id), id).toContain(`>${tag}</text>`);
-      const card = s.slice(s.indexOf(`data-box="${id}"`), s.indexOf('</article>', s.indexOf(`data-box="${id}"`)));
-      expect(card, `${id}'s card`).toContain(`<span class="tag">${tag.toLowerCase().replace(' · planned', '')} · planned</span>`);
-    }
   });
   it('a part\'s page: its boxes, where it sits, its decisions, the steps through it, a way back', () => {
     const p = html('catalog-aws.html');
@@ -340,7 +380,7 @@ describe('the pages show what was asked for', () => {
     expect(card).toContain('href="decisions.html#decision-B13">Every option side by side ›</a>');
   });
   it('no page shows a reader "undefined", "NaN" or "[object Object]"', () => {
-    for (const name of ['index.html', 'use-cases.html', 'context.html', 'decisions.html', 'skills-catalog.html', 'catalog.html', 'catalog-aws.html']) {
+    for (const name of ['index.html', 'ports.html', 'use-cases.html', 'context.html', 'decisions.html', 'skills-catalog.html', 'catalog.html', 'catalog-aws.html']) {
       const shown = html(name).replace(/<script[\s\S]*?<\/script>/g, '');
       expect(shown, name).not.toMatch(/\bundefined\b|\bNaN\b|\[object Object\]/);
     }

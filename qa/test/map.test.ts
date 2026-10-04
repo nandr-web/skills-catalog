@@ -27,8 +27,8 @@ describe('the system map', () => {
     expect(built.problems).toEqual([]);
     expect([...built.files.keys()].sort()).toEqual([
       'docs/decisions.md',
-      'docs/map/catalog-aws.html', 'docs/map/catalog.html', 'docs/map/context.html', 'docs/map/decisions.html', 'docs/map/index.html', 'docs/map/skills-catalog.html',
-      'docs/map/use-cases.html',
+      'docs/map/catalog-aws.html', 'docs/map/catalog.html', 'docs/map/context.html', 'docs/map/decisions.html', 'docs/map/index.html', 'docs/map/ports.html',
+      'docs/map/skills-catalog.html', 'docs/map/use-cases.html',
       'docs/pictures/map-aws.svg', 'docs/pictures/map-held-update.svg', 'docs/pictures/map-local.svg',
     ]);
     for (const [path, text] of built.files) expect(readFileSync(join(ROOT, path), 'utf8'), `${path} is stale: run npm run map in qa/`).toBe(text);

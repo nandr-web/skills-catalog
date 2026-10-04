@@ -32,7 +32,7 @@ Node 24.15 or later. From this folder:
 | `node src/cli.ts trace-check` | Every requirement in `../requirements/` has an automated check, and every golden reference resolves |
 | `node src/cli.ts scrub-trace <trace.jsonl>` | Replaces the home folder, the sandbox path and session ids in a trace, before it becomes a test fixture |
 | `npm run demo` | The one-click demo: two developers share skills in one terminal window, step by step (below) |
-| `npm run map` | Checks the system map (`../docs/map/map.yaml`) and the decision log (`../docs/decisions.yaml`) against the code (the imports, the AWS template infra's tests pin, the served tools and commands), then builds the map's pages (`../docs/map/*.html`: the architecture, use cases, context, decisions, a page per part), the decision log's page (`../docs/decisions.md`) and the pictures (`../docs/pictures/map-*.svg`); `npm run check` fails while they're stale or disagree |
+| `npm run map` | Checks the system map (`../docs/map/map.yaml`) and the decision log (`../docs/decisions.yaml`) against the code (the imports, the AWS template infra's tests pin, the served tools and commands), then builds the map's pages (`../docs/map/*.html`: the architecture, the ports one level down, use cases, context, decisions, a page per part), the decision log's page (`../docs/decisions.md`) and the pictures (`../docs/pictures/map-*.svg`); `npm run check` fails while they're stale or disagree |
 
 Live checks with a real assistant run only when you ask: `QA_LIVE=1 npx vitest run test/agent-live.test.ts`.
 The check of `qa run` on the real machine is a script, run by hand: `node test/live/qa-run-real.ts`.

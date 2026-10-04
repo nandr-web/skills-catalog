@@ -435,7 +435,7 @@ Two developers, one catalog, in order:
 
 - [Our thinking](docs/thinking.md): Q1, what we cut, the time box
 - [Architecture](docs/architecture.md) and [decisions](docs/decisions.md): the shape, the choices, who made them
-- [The system map](docs/map/index.html): the architecture, built around its contracts (what plugs into each on one machine and in AWS, and what's planned), what's inside each part, and the decisions beside them, read from the code (pages to download and open)
+- [The system map](docs/map/index.html): the architecture at a glance (what's built, what's planned, the contracts that let a backend be swapped), the ports one level down, what's inside each part, and the decisions beside them, read from the code (pages to download and open)
 - [The API](docs/api.md) and [the contract](docs/contract.md): every operation, its data, rules and errors
 - [Requirements](docs/requirements.md) and [how we test](qa/qa-plan.md): each requirement and its tests
 - [Agent experience](docs/agent-experience.md): what we measured with real assistants
