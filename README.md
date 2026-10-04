@@ -8,7 +8,7 @@
 
 <p align="center"><sub>Real Claude Code. Version 2 of a skill adds a script, so the update waits for a yes.</sub></p>
 
-<p align="center"><a href="#check-it-against-the-prd">The PRD, item by item</a> · <a href="#try-it">Try it</a> · <a href="#install">Install</a> · <a href="docs/thinking.md">Our thinking</a> · <a href="docs/architecture.md">Architecture</a> · <a href="https://claude.ai/artifact/Tn6An3wQ9sVg9zD1eyB7aq">Decisions</a> · <a href="docs/api.md">API</a></p>
+<p align="center"><a href="#check-it-against-the-prd">The PRD, item by item</a> · <a href="#try-it">Try it</a> · <a href="#install">Install</a> · <a href="docs/thinking.md">Our thinking</a> · <a href="docs/architecture.md">Architecture</a> · <a href="#how-it-works">System map</a> · <a href="docs/api.md">API</a></p>
 
 - **Publish once.** A skill goes into a shared catalog as a numbered version. Nothing is overwritten.
 - **Find it by asking.** Your assistant searches in plain words. It says so when nothing really fits.
@@ -423,6 +423,17 @@ The phases are [the requirements'](docs/requirements.md) lists, today's plan; th
 
 ## How it works
 
+**The system map:** what the system is made of, what's planned, and what can be swapped, read from the code and checked against it. [Open the interactive map ›](https://claude.ai/artifact/Tn6An3wQ9sVg9zD1eyB7aq) (click a box for what it is, › to zoom in).
+
+<p align="center"><a href="https://claude.ai/artifact/Tn6An3wQ9sVg9zD1eyB7aq"><img alt="The system map's architecture. Who uses it: the Developer asks Claude Code (not ours), which calls skills-catalog (MCP server, CLI, serve) over MCP; the Developer also uses its CLI; other assistants (phase 2 to 3, planned) and a web page (phase 2, planned) are hatched. skills-catalog calls the catalog API, a contract every operation is defined in once; on one machine the local catalog plugs into it, in AWS the hosted catalog (CloudFront, Lambda). Each runs the catalog rules (publish, find, fetch), which go through the ports, a second contract: local backends (SQLite, a folder) plug in on one machine, AWS backends (DynamoDB, S3, GitHub) in AWS, and agent reviewers (phase 2, planned) are hatched below." src="docs/pictures/system-map/architecture.png" width="100%"></a></p>
+
+<table>
+<tr>
+<td width="50%" valign="top"><b>One level down: the ports</b><br><a href="https://claude.ai/artifact/Tn6An3wQ9sVg9zD1eyB7aq"><img alt="The ports page: catalog rules on top call Storage, Events, SearchIndex, Identity and the Reviewer, each a contract; on one machine versions and files in SQLite and a folder, an outbox, SQLite full-text search and a local sign-in plug in; in AWS versions and files in DynamoDB and S3, events by stream, queue and indexer, a search file in S3 and GitHub sign-in; Events says no shared tests yet; the rules reviewer plugs into the Reviewer, agent reviewers are planned" src="docs/pictures/system-map/ports.png" width="100%"></a><br><sub>Each port, and what plugs into it on one machine and in AWS.</sub></td>
+<td width="50%" valign="top"><b>Every decision, with what it was chosen over</b><br><a href="https://claude.ai/artifact/Tn6An3wQ9sVg9zD1eyB7aq"><img alt="The decisions tab with the hosted technologies decision open: what was chosen, why, who decided and when, and each aspect weighed: DynamoDB plus S3 chosen over Postgres plus S3, Aurora DSQL plus S3 and SQLite on a small machine; a search file in S3 over OpenSearch, Postgres and S3 Vectors; Lambda plus HTTP API over a Lambda URL, Fargate and one small machine; and more" src="docs/pictures/system-map/decisions.png" width="100%"></a><br><sub>Open one to see the options weighed side by side.</sub></td>
+</tr>
+</table>
+
 The parts on the developer's machine:
 
 ![The parts on the developer's machine: the Developer asks the Assistant, which calls the MCP server's tools; the Developer runs the CLI; both reach the installer, which holds risky updates, and the core, which reads and writes the Catalog, a folder here or hosted; the installer writes checked files into the skills folder](docs/pictures/parts.svg)
@@ -435,7 +446,7 @@ Two developers, one catalog, in order:
 
 - [Our thinking](docs/thinking.md): Q1, what we cut, the time box
 - [Architecture](docs/architecture.md) and [decisions](https://claude.ai/artifact/Tn6An3wQ9sVg9zD1eyB7aq) (the system map's Decisions tab): the shape, the choices, who made them
-- [The system map](docs/map/index.html): the architecture at a glance (what's built, what's planned, the contracts that let a backend be swapped), the ports one level down, what's inside each part, and the decisions beside them, read from the code (pages to download and open)
+- [The system map](https://claude.ai/artifact/Tn6An3wQ9sVg9zD1eyB7aq): the architecture at a glance (what's built, what's planned, the contracts that let a backend be swapped), the ports one level down, what's inside each part, and the decisions beside them, read from the code (its pages are also in [docs/map](docs/map), to download and open)
 - [The API](docs/api.md) and [the contract](docs/contract.md): every operation, its data, rules and errors
 - [Requirements](docs/requirements.md) and [how we test](qa/qa-plan.md): each requirement and its tests
 - [Agent experience](docs/agent-experience.md): what we measured with real assistants
