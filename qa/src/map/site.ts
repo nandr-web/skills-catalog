@@ -9,7 +9,7 @@
 //                    decisions, the use-case steps through it, its code and tests
 // One question per page. Self-contained: inline CSS and script; without a script everything is still there, stacked.
 import { matchesGlob } from 'node:path';
-import { architectureSpec, phaseOf, type ArchBox } from './architecture.ts';
+import { architectureSpec, phaseOf, UNPROVEN, unprovenContract, type ArchBox } from './architecture.ts';
 import { decisionsAbout, type Aspect, type Decision, type DecisionLog } from './decisions.ts';
 import type { Facts } from './facts.ts';
 import { toSpec, type MapSource, type Part } from './map.ts';
@@ -110,7 +110,7 @@ function insideSpec(c: Ctx, page: Page): SystemMapSpec {
   }
   for (const b of page.boxes) parts.push({
     id: b.id, label: b.label, ...(b.note ? { note: b.note } : {}), kind: b.kind ?? 'service', at: b.at, zone: 'inside',
-    ...(b.status === 'proposed' ? { status: 'proposed' } : {}),
+    ...(b.status === 'proposed' ? { status: 'proposed', ...(phaseOf(b, c.facts) ? { phase: phaseOf(b, c.facts) } : {}) } : {}),
     ...(b.only && many ? { only: b.only.filter((v) => views.includes(v)) } : {}),
   });
   const links = pageLinks(c, page, views);
@@ -411,7 +411,13 @@ const SCRIPT = `(() => {
   document.addEventListener('click', (e) => {
     const t = e.target.closest('.controls [data-view], .controls [data-sv], .controls [data-planned], .d-map-part[role="button"]');
     if (!t) return;
-    if (t.matches('.d-map-part')) return go({ box: state.box === t.dataset.part ? '' : t.dataset.part });
+    if (t.matches('.d-map-part')) {
+      go({ box: state.box === t.dataset.part ? '' : t.dataset.part });
+      // A card shown under a wide drawing is below the fold: bring it into view.
+      const shown = document.querySelector('.frame.on .picked:not([hidden])');
+      if (shown) shown.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      return;
+    }
     e.preventDefault();
     if (t.dataset.sv !== undefined) return go({ sv: t.dataset.sv, box: '' });
     if (t.dataset.view !== undefined) return go({ view: t.dataset.view });
@@ -424,6 +430,8 @@ const SCRIPT = `(() => {
   });
   window.addEventListener('hashchange', () => { read(); show(); });
   read(); show();
+  // A page whose drawing is centred on what matters (the contracts): a narrow screen opens on the middle of it.
+  if (data.center) for (const s of $$('.frame.on .d-scroll-art')) if (s.scrollWidth > s.clientWidth) s.scrollLeft = (s.scrollWidth - s.clientWidth) / 2;
 })();`;
 
 function shell(title: string, body: string, opts: { css?: string; data?: unknown; script: boolean; extra?: string }): string {
@@ -489,7 +497,7 @@ async function contextPage(c: Ctx): Promise<string> {
 <aside class="panel" aria-live="polite"><div class="picked" hidden></div>
 <h3>What runs where, and what talks to what.</h3>
 <p>${esc(c.m.views!.find((x) => x.id === v)?.note ?? '')}</p>
-<ul class="legend"><li><b>›</b> opens the part's own page: what's inside it</li><li>Click any other part for what it is</li><li><b>- - -</b> dashed and <b>PLANNED</b>: not built yet (turn on “planned”)</li><li>Shaded, <b>not ours</b>: another company's part</li></ul>
+<ul class="legend"><li><b>›</b> opens the part's own page: what's inside it</li><li>Click any other part for what it is</li><li><b>Hatched</b>, dotted, <b>PHASE n · PLANNED</b>: not built yet (turn on “planned”)</li><li>Shaded, dashed, <b>not ours</b>: another company's part</li></ul>
 </aside></div></section>`);
   }
   const code = codeSpec(c);
@@ -551,7 +559,7 @@ async function partPage(c: Ctx, page: Page): Promise<string> {
 <li><b>→</b> ${page.reads === 'aws' ? 'read from the stack: the box at its tail names or may use the one at its head (its words: what it may do)' : 'read from the imports: the box at its tail uses the one at its head'}</li>
 ${foundations.length ? `<li><b>No lines:</b> ${foundations.map((b) => esc(b.label)).join(' and ')}, used by nearly every box (each says by which)</li>` : ''}
 <li><b>Outside the boundary:</b> the parts around it; <b>›</b> opens their page</li>
-${page.boxes.some((b) => b.status === 'proposed') ? '<li><b>- - -</b> dashed and <b>PLANNED</b>: not built yet (turn on “planned”)</li>' : ''}
+${page.boxes.some((b) => b.status === 'proposed') ? '<li><b>Hatched</b>, dotted, <b>PHASE n · PLANNED</b>: not built yet (turn on “planned”)</li>' : ''}
 </ul>
 </aside></div></section>`;
   });
@@ -642,7 +650,8 @@ ${b.note ? `<p class="note">${esc(b.note)}</p>` : ''}
 ${b.text ? `<p>${rich(b.text)}</p>` : ''}
 ${b.contract ? `<p><span class="kicker">Declared</span> <code>${esc(b.contract.name)}</code> in ${codeLink(c, b.contract.file)}</p>
 <ul class="plugged">${plugged.map((x) => `<li><span class="kicker">${esc(sideOf(x))}</span> ${esc(x.label)}${x.note ? ` <span class="note">${esc(x.note)}</span>` : ''}${x.status === 'proposed' ? ' <span class="tag">planned</span>' : ''}</li>`).join('')}</ul>
-${b.contract.suites?.length ? `<p><span class="kicker">Proved on both sides by</span> ${b.contract.suites.map((s) => `<code>${esc(s)}</code>`).join(', ')}: ${tests([...a.proof.local, ...a.proof.aws])}</p>` : ''}` : ''}
+${b.contract.suites?.length ? `<p><span class="kicker">Proved on both sides by</span> ${b.contract.suites.map((s) => `<code>${esc(s)}</code>`).join(', ')}: ${tests([...a.proof.local, ...a.proof.aws])}</p>` : `<p><span class="kicker">Not proven yet</span> no shared suite runs on both sides' adapters, so swapping a side isn't shown to work.</p>`}` : ''}
+${b.tests?.length ? `<p><span class="kicker">Tests</span> ${b.tests.map((g) => codeLink(c, g)).join(' ')}</p>` : ''}
 ${into ? `<p><span class="kicker">Plugs into</span> ${esc(into.label)}${b.status === 'proposed' ? ' (once built)' : `, as ${b.plugs!.implements.map((n) => `<code>${esc(n)}</code>`).join(', ')}`}</p>` : ''}
 ${b.code?.length ? `<p><span class="kicker">Code</span> ${b.code.map((g) => codeLink(c, g)).join(' ')}</p>` : ''}
 ${b.needs?.length ? `<p><span class="kicker">Would be built by</span> ${b.needs.map((r) => requirementLink(c, r)).join(' ')}</p>` : ''}
@@ -658,6 +667,8 @@ function architecturePage(c: Ctx): string {
   const spec = parseSystemMap(architectureSpec(c.m, c.facts)).spec;
   const L = layoutSystemMap(spec, '');
   const svg = drawSystemMap(spec, L, undefined, { mode: 'inline', idPrefix: 'architecture', interactive: true, partLinks: true });
+  const contracts = a.boxes.filter((b) => b.contract && b.status !== 'proposed');
+  const unproven = contracts.filter(unprovenContract), proven = contracts.filter((b) => !unprovenContract(b));
   const body = `${nav('architecture')}
 <header class="top"><span class="eyebrow">System map · architecture</span><h1>${esc(c.m.title)}</h1>
 <p class="question">${esc(a.question)}</p></header>
@@ -665,12 +676,13 @@ function architecturePage(c: Ctx): string {
 <h2 class="frame-title">The architecture · on one machine and in AWS, with what's planned</h2>
 <div class="${gridClass(L.width)}">${figure(svg, widths, L.width)}
 <aside class="panel" aria-live="polite"><div class="picked" hidden></div>
-<h3>Built around two contracts, so each side can be swapped.</h3>
-<p>skills-catalog calls <b>the API</b>; the catalog's rules call <b>its ports</b>. What plugs into each sits beside it: on one machine on the left, in AWS on the right.</p>
+<h3>Built around contracts, so each side can be swapped.</h3>
+<p>skills-catalog calls <b>the API</b>; the catalog's rules call <b>their ports</b>. What plugs into each sits beside it: on one machine on the left, in AWS on the right.</p>
 <ul class="legend">
 <li><b>⊐ ⊏</b> a contract: an interface in the code that the rest is written against</li>
 <li><b>—</b> from a contract: what plugs into it, checked in the code (it implements the contract)</li>
-<li>${esc(a.proof.text)}</li>
+<li>${esc(a.proof.text)} Proven so far: ${proven.map((b) => `<b>${esc(b.label)}</b>`).join(', ')}.</li>
+${unproven.length ? `<li><b>Orange</b>, “${esc(UNPROVEN)}”: ${unproven.map((b) => `<b>${esc(b.label)}</b>`).join(' and ')} have no shared suite, so swapping their side isn't shown to work</li>` : ''}
 <li><b>Hatched</b>, dotted, <b>PHASE n · PLANNED</b>: not built yet; n is the phase of the requirements that build it</li>
 <li>Shaded, <b>not ours</b>: another company's part</li>
 <li><b>›</b> opens the part's own page; click any other box for what it is</li>
@@ -679,7 +691,7 @@ function architecturePage(c: Ctx): string {
 </aside></div></section></main>
 <section class="cards boxes"><h2>The boxes</h2><div class="card-grid">${a.boxes.map((b) => archCard(c, b)).join('\n')}</div></section>`;
   // What's planned is always shown here (hatched, with its phase): the landing shows today and what's next together.
-  return shell(`${c.m.title}: architecture`, body, { css: scrollHintCss(widths), data: { views: [''], svs: [''], planned: true }, script: c.script });
+  return shell(`${c.m.title}: architecture`, body, { css: scrollHintCss(widths), data: { views: [''], svs: [''], planned: true, center: true }, script: c.script });
 }
 
 function decisionsPage(c: Ctx): string {

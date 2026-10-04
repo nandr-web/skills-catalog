@@ -110,16 +110,38 @@ describe('the page checks catch each kind of drift', () => {
 
 describe('the architecture checks catch each kind of drift, one planted mistake per rule', () => {
   const abox = (m: MapSource, id: string): ArchBox => m.architecture!.boxes.find((b) => b.id === id)!;
-  const rulesOf = (m: MapSource) => [...new Set(checkMap(m, facts, exists).map((p) => p.rule))];
-  /** Plants one mistake in a copy of the map: exactly that rule fires (and nothing else); the unplanted map has no problem. */
-  const planted = (rule: Rule, plant: (m: MapSource) => void) => {
-    expect(checkMap(source(), facts, exists), 'the unplanted map').toEqual([]);
+  const problemsOf = (m: MapSource, f: Facts = facts) => checkMap(m, f, exists);
+  const rulesOf = (m: MapSource, f: Facts = facts) => [...new Set(problemsOf(m, f).map((p) => p.rule))].sort();
+  /** Plants one mistake in a copy of the map: exactly that rule fires (and no other); the unplanted map has no problem. */
+  const planted = (rules: Rule | Rule[], plant: (m: MapSource) => void, f: Facts = facts) => {
+    expect(problemsOf(source()), 'the unplanted map').toEqual([]);
     const m = structuredClone(source());
     plant(m);
-    expect(rulesOf(m), `planted ${rule}`).toEqual([rule]);
+    expect(rulesOf(m, f), `planted ${[rules].flat().join(' + ')}`).toEqual([rules].flat().sort());
+    return problemsOf(m, f);
   };
-  it('a box that plugs in but whose files don\'t implement the contract', () => planted('adapter-not-in-code', (m) => { abox(m, 'a-storage-local').plugs!.implements = ['SearchIndex']; }));
-  it('a contract its file doesn\'t declare', () => planted('contract-not-in-code', (m) => { abox(m, 'a-storage').contract!.file = 'core/src/catalog.ts'; }));
+  /** The facts with some files' text changed (the checks read code through `text`). */
+  const withText = (change: (path: string, text: string) => string): Facts => ({ ...facts, text: (path) => change(path, facts.text(path)) });
+  it('a box that plugs in but whose files don\'t implement the contract', () => {
+    // Saying it implements something else, and not its own contract, is two mistakes: the contract it's plugged into, and the code.
+    planted(['adapter-not-in-code', 'implements-other-contract'], (m) => { abox(m, 'a-storage-local').plugs!.implements = ['SearchIndex']; });
+    // Saying more than the code does is the one.
+    const found = planted('adapter-not-in-code', (m) => { abox(m, 'a-storage-local').plugs!.implements = ['Storage', 'SearchIndex']; });
+    expect(found[0]!.message).toContain('implements SearchIndex');
+  });
+  it('a contract its file doesn\'t declare', () => planted('contract-not-in-code', (m) => { abox(m, 'a-events').contract!.file = 'core/src/catalog.ts'; }));
+  it('a contract whose file is a pattern, not one file', () => {
+    const found = planted('contract-not-in-code', (m) => { abox(m, 'a-events').contract!.file = 'core/src/*.ts'; });
+    expect(found[0]!.message).toContain('is not one file');
+  });
+  it('a contract declared only in a comment', () => {
+    const commented = withText((path, text) => (path === 'core/src/ports.ts' ? text.replace(/export interface Events\b/, '// $&') : text));
+    expect(commented.text('core/src/ports.ts')).toContain('// export interface Events');
+    expect(checkMap(source(), facts, exists), 'the unplanted map').toEqual([]);
+    const problems = checkMap(source(), commented, exists);
+    expect(problems.map((p) => p.rule)).toEqual(['contract-not-in-code']);
+    expect(problems[0]!.message).toContain('a-events');
+  });
   it('a shared suite that runs on neither side', () => {
     planted('suite-not-run', (m) => { abox(m, 'a-events').contract!.suites = ['eventsSuite']; });
     const m = structuredClone(source());
@@ -127,11 +149,47 @@ describe('the architecture checks catch each kind of drift, one planted mistake 
     const sides = checkMap(m, facts, exists).filter((p) => p.rule === 'suite-not-run').map((p) => /AWS|local/.exec(p.message)?.[0]).sort();
     expect(sides).toEqual(['AWS', 'local']); // each side is named on its own
   });
+  it('a shared suite whose only call on the AWS side is in a comment', () => {
+    const commented = withText((path, text) => (path === 'hosted/test/shared.test.ts' ? text.replace(/^storageSuite\(/m, '// storageSuite(') : text));
+    expect(commented.text('hosted/test/shared.test.ts')).toContain('// storageSuite(hosted);');
+    const problems = checkMap(source(), commented, exists);
+    expect(problems.map((p) => p.rule)).toEqual(['suite-not-run']);
+    expect(problems[0]!.message).toMatch(/storageSuite.*AWS/);
+  });
+  it('an adapter whose files only take the contract as a parameter', () => {
+    const only = withText((path, text) => (['hosted/src/storage.ts', 'hosted/src/blobs.ts', 'hosted/src/place.ts'].includes(path) ? 'export function f(s: Storage) { return 1; }' : text));
+    const problems = checkMap(source(), only, exists);
+    expect(problems.map((p) => p.rule)).toEqual(['adapter-not-in-code']);
+    expect(problems[0]!.message).toContain('a-storage-aws');
+  });
+  it('a box that implements more than the contract it plugs into, but not that one', () => {
+    const found = planted('implements-other-contract', (m) => { abox(m, 'a-identity-aws').plugs!.implements = ['GitHubSignIn', 'TokenStore']; });
+    expect(found[0]!.message).toContain('implements Identity');
+  });
+  it('a contract with no adapter on one side', () => {
+    const found = planted('contract-side-missing', (m) => { m.architecture!.boxes = m.architecture!.boxes.filter((b) => b.id !== 'a-search-aws'); });
+    expect(found).toHaveLength(1);
+    expect(found[0]!.message).toMatch(/SearchIndex.*in AWS/);
+  });
+  it('a contract with no adapter on either side: one problem for each side', () => {
+    const found = planted('contract-side-missing', (m) => { m.architecture!.boxes = m.architecture!.boxes.filter((b) => !['a-events-local', 'a-events-aws'].includes(b.id)); });
+    expect(found).toHaveLength(2);
+    expect(found.map((p) => /on one machine|in AWS/.exec(p.message)?.[0]).sort()).toEqual(['in AWS', 'on one machine']);
+  });
+  it('a box plugging into another contract than the one it implements', () => {
+    const found = planted(['contract-side-missing', 'implements-other-contract'], (m) => { abox(m, 'a-search-aws').plugs!.into = 'a-storage'; });
+    expect(found.find((p) => p.rule === 'contract-side-missing')!.message).toMatch(/SearchIndex.*in AWS/);
+  });
+  it('a planned box whose requirements give no one phase', () => {
+    const found = planted('planned-phase-unclear', (m) => { abox(m, 'a-web').needs = ['web-view-update', 'aws-deploy']; });
+    expect(found[0]!.message).toContain('a-web');
+  });
   it('a line between two boxes that neither a link on the map nor an import backs', () => planted('line-not-in-code', (m) => {
     m.architecture!.lines!.push({ from: 'a-search-local', to: 'a-identity-aws', label: 'calls' });
   }));
   it('a planned box that has code (so it\'s built)', () => planted('planned-part-has-code', (m) => { abox(m, 'a-reviewer-agents').code = ['core/src/skill-tree/reviewer.ts']; }));
-  it('a box plugging into something that is no contract', () => planted('unknown-contract', (m) => { abox(m, 'a-storage-local').plugs!.into = 'a-rules'; }));
+  // Plugged into a box that is no contract, it also leaves the contract it should have plugged into without that side.
+  it('a box plugging into something that is no contract', () => planted(['contract-side-missing', 'unknown-contract'], (m) => { abox(m, 'a-storage-local').plugs!.into = 'a-rules'; }));
   it('a field the box doesn\'t have (what an unquoted comma in a flow map makes)', () => planted('unknown-field', (m) => {
     (abox(m, 'a-reviewer') as unknown as Record<string, unknown>)['review out'] = null;
   }));
@@ -184,6 +242,10 @@ describe('the pages show what was asked for', () => {
     expect(s).toMatch(/<a class="d-map-part d-map-part--opens" data-part="sc1" href="skills-catalog.html"/);
     expect(s).toMatch(/<a class="d-map-part d-map-part--opens" data-part="catalog" href="catalog-aws.html"/);
     expect(s.match(/data-part="web"/g)?.length).toBe(2); // in AWS and on one machine, with what's planned only
+    // A planned part carries its phase, from the requirements that would build it (and the legend says so).
+    const planned = s.slice(s.indexOf('data-part="assistants"'));
+    expect(planned.slice(0, planned.indexOf('</g>'))).toContain('>PHASE 2–3 · PLANNED</text>');
+    expect(s).toContain('<b>PHASE n · PLANNED</b>');
   });
   it('the architecture page: every box drawn, contracts as ports, what\'s planned hatched with its phase, a card each', () => {
     const arch = source().architecture!;
@@ -209,6 +271,20 @@ describe('the pages show what was asked for', () => {
     expect(arch.boxes.filter((b) => b.contract).length).toBe(6);
     const tags: Record<string, string> = { 'a-assistants': 'PHASE 2–3 · PLANNED', 'a-web': 'PHASE 2 · PLANNED', 'a-reviewer-agents': 'PHASE 2 · PLANNED' };
     expect(arch.boxes.filter((b) => b.status === 'proposed').map((b) => b.id).sort()).toEqual(Object.keys(tags).sort());
+    // A built contract no shared suite proves is orange and says so in words; the panel names the ones that are proven.
+    const unproven = arch.boxes.filter((b) => b.contract && !b.contract.suites?.length).map((b) => b.id).sort();
+    expect(unproven).toEqual(['a-events', 'a-identity']);
+    for (const b of arch.boxes.filter((x) => x.contract)) {
+      const d = drawn(b.id);
+      expect(/\bd-node--alert\b/.test(d), `${b.id} orange: ${unproven.includes(b.id)}`).toBe(unproven.includes(b.id));
+      expect(d.includes('>no shared tests yet</text>'), `${b.id} says no shared tests yet`).toBe(unproven.includes(b.id));
+    }
+    expect(s).toMatch(/Proven so far: <b>the API<\/b>, <b>Storage<\/b>, <b>SearchIndex<\/b>, <b>Reviewer<\/b>\./);
+    expect(s).toContain('<b>Orange</b>');
+    expect(s).toContain('<b>Events</b> and <b>Identity</b> have no shared suite');
+    expect(s).toContain('Not proven yet');
+    // The page centres a drawing wider than the screen.
+    expect(s).toContain('"center":true');
     for (const [id, tag] of Object.entries(tags)) {
       expect(drawn(id), id).toContain(`>${tag}</text>`);
       const card = s.slice(s.indexOf(`data-box="${id}"`), s.indexOf('</article>', s.indexOf(`data-box="${id}"`)));

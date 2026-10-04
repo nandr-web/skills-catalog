@@ -36,7 +36,7 @@ export type Page = {
   /** The part's files that belong to no one box, each with why. */
   shared?: { glob: string; why: string }[];
 };
-/** The code's packages, with what uses what between them (structure.html, the Code view). */
+/** The code's packages, with what uses what between them (context.html, the Code view). */
 export type CodeView = { question: string; packages: { id: string; label: string; note?: string; at: Cell; text?: string }[] };
 
 /** A line read from the code between two boxes: which way it goes, and the words the code gives it (AWS access). */

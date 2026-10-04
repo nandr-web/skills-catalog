@@ -1,7 +1,7 @@
 // The system map's source (docs/map/map.yaml): what's written by hand, how it is checked against the code (facts.ts),
 // and how it becomes the spec the renderer draws. Each problem names its rule, so a test can plant one of each.
 import { matchesGlob, posix } from 'node:path';
-import { architectureText, checkArchitecture, type Architecture } from './architecture.ts';
+import { architectureText, checkArchitecture, phaseOf, type Architecture } from './architecture.ts';
 import { PACKAGES, type Facts } from './facts.ts';
 import { checkCodeView, checkPages, pageOf, type CodeView, type Page } from './pages.ts';
 
@@ -50,7 +50,8 @@ export type Rule =
   // decisions.ts: decisions as data
   | 'decision-unknown-part' | 'chosen-not-an-option' | 'unknown-decision'
   // architecture.ts: the contracts and what plugs into them
-  | 'unknown-zone' | 'contract-not-in-code' | 'suite-not-run' | 'unknown-contract' | 'adapter-not-in-code' | 'unknown-field';
+  | 'unknown-zone' | 'contract-not-in-code' | 'suite-not-run' | 'unknown-contract' | 'adapter-not-in-code' | 'unknown-field'
+  | 'implements-other-contract' | 'contract-side-missing' | 'planned-phase-unclear';
 export type Problem = { rule: Rule; message: string };
 
 /** Words the map never uses (review V5.4, V5.6, V6.4; the owner's names): each with what to say instead. */
@@ -183,8 +184,11 @@ export function toSpec(m: MapSource, facts: Facts, pageDir: string): Record<stri
   // A part with a page of its own in a view (pages.ts) links to it there: one page per part, or per view.
   const viewIds = (m.views ?? []).map((v) => v.id);
   const hrefs = (id: string) => Object.fromEntries(viewIds.map((v) => [v, pageOf(m, id, v)]).filter(([, pg]) => pg).map(([v, pg]) => [v, `${(pg as Page).id}.html`]));
-  const parts = m.parts.map(({ text, code, tests, links, views, needs: _n, ...p }) => {
+  const parts = m.parts.map(({ text, code, tests, links, views, needs, ...p }) => {
     const pages = hrefs(p.id);
+    // A planned part says its phase: the phase of the requirements that would build it.
+    const phase = p.status === 'proposed' ? phaseOf({ needs }, facts) : undefined;
+    if (phase) Object.assign(p, { phase });
     const vs: Record<string, Record<string, unknown>> = Object.fromEntries(Object.entries(views ?? {}).map(([v, o]) => {
       const { text: t, code: c, tests: ts, ...rest } = o;
       const own = t !== undefined || c !== undefined || ts !== undefined;

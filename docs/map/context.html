@@ -113,7 +113,7 @@ a.d-map-part:hover > :first-child { stroke: var(--d-ink); stroke-width: 2; }
 
 /* groups (boundaries) */
 .d-group { fill: var(--d-grid); fill-opacity: 0.35; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
-.d-group--region { fill-opacity: 0.6; stroke: var(--d-line); stroke-dasharray: none; }
+.d-group--region { fill-opacity: 0.22; stroke: var(--d-line); stroke-width: 1.2; stroke-dasharray: none; }
 .d-group-label { font-size: 10.5px; fill: var(--d-ink2); letter-spacing: 0.06em; font-weight: 500; }
 
 :root { --page: #ECF0F3; --card: #F9FBFC; --ink: #13202A; --ink-2: #3A4A56; --line: #B7C4CD; --accent: #137052; --accent-soft: #D9EDE3; --hot: #B23A0A; --hot-soft: #F8E2D5; --even: #E4E9ED; }
@@ -244,8 +244,8 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 @container (max-width: 404.5px) { .d-scroll-hint[data-w="405"] { display: block; } }
 @container (max-width: 416.5px) { .d-scroll-hint[data-w="417"] { display: block; } }
 @container (max-width: 643.5px) { .d-scroll-hint[data-w="644"] { display: block; } }
-@container (max-width: 757.5px) { .d-scroll-hint[data-w="758"] { display: block; } }
-@container (max-width: 839.5px) { .d-scroll-hint[data-w="840"] { display: block; } }
+@container (max-width: 787.5px) { .d-scroll-hint[data-w="788"] { display: block; } }
+@container (max-width: 885.5px) { .d-scroll-hint[data-w="886"] { display: block; } }
 </style>
 <div class="wrap">
 <nav class="site" aria-label="The system map's pages">
@@ -323,96 +323,96 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <aside class="panel" aria-live="polite"><div class="picked" hidden></div>
 <h3>What runs where, and what talks to what.</h3>
 <p>Everything on one machine: the catalog is a folder there, and the two developers are two demo users (ana and bob in the screens).</p>
-<ul class="legend"><li><b>›</b> opens the part's own page: what's inside it</li><li>Click any other part for what it is</li><li><b>- - -</b> dashed and <b>PLANNED</b>: not built yet (turn on “planned”)</li><li>Shaded, <b>not ours</b>: another company's part</li></ul>
+<ul class="legend"><li><b>›</b> opens the part's own page: what's inside it</li><li>Click any other part for what it is</li><li><b>Hatched</b>, dotted, <b>PHASE n · PLANNED</b>: not built yet (turn on “planned”)</li><li>Shaded, dashed, <b>not ours</b>: another company's part</li></ul>
 </aside></div></section>
 <section class="frame" data-sv="running" data-view="local" data-planned="1">
 <h2 class="frame-title">The running parts · on one machine · with what's planned</h2>
-<div class="frame-grid wide"><figure class="map-art" style="--w: 840px"><div class="d-scroll"><p class="d-scroll-hint" data-w="840" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 840 513" width="840" height="513" role="group" aria-label="How does a skill go from one developer to another, and where does each step happen?">
+<div class="frame-grid wide"><figure class="map-art" style="--w: 886px"><div class="d-scroll"><p class="d-scroll-hint" data-w="886" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 886 513" width="886" height="513" role="group" aria-label="How does a skill go from one developer to another, and where does each step happen?">
 <title>Skills Catalog · on one machine</title>
 <defs><marker id="structure-local-planned-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="structure-local-planned-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-local-planned-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="structure-local-planned-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-local-planned-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="structure-local-planned-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-local-planned-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="structure-local-planned-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
 <defs><pattern id="structure-local-planned-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="d-hatch-bg" width="6" height="6"/><path class="d-hatch-line" d="M0 0V6"/></pattern></defs>
-<rect class="d-group" x="16.5" y="32" width="807" height="464.5" rx="6"/>
-<text class="d-group-label" x="24.5" y="43">one machine</text>
-<path class="d-edge" d="M105 92 L105 174.5"/>
-<path class="d-edge" d="M319 92 L319 174.5"/>
-<path class="d-edge" d="M105 227.5 L105 302.5"/>
-<path class="d-edge" d="M319 227.5 L319 302.5"/>
-<path class="d-edge" d="M45 73 L31.5 73 Q26.5 73 26.5 78 L26.5 324 Q26.5 329 31.5 329 L38.5 329"/>
-<path class="d-edge" d="M259 73 L245.5 73 Q240.5 73 240.5 78 L240.5 324 Q240.5 329 245.5 329 L252.5 329"/>
-<path class="d-edge" d="M156.8 355.5 L156.8 427.5"/>
-<path class="d-edge" d="M267.3 355.5 L267.3 427.5"/>
-<path class="d-edge d-edge--proposed" d="M379 73 L528 73 Q533 73 533 78 L533 166"/>
-<path class="d-edge d-edge--proposed" d="M533 236 L533 324 Q533 329 528 329 L385.5 329"/>
-<path class="d-edge d-edge--proposed" d="M747 236 L747 331 Q747 336 742 336 L385.5 336"/>
-<path class="d-edge d-edge--proposed" d="M379 80 L742 80 Q747 80 747 85 L747 166"/>
+<rect class="d-group" x="21.5" y="32" width="848" height="464.5" rx="6"/>
+<text class="d-group-label" x="29.5" y="43">one machine</text>
+<path class="d-edge" d="M110 92 L110 174.5"/>
+<path class="d-edge" d="M334 92 L334 174.5"/>
+<path class="d-edge" d="M110 227.5 L110 302.5"/>
+<path class="d-edge" d="M334 227.5 L334 302.5"/>
+<path class="d-edge" d="M50 73 L36.5 73 Q31.5 73 31.5 78 L31.5 324 Q31.5 329 36.5 329 L43.5 329"/>
+<path class="d-edge" d="M274 73 L260.5 73 Q255.5 73 255.5 78 L255.5 324 Q255.5 329 260.5 329 L267.5 329"/>
+<path class="d-edge" d="M164.3 355.5 L164.3 427.5"/>
+<path class="d-edge" d="M279.8 355.5 L279.8 427.5"/>
+<path class="d-edge d-edge--proposed" d="M394 73 L553 73 Q558 73 558 78 L558 166"/>
+<path class="d-edge d-edge--proposed" d="M558 236 L558 324 Q558 329 553 329 L400.5 329"/>
+<path class="d-edge d-edge--proposed" d="M782 236 L782 331 Q782 336 777 336 L400.5 336"/>
+<path class="d-edge d-edge--proposed" d="M394 80 L777 80 Q782 80 782 85 L782 166"/>
 <g class="d-map-part" data-part="dev1" tabindex="0" role="button" aria-label="Developer 1: what it is, its code and tests">
-<rect class="d-node" x="45" y="54" width="120" height="38" rx="19"/>
-<text class="d-label" x="105" y="73">Developer 1</text>
+<rect class="d-node" x="50" y="54" width="120" height="38" rx="19"/>
+<text class="d-label" x="110" y="73">Developer 1</text>
 </g>
 <g class="d-map-part" data-part="dev2" tabindex="0" role="button" aria-label="Developer 2: what it is, its code and tests">
-<rect class="d-node" x="259" y="54" width="120" height="38" rx="19"/>
-<text class="d-label" x="319" y="73">Developer 2</text>
+<rect class="d-node" x="274" y="54" width="120" height="38" rx="19"/>
+<text class="d-label" x="334" y="73">Developer 2</text>
 </g>
 <g class="d-map-part" data-part="cc1" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
-<rect class="d-node d-node--external" x="49" y="174.5" width="112" height="53" rx="3"/>
-<text class="d-label" x="105" y="194">Claude Code</text>
-<text class="d-note" x="105" y="210">not ours</text>
+<rect class="d-node d-node--external" x="54" y="174.5" width="112" height="53" rx="3"/>
+<text class="d-label" x="110" y="194">Claude Code</text>
+<text class="d-note" x="110" y="210">not ours</text>
 </g>
 <g class="d-map-part" data-part="cc2" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
-<rect class="d-node d-node--external" x="263" y="174.5" width="112" height="53" rx="3"/>
-<text class="d-label" x="319" y="194">Claude Code</text>
-<text class="d-note" x="319" y="210">not ours</text>
+<rect class="d-node d-node--external" x="278" y="174.5" width="112" height="53" rx="3"/>
+<text class="d-label" x="334" y="194">Claude Code</text>
+<text class="d-note" x="334" y="210">not ours</text>
 </g>
 <a class="d-map-part d-map-part--opens" data-part="sc1" href="skills-catalog.html" aria-label="skills-catalog: open its page">
-<rect class="d-node" x="38.5" y="302.5" width="133" height="53" rx="3"/>
-<text class="d-label" x="105" y="322">skills-catalog</text>
-<text class="d-note" x="105" y="338">MCP server · CLI</text>
-<text class="d-map-opens" x="163.5" y="329" aria-hidden="true">›</text>
+<rect class="d-node" x="43.5" y="302.5" width="133" height="53" rx="3"/>
+<text class="d-label" x="110" y="322">skills-catalog</text>
+<text class="d-note" x="110" y="338">MCP server · CLI</text>
+<text class="d-map-opens" x="168.5" y="329" aria-hidden="true">›</text>
 </a>
 <a class="d-map-part d-map-part--opens" data-part="sc2" href="skills-catalog.html" aria-label="skills-catalog: open its page">
-<rect class="d-node" x="252.5" y="302.5" width="133" height="53" rx="3"/>
-<text class="d-label" x="319" y="322">skills-catalog</text>
-<text class="d-note" x="319" y="338">MCP server · CLI</text>
-<text class="d-map-opens" x="377.5" y="329" aria-hidden="true">›</text>
+<rect class="d-node" x="267.5" y="302.5" width="133" height="53" rx="3"/>
+<text class="d-label" x="334" y="322">skills-catalog</text>
+<text class="d-note" x="334" y="338">MCP server · CLI</text>
+<text class="d-map-opens" x="392.5" y="329" aria-hidden="true">›</text>
 </a>
 <a class="d-map-part d-map-part--opens" data-part="catalog" href="catalog.html" aria-label="catalog: open its page">
-<path class="d-node" d="M142 433.5 A70 6 0 0 1 282 433.5 V480.5 A70 6 0 0 1 142 480.5 Z"/>
-<path class="d-node-detail" d="M142 433.5 A70 6 0 0 0 282 433.5"/>
-<text class="d-label" x="212" y="453">catalog</text>
-<text class="d-note" x="212" y="469">skills · versions</text>
-<text class="d-map-opens" x="274" y="457" aria-hidden="true">›</text>
+<path class="d-node" d="M152 433.5 A70 6 0 0 1 292 433.5 V480.5 A70 6 0 0 1 152 480.5 Z"/>
+<path class="d-node-detail" d="M152 433.5 A70 6 0 0 0 292 433.5"/>
+<text class="d-label" x="222" y="453">catalog</text>
+<text class="d-note" x="222" y="469">skills · versions</text>
+<text class="d-map-opens" x="284" y="457" aria-hidden="true">›</text>
 </a>
 <g class="d-map-part d-map-part--proposed" data-part="assistants" tabindex="0" role="button" aria-label="other assistants: what it is, its code and tests">
-<rect class="d-node d-node--external d-node--proposed" style="fill: url(#structure-local-planned-hatch)" x="454" y="166" width="158" height="70" rx="3"/>
-<rect class="d-tag d-tag--proposed" x="504.9" y="172" width="56.2" height="15" rx="3"/>
-<text class="d-tag-text d-tag-text--proposed" x="533" y="179.5">PLANNED</text>
-<text class="d-label" x="533" y="202.5">other assistants</text>
-<text class="d-note" x="533" y="218.5">pi · Copilot · Codex</text>
+<rect class="d-node d-node--external d-node--proposed" style="fill: url(#structure-local-planned-hatch)" x="474" y="166" width="168" height="70" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="490.3" y="172" width="135.4" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="558" y="179.5">PHASE 2–3 · PLANNED</text>
+<text class="d-label" x="558" y="202.5">other assistants</text>
+<text class="d-note" x="558" y="218.5">pi · Copilot · Codex</text>
 </g>
 <g class="d-map-part d-map-part--proposed" data-part="web" tabindex="0" role="button" aria-label="web page: what it is, its code and tests">
-<rect class="d-node d-node--proposed" style="fill: url(#structure-local-planned-hatch)" x="680.5" y="166" width="133" height="70" rx="3"/>
-<rect class="d-tag d-tag--proposed" x="718.9" y="172" width="56.2" height="15" rx="3"/>
-<text class="d-tag-text d-tag-text--proposed" x="747" y="179.5">PLANNED</text>
-<text class="d-label" x="747" y="202.5">web page</text>
-<text class="d-note" x="747" y="218.5">browse · compare</text>
+<rect class="d-node d-node--proposed" style="fill: url(#structure-local-planned-hatch)" x="704.5" y="166" width="155" height="70" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="720.9" y="172" width="122.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="782" y="179.5">PHASE 2 · PLANNED</text>
+<text class="d-label" x="782" y="202.5">web page</text>
+<text class="d-note" x="782" y="218.5">browse · compare</text>
 </g>
-<text class="d-edge-label d-map-label--start" x="112" y="133.3">asks</text>
-<text class="d-edge-label d-map-label--start" x="326" y="133.3">asks</text>
-<text class="d-edge-label d-map-label--start" x="112" y="265">MCP</text>
-<text class="d-edge-label d-map-label--start" x="326" y="265">MCP</text>
-<text class="d-edge-label d-map-label--start" x="33.5" y="162.6">CLI</text>
-<text class="d-edge-label d-map-label--end" x="233.5" y="201">CLI</text>
-<text class="d-edge-label d-map-label--start" x="163.8" y="391.5">publish</text>
-<text class="d-edge-label d-map-label--start" x="274.3" y="391.5">find, fetch</text>
-<text class="d-edge-label d-edge-label--proposed" x="456" y="64">asks (planned)</text>
-<text class="d-edge-label d-edge-label--proposed" x="459.3" y="320">MCP, CLI (planned)</text>
-<text class="d-edge-label d-edge-label--proposed" x="566.3" y="345">API (planned)</text>
-<text class="d-edge-label d-edge-label--proposed" x="618.2" y="71">browses (planned)</text>
+<text class="d-edge-label d-map-label--start" x="117" y="133.3">asks</text>
+<text class="d-edge-label d-map-label--start" x="341" y="133.3">asks</text>
+<text class="d-edge-label d-map-label--start" x="117" y="265">MCP</text>
+<text class="d-edge-label d-map-label--start" x="341" y="265">MCP</text>
+<text class="d-edge-label d-map-label--start" x="38.5" y="162.6">CLI</text>
+<text class="d-edge-label d-map-label--end" x="248.5" y="201">CLI</text>
+<text class="d-edge-label d-map-label--start" x="171.3" y="391.5">publish</text>
+<text class="d-edge-label d-map-label--start" x="286.8" y="391.5">find, fetch</text>
+<text class="d-edge-label d-edge-label--proposed" x="476" y="64">asks (planned)</text>
+<text class="d-edge-label d-edge-label--proposed" x="479.3" y="320">MCP, CLI (planned)</text>
+<text class="d-edge-label d-edge-label--proposed" x="591.3" y="345">API (planned)</text>
+<text class="d-edge-label d-edge-label--proposed" x="646.2" y="71">browses (planned)</text>
 </svg></div></div></figure>
 <aside class="panel" aria-live="polite"><div class="picked" hidden></div>
 <h3>What runs where, and what talks to what.</h3>
 <p>Everything on one machine: the catalog is a folder there, and the two developers are two demo users (ana and bob in the screens).</p>
-<ul class="legend"><li><b>›</b> opens the part's own page: what's inside it</li><li>Click any other part for what it is</li><li><b>- - -</b> dashed and <b>PLANNED</b>: not built yet (turn on “planned”)</li><li>Shaded, <b>not ours</b>: another company's part</li></ul>
+<ul class="legend"><li><b>›</b> opens the part's own page: what's inside it</li><li>Click any other part for what it is</li><li><b>Hatched</b>, dotted, <b>PHASE n · PLANNED</b>: not built yet (turn on “planned”)</li><li>Shaded, dashed, <b>not ours</b>: another company's part</li></ul>
 </aside></div></section>
 <section class="frame" data-sv="running" data-view="aws" data-planned="0">
 <h2 class="frame-title">The running parts · in AWS</h2>
@@ -489,107 +489,107 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <aside class="panel" aria-live="polite"><div class="picked" hidden></div>
 <h3>What runs where, and what talks to what.</h3>
 <p>Each developer on their own machine, sharing a catalog in the team's AWS account. They sign in with GitHub.</p>
-<ul class="legend"><li><b>›</b> opens the part's own page: what's inside it</li><li>Click any other part for what it is</li><li><b>- - -</b> dashed and <b>PLANNED</b>: not built yet (turn on “planned”)</li><li>Shaded, <b>not ours</b>: another company's part</li></ul>
+<ul class="legend"><li><b>›</b> opens the part's own page: what's inside it</li><li>Click any other part for what it is</li><li><b>Hatched</b>, dotted, <b>PHASE n · PLANNED</b>: not built yet (turn on “planned”)</li><li>Shaded, dashed, <b>not ours</b>: another company's part</li></ul>
 </aside></div></section>
 <section class="frame" data-sv="running" data-view="aws" data-planned="1">
 <h2 class="frame-title">The running parts · in AWS · with what's planned</h2>
-<div class="frame-grid wide"><figure class="map-art" style="--w: 758px"><div class="d-scroll"><p class="d-scroll-hint" data-w="758" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 758 628" width="758" height="628" role="group" aria-label="How does a skill go from one developer to another, and where does each step happen?">
+<div class="frame-grid wide"><figure class="map-art" style="--w: 788px"><div class="d-scroll"><p class="d-scroll-hint" data-w="788" aria-hidden="true">Scroll sideways to see all of it →</p><div class="d-scroll-art"><svg class="d d-system-map" viewBox="0 0 788 628" width="788" height="628" role="group" aria-label="How does a skill go from one developer to another, and where does each step happen?">
 <title>Skills Catalog · in AWS</title>
 <defs><marker id="structure-aws-planned-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow" d="M0 1L10 5L0 9z"/></marker><marker id="structure-aws-planned-arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-aws-planned-arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--focus" d="M0 1L10 5L0 9z"/></marker><marker id="structure-aws-planned-arrow-open-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--focus" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-aws-planned-arrow-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--alert" d="M0 1L10 5L0 9z"/></marker><marker id="structure-aws-planned-arrow-open-alert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--alert" d="M1 1.5L9 5L1 8.5"/></marker><marker id="structure-aws-planned-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--muted" d="M0 1L10 5L0 9z"/></marker><marker id="structure-aws-planned-arrow-open-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="d-arrow d-arrow--open d-arrow--muted" d="M1 1.5L9 5L1 8.5"/></marker></defs>
 <defs><pattern id="structure-aws-planned-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="d-hatch-bg" width="6" height="6"/><path class="d-hatch-line" d="M0 0V6"/></pattern></defs>
-<rect class="d-group" x="16.5" y="32" width="165" height="333.5" rx="6"/>
-<text class="d-group-label" x="24.5" y="43">Developer 1's machine</text>
-<rect class="d-group" x="302.4" y="32" width="439.4" height="333.5" rx="6"/>
-<text class="d-group-label" x="310.4" y="43">Developer 2's machine</text>
-<rect class="d-group" x="156" y="400" width="436.4" height="102" rx="6"/>
-<text class="d-group-label" x="164" y="411">AWS</text>
-<path class="d-edge" d="M105 92 L105 174.5"/>
-<path class="d-edge" d="M378.9 92 L378.9 174.5"/>
-<path class="d-edge" d="M105 227.5 L105 302.5"/>
-<path class="d-edge" d="M378.9 227.5 L378.9 302.5"/>
-<path class="d-edge" d="M45 73 L31.5 73 Q26.5 73 26.5 78 L26.5 324 Q26.5 329 31.5 329 L38.5 329"/>
-<path class="d-edge" d="M438.9 73 L452.4 73 Q457.4 73 457.4 78 L457.4 324 Q457.4 329 452.4 329 L445.4 329"/>
-<path class="d-edge" d="M105 355.5 L105 452 Q105 457 110 457 L166 457"/>
-<path class="d-edge" d="M378.9 355.5 L378.9 452 Q378.9 457 373.9 457 L318 457"/>
-<path class="d-edge" d="M242 486.5 L242 558.5"/>
-<path class="d-edge d-edge--proposed" d="M438.9 80 L647.8 80 Q652.8 80 652.8 85 L652.8 166"/>
-<path class="d-edge d-edge--proposed" d="M652.8 236 L652.8 331 Q652.8 336 647.8 336 L445.4 336"/>
-<path class="d-edge d-edge--proposed" d="M449.3 464 L318 464"/>
-<path class="d-edge d-edge--proposed" d="M438.9 66 L510.8 66 Q515.8 66 515.8 71 L515.8 422"/>
+<rect class="d-group" x="21.5" y="32" width="165" height="333.5" rx="6"/>
+<text class="d-group-label" x="29.5" y="43">Developer 1's machine</text>
+<rect class="d-group" x="317.4" y="32" width="454.4" height="333.5" rx="6"/>
+<text class="d-group-label" x="325.4" y="43">Developer 2's machine</text>
+<rect class="d-group" x="166" y="400" width="457.4" height="102" rx="6"/>
+<text class="d-group-label" x="174" y="411">AWS</text>
+<path class="d-edge" d="M110 92 L110 174.5"/>
+<path class="d-edge" d="M393.9 92 L393.9 174.5"/>
+<path class="d-edge" d="M110 227.5 L110 302.5"/>
+<path class="d-edge" d="M393.9 227.5 L393.9 302.5"/>
+<path class="d-edge" d="M50 73 L36.5 73 Q31.5 73 31.5 78 L31.5 324 Q31.5 329 36.5 329 L43.5 329"/>
+<path class="d-edge" d="M453.9 73 L467.4 73 Q472.4 73 472.4 78 L472.4 324 Q472.4 329 467.4 329 L460.4 329"/>
+<path class="d-edge" d="M110 355.5 L110 452 Q110 457 115 457 L176 457"/>
+<path class="d-edge" d="M393.9 355.5 L393.9 452 Q393.9 457 388.9 457 L328 457"/>
+<path class="d-edge" d="M252 486.5 L252 558.5"/>
+<path class="d-edge d-edge--proposed" d="M453.9 80 L672.8 80 Q677.8 80 677.8 85 L677.8 166"/>
+<path class="d-edge d-edge--proposed" d="M677.8 236 L677.8 331 Q677.8 336 672.8 336 L460.4 336"/>
+<path class="d-edge d-edge--proposed" d="M458.3 464 L328 464"/>
+<path class="d-edge d-edge--proposed" d="M453.9 66 L530.8 66 Q535.8 66 535.8 71 L535.8 422"/>
 <g class="d-map-part" data-part="dev1" tabindex="0" role="button" aria-label="Developer 1: what it is, its code and tests">
-<rect class="d-node" x="45" y="54" width="120" height="38" rx="19"/>
-<text class="d-label" x="105" y="73">Developer 1</text>
+<rect class="d-node" x="50" y="54" width="120" height="38" rx="19"/>
+<text class="d-label" x="110" y="73">Developer 1</text>
 </g>
 <g class="d-map-part" data-part="dev2" tabindex="0" role="button" aria-label="Developer 2: what it is, its code and tests">
-<rect class="d-node" x="318.9" y="54" width="120" height="38" rx="19"/>
-<text class="d-label" x="378.9" y="73">Developer 2</text>
+<rect class="d-node" x="333.9" y="54" width="120" height="38" rx="19"/>
+<text class="d-label" x="393.9" y="73">Developer 2</text>
 </g>
 <g class="d-map-part" data-part="cc1" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
-<rect class="d-node d-node--external" x="49" y="174.5" width="112" height="53" rx="3"/>
-<text class="d-label" x="105" y="194">Claude Code</text>
-<text class="d-note" x="105" y="210">not ours</text>
+<rect class="d-node d-node--external" x="54" y="174.5" width="112" height="53" rx="3"/>
+<text class="d-label" x="110" y="194">Claude Code</text>
+<text class="d-note" x="110" y="210">not ours</text>
 </g>
 <g class="d-map-part" data-part="cc2" tabindex="0" role="button" aria-label="Claude Code: what it is, its code and tests">
-<rect class="d-node d-node--external" x="322.9" y="174.5" width="112" height="53" rx="3"/>
-<text class="d-label" x="378.9" y="194">Claude Code</text>
-<text class="d-note" x="378.9" y="210">not ours</text>
+<rect class="d-node d-node--external" x="337.9" y="174.5" width="112" height="53" rx="3"/>
+<text class="d-label" x="393.9" y="194">Claude Code</text>
+<text class="d-note" x="393.9" y="210">not ours</text>
 </g>
 <a class="d-map-part d-map-part--opens" data-part="sc1" href="skills-catalog.html" aria-label="skills-catalog: open its page">
-<rect class="d-node" x="38.5" y="302.5" width="133" height="53" rx="3"/>
-<text class="d-label" x="105" y="322">skills-catalog</text>
-<text class="d-note" x="105" y="338">MCP server · CLI</text>
-<text class="d-map-opens" x="163.5" y="329" aria-hidden="true">›</text>
+<rect class="d-node" x="43.5" y="302.5" width="133" height="53" rx="3"/>
+<text class="d-label" x="110" y="322">skills-catalog</text>
+<text class="d-note" x="110" y="338">MCP server · CLI</text>
+<text class="d-map-opens" x="168.5" y="329" aria-hidden="true">›</text>
 </a>
 <a class="d-map-part d-map-part--opens" data-part="sc2" href="skills-catalog.html" aria-label="skills-catalog: open its page">
-<rect class="d-node" x="312.4" y="302.5" width="133" height="53" rx="3"/>
-<text class="d-label" x="378.9" y="322">skills-catalog</text>
-<text class="d-note" x="378.9" y="338">MCP server · CLI</text>
-<text class="d-map-opens" x="437.4" y="329" aria-hidden="true">›</text>
+<rect class="d-node" x="327.4" y="302.5" width="133" height="53" rx="3"/>
+<text class="d-label" x="393.9" y="322">skills-catalog</text>
+<text class="d-note" x="393.9" y="338">MCP server · CLI</text>
+<text class="d-map-opens" x="452.4" y="329" aria-hidden="true">›</text>
 </a>
 <a class="d-map-part d-map-part--opens" data-part="catalog" href="catalog-aws.html" aria-label="catalog on AWS: open its page">
-<path class="d-node" d="M166 433.5 A76 6 0 0 1 318 433.5 V480.5 A76 6 0 0 1 166 480.5 Z"/>
-<path class="d-node-detail" d="M166 433.5 A76 6 0 0 0 318 433.5"/>
-<text class="d-label" x="242" y="453">catalog on AWS</text>
-<text class="d-note" x="242" y="469">API · DynamoDB · S3</text>
-<text class="d-map-opens" x="310" y="457" aria-hidden="true">›</text>
+<path class="d-node" d="M176 433.5 A76 6 0 0 1 328 433.5 V480.5 A76 6 0 0 1 176 480.5 Z"/>
+<path class="d-node-detail" d="M176 433.5 A76 6 0 0 0 328 433.5"/>
+<text class="d-label" x="252" y="453">catalog on AWS</text>
+<text class="d-note" x="252" y="469">API · DynamoDB · S3</text>
+<text class="d-map-opens" x="320" y="457" aria-hidden="true">›</text>
 </a>
 <g class="d-map-part" data-part="github" tabindex="0" role="button" aria-label="GitHub sign-in: what it is, its code and tests">
-<rect class="d-node d-node--external" x="175.5" y="558.5" width="133" height="53" rx="3"/>
-<text class="d-label" x="242" y="578">GitHub sign-in</text>
-<text class="d-note" x="242" y="594">not ours</text>
+<rect class="d-node d-node--external" x="185.5" y="558.5" width="133" height="53" rx="3"/>
+<text class="d-label" x="252" y="578">GitHub sign-in</text>
+<text class="d-note" x="252" y="594">not ours</text>
 </g>
 <g class="d-map-part d-map-part--proposed" data-part="assistants" tabindex="0" role="button" aria-label="other assistants: what it is, its code and tests">
-<rect class="d-node d-node--external d-node--proposed" style="fill: url(#structure-aws-planned-hatch)" x="573.8" y="166" width="158" height="70" rx="3"/>
-<rect class="d-tag d-tag--proposed" x="624.7" y="172" width="56.2" height="15" rx="3"/>
-<text class="d-tag-text d-tag-text--proposed" x="652.8" y="179.5">PLANNED</text>
-<text class="d-label" x="652.8" y="202.5">other assistants</text>
-<text class="d-note" x="652.8" y="218.5">pi · Copilot · Codex</text>
+<rect class="d-node d-node--external d-node--proposed" style="fill: url(#structure-aws-planned-hatch)" x="593.8" y="166" width="168" height="70" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="610.1" y="172" width="135.4" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="677.8" y="179.5">PHASE 2–3 · PLANNED</text>
+<text class="d-label" x="677.8" y="202.5">other assistants</text>
+<text class="d-note" x="677.8" y="218.5">pi · Copilot · Codex</text>
 </g>
 <g class="d-map-part d-map-part--proposed" data-part="web" tabindex="0" role="button" aria-label="web page: what it is, its code and tests">
-<rect class="d-node d-node--proposed" style="fill: url(#structure-aws-planned-hatch)" x="449.3" y="422" width="133" height="70" rx="3"/>
-<rect class="d-tag d-tag--proposed" x="487.7" y="428" width="56.2" height="15" rx="3"/>
-<text class="d-tag-text d-tag-text--proposed" x="515.8" y="435.5">PLANNED</text>
-<text class="d-label" x="515.8" y="458.5">web page</text>
-<text class="d-note" x="515.8" y="474.5">browse · compare</text>
+<rect class="d-node d-node--proposed" style="fill: url(#structure-aws-planned-hatch)" x="458.3" y="422" width="155" height="70" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="474.7" y="428" width="122.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="535.8" y="435.5">PHASE 2 · PLANNED</text>
+<text class="d-label" x="535.8" y="458.5">web page</text>
+<text class="d-note" x="535.8" y="474.5">browse · compare</text>
 </g>
-<text class="d-edge-label d-map-label--start" x="112" y="133.3">asks</text>
-<text class="d-edge-label d-map-label--start" x="385.9" y="133.3">asks</text>
-<text class="d-edge-label d-map-label--start" x="112" y="265">MCP</text>
-<text class="d-edge-label d-map-label--start" x="385.9" y="265">MCP</text>
-<text class="d-edge-label d-map-label--start" x="33.5" y="162.6">CLI</text>
-<text class="d-edge-label d-map-label--start" x="464.4" y="201">CLI</text>
-<text class="d-edge-label d-map-label--end" x="98" y="406.3">publish</text>
-<text class="d-edge-label d-map-label--start" x="385.9" y="375.8">find, fetch</text>
-<text class="d-edge-label d-map-label--start" x="249" y="522.5">signs in</text>
-<text class="d-edge-label d-edge-label--proposed" x="577.9" y="71">asks (planned)</text>
-<text class="d-edge-label d-edge-label--proposed" x="580.2" y="327">MCP, CLI (planned)</text>
-<text class="d-edge-label d-edge-label--proposed" x="383.7" y="473">API (planned)</text>
-<text class="d-edge-label d-map-label--start d-edge-label--proposed" x="522.8" y="244">browses (planned)</text>
+<text class="d-edge-label d-map-label--start" x="117" y="133.3">asks</text>
+<text class="d-edge-label d-map-label--start" x="400.9" y="133.3">asks</text>
+<text class="d-edge-label d-map-label--start" x="117" y="265">MCP</text>
+<text class="d-edge-label d-map-label--start" x="400.9" y="265">MCP</text>
+<text class="d-edge-label d-map-label--start" x="38.5" y="162.6">CLI</text>
+<text class="d-edge-label d-map-label--start" x="479.4" y="201">CLI</text>
+<text class="d-edge-label d-map-label--start" x="117" y="406.3">publish</text>
+<text class="d-edge-label d-map-label--start" x="400.9" y="375.8">find, fetch</text>
+<text class="d-edge-label d-map-label--start" x="259" y="522.5">signs in</text>
+<text class="d-edge-label d-edge-label--proposed" x="599.4" y="71">asks (planned)</text>
+<text class="d-edge-label d-edge-label--proposed" x="601.7" y="327">MCP, CLI (planned)</text>
+<text class="d-edge-label d-edge-label--proposed" x="393.2" y="473">API (planned)</text>
+<text class="d-edge-label d-map-label--start d-edge-label--proposed" x="542.8" y="244">browses (planned)</text>
 </svg></div></div></figure>
 <aside class="panel" aria-live="polite"><div class="picked" hidden></div>
 <h3>What runs where, and what talks to what.</h3>
 <p>Each developer on their own machine, sharing a catalog in the team's AWS account. They sign in with GitHub.</p>
-<ul class="legend"><li><b>›</b> opens the part's own page: what's inside it</li><li>Click any other part for what it is</li><li><b>- - -</b> dashed and <b>PLANNED</b>: not built yet (turn on “planned”)</li><li>Shaded, <b>not ours</b>: another company's part</li></ul>
+<ul class="legend"><li><b>›</b> opens the part's own page: what's inside it</li><li>Click any other part for what it is</li><li><b>Hatched</b>, dotted, <b>PHASE n · PLANNED</b>: not built yet (turn on “planned”)</li><li>Shaded, dashed, <b>not ours</b>: another company's part</li></ul>
 </aside></div></section>
 <section class="frame" data-sv="code">
 <h2 class="frame-title">The code · its packages</h2>
@@ -863,7 +863,13 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
   document.addEventListener('click', (e) => {
     const t = e.target.closest('.controls [data-view], .controls [data-sv], .controls [data-planned], .d-map-part[role="button"]');
     if (!t) return;
-    if (t.matches('.d-map-part')) return go({ box: state.box === t.dataset.part ? '' : t.dataset.part });
+    if (t.matches('.d-map-part')) {
+      go({ box: state.box === t.dataset.part ? '' : t.dataset.part });
+      // A card shown under a wide drawing is below the fold: bring it into view.
+      const shown = document.querySelector('.frame.on .picked:not([hidden])');
+      if (shown) shown.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      return;
+    }
     e.preventDefault();
     if (t.dataset.sv !== undefined) return go({ sv: t.dataset.sv, box: '' });
     if (t.dataset.view !== undefined) return go({ view: t.dataset.view });
@@ -876,4 +882,6 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
   });
   window.addEventListener('hashchange', () => { read(); show(); });
   read(); show();
+  // A page whose drawing is centred on what matters (the contracts): a narrow screen opens on the middle of it.
+  if (data.center) for (const s of $$('.frame.on .d-scroll-art')) if (s.scrollWidth > s.clientWidth) s.scrollLeft = (s.scrollWidth - s.clientWidth) / 2;
 })();</script>

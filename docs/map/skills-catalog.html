@@ -113,7 +113,7 @@ a.d-map-part:hover > :first-child { stroke: var(--d-ink); stroke-width: 2; }
 
 /* groups (boundaries) */
 .d-group { fill: var(--d-grid); fill-opacity: 0.35; stroke: var(--d-ink2); stroke-width: 1; stroke-dasharray: 4 3; }
-.d-group--region { fill-opacity: 0.6; stroke: var(--d-line); stroke-dasharray: none; }
+.d-group--region { fill-opacity: 0.22; stroke: var(--d-line); stroke-width: 1.2; stroke-dasharray: none; }
 .d-group-label { font-size: 10.5px; fill: var(--d-ink2); letter-spacing: 0.06em; font-weight: 500; }
 
 :root { --page: #ECF0F3; --card: #F9FBFC; --ink: #13202A; --ink-2: #3A4A56; --line: #B7C4CD; --accent: #137052; --accent-soft: #D9EDE3; --hot: #B23A0A; --hot-soft: #F8E2D5; --even: #E4E9ED; }
@@ -317,9 +317,9 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <text class="d-note" x="381.1" y="375.6">one runner, every face</text>
 </g>
 <g class="d-map-part d-map-part--proposed" data-part="agent-reviewers" tabindex="0" role="button" aria-label="agent reviewers: what it is, its code and tests">
-<rect class="d-node d-node--proposed" style="fill: url(#skills-catalog-local-hatch)" x="41.5" y="478.4" width="146" height="70" rx="3"/>
-<rect class="d-tag d-tag--proposed" x="86.4" y="484.4" width="56.2" height="15" rx="3"/>
-<text class="d-tag-text d-tag-text--proposed" x="114.5" y="491.9">PLANNED</text>
+<rect class="d-node d-node--proposed" style="fill: url(#skills-catalog-local-hatch)" x="37" y="478.4" width="155" height="70" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="53.4" y="484.4" width="122.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="114.5" y="491.9">PHASE 2 · PLANNED</text>
 <text class="d-label" x="114.5" y="514.9">agent reviewers</text>
 <text class="d-note" x="114.5" y="530.9">quality, by agents</text>
 </g>
@@ -358,7 +358,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <li><b>→</b> read from the imports: the box at its tail uses the one at its head</li>
 <li><b>No lines:</b> the API and skill checks, used by nearly every box (each says by which)</li>
 <li><b>Outside the boundary:</b> the parts around it; <b>›</b> opens their page</li>
-<li><b>- - -</b> dashed and <b>PLANNED</b>: not built yet (turn on “planned”)</li>
+<li><b>Hatched</b>, dotted, <b>PHASE n · PLANNED</b>: not built yet (turn on “planned”)</li>
 </ul>
 </aside></div></section>
 <section class="frame" data-view="aws">
@@ -420,9 +420,9 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <text class="d-note" x="381.1" y="375.6">one runner, every face</text>
 </g>
 <g class="d-map-part d-map-part--proposed" data-part="agent-reviewers" tabindex="0" role="button" aria-label="agent reviewers: what it is, its code and tests">
-<rect class="d-node d-node--proposed" style="fill: url(#skills-catalog-aws-hatch)" x="41.5" y="478.4" width="146" height="70" rx="3"/>
-<rect class="d-tag d-tag--proposed" x="86.4" y="484.4" width="56.2" height="15" rx="3"/>
-<text class="d-tag-text d-tag-text--proposed" x="114.5" y="491.9">PLANNED</text>
+<rect class="d-node d-node--proposed" style="fill: url(#skills-catalog-aws-hatch)" x="37" y="478.4" width="155" height="70" rx="3"/>
+<rect class="d-tag d-tag--proposed" x="53.4" y="484.4" width="122.2" height="15" rx="3"/>
+<text class="d-tag-text d-tag-text--proposed" x="114.5" y="491.9">PHASE 2 · PLANNED</text>
 <text class="d-label" x="114.5" y="514.9">agent reviewers</text>
 <text class="d-note" x="114.5" y="530.9">quality, by agents</text>
 </g>
@@ -461,7 +461,7 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
 <li><b>→</b> read from the imports: the box at its tail uses the one at its head</li>
 <li><b>No lines:</b> the API and skill checks, used by nearly every box (each says by which)</li>
 <li><b>Outside the boundary:</b> the parts around it; <b>›</b> opens their page</li>
-<li><b>- - -</b> dashed and <b>PLANNED</b>: not built yet (turn on “planned”)</li>
+<li><b>Hatched</b>, dotted, <b>PHASE n · PLANNED</b>: not built yet (turn on “planned”)</li>
 </ul>
 </aside></div></section></main>
 <section class="cards boxes"><h2>The boxes</h2><div class="card-grid"><article class="card" data-box="mcp" data-view="local" id="box-local-mcp">
@@ -1952,7 +1952,13 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
   document.addEventListener('click', (e) => {
     const t = e.target.closest('.controls [data-view], .controls [data-sv], .controls [data-planned], .d-map-part[role="button"]');
     if (!t) return;
-    if (t.matches('.d-map-part')) return go({ box: state.box === t.dataset.part ? '' : t.dataset.part });
+    if (t.matches('.d-map-part')) {
+      go({ box: state.box === t.dataset.part ? '' : t.dataset.part });
+      // A card shown under a wide drawing is below the fold: bring it into view.
+      const shown = document.querySelector('.frame.on .picked:not([hidden])');
+      if (shown) shown.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      return;
+    }
     e.preventDefault();
     if (t.dataset.sv !== undefined) return go({ sv: t.dataset.sv, box: '' });
     if (t.dataset.view !== undefined) return go({ view: t.dataset.view });
@@ -1965,4 +1971,6 @@ table.matrix { border-collapse: collapse; font-size: 13px; min-width: 640px; }
   });
   window.addEventListener('hashchange', () => { read(); show(); });
   read(); show();
+  // A page whose drawing is centred on what matters (the contracts): a narrow screen opens on the middle of it.
+  if (data.center) for (const s of $$('.frame.on .d-scroll-art')) if (s.scrollWidth > s.clientWidth) s.scrollLeft = (s.scrollWidth - s.clientWidth) / 2;
 })();</script>

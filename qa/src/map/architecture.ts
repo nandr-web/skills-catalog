@@ -29,6 +29,9 @@ export type ArchLine = { from: string; to: string; label?: string };
 export type Architecture = {
   question: string;
   zones: { id: string; label: string; style?: 'boundary' | 'region' }[];
+  /** The zones a contract's adapters must cover, one adapter each (on one machine, in AWS); an adapter in any other
+   *  zone (the same everywhere) covers them all. */
+  sides: string[];
   boxes: ArchBox[];
   lines?: ArchLine[];
   /** The shared suites a contract names run on the local adapters (in `local`) and on the AWS ones (in `aws`). */
@@ -44,8 +47,19 @@ export function phaseOf(b: Pick<ArchBox, 'needs'>, facts: Facts): string | undef
 }
 
 const DECLARES = (name: string) => new RegExp(`export\\s+(?:declare\\s+)?(?:interface|class|type|abstract\\s+class)\\s+${name}\\b`);
-/** Code that implements a contract: `implements Name`, or a value typed as one (`: Name`, `: Promise<Name>`). */
-const IMPLEMENTS = (name: string) => new RegExp(`implements\\s[^{]*\\b${name}\\b|:\\s*(?:Promise<\\s*)?${name}\\b`);
+/**
+ * Code that makes a contract: a class that `implements Name`; a function that returns one (`): Name`, `): Promise<Name>`,
+ * or an object holding one, `): Promise<{ catalog: Name; … }>`); or a value declared as one (`const x: Name =`).
+ * A parameter typed `Name` is a use, not an implementation, and doesn't count.
+ */
+const IMPLEMENTS = (name: string) => new RegExp([
+  `implements\\s[^{]*\\b${name}\\b`,
+  `\\)\\s*:\\s*(?:Promise<\\s*)?${name}\\b`,
+  `\\)\\s*:\\s*(?:Promise<\\s*)?\\{[^}]*:\\s*${name}\\b`,
+  `\\b(?:const|let)\\s+\\w+\\s*:\\s*${name}\\s*=`,
+].join('|'));
+/** A file's code without its comments, so a declaration or a call in a comment doesn't count. */
+const code = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:"'`])\/\/.*$/gm, '$1');
 
 /** A box's fields: any other is a mistake, often a comma left unquoted in a YAML flow map ("note: a, b" makes a field "b"). */
 const BOX_FIELDS = new Set(['id', 'label', 'note', 'kind', 'external', 'status', 'at', 'zone', 'part', 'view', 'contract', 'plugs', 'needs', 'text', 'code', 'tests']);
@@ -64,6 +78,7 @@ export function checkArchitecture(m: MapSource, facts: Facts): Problem[] {
   const zones = new Set(a.zones.map((z) => z.id));
   const parts = new Map(m.parts.map((p) => [p.id, p]));
   const cells = new Map<string, string>();
+  for (const s of a.sides) if (!zones.has(s)) add('unknown-zone', `architecture.sides: no zone "${s}"`);
 
   for (const b of a.boxes) {
     const at = `architecture.boxes.${b.id}`;
@@ -80,18 +95,20 @@ export function checkArchitecture(m: MapSource, facts: Facts): Problem[] {
     // Planned: names what would build it, and has no code yet.
     if (b.status === 'proposed') {
       if (!b.needs?.length) add('planned-needs-nothing', `${at}: a planned box names the requirements that would build it (needs:)`);
+      else if (!phaseOf(b, facts)) add('planned-phase-unclear', `${at}: its requirements' phases (${(b.needs ?? []).map((r) => facts.requirements.get(r)?.phase ?? '?').join(', ')}) give no one phase to show`);
       const built = filesOf(facts, b.code);
       if (built.length) add('planned-part-has-code', `${at}: "${b.label}" is planned, but has code (${built[0]}): it's built, so drop status: proposed`);
     }
     for (const r of b.needs ?? []) if (!facts.requirements.has(r)) add('unknown-requirement', `${at}.needs: no requirement "${r}" in qa/traceability.yaml`);
 
-    // A contract is declared where it says.
+    // A contract is declared where it says: one file, in its code (not a comment).
     if (b.contract) {
-      const text = facts.matches(b.contract.file).length ? facts.text(b.contract.file) : '';
-      if (!DECLARES(b.contract.name).test(text)) add('contract-not-in-code', `${at}: ${b.contract.file} declares no "${b.contract.name}"`);
-      // Its shared suites run on both sides' adapters.
+      const one = facts.matches(b.contract.file);
+      const text = one.length === 1 && one[0] === b.contract.file ? code(facts.text(b.contract.file)) : '';
+      if (!DECLARES(b.contract.name).test(text)) add('contract-not-in-code', `${at}: ${b.contract.file} ${one.length === 1 ? `declares no "${b.contract.name}"` : 'is not one file'}`);
+      // Its shared suites run on both sides' adapters (a call in a comment doesn't count).
       for (const s of b.contract.suites ?? []) for (const side of ['local', 'aws'] as const) {
-        const runs = testFiles(facts, a.proof[side]).some((f) => new RegExp(`\\b${s}\\(`).test(facts.text(f)));
+        const runs = testFiles(facts, a.proof[side]).some((f) => new RegExp(`\\b${s}\\(`).test(code(facts.text(f))));
         if (!runs) add('suite-not-run', `${at}: the shared suite ${s} runs in none of the ${side === 'aws' ? 'AWS' : 'local'} adapters' tests (${a.proof[side].join(', ')})`);
       }
     }
@@ -99,11 +116,22 @@ export function checkArchitecture(m: MapSource, facts: Facts): Problem[] {
     if (b.plugs) {
       const into = boxes.get(b.plugs.into);
       if (!into?.contract) add('unknown-contract', `${at}.plugs: "${b.plugs.into}" is no contract box`);
+      // What plugs into a contract implements that contract (and may implement more).
+      else if (!b.plugs.implements.includes(into.contract.name))
+        add('implements-other-contract', `${at}: it plugs into ${into.label}, so it implements ${into.contract.name}; it says only ${b.plugs.implements.join(', ')}`);
       const files = filesOf(facts, b.code);
       // A planned box has no code yet: what it will implement is checked once it's built.
-      if (b.status !== 'proposed') for (const name of b.plugs.implements) if (!files.some((f) => IMPLEMENTS(name).test(facts.text(f))))
-        add('adapter-not-in-code', `${at}: none of its files implements ${name} (\`implements ${name}\`, or a value typed ${name})`);
+      if (b.status !== 'proposed') for (const name of b.plugs.implements) if (!files.some((f) => IMPLEMENTS(name).test(code(facts.text(f)))))
+        add('adapter-not-in-code', `${at}: none of its files implements ${name} (a class \`implements ${name}\`, a function returning one, or a value declared one)`);
     }
+  }
+
+  // Every contract is built on each side: an adapter on one machine and one in AWS, or one the same everywhere.
+  for (const c of a.boxes.filter((b) => b.contract && b.status !== 'proposed')) {
+    const built = a.boxes.filter((b) => b.plugs?.into === c.id && b.status !== 'proposed');
+    const everywhere = built.some((b) => !b.zone || !a.sides.includes(b.zone));
+    for (const side of a.sides) if (!everywhere && !built.some((b) => b.zone === side))
+      add('contract-side-missing', `architecture.boxes.${c.id}: nothing built plugs into ${c.label} ${a.zones.find((z) => z.id === side)?.label ?? side}`);
   }
 
   // A hand line is a link one level up (between the parts the boxes stand for), or an import between their files.
@@ -113,8 +141,12 @@ export function checkArchitecture(m: MapSource, facts: Facts): Problem[] {
     const [x, y] = [boxes.get(l.from), boxes.get(l.to)];
     if (!x || !y) { add('unknown-part', `${at}: no box "${!x ? l.from : l.to}"`); continue; }
     if (x.part && y.part && linked(x.part, y.part)) continue;
-    const [fx, fy] = [new Set(filesOf(facts, x.code)), new Set(filesOf(facts, y.code))];
-    const imported = facts.imports.edges.some((e) => !e.types && ((fx.has(e.from) && fy.has(e.to)) || (fy.has(e.from) && fx.has(e.to))));
+    // A contract's own file is one of its box's files; code calls a contract through its type, so a line to a contract
+    // may stand on a types-only import (to anything else, only a real one counts).
+    const filesFor = (b: ArchBox) => new Set([...filesOf(facts, b.code), ...(b.contract ? [b.contract.file] : [])]);
+    const [fx, fy] = [filesFor(x), filesFor(y)];
+    const typesOk = !!(x.contract || y.contract);
+    const imported = facts.imports.edges.some((e) => (typesOk || !e.types) && ((fx.has(e.from) && fy.has(e.to)) || (fy.has(e.from) && fx.has(e.to))));
     if (!imported) add('line-not-in-code', `${at}: neither a link between their parts on the map nor an import between their files`);
   }
   return problems;
@@ -131,6 +163,11 @@ export function architectureText(a: Architecture | undefined): [string, string][
   ];
 }
 
+/** A built contract that no shared suite proves on both sides. */
+export const unprovenContract = (b: ArchBox) => !!b.contract && b.status !== 'proposed' && !b.contract.suites?.length;
+/** The words an unproven contract carries on the drawing, in place of its note. */
+export const UNPROVEN = 'no shared tests yet';
+
 /** The spec the renderer draws: the boxes, the lines written by hand, and a line from each contract to what plugs in. */
 export function architectureSpec(m: MapSource, facts: Facts): Record<string, unknown> {
   const a = m.architecture!;
@@ -141,8 +178,12 @@ export function architectureSpec(m: MapSource, facts: Facts): Record<string, unk
   const parts = a.boxes.map((b) => {
     const pg = page(b);
     const phase = b.status === 'proposed' ? phaseOf(b, facts) : undefined;
+    // What to notice: a contract no shared suite proves on both sides (swapping its side isn't shown to work), in words too.
+    const unproven = unprovenContract(b);
+    const note = unproven ? UNPROVEN : b.note;
     return {
-      id: b.id, label: b.label, ...(b.note ? { note: b.note } : {}), kind: b.kind ?? 'service', external: !!b.external,
+      id: b.id, label: b.label, ...(note ? { note } : {}), kind: b.kind ?? 'service', external: !!b.external,
+      ...(unproven ? { emphasis: 'alert' } : {}),
       ...(b.status === 'proposed' ? { status: 'proposed' } : {}), ...(phase ? { phase } : {}),
       at: b.at, ...(b.zone ? { zone: b.zone } : {}), ...(pg ? { href: `${pg.id}.html` } : {}),
     };
